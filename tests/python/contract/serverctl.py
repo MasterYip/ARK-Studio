@@ -18,6 +18,14 @@ import time
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[3]
+
+# The frozen Python server lives in ark_studio/python/ (import name arkstudio):
+# importable here and in child processes (python -m arkstudio).
+_ARK_PY = str(Path(__file__).resolve().parents[3] / "ark_studio" / "python")
+if _ARK_PY not in sys.path:
+    sys.path.insert(0, _ARK_PY)
+if _ARK_PY not in os.environ.get("PYTHONPATH", "").split(os.pathsep):
+    os.environ["PYTHONPATH"] = os.pathsep.join(p for p in (_ARK_PY, os.environ.get("PYTHONPATH", "")) if p)
 ASSET_VERSION = "contract1"
 PYTHON = os.environ.get("ARK_CONTRACT_PYTHON") or sys.executable
 
@@ -39,6 +47,41 @@ def make_fixture(target: Path, *, auth: int = 0, nodes: int = 0) -> dict:
                           str(target), "--auth", str(auth), "--nodes", str(nodes)],
                          cwd=str(REPO), capture_output=True, text=True, check=True)
     return json.loads(out.stdout.strip().splitlines()[-1])
+
+
+FIXTURES = REPO / "tests" / "python" / "contract" / "fixtures"
+FIXTURE_MTIME = 1767225600  # 2026-01-01T00:00:00Z
+
+
+def recorded_fixture(target: Path, mode: str) -> dict:
+    """Extract fixtures/<mode>.zip (record_fixtures.py) into ``target``: the
+    Go-only suite's fixture, built without the Python server."""
+    import sqlite3
+    import zipfile
+    target = Path(target)
+    with zipfile.ZipFile(FIXTURES / f"{mode}.zip") as z:
+        meta = json.loads(z.read("fixture.json"))
+        for info in z.infolist():
+            if info.filename.startswith("data/") and not info.is_dir():
+                path = target / info.filename[len("data/"):]
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_bytes(z.read(info))
+    # Fixed file and folder times (the extraction time would leak into
+    # mtimes, media ETags and Last-Modified, so two runs would differ).
+    for path in sorted(target.rglob("*"), key=lambda p: len(p.parts), reverse=True) + [target]:
+        os.utime(path, (FIXTURE_MTIME, FIXTURE_MTIME))
+    new = str(target.resolve())
+    org = target / "org.sqlite3"
+    if org.is_file():
+        old = meta["recorded_data_dir"]
+        con = sqlite3.connect(str(org))
+        try:
+            con.execute("UPDATE projects SET path=? || substr(path, ?) WHERE substr(path, 1, ?)=?",
+                        (new, len(old) + 1, len(old), old))
+            con.commit()
+        finally:
+            con.close()
+    return json.loads(json.dumps(meta["fixture"]).replace("@DATA@", json.dumps(new)[1:-1]))
 
 
 def copy_fixture(source: Path, target: Path) -> Path:

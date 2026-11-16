@@ -3,7 +3,7 @@
 Routes: POST /api/agent/v1/setup/{action} (Handler._setup_action), the full
 per-viewer payload of GET /api/skills/setup/state and GET /api/agent/v1/setup
 and the ``setup`` block of GET /api/project/overview for a project that has a
-``setup/`` folder (arkstudio/skills/setup.py, setup_layers.py).
+``setup/`` folder (ark_studio/python/arkstudio/skills/setup.py, setup_layers.py).
 
 CALL steps write the same files into both data dirs between the requests:
 small Git repositories under ``<data>/setup-work`` built with a fixed

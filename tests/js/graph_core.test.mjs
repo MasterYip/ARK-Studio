@@ -3,6 +3,11 @@ import { test } from "node:test";
 import vm from "node:vm";
 import { readFile } from "node:fs/promises";
 import { loadGraphCore } from "./load_graph_core.mjs";
+import { existsSync } from "node:fs";
+// These cases compare against the frozen Python server's sources; trees
+// without ark_studio/python (the public export) skip them.
+const noPython = !existsSync(new URL("../../ark_studio/python/arkstudio/", import.meta.url))
+  && "the Python reference sources are not in this tree";
 
 test("shared entry/map integrator preserves the pre-extraction trajectory", async () => {
   const { stepForce, GRAPH_DEFAULTS } = (await loadGraphCore(vm.createContext({}))).namespace;
@@ -45,9 +50,9 @@ test("focus rendering inspects edges once even when every node is selected", asy
   assert.equal(reads, edges.length);
 });
 
-test("only symmetric relations from tags.py are drawn without an arrow", async () => {
+test("only symmetric relations from tags.py are drawn without an arrow", { skip: noPython }, async () => {
   const { relationIsDirected, UNDIRECTED_RELATIONS } = (await loadGraphCore(vm.createContext({}))).namespace;
-  const tags = await readFile(new URL("../../arkstudio/tags.py", import.meta.url), "utf8");
+  const tags = await readFile(new URL("../../ark_studio/python/arkstudio/tags.py", import.meta.url), "utf8");
   const rows = [...tags.matchAll(/\("([a-z_]+)", \{"label": "([^"]+)", "reverse": "([^"]+)"\}\)/g)];
   assert.ok(rows.length >= 17);
   const symmetric = rows.filter(([, , label, reverse]) => label === reverse).map(([, id]) => id).sort();
@@ -98,4 +103,27 @@ test("the Force simulation stops once motion stays under the threshold, or at th
   assert.equal(r.verdicts.at(-1), "cap");
   assert.equal(r.verdicts.slice(0, -1).includes("cap"), false);
   assert.equal(run([moving], 1, FORCE_SETTLE.alphaFloor / 2).verdicts[0], "cap");
+});
+
+test("Home backdrop keeps the best-connected nodes of a large project and their links", async () => {
+  const { backdropSample, BACKDROP_NODE_LIMIT } = (await loadGraphCore(vm.createContext({}))).namespace;
+  const small = { nodes: [{ id: 1, degree: 0 }, { id: 2, degree: 1 }], edges: [{ source: 1, target: 2 }] };
+  const same = backdropSample(small.nodes, small.edges);
+  assert.equal(same.nodes, small.nodes);
+  assert.equal(same.edges, small.edges);
+
+  const nodes = Array.from({ length: 5000 }, (_, i) => ({ id: i + 1, degree: i % 97 }));
+  const edges = Array.from({ length: 8000 }, (_, i) => ({ source: (i % 5000) + 1, target: ((i * 7) % 5000) + 1 }));
+  const { nodes: kept, edges: links } = backdropSample(nodes, edges);
+  assert.equal(kept.length, BACKDROP_NODE_LIMIT);
+  const minKept = Math.min(...kept.map((node) => node.degree));
+  assert.ok(nodes.filter((node) => !kept.includes(node)).every((node) => node.degree <= minKept));
+  // Server order is kept; only links between kept nodes remain.
+  assert.deepEqual(kept.map((node) => node.id), [...kept.map((node) => node.id)].sort((a, b) => a - b));
+  const ids = new Set(kept.map((node) => node.id));
+  assert.ok(links.length > 0);
+  assert.ok(links.every((edge) => ids.has(edge.source) && ids.has(edge.target)));
+  // Links already bound to node objects (a GraphView reused the data) count too.
+  const bound = edges.map((edge) => ({ source: { id: edge.source }, target: { id: edge.target } }));
+  assert.equal(backdropSample(nodes, bound).edges.length, links.length);
 });

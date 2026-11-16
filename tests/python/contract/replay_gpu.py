@@ -64,8 +64,11 @@ def fake_ssh_problems() -> list:
     if len(sides) != 2:
         return [f"fake ssh: expected two servers, got {[p.name for p in sides]}"]
 
+    import go_only  # the Go system query's df section is Go-only (go_only.GO_ONLY_SSH_SUFFIX)
+
     def load(side: Path):
-        calls = sorted(json.dumps(json.loads(p.read_text(encoding="utf-8"))[1:], ensure_ascii=False)
+        calls = sorted(json.dumps(go_only.ssh_call_canonical(json.loads(p.read_text(encoding="utf-8"))[1:]),
+                                  ensure_ascii=False)
                        for p in (side / "log").glob("*.json"))
         jobs = {p.name: json.loads(p.read_text(encoding="utf-8")) for p in (side / "jobs").glob("*.json")}
         return calls, jobs

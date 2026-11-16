@@ -23,10 +23,10 @@ import {
   shouldCacheAsset,
   shouldCacheResponse,
   tabHash,
-} from "../../web/js/mobile-core.js";
+} from "../../ark_studio/web/js/mobile-core.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const WEB = path.join(ROOT, "web");
+const WEB = path.join(ROOT, "ark_studio", "web");
 
 test("mobile nav keeps six primary destinations and secondary desktop routes", () => {
   assert.equal(MOBILE_PRIMARY_TABS.length, 6);

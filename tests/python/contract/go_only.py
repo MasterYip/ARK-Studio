@@ -1,13 +1,13 @@
 """Intentional Go-only divergences from the frozen Python reference server.
 
-Since the 2026-11-15 switch-over, backend features land in ark-server (go/)
-only; arkstudio/server.py is frozen.  The contract (gen_contract.py) is
+Since the 2026-11-15 switch-over, backend features land in ark-server (ark_studio/server/)
+only; ark_studio/python/arkstudio/server.py is frozen.  The contract (gen_contract.py) is
 still generated from Python, so a new Go route is not a contract record and
 Python cannot answer it.  This module is the allow-list the parity tools
 consult:
 
 * ``ROUTES``: Go-only route ids.  ``ark-server routes`` lists them (from
-  ``GoOnlyRoutes`` in go/internal/server/routes_agentdocs.go) with the
+  ``GoOnlyRoutes`` in ark_studio/server/internal/server/routes_agentdocs.go) with the
   ``goonly:`` prefix.  harness.py runs cases that name them only against
   Go and reports SKIP against Python; diffreplay/replay_probe never
   generate steps for them (they are not in contract.json).
@@ -38,7 +38,7 @@ from typing import Callable
 PREFIX = "goonly:"
 
 ROUTES = {
-    # go/internal/server/routes_agentdocs.go, go/internal/agentdocs
+    # ark_studio/server/internal/server/routes_agentdocs.go, ark_studio/server/internal/agentdocs
     "goonly:exact:/api/agent/v1/docs": "agent documentation index",
     "goonly:prefix:/api/agent/v1/docs/": "one agent doc (text/markdown, ?section=, ?format=json)",
 }
@@ -64,9 +64,45 @@ def _strip_interface_docs(body: bytes) -> bytes:
     return json.dumps(payload, ensure_ascii=False).encode()
 
 
+def _strip_storage(*path: str):
+    """A canonicaliser removing the Go-only "storage" member of every object
+    in the list at ``path`` (the GPU servers' df figures, gpu/storage.go)."""
+    def strip(body: bytes) -> bytes:
+        try:
+            payload = json.loads(body)
+        except ValueError:
+            return body
+        items = payload
+        for key in path:
+            items = items.get(key) if isinstance(items, dict) else None
+        if not isinstance(items, list):
+            return body
+        for item in items:
+            if isinstance(item, dict):
+                item.pop("storage", None)
+        return json.dumps(payload, ensure_ascii=False).encode()
+    return strip
+
+
 AUGMENTED = {
     "/api/agent/v1/interface": _strip_interface_docs,  # routes_agentdocs.go agentInterfaceEncoded
+    # ark_studio/server/internal/gpu/storage.go (ProbeServer "storage"; test storage_test.go)
+    "/api/gpu/probe": _strip_storage("servers"),
+    "/api/gpu/dashboard": _strip_storage("probe", "servers"),
+    # ark_studio/server/internal/resources/graph.go gpuResources (device "storage"; test storage_test.go)
+    "/api/resources/graph": _strip_storage("devices"),
 }
+
+# The Go system query ends with a read-only df section (ark_studio/server/internal/gpu/
+# storage.go StorageCommand); the GPU replay's fake ssh compares the argv
+# both servers sent after removing it (replay_gpu.fake_ssh_problems).
+GO_ONLY_SSH_SUFFIX = ("\necho __ARK_DF__; df -PB1 -x tmpfs -x devtmpfs -x overlay -x squashfs 2>/dev/null "
+                      "|| df -PB1 2>/dev/null || true")
+
+
+def ssh_call_canonical(argv: list) -> list:
+    """An ssh argv as the Python server sends it (Go-only remote additions removed)."""
+    return [a.replace(GO_ONLY_SSH_SUFFIX, "") if isinstance(a, str) else a for a in argv]
 
 
 def augmented(path: str):
@@ -92,7 +128,7 @@ def _resources_nonfinite(py, go) -> bool:
 
 FIXES = [
     Fix("resources-graph-nonfinite-gpu-memory", "GET", "/api/resources/graph",
-        "go/internal/resources/graph.go (roundMB, finiteMB; test round_test.go)",
+        "ark_studio/server/internal/resources/graph.go (roundMB, finiteMB; test round_test.go)",
         "a GPU probe reporting an infinite/NaN memory figure: Python's round() raises and the "
         "whole graph answers 500; Go reports those figures as null",
         _resources_nonfinite),

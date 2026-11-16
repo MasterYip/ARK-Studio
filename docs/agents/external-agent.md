@@ -35,7 +35,7 @@ label observations by their source machine. Reconcile returned questions
 with facts already known, then
 `POST /api/agent/v1/setup/draft` with `propose: true`. Show the user
 `summary_markdown` and the digest, and let them confirm it themselves (ARK UI
-or `python -m arkstudio skills setup confirm`). Then
+or `ark-server skills setup confirm`). Then
 `POST /api/agent/v1/setup/verify`. After that, treat
 `readiness.requires_human` (policies set to `ask`) as actions that need
 explicit user approval every time.

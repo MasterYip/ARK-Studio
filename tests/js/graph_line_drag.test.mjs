@@ -36,7 +36,7 @@ async function fixture(layout = "force") {
   });
   const core = await loadGraphCore(context);
   const graphModule = new vm.SourceTextModule(
-    await readFile(new URL("../../web/js/graph.js", import.meta.url), "utf8"), { context },
+    await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8"), { context },
   );
   const imports = {
     "./dom.js": ["h", "clear", "typeColor", "statusColor", "clamp", "copyText"],

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   buildResourcesModel, utilisation, occupancyShares, agoKey, ageSeconds, rowBox, CARD_W,
-} from "../../web/js/resources-model.js";
+} from "../../ark_studio/web/js/resources-model.js";
 
 const payload = {
   viewer: "alice",
@@ -109,4 +109,133 @@ test("relative times", () => {
   const now = Date.parse("2026-11-14T12:00:00Z");
   assert.equal(ageSeconds("2026-11-14T11:00:00Z", now), 3600);
   assert.equal(ageSeconds(null, now), null);
+});
+
+// ------------------------------------------------- storage, fold, controls
+import { readFileSync } from "node:fs";
+import {
+  storageResources, usageTone, formatBytes, setCollapsed, toggleCollapsed, collapsibleIds,
+  resourcesKeyAction, nearestInDirection, cardsInBox, collapseToggleBox, CARD_METRICS,
+} from "../../ark_studio/web/js/resources-model.js";
+
+const withStorage = {
+  ...payload,
+  devices: payload.devices.map((d) => (d.id !== "gpu:lab" ? d : { ...d, storage: [
+    { mount: "/data", used_bytes: 9 * 2 ** 40, total_bytes: 10 * 2 ** 40, free_bytes: 2 ** 40, percent: 90, data: true },
+    { mount: "/", used_bytes: 2 ** 30, total_bytes: 4 * 2 ** 30, free_bytes: 3 * 2 ** 30, percent: 25, data: false },
+  ] })),
+};
+
+test("a GPU server's storage becomes storage rows after its GPUs and CPU", () => {
+  const rows = storageResources(withStorage.devices[1]);
+  assert.deepEqual(rows.map((r) => [r.kind, r.label, r.metrics.disk_pct, r.metrics.data]),
+    [["storage", "/data", 90, true], ["storage", "/", 25, false]]);
+  assert.deepEqual(storageResources({ id: "x" }), []);
+  assert.deepEqual(storageResources({ id: "x", storage: [{ percent: 3 }] }), [], "rows need a mount");
+  const model = buildResourcesModel(withStorage);
+  const lab = model.cards.find((c) => c.id === "gpu:lab");
+  assert.deepEqual(lab.rows.map((r) => r.kind), ["gpu", "gpu", "cpu", "storage", "storage"]);
+  assert.equal(model.counts.types.storage, 3, "filter chips count server storage");
+  assert.equal(utilisation(lab.rows.find((r) => r.label === "/data")).util, 0.9);
+  const storageOnly = buildResourcesModel(withStorage, { types: new Set(["storage"]) });
+  assert.deepEqual(storageOnly.cards.map((c) => c.id), ["ark", "gpu:lab"]);
+});
+
+test("usage colours use the GPU board's memory thresholds; byte sizes are binary", () => {
+  assert.equal(usageTone(null), null);
+  assert.equal(usageTone(59.9), "ok");
+  assert.equal(usageTone(60), "warn");
+  assert.equal(usageTone(84.9), "warn");
+  assert.equal(usageTone(85), "danger");
+  assert.equal(usageTone("90"), "danger");
+  assert.equal(formatBytes(512), "512 B");
+  assert.equal(formatBytes(1536 * 2 ** 20), "1.5 GiB");
+  assert.equal(formatBytes(10 * 2 ** 40), "10 TiB");
+  assert.equal(formatBytes(916 * 2 ** 30), "916 GiB");
+  assert.equal(formatBytes(null), "?");
+});
+
+test("folded cards keep their header and summary, hide their rows and count them", () => {
+  const open = buildResourcesModel(withStorage);
+  const folded = buildResourcesModel(withStorage, { collapsed: new Set(["gpu:lab", "gpu:old"]) });
+  const lab = folded.cards.find((c) => c.id === "gpu:lab");
+  assert.equal(lab.collapsed, true);
+  assert.deepEqual(lab.rows, []);
+  assert.equal(lab.allRows.length, 5);
+  assert.equal(lab.hiddenCount, 5);
+  assert.equal(lab.h, open.cards.find((c) => c.id === "gpu:lab").h - 5 * CARD_METRICS.ROW_H);
+  const old = folded.cards.find((c) => c.id === "gpu:old");
+  assert.equal(old.collapsible, false, "nothing to fold");
+  assert.equal(old.collapsed, false);
+  assert.deepEqual(collapsibleIds(folded.cards).sort(), ["ark", "gpu:lab", "host:alice", "host:bob"]);
+  assert.deepEqual(collapsibleIds(folded.cards, ["gpu:old", "ark"]), ["ark"]);
+  const box = collapseToggleBox(lab);
+  assert.ok(box.x + box.w <= lab.w && box.y + box.h <= CARD_METRICS.HEADER_H);
+  const owned = folded.cards.find((c) => c.id === "host:alice");
+  assert.ok(collapseToggleBox(owned).x < box.x, "left of the owner avatar");
+});
+
+test("fold state: set, toggle one card, toggle a multi-selection together", () => {
+  const start = new Set(["a"]);
+  assert.deepEqual([...setCollapsed(start, ["b", "c"], true)].sort(), ["a", "b", "c"]);
+  assert.deepEqual([...setCollapsed(start, ["a", "x"], false)], []);
+  assert.deepEqual([...start], ["a"], "inputs are not mutated");
+  assert.deepEqual([...toggleCollapsed(start, "a")], []);
+  assert.deepEqual([...toggleCollapsed(start, "b")].sort(), ["a", "b"]);
+  // The clicked card decides the direction; the selection follows it.
+  assert.deepEqual([...toggleCollapsed(start, "b", ["a", "b", "c"])].sort(), ["a", "b", "c"]);
+  assert.deepEqual([...toggleCollapsed(start, "a", ["a", "b"])], []);
+  assert.deepEqual([...toggleCollapsed(start, "z", ["a", "b"])].sort(), ["a", "z"], "outside the selection: alone");
+});
+
+const key = (k, extra = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false,
+  target: { tagName: "DIV" }, ...extra });
+
+test("keyboard map matches the Node graph and Mind's fold keys", () => {
+  const table = {
+    "?": "help", f: "fit", F: "fit", r: "mode-read", R: "mode-read", e: "mode-edit", E: "mode-edit",
+    "+": "expand", "=": "expand", "-": "collapse", "*": "expand-all", "/": "collapse-all",
+    ArrowLeft: "nav-left", ArrowRight: "nav-right", ArrowUp: "nav-up", ArrowDown: "nav-down",
+    Enter: "open", Escape: "clear", Tab: "none", Backspace: "none", x: null, Delete: null, " ": null,
+  };
+  for (const [k, want] of Object.entries(table)) assert.equal(resourcesKeyAction(key(k)), want, k);
+  assert.equal(resourcesKeyAction(key("a", { ctrlKey: true })), "select-all");
+  assert.equal(resourcesKeyAction(key("A", { metaKey: true })), "select-all");
+  assert.equal(resourcesKeyAction(key("a", { ctrlKey: true, shiftKey: true })), null);
+  assert.equal(resourcesKeyAction(key("f", { ctrlKey: true })), null, "Ctrl+F stays the browser's");
+  assert.equal(resourcesKeyAction(key("*", { shiftKey: true })), "expand-all", "* needs Shift on most layouts");
+  assert.equal(resourcesKeyAction(key("+", { ctrlKey: true })), null, "Ctrl++ stays browser zoom");
+  assert.equal(resourcesKeyAction(key("Escape"), { helpOpen: true }), "close-help");
+  assert.equal(resourcesKeyAction(key("Enter"), { mode: "edit" }), null, "edit mode: Enter does not open");
+  assert.equal(resourcesKeyAction(key("Tab"), { mode: "edit" }), null);
+  for (const tagName of ["INPUT", "TEXTAREA", "SELECT"]) {
+    assert.equal(resourcesKeyAction(key("f", { target: { tagName } })), null, tagName);
+  }
+  assert.equal(resourcesKeyAction(key("/", { target: { tagName: "DIV", isContentEditable: true } })), null);
+});
+
+test("Mind's fold keys in graph.js are the ones the Resources graph mirrors", () => {
+  const source = readFileSync(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8");
+  const body = source.slice(source.indexOf("  _onKeyDown(event) {"), source.indexOf("  _mindParents() {"));
+  const pairs = [...body.matchAll(/event\.key === "([*/+=-])"[^]*?this\._(expand|collapse)Selected\((true|false)\)/g)]
+    .map((m) => `${m[1]}:${m[2]}:${m[3]}`);
+  assert.deepEqual(pairs, ["+:expand:false", "-:collapse:false", "*:expand:true", "/:collapse:true"]);
+  for (const k of ["f", "r", "e", "?"]) assert.ok(body.includes(`event.key === "${k}"`), k);
+});
+
+test("arrow navigation and box selection", () => {
+  const cards = [
+    { id: "a", x: 0, y: 0, w: 100, h: 50 }, { id: "b", x: 300, y: 10, w: 100, h: 50 },
+    { id: "c", x: 300, y: 400, w: 100, h: 50 }, { id: "d", x: 0, y: 300, w: 100, h: 50 },
+  ];
+  assert.equal(nearestInDirection(cards, "a", "right"), "b");
+  assert.equal(nearestInDirection(cards, "a", "down"), "d");
+  assert.equal(nearestInDirection(cards, "b", "down"), "c");
+  assert.equal(nearestInDirection(cards, "a", "left"), null);
+  assert.equal(nearestInDirection(cards, null, "left"), "a", "no selection: the first card");
+  assert.equal(nearestInDirection([], null, "up"), null);
+  const identity = (x, y) => ({ x, y });
+  assert.deepEqual(cardsInBox(cards, { x1: -10, y1: -10, x2: 260, y2: 20 }, identity), ["a", "b"], "touching");
+  assert.deepEqual(cardsInBox(cards, { x1: 260, y1: 20, x2: -10, y2: -10 }, identity, true), [], "contain");
+  assert.deepEqual(cardsInBox(cards, { x1: -60, y1: -30, x2: 60, y2: 30 }, identity, true), ["a"]);
 });

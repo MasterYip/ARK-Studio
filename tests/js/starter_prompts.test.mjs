@@ -10,7 +10,7 @@ import vm from "node:vm";
 const MODULES = new Map();
 async function loadModule(name) {
   if (MODULES.has(name)) return MODULES.get(name);
-  const source = await readFile(new URL(`../../web/js/${name}`, import.meta.url), "utf8");
+  const source = await readFile(new URL(`../../ark_studio/web/js/${name}`, import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, { identifier: name });
   MODULES.set(name, module);
   await module.link(async (specifier) => {

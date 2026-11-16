@@ -9,7 +9,7 @@ and the privacy rules (private / shared / another owner).
 
 Live sessions run two deterministic agents only (never a model):
 
-* ``echo`` -- arkstudio/demo_agent.py under Python, ``ark-server
+* ``echo`` -- ark_studio/python/arkstudio/demo_agent.py under Python, ``ark-server
   demo-agent`` under Go (byte-identical output; N16 masks the program path);
 * ``custom`` -- ARK_TASK_CUSTOM_COMMAND = this replay's ``fake_agent.py``
   run by the same Python interpreter for both servers: prints the session

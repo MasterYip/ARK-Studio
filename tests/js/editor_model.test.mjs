@@ -5,7 +5,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 async function loadModel() {
-  const source = await readFile(new URL("../../web/js/editor-model.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../ark_studio/web/js/editor-model.js", import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, { identifier: "editor-model.js" });
   await module.link(() => { throw new Error("editor-model must stay dependency-free"); });
   await module.evaluate();

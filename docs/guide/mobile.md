@@ -4,7 +4,7 @@ ARK remains a loopback-first desktop workbench. This guide covers the optional
 phone client: the same responsive web app opened on an Android phone through a
 LAN address, an SSH tunnel, or a deliberately public HTTPS deployment, paired by
 scanning a QR code in **Settings → Project → Access → Mobile / Pair phone**, and the native
-Android app in `android/` (see [Android app](#android-app)). There is no external
+Android app in `ark_studio/android/` (see [Android app](#android-app)). There is no external
 QR service, no telemetry and no phone-side SSH client.
 
 A pairing QR is bound to the open project and to the account that created it,
@@ -49,7 +49,7 @@ A non-loopback bind without authentication is rejected before the socket is
 opened:
 
 ```bash
-$ python -m arkstudio serve --expose
+$ ark-server serve --expose
 error: refusing to bind ARK to 0.0.0.0 without account authentication. Set
 --auth-user and ARK_AUTH_PASSWORD (or --auth-password-hash / --auth-password-file),
 or leave the default 127.0.0.1 bind. ARK never exposes itself publicly without a
@@ -71,7 +71,7 @@ values out of argv, shell history and tracked files.
 ```bash
 export ARK_AUTH_USER=ark
 export ARK_AUTH_PASSWORD='<initial-password>'
-python -m arkstudio serve --expose --port 8890
+ark-server serve --expose --port 8890
 ```
 
 Equivalent environment configuration:
@@ -111,7 +111,7 @@ PY
 # then:
 export ARK_AUTH_USER=ark
 export ARK_AUTH_PASSWORD_HASH='<pbkdf2-password-hash>'
-python -m arkstudio serve --expose --public-url https://ark.example.net/
+ark-server serve --expose --public-url https://ark.example.net/
 ```
 
 ### What the login gate covers
@@ -145,14 +145,14 @@ error message, `429` with `Retry-After` after the limit).
 ## Start the desktop server
 
 ```bash
-python -m arkstudio serve --root runtime/projects --port 8890
+ark-server serve --root runtime/projects --port 8890
 ```
 
 This remains loopback-only. Optional reverse-proxy mode:
 
 ```bash
 ARK_AUTH_USER=ark ARK_AUTH_PASSWORD='…' \
-  python -m arkstudio serve --root runtime/projects --port 8890 \
+  ark-server serve --root runtime/projects --port 8890 \
   --public-url https://ark.example.net/ark/
 ```
 
@@ -161,7 +161,7 @@ Optional direct public bind (still put HTTPS in front for real internet use):
 ```bash
 export ARK_AUTH_USER=ark
 export ARK_AUTH_PASSWORD='…'
-python -m arkstudio serve --root runtime/projects --port 8890 --expose \
+ark-server serve --root runtime/projects --port 8890 --expose \
   --public-url https://ark.example.net/
 ```
 
@@ -170,8 +170,8 @@ environment variable; both are normalised to an `http(s)` base ending in `/`.
 
 ### Persistent Server Configuration
 
-Initialize accounts with `python3 -m arkstudio server-init`, then start with
-`python3 -m arkstudio serve --config ~/.config/arkstudio/main.json`. This native
+Initialize accounts with `ark-server server-init`, then start with
+`ark-server serve --config ~/.config/arkstudio/main.json`. This native
 CLI stores the owner password hash in the organization database and restores
 authentication independently of the invoking terminal's environment. JSON
 configuration requires sign-in by default. No custom startup shell script or
@@ -239,7 +239,7 @@ Run ARK on the server, loopback-bound (the default):
 
 ```bash
 # on gpu-server-1 or wherever ARK runs
-python -m arkstudio serve --port 8890
+ark-server serve --port 8890
 ```
 
 On a **phone-reachable computer** (a laptop/desktop on the same Wi-Fi as the
@@ -252,7 +252,7 @@ ssh -N -L 0.0.0.0:8891:127.0.0.1:8890 user@gpu-server-1
 or use the helper, which prints the command, URL and warnings:
 
 ```bash
-python -m arkstudio mobile-tunnel \
+ark-server mobile-tunnel \
   --ssh user@gpu-server-1 \
   --ark-port 8890 \
   --local-port 8891 \
@@ -348,7 +348,7 @@ Then advertise the public URL and account:
 ARK_AUTH_USER=ark ARK_AUTH_PASSWORD='…' \
 ARK_PUBLIC_URL=https://ark.example.net/ark/ \
 ARK_TRUST_PROXY=1 \
-python -m arkstudio serve --port 8890
+ark-server serve --port 8890
 ```
 
 `ARK_TRUST_PROXY=1` is only for a proxy you control: it makes rate limiting and
@@ -565,18 +565,18 @@ secret until the caller is authenticated.
 
 ## PWA implementation
 
-- `web/manifest.webmanifest` — relative `start_url`/`scope`, standalone display,
+- `ark_studio/web/manifest.webmanifest` — relative `start_url`/`scope`, standalone display,
   192/512 px icons plus a maskable icon, theme colour.
-- `web/sw.js` — installs an explicit shell cache (HTML, CSS, modules, icons,
+- `ark_studio/web/sw.js` — installs an explicit shell cache (HTML, CSS, modules, icons,
   KaTeX). API requests are never intercepted or cached. Navigation is
   network-first with a cached shell fallback; static assets are
   stale-while-revalidate. Bump `CACHE_VERSION` when changing the shell.
-- `web/js/mobile-core.js` — DOM-free nav/QR/PWA helpers with Node tests.
-- `web/js/mobile-ui.js` — service worker registration, install prompt, pairing
+- `ark_studio/web/js/mobile-core.js` — DOM-free nav/QR/PWA helpers with Node tests.
+- `ark_studio/web/js/mobile-ui.js` — service worker registration, install prompt, pairing
   gate and PWA status.
-- `web/login.html`, `web/css/login.css`, `web/js/login.js` — the server-rendered
+- `ark_studio/web/login.html`, `ark_studio/web/css/login.css`, `ark_studio/web/js/login.js` — the server-rendered
   login surface, styled to match ARK, with the hash-preserving helper.
-- `web/css/mobile.css` — phone-only layout (≤760 px): bottom tabs, safe-area
+- `ark_studio/web/css/mobile.css` — phone-only layout (≤760 px): bottom tabs, safe-area
   insets, off-canvas session drawers, settings nav, Files/terminal adjustments.
   Desktop styles remain in `app.css`.
 
@@ -621,7 +621,7 @@ cache stores no project data; offline mode only guarantees the app skeleton.
 
 ## Android app
 
-`android/` builds two apps that install side by side, both downloadable from
+`ark_studio/android/` builds two apps that install side by side, both downloadable from
 Settings → Project → Access:
 
 - **ARK Studio** (`:app`, `com.masteryip.arkstudio`, 3.0): the native app below,

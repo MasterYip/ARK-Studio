@@ -5,7 +5,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 async function loadModule(name, linker) {
-  const source = await readFile(new URL(`../../web/js/${name}`, import.meta.url), "utf8");
+  const source = await readFile(new URL(`../../ark_studio/web/js/${name}`, import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, { identifier: name });
   await module.link(linker);
   await module.evaluate();

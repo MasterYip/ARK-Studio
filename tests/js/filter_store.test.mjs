@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
 
-const storeSource = await readFile(new URL("../../web/js/filter-store.js", import.meta.url), "utf8");
+const storeSource = await readFile(new URL("../../ark_studio/web/js/filter-store.js", import.meta.url), "utf8");
 
 async function loadStore(context) {
   const module = new vm.SourceTextModule(storeSource, { identifier: "filter-store.js", context });
@@ -27,7 +27,7 @@ function memoryStorage() {
 async function stateFixture(storage = memoryStorage()) {
   const context = vm.createContext({ URLSearchParams, location: { search: "" }, localStorage: storage, document: { documentElement: { dataset: {} } } });
   const store = await loadStore(context);
-  const module = new vm.SourceTextModule(await readFile(new URL("../../web/js/state.js", import.meta.url), "utf8"), { context });
+  const module = new vm.SourceTextModule(await readFile(new URL("../../ark_studio/web/js/state.js", import.meta.url), "utf8"), { context });
   await module.link((specifier) => {
     if (specifier === "./filter-store.js") return store;
     if (specifier === "./appearance.js") return new vm.SyntheticModule(["applyAppearance"], function () {

@@ -9,11 +9,11 @@ async function fixture(nodeTransitions = true) {
   const context = vm.createContext({ performance, localStorage: { setItem() {} } });
   const core = await loadGraphCore(context);
   const module = new vm.SourceTextModule(
-    await readFile(new URL("../../web/js/graph.js", import.meta.url), "utf8"), { context },
+    await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8"), { context },
   );
   await module.link(async (specifier, parent) => {
     if (specifier === "./graph-core.js") return core;
-    const source = await readFile(new URL(`../../web/js/${specifier.slice(2)}`, import.meta.url), "utf8");
+    const source = await readFile(new URL(`../../ark_studio/web/js/${specifier.slice(2)}`, import.meta.url), "utf8");
     const names = [...new Set([...source.matchAll(/export (?:async )?(?:function|class|const|let) (\w+)/g)].map((m) => m[1]))];
     const values = {
       clamp: (n, min, max) => Math.max(min, Math.min(max, n)),

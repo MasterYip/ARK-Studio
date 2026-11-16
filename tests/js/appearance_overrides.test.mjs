@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   OVERRIDE_GROUPS, normalizeOverrides, resolveAppearance, mergeOverrides,
-} from "../../web/js/appearance-overrides.js";
+} from "../../ark_studio/web/js/appearance-overrides.js";
 
 const project = {
   palette: {

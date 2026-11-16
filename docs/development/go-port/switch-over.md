@@ -1,7 +1,7 @@
 # Running ark-server in place of Python: switch-over and rollback
 
 The Python server (`python -m arkstudio serve`) is **deprecated** in favour of
-`ark-server`, the Go server built from `go/`. Python stays in the repository,
+`ark-server`, the Go server built from `ark_studio/server/`. Python stays in the repository,
 fully working, as the reference implementation and as the rollback path. This
 page describes how to run `ark-server` in place of Python, what data the two
 share, and the exact procedure for switching a production host over and back.
@@ -29,7 +29,7 @@ time, never both on one data directory):
 
 | data | compatibility |
 |---|---|
-| project databases `<project>.ark/ark.sqlite3` | identical DDL, the same additive migrations in the same order (`go/internal/store/schema_gen.go` is generated from `arkstudio/db.py`), WAL journal mode, the same `meta` rows (schema_version, change_log_id, migration flags) |
+| project databases `<project>.ark/ark.sqlite3` | identical DDL, the same additive migrations in the same order (`ark_studio/server/internal/store/schema_gen.go` is generated from `ark_studio/python/arkstudio/db.py`), WAL journal mode, the same `meta` rows (schema_version, change_log_id, migration flags) |
 | `project.json`, `activity.jsonl`, assets, `history.git/`, `sessions/` | same file formats and names; LF on Linux (CRLF only on Windows, as Python writes it) |
 | `org.sqlite3` | same schema (org v3), DELETE journal mode kept as Python sets it |
 | `.auth-secret`, `.auth-sessions.json`, `.agent-token` | read and written in Python's format; a remembered browser session survives a switch in both directions (`diffreplay.py --handoff`) |
@@ -75,15 +75,15 @@ rows). Consequences:
 On a build machine (any OS; no C toolchain needed):
 
 ```sh
-cd go
-go generate ./...                                   # embed web/ into the binary
+cd ark_studio/server
+go generate ./...                                   # embed ark_studio/web/ into the binary
 GOOS=linux GOARCH=amd64 go build -trimpath -o ark-server-linux-amd64 ./cmd/ark-server
 sha256sum ark-server-linux-amd64 > ark-server-linux-amd64.sha256
 go vet ./... && go test ./...
 ```
 
 Build from the same commit that the host's `<checkout>` is at (record it with
-`git rev-parse HEAD`), so Python and Go agree on the schema and on `web/`.
+`git rev-parse HEAD`), so Python and Go agree on the schema and on `ark_studio/web/`.
 `ark-server version` prints the build version. `ark-server routes` lists the
 contract ids the binary implements.
 

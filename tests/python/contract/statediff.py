@@ -91,14 +91,13 @@ class StateNormalizer:
             return "<unparsable>"
         if not isinstance(sealed, dict):
             return "<not-a-dict>"
-        sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
-        from arkstudio.org import OrgError, SecretBox
-        box = SecretBox(self.data_dir / "private" / "org" / "secret.key", env_key="ARK_REPLAY_NO_SUCH_KEY")
+        key_path = self.data_dir / "private" / "org" / "secret.key"
         out = {}
         for key, token in sealed.items():
             try:
-                out[key] = "<opened:" + box.open(token, aad=f"{row.get('user_id')}:{row.get('scope')}:{key}") + ">"
-            except (OrgError, TypeError, AttributeError):
+                out[key] = "<opened:" + open_sealed(key_path, token,
+                                                    f"{row.get('user_id')}:{row.get('scope')}:{key}") + ">"
+            except (ValueError, TypeError, AttributeError, OSError):
                 out[key] = f"<raw:{token}>"
         return json.dumps(out, ensure_ascii=False)
 
@@ -156,6 +155,39 @@ def _git_listing(repo: Path, norm: StateNormalizer) -> list:
         files = {name: git("cat-file", "-p", f"{commit}:{name}") for name in ("title.txt", "body.md")}
         out.append({"meta": meta, "parents": parents, "files": files})
     return sorted(out, key=lambda x: json.dumps(x, sort_keys=True))
+
+
+def _unb64(text: str) -> bytes:
+    import base64
+    return base64.urlsafe_b64decode((text + "=" * (-len(text) % 4)).encode("ascii"))
+
+
+def open_sealed(key_path: Path, token, aad: str) -> str:
+    """SecretBox.open (org.py / ark_studio/server/internal/org) with the key file's key: a
+    SHA-256 keystream plus HMAC-SHA256 tag over aad.  Independent of the
+    server code, so the Go-only suite can open sealed values too; raises
+    ValueError for anything that does not open."""
+    import hashlib
+    import hmac
+    version, nonce_b64, cipher_b64, tag_b64 = str(token or "").split("$", 3)
+    if version != "ark1":
+        raise ValueError("unknown version")
+    nonce, cipher, tag = _unb64(nonce_b64), _unb64(cipher_b64), _unb64(tag_b64)
+    raw = Path(key_path).read_bytes()
+    if len(raw) < 16:
+        raise ValueError("short key")
+    key = hashlib.sha256(raw).digest()
+    context = aad.encode("utf-8")
+    if not hmac.compare_digest(hmac.new(key, b"ark-org-tag" + context + nonce + cipher,
+                                        hashlib.sha256).digest(), tag):
+        raise ValueError("tag mismatch")
+    stream = bytearray()
+    counter = 0
+    while len(stream) < len(cipher):
+        stream.extend(hashlib.sha256(b"ark-org-keystream" + key + context + nonce
+                                     + counter.to_bytes(8, "big")).digest())
+        counter += 1
+    return bytes(a ^ b for a, b in zip(cipher, stream)).decode("utf-8", "replace")
 
 
 def dump(data_dir: Path, start: str, *, skip: tuple[str, ...] = ()) -> dict:

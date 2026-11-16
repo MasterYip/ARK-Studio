@@ -35,7 +35,7 @@ Extract the `.ark` folder into the destination server's project directory, then
 open it from the project switcher. For a local browser instance:
 
 ```sh
-python -m arkstudio serve --root /path/to/projects
+ark-server serve --root /path/to/projects
 ```
 
 If that project ID already exists on the destination, keep the original safe

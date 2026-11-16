@@ -13,7 +13,7 @@ users. Queues grow until the clients time out. Its listen backlog is 5
 (`socketserver` default), so bursts of new connections are refused (the load
 generator retries sign-ins for that reason).
 
-## Design (as implemented in `go/`)
+## Design (as implemented in `ark_studio/server/`)
 
 | concern | mechanism | where |
 |---|---|---|
@@ -81,7 +81,7 @@ Phase 2 (snapshot hot spot):
 builds one fixture (`tests/python/contract/fixture.py`: the demo project plus M
 generated units, N members with a write grant, PBKDF2 at 1000 iterations so
 sign-in is cheap) and gives each server a byte-identical copy. Then
-`go/cmd/ark-load` drives the server:
+`ark_studio/server/cmd/ark-load` drives the server:
 
 * every user signs in through the real `/login` form (CSRF token, PBKDF2) and
   keeps its own cookie jar and keep-alive connections, like a browser tab;

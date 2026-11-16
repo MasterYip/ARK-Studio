@@ -7,12 +7,17 @@ import {
   ARROW_HEADS, ARROW_PLACEMENTS, defaultArrowSettings, normalizeArrowSettings,
   normalizePersonalArrows, resolveArrowStyle, arrowResolver,
   relationReversed, displayReversed, REVERSED_BY_DEFAULT,
-} from "../../web/js/arrows.js";
-import { resolveAppearance } from "../../web/js/appearance-overrides.js";
+} from "../../ark_studio/web/js/arrows.js";
+import { resolveAppearance } from "../../ark_studio/web/js/appearance-overrides.js";
 import { loadGraphCore } from "./load_graph_core.mjs";
+import { existsSync } from "node:fs";
+// These cases compare against the frozen Python server's sources; trees
+// without ark_studio/python (the public export) skip them.
+const noPython = !existsSync(new URL("../../ark_studio/python/arkstudio/", import.meta.url))
+  && "the Python reference sources are not in this tree";
 
-test("the model matches arkstudio/settings.py", async () => {
-  const py = await readFile(new URL("../../arkstudio/settings.py", import.meta.url), "utf8");
+test("the model matches ark_studio/python/arkstudio/settings.py", { skip: noPython }, async () => {
+  const py = await readFile(new URL("../../ark_studio/python/arkstudio/settings.py", import.meta.url), "utf8");
   const tuple = (name) => [...py.match(new RegExp(`${name} = \\(([^)]*)\\)`))[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
   assert.deepEqual(ARROW_HEADS, tuple("ARROW_HEADS"));
   assert.deepEqual(ARROW_PLACEMENTS, tuple("ARROW_PLACEMENTS"));
@@ -142,8 +147,8 @@ test("paint modes: hollow fills with the background then outlines", async () => 
   assert.deepEqual(calls.map(([name]) => name), ["=fillStyle", "fill"]);
 });
 
-test("display-only reversal: built-in defaults, project/personal settings and quick toggles", async () => {
-  const py = await readFile(new URL("../../arkstudio/settings.py", import.meta.url), "utf8");
+test("display-only reversal: built-in defaults, project/personal settings and quick toggles", { skip: noPython }, async () => {
+  const py = await readFile(new URL("../../ark_studio/python/arkstudio/settings.py", import.meta.url), "utf8");
   const tuple = [...py.match(/ARROW_REVERSED_BY_DEFAULT = \(([^)]*)\)/)[1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
   assert.deepEqual([...REVERSED_BY_DEFAULT].sort(), tuple.sort());
   assert.equal(relationReversed(null, "derived_from"), true);

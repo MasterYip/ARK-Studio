@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   layeredLayout, placeNewNodes, routeNodeEdges, layoutMetrics, sampleRoute, cubicAt, NODE_W, NODE_H,
-} from "../../web/js/node-graph-layout.js";
+} from "../../ark_studio/web/js/node-graph-layout.js";
 
 const nodesOf = (ids) => ids.map((id) => ({ id, w: NODE_W, h: NODE_H }));
 const edgesOf = (pairs) => pairs.map(([source, target], i) => ({ id: `e${i}`, source, target }));

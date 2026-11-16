@@ -6,7 +6,7 @@ Writes still go to the server immediately; there is no offline editing.
 
 ## Behaviour
 
-- **What is cached.** GET responses listed in `web/js/client-cache-model.js`
+- **What is cached.** GET responses listed in `ark_studio/web/js/client-cache-model.js`
   (`ROUTES`): bootstrap, project, overview, setup state, workspace info,
   assignees, graph snapshot and bodies, unit lists, unit details, comments,
   topics and topic pages, timeline, activity, `/api/me` and effective
@@ -53,7 +53,7 @@ Writes still go to the server immediately; there is no offline editing.
 - **Offline.** A request that gets no response puts the tab "offline"; a
   502/503/504/52x without an ARK JSON error body (a proxy such as Cloudflare
   answering) puts it "server unreachable". Both keep cached data on screen
-  read-only with a banner (`web/js/connectivity.js`). Any response ends the
+  read-only with a banner (`ark_studio/web/js/connectivity.js`). Any response ends the
   state; so does the health probe (`GET /api/health`, no-store), which runs
   with backoff from 2 s doubling to 30 s and at once on the browser's
   `online`/`offline` events, when the tab becomes visible or gains focus, and
@@ -150,7 +150,7 @@ Writes still go to the server immediately; there is no offline editing.
   `/api/unit-details`.
 - **Database schema v11.** Table `change_log(seq INTEGER PRIMARY KEY
   AUTOINCREMENT, kind TEXT, ref INTEGER, tree INTEGER DEFAULT 0)` filled by
-  triggers (`arkstudio/db.py`, `CHANGE_LOG_SCHEMA`): units insert/update/delete
+  triggers (`ark_studio/python/arkstudio/db.py`, `CHANGE_LOG_SCHEMA`): units insert/update/delete
   (`tree` when `assignee` changes); unit_links (`link` row plus both ends,
   `tree` on the source of a part_of link); topic_members (topic and member);
   unit_tags, unit_media, unit_comments (their unit). `meta.change_log_id` is

@@ -3,7 +3,7 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 
-const module = new vm.SourceTextModule(await readFile(new URL("../../web/js/map-list-model.js", import.meta.url), "utf8"));
+const module = new vm.SourceTextModule(await readFile(new URL("../../ark_studio/web/js/map-list-model.js", import.meta.url), "utf8"));
 await module.link(() => { throw new Error("Map list model must remain dependency free"); });
 await module.evaluate();
 const { normalizeMapListPrefs, defaultMapListDirection, sortMapUnits, groupMapUnits, mapListPage } = module.namespace;

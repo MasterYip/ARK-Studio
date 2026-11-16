@@ -2,7 +2,7 @@
 
 A release produces, from one commit:
 
-* the **desktop app** (Tauri 2, `desktop/`) with the Go `ark-server` as its
+* the **desktop app** (Tauri 2, `ark_studio/desktop/`) with the Go `ark-server` as its
   sidecar: Windows NSIS installer + MSI + portable zip, macOS `.dmg` (arm64 and
   x64), Ubuntu `.deb` + AppImage;
 * **standalone `ark-server`** archives for linux amd64/arm64, darwin
@@ -11,16 +11,16 @@ A release produces, from one commit:
 * `SHA256SUMS.txt` over all files, and the updater's `latest.json` when the
   updater key is configured.
 
-No Python is shipped. The Python desktop pieces (`arkstudio/desktop.py`,
-`arkstudio/launcher.py`, `scripts/release/build-tray-launcher.ps1`) stay in the
+No Python is shipped. The Python desktop pieces (`ark_studio/python/arkstudio/desktop.py`,
+`ark_studio/python/arkstudio/launcher.py`, `scripts/release/build-tray-launcher.ps1`) stay in the
 repository with the deprecated Python server but are not part of a release.
 
 ## Version
 
 `VERSION` (repository root) is the single source. `scripts/release/version.mjs`
-copies it into `pyproject.toml`, `arkstudio/__init__.py`,
-`desktop/package.json`, `desktop/src-tauri/Cargo.toml` and
-`desktop/src-tauri/tauri.conf.json`, and checks them; `ark-server` gets it at
+copies it into `ark_studio/python/pyproject.toml`, `ark_studio/python/arkstudio/__init__.py`,
+`ark_studio/desktop/package.json`, `ark_studio/desktop/src-tauri/Cargo.toml` and
+`ark_studio/desktop/src-tauri/tauri.conf.json`, and checks them; `ark-server` gets it at
 build time (`-ldflags "-X main.version=<VERSION>"`, see
 `scripts/release/build-server.sh`; a plain `go build` reports `2.0-go`).
 
@@ -54,7 +54,7 @@ as workflow artifacts without creating a release, for testing a branch.
 | --- | --- | --- |
 | `version` | ubuntu-22.04 | `version.mjs --check`; on tags `--tag` |
 | `server` | ubuntu-22.04 | `go vet`, desktop-gate tests, `build-server.sh` (all five targets, web UI and agent docs embedded), `go test ./internal/agentdocs/` with `ARK_REQUIRE_EMBEDDED_DOCS=1`, `build-server-deb.sh` (amd64, arm64), smoke test of the linux binary (`docs-check`, `/api/health`, `GET /api/agent/v1/docs` with the agent token); artifact `ark-server` |
-| `desktop` | windows-latest, macos-15 (aarch64 native, x86_64 cross-built), ubuntu-22.04 | Go sidecar for the target triple (`desktop/src-tauri/binaries/ark-server-<triple>`) and `docs-check` on it (native targets), Linux deps (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, ...), optional signing setup, `tauri-action` with `--target <triple>`; Windows portable zip; artifact `desktop-<name>` |
+| `desktop` | windows-latest, macos-15 (aarch64 native, x86_64 cross-built), ubuntu-22.04 | Go sidecar for the target triple (`ark_studio/desktop/src-tauri/binaries/ark-server-<triple>`) and `docs-check` on it (native targets), Linux deps (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, ...), optional signing setup, `tauri-action` with `--target <triple>`; Windows portable zip; artifact `desktop-<name>` |
 | `checksums` | ubuntu-22.04 | `SHA256SUMS.txt` over all artifacts; on tags uploads server packages, portable zip and checksums to the draft release |
 
 Actions are pinned by commit SHA (the tag is in a comment). To bump one, look
@@ -69,16 +69,16 @@ bash scripts/release/build-server.sh                       # -> dist/server/
 bash scripts/release/build-server.sh linux/amd64           # one target
 
 # desktop app for this machine
-bash scripts/release/build-server.sh --no-archive --sidecar desktop/src-tauri/binaries <goos>/<goarch>
+bash scripts/release/build-server.sh --no-archive --sidecar ark_studio/desktop/src-tauri/binaries <goos>/<goarch>
 cd desktop && npm ci && npx tauri build
 ```
 
 ### Embedded web UI and agent docs
 
 `build-server.sh` runs `go generate ./internal/webui ./internal/agentdocs`
-before `go build`: `cmd/webgen` copies `web/`, `cmd/docsgen` copies the
+before `go build`: `cmd/webgen` copies `ark_studio/web/`, `cmd/docsgen` copies the
 documentation agents read through `GET /api/agent/v1/docs` (the include list
-is in `go/internal/agentdocs/include.go`; see
+is in `ark_studio/server/internal/agentdocs/include.go`; see
 [external agents](../agents/external-agent.md#documentation-for-agents)).
 It then runs `ark-server docs-check --docs ../docs`, which fails when the
 embedded docs are missing, lack a start-here doc or differ from `docs/`, and
@@ -86,11 +86,11 @@ runs `docs-check` again on every built binary the host can execute. A
 hand-built binary needs the same step:
 
 ```sh
-cd go && go generate ./... && go build ./cmd/ark-server && ./ark-server docs-check
+cd ark_studio/server && go generate ./... && go build ./cmd/ark-server && ./ark-server docs-check
 ```
 
 Without `go generate` a binary has no embedded docs (or web UI) and reads
-`docs/` from disk beside the `web/` folder it serves (development).
+`docs/` from disk beside the `ark_studio/web/` folder it serves (development).
 
 The sidecar must be named for the Rust target triple Tauri builds for
 (`ark-server-x86_64-pc-windows-msvc.exe`, `ark-server-aarch64-apple-darwin`,
@@ -173,14 +173,14 @@ update automatically.
 ## Platform notes
 
 * **Windows upgrades** stop an `ark-server` left running from the install
-  folder before files are replaced (`desktop/src-tauri/windows/hooks.nsh` runs
+  folder before files are replaced (`ark_studio/desktop/src-tauri/windows/hooks.nsh` runs
   `ark-studio.exe --stop-sidecars`; tauri-apps/tauri#15134). The app also
   stops a sidecar recorded in `sidecar.json` at start, and runs its sidecar in
   a kill-on-close job object. The MSI has no such hook; MSI upgrades rely on
   the job object and the restart manager.
 * **Local-mode security**: the app starts `ark-server` with
   `ARK_DESKTOP_SECRET` (environment), which turns on ark-server's desktop gate
-  (`go/internal/desktopgate`): only the app's window (cookie from a one-time
+  (`ark_studio/server/internal/api/desktopgate`): only the app's window (cookie from a one-time
   signed claim URL) and tokens the server issued are admitted on the loopback
   port. With the variable set, the server also exits when its stdin closes.
 * **What CI verifies that a Windows machine cannot**: the macOS `.app`/`.dmg`

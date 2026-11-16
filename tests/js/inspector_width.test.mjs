@@ -3,7 +3,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
 
-const source = await readFile(new URL("../../web/js/inspector-width.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../../ark_studio/web/js/inspector-width.js", import.meta.url), "utf8");
 const module = new vm.SourceTextModule(source, { context: vm.createContext({}) });
 await module.link(() => {}); await module.evaluate();
 const { clampInspectorWidth, dragInspectorWidth, INSPECTOR_MIN_W, INSPECTOR_MAX_W, INSPECTOR_DEFAULT_W, INSPECTOR_WIDTH_KEY } = module.namespace;
@@ -25,7 +25,7 @@ test("dragging the left edge of the right-docked pane widens it", () => {
 });
 
 test("the placeholder and the unit pane both mount the shared resize handle", async () => {
-  const inspector = await readFile(new URL("../../web/js/inspector.js", import.meta.url), "utf8");
+  const inspector = await readFile(new URL("../../ark_studio/web/js/inspector.js", import.meta.url), "utf8");
   const start = inspector.indexOf("export function showInspectorPlaceholder");
   const end = inspector.indexOf("\n}\n", start);
   assert.match(inspector.slice(start, end), /inspectorResizer\(ctx\)/);

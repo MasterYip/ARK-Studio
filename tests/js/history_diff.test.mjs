@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { diffFiles, inlineChanges } from "../../web/js/history-diff.js";
+import { diffFiles, inlineChanges } from "../../ark_studio/web/js/history-diff.js";
 
 const source = [
   "diff --git a/body.md b/body.md", "index 123..456 100644", "--- a/body.md", "+++ b/body.md",

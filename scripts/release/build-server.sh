@@ -53,13 +53,13 @@ triple() {
   esac
 }
 
-echo "ark-server $version: embedding web/ and the agent docs"
-(cd "$root/go" && go generate ./internal/webui ./internal/agentdocs)
-(cd "$root/go" && go run ./cmd/ark-server docs-check --docs ../docs)
-hostos="$(cd "$root/go" && go env GOHOSTOS)"; hostarch="$(cd "$root/go" && go env GOHOSTARCH)"
+echo "ark-server $version: embedding ark_studio/web/ and the agent docs"
+(cd "$root/ark_studio/server" && go generate ./internal/webui ./internal/agentdocs)
+(cd "$root/ark_studio/server" && go run ./cmd/ark-server docs-check --docs ../../docs)
+hostos="$(cd "$root/ark_studio/server" && go env GOHOSTOS)"; hostarch="$(cd "$root/ark_studio/server" && go env GOHOSTARCH)"
 
 build_one() { # goos goarch dest
-  (cd "$root/go" && CGO_ENABLED=0 GOOS="$1" GOARCH="$2" go build -trimpath -buildvcs=false \
+  (cd "$root/ark_studio/server" && CGO_ENABLED=0 GOOS="$1" GOARCH="$2" go build -trimpath -buildvcs=false \
     -ldflags "-s -w -X main.version=$version" -o "$3" ./cmd/ark-server)
 }
 

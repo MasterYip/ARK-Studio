@@ -5,7 +5,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 async function loadModel() {
-  const source = await readFile(new URL("../../web/js/workbench-model.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../ark_studio/web/js/workbench-model.js", import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, { identifier: "workbench-model.js" });
   await module.link(() => { throw new Error("workbench-model must stay dependency-free"); });
   await module.evaluate();

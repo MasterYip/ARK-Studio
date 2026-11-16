@@ -4,7 +4,7 @@ import {
   AGGREGATE_FRESH_MS, OWN_WRITE_WAIT_MS, cacheRoute, entryKey, identityScope, mergeBodiesDelta,
   mergeSnapshotDelta, normalizeRoute, planEviction, prefetchPlan, servePolicy, slowConnection,
   staleAfterDelta,
-} from "../../web/js/client-cache-model.js";
+} from "../../ark_studio/web/js/client-cache-model.js";
 
 const origin = "https://ark.example";
 

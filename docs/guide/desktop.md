@@ -1,6 +1,6 @@
 # ARK Studio desktop app
 
-The desktop app is a small native shell (Tauri 2, in `desktop/`) around the
+The desktop app is a small native shell (Tauri 2, in `ark_studio/desktop/`) around the
 ARK web UI. It has no Python and no bundled web UI of its own: its window
 always shows a server's own pages.
 
@@ -31,10 +31,10 @@ rest of ARK.
   the connection window need a compositing window manager.
 
 The ARK web app recognizes the desktop app (`window.__ARK_DESKTOP__`) and
-marks its top bar as the drag region (`web/js/desktop-shell.js`); browsers are
+marks its top bar as the drag region (`ark_studio/web/js/desktop-shell.js`); browsers are
 unaffected. Pages that do not know about the desktop app (the sign-in page, an
 older ARK server) still get the window buttons and a drag region from the
-shell (`desktop/src-tauri/src/shell.js`).
+shell (`ark_studio/desktop/src-tauri/src/shell.js`).
 
 ## Tray
 
@@ -77,15 +77,6 @@ computer" in such a link's dialog opens the same path locally through the
 desktop app: inside the folders under **Settings > Folders remote servers may
 open** directly, elsewhere after asking. Programs and scripts are revealed in
 the file manager, never started.
-
-## Legacy Python shell (deprecated)
-
-`python -m arkstudio desktop` (pywebview + pystray), the tkinter chooser
-`python -m arkstudio.launcher` and the `ARK-Tray.exe` stub built by
-`scripts/release/build-tray-launcher.ps1` still work from a source checkout
-with `pip install -r requirements-desktop.txt`, but they are deprecated together
-with the Python server and are not distributed. Their settings live in
-`~/.ark/desktop.json`; the desktop app does not read them.
 
 ## Development
 

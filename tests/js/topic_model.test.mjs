@@ -3,7 +3,7 @@ import test from "node:test";
 import {
   layoutFromMembers, layoutChanges, ruleFromFilters, ruleParts, moveInOrder, visibleEdges, previewPoints,
   outlineMove, outlineDrop, dropPosition, foldable, foldLevel, subtreeIds, visibleOutline, foldChord, filterTopic,
-} from "../../web/js/topic-model.js";
+} from "../../ark_studio/web/js/topic-model.js";
 
 const members = [
   { id: 1, uid: "S-0001", member: { x: 10, y: 20 } },

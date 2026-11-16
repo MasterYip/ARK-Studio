@@ -19,7 +19,7 @@ previews a note) or as an Obsidian vault.
 - **CLI**, for a project folder on the server:
 
   ```bash
-  python -m arkstudio export --project /path/My.ark --format bundle \
+  ark-server export --project /path/My.ark --format bundle \
       --units F-0015,F-0016 --depth 1 --out /tmp/
   ```
 

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
-import { contrast, normalizeDisplay, paletteMode, paletteTokens, readable, resolvePalette } from "../../web/js/appearance.js";
+import { contrast, normalizeDisplay, paletteMode, paletteTokens, readable, resolvePalette } from "../../ark_studio/web/js/appearance.js";
 
 const palettes = [
   { background: "#101222", surface: "#1c1f36", text: "#ecebff", muted: "#a5a3c4", line: "#303456", accent: "#6366f1" },
@@ -50,7 +50,7 @@ test("display normalization bounds scale and does not coerce string booleans", (
 });
 
 test("text scaling uses rem without scaling graph geometry or fixed SVG lockups", () => {
-  const css = readFileSync(new URL("../../web/css/app.css", import.meta.url), "utf8");
+  const css = readFileSync(new URL("../../ark_studio/web/css/app.css", import.meta.url), "utf8");
   assert.match(css, /font-size:calc\(16px \* var\(--font-scale,1\)\)/);
   assert.doesNotMatch(css, /font-size:\s*\d+(?:\.\d+)?px/);
   assert.doesNotMatch(css, /\bzoom:\s*var\(--font/);

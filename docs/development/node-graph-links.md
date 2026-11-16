@@ -1,7 +1,7 @@
 # Node graph link curves
 
 How other node editors shape links, and what the node graph
-(`web/js/node-graph-layout.js`) uses. Every link leaves the source's output
+(`ark_studio/web/js/node-graph-layout.js`) uses. Every link leaves the source's output
 port (right edge) and enters the target's input port (left edge) horizontally.
 "Forward" means the target port is to the right of the source port; a
 "backward" link points left.

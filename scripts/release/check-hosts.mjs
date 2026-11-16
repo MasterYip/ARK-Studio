@@ -5,7 +5,7 @@
 //
 // Scans files (text or binary; directories recursively) for host names and
 // IPv4 addresses and fails if any is one of ours. Default paths: everything
-// that ends up in a bundle (desktop UI and shell, tauri config, web/ which is
+// that ends up in a bundle (desktop UI and shell, tauri config, ark_studio/web/ which is
 // embedded in ark-server, the Go sources). CI also runs it on the built
 // ark-studio and ark-server binaries.
 //
@@ -31,13 +31,13 @@ export const FORBIDDEN_SHA256 = new Set([
 ]);
 
 export const DEFAULT_PATHS = [
-  "desktop/ui",
-  "desktop/src-tauri/src",
-  "desktop/src-tauri/capabilities",
-  "desktop/src-tauri/tauri.conf.json",
-  "desktop/src-tauri/windows",
-  "web",
-  "go",
+  "ark_studio/desktop/ui",
+  "ark_studio/desktop/src-tauri/src",
+  "ark_studio/desktop/src-tauri/capabilities",
+  "ark_studio/desktop/src-tauri/tauri.conf.json",
+  "ark_studio/desktop/src-tauri/windows",
+  "ark_studio/web",
+  "ark_studio/server",
 ];
 
 const SKIP_DIRS = new Set(["node_modules", "target", ".git", "gen", "dist", "binaries"]);

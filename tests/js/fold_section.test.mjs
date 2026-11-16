@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FOLD_PREFIX, foldIsOpen, rememberFold } from "../../web/js/fold-section.js";
+import { FOLD_PREFIX, foldIsOpen, rememberFold } from "../../ark_studio/web/js/fold-section.js";
 
 function memoryStorage() {
   const data = new Map();

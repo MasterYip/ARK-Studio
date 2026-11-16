@@ -36,7 +36,7 @@ start ARK with a command:
 ```powershell
 $env:ARK_DSH_COMMAND = "dsh headless -"
 $env:ARK_DSH_TIMEOUT = "180"
-python -m arkstudio serve --port 8890
+ark-server serve --port 8890
 ```
 
 `ARK_DSH_COMMAND` is split with shell-like quoting and run with the `.ark`

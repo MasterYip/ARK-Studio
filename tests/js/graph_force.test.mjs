@@ -12,7 +12,7 @@ async function load(url) {
   await module.link((specifier, parent) => load(new URL(specifier, parent.identifier)));
   return module;
 }
-const module = await load(new URL("../../web/js/graph-force.js", import.meta.url));
+const module = await load(new URL("../../ark_studio/web/js/graph-force.js", import.meta.url));
 await module.evaluate();
 const { applyRepulsion } = module.namespace;
 const copy = (nodes) => nodes.map((n) => ({ ...n, vx: 0, vy: 0 }));

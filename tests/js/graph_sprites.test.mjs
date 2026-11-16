@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   SpriteCache, spriteBucket, MIN_BUCKET, MAX_BUCKET, MAX_SPRITE_PIXELS, ATLAS_SIZE,
-} from "../../web/js/graph-sprites.js";
+} from "../../ark_studio/web/js/graph-sprites.js";
 
 function fakeSurface(w, h) {
   const calls = [];

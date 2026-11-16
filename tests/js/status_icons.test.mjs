@@ -3,18 +3,23 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
+import { existsSync } from "node:fs";
+// These cases compare against the frozen Python server's sources; trees
+// without ark_studio/python (the public export) skip them.
+const noPython = !existsSync(new URL("../../ark_studio/python/arkstudio/", import.meta.url))
+  && "the Python reference sources are not in this tree";
 
 const paths = [];
 const context = vm.createContext({ Path2D: class { constructor(d) { this.d = d; paths.push(d); } } });
 const module = new vm.SourceTextModule(
-  await readFile(new URL("../../web/js/icons.js", import.meta.url), "utf8"), { context },
+  await readFile(new URL("../../ark_studio/web/js/icons.js", import.meta.url), "utf8"), { context },
 );
 await module.link(() => {});
 await module.evaluate();
 const { statusIconName, statusIconInk, drawStatusIcon, hasIcon } = module.namespace;
 
-test("all persisted ARK statuses have distinct valid icons; unknowns stay neutral", async () => {
-  const tags = await readFile(new URL("../../arkstudio/tags.py", import.meta.url), "utf8");
+test("all persisted ARK statuses have distinct valid icons; unknowns stay neutral", { skip: noPython }, async () => {
+  const tags = await readFile(new URL("../../ark_studio/python/arkstudio/tags.py", import.meta.url), "utf8");
   const block = tags.split("KNOWN_STATUSES =")[1].split("KNOWN_IMPORTANCE =")[0];
   const statuses = [...block.matchAll(/\("(\w+)",/g)].map((m) => m[1]);
   const names = statuses.map(statusIconName);

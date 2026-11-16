@@ -169,7 +169,7 @@ Rules, in order:
    - `mode: "replace"` with offset 0 rewrites the transcript. Use it when the
      source file was rewritten or shrank.
 6. Every line is parsed and its strings run through the secret redactor
-   (`arkstudio/secret_redact.py`). A line longer than the line limit is stored as
+   (`ark_studio/server/internal/secretredact`). A line longer than the line limit is stored as
    `{"type":"ark_truncated","bytes":N,"preview":"…"}`.
 7. `413 SESSION_QUOTA` when the stored session, or `413 SESSION_PROJECT_QUOTA`
    when the project's `sessions/` folder, would exceed its cap.

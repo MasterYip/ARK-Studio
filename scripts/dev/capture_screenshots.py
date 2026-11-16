@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
 """Capture the README/doc screenshots and the demo images from a fresh demo.
 
-    cd go && go generate ./... && go build -o ark-server ./cmd/ark-server && cd ..
-    python scripts/dev/capture_screenshots.py --server go/ark-server --out ./output/shots
-    python scripts/dev/capture_screenshots.py --server go/ark-server --write
+    cd ark_studio/server && go generate ./... && go build -o ark-server ./cmd/ark-server && cd ../..
+    python scripts/dev/capture_screenshots.py --server ark_studio/server/ark-server --out ./output/shots
+    python scripts/dev/capture_screenshots.py --server ark_studio/server/ark-server --write
 
 Starts ``ark-server serve`` on a new temporary root (local mode, starter demo
 projects, user "Local user"), drives headless Edge/Chrome over the DevTools
@@ -12,11 +12,11 @@ protocol at 1440x900, light theme, English, guided tour dismissed, and saves:
     docs/screenshots/readme-home.png    Home of the PredActor demo
     docs/screenshots/readme-map.png     Map, force graph
     docs/screenshots/readme-editor.png  Editor, split view of a demo node
-    demo-assets/workbench-overview.png  Home, dark theme (attached by the demo seed)
-    demo-assets/mind-graph.png          Map, mind layout, dark theme (attached by the seed)
+    ark_studio/demo/workbench-overview.png  Home, dark theme (attached by the demo seed)
+    ark_studio/demo/mind-graph.png          Map, mind layout, dark theme (attached by the seed)
 
 ``--write`` saves into the repository (run it twice: the demo seed attaches the
-two demo-assets images, so the second run shows the new ones in previews).
+two ark_studio/demo images, so the second run shows the new ones in previews).
 Otherwise files go to ``--out``. Set ARK_EDGE_PATH for a browser elsewhere.
 No external network is used.
 """
@@ -222,7 +222,7 @@ def capture(server: Path, out: dict[str, Path], keep: bool) -> None:
     temp = Path(tempfile.mkdtemp(prefix="ark-shots-"))
     port, debug = free_port(), free_port()
     base = f"http://127.0.0.1:{port}"
-    env = dict(os.environ, ARK_WEB_ROOT=str(ROOT / "web"))
+    env = dict(os.environ, ARK_WEB_ROOT=str(ROOT / "ark_studio" / "web"))
     env.pop("ARK_PUBLIC", None)
     serve = subprocess.Popen([str(server), "serve", "--root", str(temp / "data" / "projects"), "--port", str(port)],
                              cwd=temp, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -330,8 +330,8 @@ TARGETS = {
     "readme-home": "docs/screenshots/readme-home.png",
     "readme-map": "docs/screenshots/readme-map.png",
     "readme-editor": "docs/screenshots/readme-editor.png",
-    "workbench-overview": "demo-assets/workbench-overview.png",
-    "mind-graph": "demo-assets/mind-graph.png",
+    "workbench-overview": "ark_studio/demo/workbench-overview.png",
+    "mind-graph": "ark_studio/demo/mind-graph.png",
 }
 
 

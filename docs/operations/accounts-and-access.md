@@ -5,8 +5,8 @@ teams and project grants. The HTTP API enforces access independently of the UI.
 
 ## Start With Authentication
 
-For a server deployment, use `python3 -m arkstudio server-init` once, then
-`python3 -m arkstudio serve --config <server.json>`. Account passwords are stored
+For a server deployment, use `ark-server server-init` once, then
+`ark-server serve --config <server.json>`. Account passwords are stored
 as salted hashes in the organization database; restart does not need bootstrap
 credentials in the shell environment. See [server operations](server-operations.md).
 
@@ -17,7 +17,7 @@ For example, in PowerShell:
 ```powershell
 $env:ARK_AUTH_USER = 'your-username'
 $env:ARK_AUTH_PASSWORD = 'replace-with-your-password'
-python -m arkstudio serve --port 8890
+ark-server serve --port 8890
 ```
 
 Or in a POSIX shell:
@@ -25,7 +25,7 @@ Or in a POSIX shell:
 ```sh
 export ARK_AUTH_USER='your-username'
 export ARK_AUTH_PASSWORD='replace-with-your-password'
-python -m arkstudio serve --port 8890
+ark-server serve --port 8890
 ```
 
 Use a private environment or a password file (`--auth-password-file`) for a

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { DRAG_ATTR, desktopChrome, installDesktopShell } from "../../web/js/desktop-shell.js";
+import { DRAG_ATTR, desktopChrome, installDesktopShell } from "../../ark_studio/web/js/desktop-shell.js";
 
 function fakeDoc(selectors) {
   const attrs = (init = {}) => {

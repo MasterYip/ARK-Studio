@@ -1,0 +1,13 @@
+/internal/webui/dist/*
+!/internal/webui/dist/.keep
+/internal/webui/demo/*
+!/internal/webui/demo/.keep
+/internal/agentdocs/dist/*
+!/internal/agentdocs/dist/.keep
+/ark-server
+/ark-server.exe
+/ark-load
+/ark-load.exe
+*.test
+*.test.exe
+/.snap/

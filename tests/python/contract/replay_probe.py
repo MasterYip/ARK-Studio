@@ -11,7 +11,7 @@ while the route table said "ported".
 
 This module closes that gap:
 
-* ``scan_branches()`` walks arkstudio/server.py and lists every
+* ``scan_branches()`` walks ark_studio/python/arkstudio/server.py and lists every
   (function, variable) pair compared with string constants.  Each pair must
   be classified in DERIVED (a path-derived dispatch key: probed) or in
   NOT_DISPATCH (a query flag, header, body value or computed value: not a
@@ -24,7 +24,7 @@ This module closes that gap:
 * diffreplay.py runs the probe steps last in every mode, compared byte for
   byte like any module and never skipped; independently, any Go response
   carrying ``NOT_PORTED`` is a mismatch in every module.
-* ``python -B replay_probe.py --go go/ark-server.exe`` runs the probe against
+* ``python -B replay_probe.py --go ark_studio/server/ark-server.exe`` runs the probe against
   the Go server alone (quick check, no Python reference) and fails on any
   NOT_PORTED reply; ``--write`` records the result in probe.json, which
   route_table.py reads to count dispatcher sub-routes.
@@ -39,7 +39,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 REPO = HERE.parents[2]
-SERVER = REPO / "arkstudio" / "server.py"
+SERVER = REPO / "ark_studio" / "python" / "arkstudio" / "server.py"
 CONTRACT = REPO / "docs" / "development" / "go-port" / "contract.json"
 PROBE_JSON = REPO / "docs" / "development" / "go-port" / "probe.json"
 

@@ -1,8 +1,8 @@
 # ARK Studio Go server (ark-server)
 
-`ark-server` (`go/`) is ARK Studio's production server and CLI. It answers
+`ark-server` (`ark_studio/server/`) is ARK Studio's production server and CLI. It answers
 every route, subcommand and configuration input of the deprecated Python
-server (`arkstudio/`, frozen as the reference implementation and rollback
+server (`ark_studio/python/arkstudio/`, frozen as the reference implementation and rollback
 path) byte for byte, and runs on the same data folders. New backend features
 are written in Go only. Running it in place of Python, data compatibility
 and rollback: [switch-over.md](switch-over.md). Concurrency design and load
@@ -12,16 +12,17 @@ measurements: [concurrency.md](concurrency.md).
 
 | path | what |
 |---|---|
-| `go/cmd/ark-server` | the server and the CLI (every `python -m arkstudio` subcommand, see "Command line"), plus `routes [--json]`, `version`, `demo-agent`, `docs-check [--docs DIR]` |
-| `go/cmd/ark-load` | load generator (real sign-ins, weighted read/write mix, process sampling) |
-| `go/cmd/webgen` | copies `web/` into the embed folder (`go generate`) |
-| `go/cmd/docsgen` | copies the agent docs (`docs/`, include list in `internal/agentdocs`) into their embed folder (`go generate`); served at `GET /api/agent/v1/docs` |
-| `go/internal/server` | HTTP pipeline, auth, static files, every route (`routes*.go`), response caching; `contract_gen.go` and `static_gen.go` are generated |
-| `go/internal/store`, `sqlitedb` | project database (schema, migrations, reads and writes; `schema_gen.go` is generated); one writer plus a read pool per SQLite file |
-| `go/internal/org`, `auth`, `project`, `settings`, `sessions`, `setup`, `gpu`, ... | accounts, projects, agent sessions, setup, GPU queue and the other services |
-| `go/internal/pyjson`, `pytext`, `pyurl`, `pyos`, `pyre`, `pyargparse` | Python-compatible JSON, str semantics, urllib parsing, shell helpers, Python 3.10 `re` and argparse, tested against CPython-generated vectors (`testdata/`) |
-| `go/internal/limits`, `stream` | bounded subprocess pool, leak-free SSE pattern |
-| `go/internal/desktopgate` | loopback gate used by the desktop app |
+| `ark_studio/server/cmd/ark-server` | the server and the CLI (every `python -m arkstudio` subcommand, see "Command line"), plus `routes [--json]`, `version`, `demo-agent`, `docs-check [--docs DIR]` |
+| `ark_studio/server/cmd/ark-load` | load generator (real sign-ins, weighted read/write mix, process sampling) |
+| `ark_studio/server/cmd/webgen` | copies `ark_studio/web/` into the embed folder (`go generate`) |
+| `ark_studio/server/cmd/docsgen` | copies the agent docs (`docs/`, include list in `internal/agentdocs`) into their embed folder (`go generate`); served at `GET /api/agent/v1/docs` |
+| `ark_studio/server/internal/server` | HTTP pipeline (host check, sign-in, device gate, project scope, same-origin), router tables (`router.go`), the handlers not yet moved to `api/`, response caching; `contract_gen.go` and `static_gen.go` are generated |
+| `ark_studio/server/internal/api`, `api/<domain>` | request context (`api.Ctx`), error replies, and one handler package per moved domain (gpu, resources, search, workspace, hostopen, chat, agentdocs, desktopgate); `api/apitest` is the shared fake context |
+| `ark_studio/server/internal/store`, `sqlitedb` | project database (schema, migrations, reads and writes; `schema_gen.go` is generated); one writer plus a read pool per SQLite file |
+| `ark_studio/server/internal/org`, `auth`, `project`, `settings`, `sessions`, `setup`, `gpu`, ... | accounts, projects, agent sessions, setup, GPU queue and the other services (domain packages, no `net/http`) |
+| `ark_studio/server/internal/compat/*` (`pyjson`, `pytext`, `pyurl`, `pyos`, `pyre`, `pydiff`, `pyargparse`) | Python-compatible JSON, str semantics, urllib parsing, shell helpers, Python 3.10 `re`, difflib and argparse, tested against CPython-generated vectors (`testdata/`) |
+| `ark_studio/server/internal/platform/*` (`clock`, `pyerr`, `textfile`, `pathx`, `procx`, `stream`) | replay-aware clock, Python exception model of error replies, text files, path rules, bounded subprocess pool, leak-free SSE pattern |
+| `ark_studio/server/internal/archtest` | layer rules of [architecture.md](architecture.md) section 4, enforced by `go test` |
 | `tests/python/contract/` | generators (contract, schema, static payloads, route tables), fixtures, black-box harness, differential replay against Python, load test |
 
 ## Build and run
@@ -34,7 +35,7 @@ was already a dependency of modernc). `modernc.org/libc`, `mathutil`,
 all.
 
 ```sh
-cd go
+cd ark_studio/server
 go generate ./...            # copy ../web into the binary (optional for development)
 go build ./cmd/ark-server    # ark-server(.exe)
 go build ./cmd/ark-load
@@ -52,7 +53,7 @@ Go-only tuning flags: `--web-root`, `--read-pool`, `--heavy-limit`,
 `--max-subprocesses`, `--max-in-flight`, `--request-timeout`.
 
 Without `go generate` only a placeholder is embedded. The server then serves
-`web/` from disk: `--web-root`/`ARK_WEB_ROOT`, or a `web/` folder beside the
+`ark_studio/web/` from disk: `--web-root`/`ARK_WEB_ROOT`, or a `ark_studio/web/` folder beside the
 binary or in a parent of the working directory. The embedded build records
 the same asset version Python computes (newest file mtime in hex), so asset
 URLs and caches stay valid across a switch between the two servers.
@@ -63,10 +64,10 @@ schema, migrations and `journal_mode`), `org.sqlite3`, `.agent-token`,
 first-run project (and the demo) like Python (`--fresh` replay).
 
 For the Tauri shell: `ark-server serve --root <dir> --port <p>` is a single
-binary with `web/` embedded, has the same CLI shape as Python, and exits
+binary with `ark_studio/web/` embedded, has the same CLI shape as Python, and exits
 cleanly on SIGINT/SIGTERM (and on console close on Windows).
 
-Go-only, for the ARK Studio desktop app (`desktop/`): with `ARK_DESKTOP_SECRET`
+Go-only, for the ARK Studio desktop app (`ark_studio/desktop/`): with `ARK_DESKTOP_SECRET`
 set (environment only; removed from the process environment at start so
 children never see it) `serve` puts `internal/desktopgate` in front of the
 app. On the loopback port it then admits only requests carrying the desktop
@@ -83,22 +84,24 @@ see [release](../release.md)); a plain build reports `2.0-go`.
 Before a change is merged or deployed, run the gate from the repository root.
 It builds `ark-server` fresh and runs gofmt, `go vet`, the agent-docs
 generate/`docs-check`, `go test ./...`, the contract tools, the contract
-harness against the new binary and the JS suite:
+harness and the golden replay (`golden.py`: the recorded replies and final
+state of ark-server alone) against the new binary, and the JS suite:
 
 ```sh
 scripts/dev/check-backend.sh             # Linux, macOS, Git Bash
+scripts/dev/check-backend.sh --quick     # without the golden replay (about 4 minutes)
 scripts/dev/check-backend.sh --legacy    # also the differential replay against the Python server
-scripts/dev/check-backend.ps1            # Windows PowerShell (-Legacy)
+scripts/dev/check-backend.ps1            # Windows PowerShell (-Quick, -Legacy)
 ```
 
 Individual checks:
 
 ```sh
-cd go && go generate ./... && go vet ./... && go test ./...
+cd ark_studio/server && go generate ./... && go vet ./... && go test ./...
 python -B tests/python/contract/gen_contract.py --check     # contract inventory is current
-ARK_CONTRACT_SERVER=go/ark-server python -B tests/python/contract/harness.py
-python -B tests/python/contract/diffreplay.py --go go/ark-server [--auth] [--nodes 2000]
-python -B tests/python/contract/cli_diff.py --go go/ark-server
+ARK_CONTRACT_SERVER=ark_studio/server/ark-server python -B tests/python/contract/harness.py
+python -B tests/python/contract/diffreplay.py --go ark_studio/server/ark-server [--auth] [--nodes 2000]
+python -B tests/python/contract/cli_diff.py --go ark_studio/server/ark-server
 python -B tests/python/contract/loadtest.py --users 600 --nodes 2000 --duration 60
 ```
 
@@ -116,12 +119,14 @@ same for the command line. Generated files (`gen_contract.py`,
 ## Adding a route
 
 The contract (`contract.json`, `routes.md`) is generated from the frozen
-Python server, so a new route exists in Go only:
+Python server, so a new route exists in Go only. Step by step (domain
+package, `api/<domain>` handler, registration in `server/router.go`,
+`go_only.py`, goldens): [development guide](../development.md#changing-the-backend). In short:
 
-1. Implement it in the matching `go/internal/server/routes_*.go` file and
-   dispatch it from the handler for its method and prefix (see how
-   `agentDocsGet` is called from `routes_views.go`).
-2. List it in `GoOnlyRoutes` (`routes_agentdocs.go`) so `ark-server routes`
+1. Implement it in the domain package and its `ark_studio/server/internal/api/<domain>`
+   handler, and register it in the right phase table of
+   `ark_studio/server/internal/server/router.go` (see `internal/api/agentdocs`).
+2. List it in `GoOnlyRoutes` (`server/routes_agentdocs.go`) so `ark-server routes`
    reports it with the `goonly:` prefix.
 3. Add it to `ROUTES` in `tests/python/contract/go_only.py`: the harness then
    runs cases that name it against Go only, and the replay does not expect
@@ -198,7 +203,7 @@ Where `ark-server` deliberately differs from the Python reference:
   that is not JSON gets the fixed text "Expecting value: line 1 column 1
   (char 0)" (Python reports the position of the first JSON syntax error);
   a non-UTF-8 reply gets one fixed message.
-* Session uploads: redaction uses `internal/pyre` (backtracking, like Python's `re`) and is about 4x slower than CPython on megabyte chunks. On Windows `Path.glob` in the store is case-insensitive in both servers.
+* Session uploads: redaction uses `internal/compat/pyre` (backtracking, like Python's `re`) and is about 4x slower than CPython on megabyte chunks. On Windows `Path.glob` in the store is case-insensitive in both servers.
 * Agent sessions: a bare program name in a preset command is resolved the way
   CreateProcess does on Windows for Python's `subprocess.Popen` (`.exe` is
   appended, PATHEXT is not applied, the search starts in the server's own
@@ -209,7 +214,7 @@ Where `ark-server` deliberately differs from the Python reference:
 * An artifact download whose file name is not Latin-1 is broken in Python
   (`http.server` cannot encode the Content-Disposition header: the client
   gets a truncated error body); Go sends the UTF-8 header. Not replayed.
-* Workbench Search regexes run on `internal/pyre`, a port of Python 3.10's
+* Workbench Search regexes run on `internal/compat/pyre`, a port of Python 3.10's
   `re` checked against 316 CPython vector patterns. A search whose regex
   backtracking exceeds a step budget (200M steps) or nests deeper than 100k
   reports `timed_out`; Python would keep running. `\N{...}` does not accept
@@ -229,7 +234,7 @@ Where `ark-server` deliberately differs from the Python reference:
 ## Command line
 
 `ark-server` takes every subcommand and flag of `python -m arkstudio`
-(`arkstudio/__main__.py`). Parsing is `internal/pyargparse`, a port of the
+(`ark_studio/python/arkstudio/__main__.py`). Parsing is `internal/compat/pyargparse`, a port of the
 Python 3.10 argparse parse loop: unique-prefix abbreviations, `--opt=value`,
 `--`, nargs `?`/`*`, choices, required options, int/float values, `-h`. It
 runs over `cli_spec.json`, a snapshot of the Python parser tree with its
@@ -237,14 +242,14 @@ runs over `cli_spec.json`, a snapshot of the Python parser tree with its
 `tests/python/contract/gen_cli.py`. `--check` mode fails when the Python
 parser changes; `test_cli_contract.py` runs it. Error texts, the usage block
 and exit code 2 are argparse's. Python's 107 recorded argv vectors (exit
-code, stdout, stderr, parsed namespace; `go/cmd/ark-server/testdata`) pass in
+code, stdout, stderr, parsed namespace; `ark_studio/server/cmd/ark-server/testdata`) pass in
 `go test ./cmd/ark-server`.
 
 | subcommand | Go |
 |---|---|
 | `serve` (all flags, `--config`, env fallbacks) | yes. Go-only tuning flags match only when spelled in full, so abbreviations mean what they mean in Python |
 | `server-init` | yes (getpass with echo off on Windows and Linux consoles) |
-| `new`, `demo` | yes. Demo images come from `demo-assets/` beside `web/`, found like the server finds `web/` |
+| `new`, `demo` | yes. Demo images come from `ark_studio/demo/` beside `ark_studio/web/`, found like the server finds `ark_studio/web/` |
 | `export` (json, markdown, csv, svg, bundle; `--out` file or folder) | yes |
 | `agent context` | yes |
 | `skills list`, `show`, `interface` | yes (static payloads from `gen_static.py`) |

@@ -2,13 +2,15 @@
 
 This document records exactly what was adapted, from where, under which
 license, and what was deliberately left out. It is the canonical source map for
-`arkstudio/skills/`.
+the skill modules (`arkstudio/skills/` in the original Python adaptation, ported
+to `ark_studio/server/internal/skillkit/` and `skillbrief/` in ark-server; the
+module names below are the Python ones).
 
 Vendor snapshots of `agent-team-workflow`, `rrsi` and
 `academic-design-workflow` were read during integration.
 They are not copied into the ARK tree. ARK ships adapted code, templates and
 documentation, plus the required license texts under
-`arkstudio/skills/LICENSES/`.
+`ark_studio/server/internal/skillkit/LICENSES/`.
 
 ## Summary
 
@@ -73,7 +75,7 @@ schema; it is not a copy of a vendor theme.
 
 ## Licenses
 
-Full license texts are shipped in `arkstudio/skills/LICENSES/`:
+Full license texts are shipped in `ark_studio/server/internal/skillkit/LICENSES/`:
 
 - `agent-team-MIT.txt` — MIT, Copyright (c) 2026 Raymon Yip.
 - `rrsi-APACHE-2.0.txt` — Apache License 2.0, Copyright 2026 The rrsi Authors /

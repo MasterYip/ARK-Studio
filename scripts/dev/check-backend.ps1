@@ -1,24 +1,22 @@
 <#
-Backend gate (deploy gate): the Go server's checks.
+Backend gate (deploy gate): the Go server's own checks, no Python server.
 
   scripts/dev/check-backend.ps1            # gofmt, vet, go test, docs-check, build,
-                                           # contract harness against the fresh binary,
-                                           # JS suite
-  scripts/dev/check-backend.ps1 -Quick     # same (kept for compatibility with later
-                                           # versions that add a slower golden replay)
+                                           # contract harness + golden replay against the
+                                           # fresh binary, JS suite
+  scripts/dev/check-backend.ps1 -Quick     # skip the golden replay (about 4 minutes)
   scripts/dev/check-backend.ps1 -Legacy    # also the differential replay against the
-                                           # frozen Python server (several minutes)
+                                           # frozen Python server (skipped without ark_studio/python)
 
 Needs: go (1.27+), a Python 3.10+ interpreter as test runner ($env:ARK_PYTHON,
-else python; the harness builds its fixture with the repository's Python
-package, but the server under test is ark-server), node (JS suite).
+else python; it never imports arkstudio in the Go-only steps), node (JS suite).
 Exits non-zero when any step fails; prints a summary.
 #>
 param([switch]$Quick, [switch]$Legacy)
 
 $ErrorActionPreference = 'Continue'
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$go = Join-Path $root 'go'
+$go = Join-Path $root 'ark_studio/server'
 $py = $env:ARK_PYTHON
 if (-not $py) { $py = 'python' }
 $bin = Join-Path $go 'ark-server.exe'
@@ -45,7 +43,7 @@ try {
     Step 'go vet' { go vet ./... }
     Step 'agent docs (generate, docs-check)' {
         go generate ./internal/agentdocs
-        if ($LASTEXITCODE -eq 0) { go run ./cmd/ark-server docs-check --docs ../docs }
+        if ($LASTEXITCODE -eq 0) { go run ./cmd/ark-server docs-check --docs ../../docs }
     }
     Step 'go test' { go test ./... }
     Step 'build ark-server' { go build -o $bin ./cmd/ark-server }
@@ -53,14 +51,23 @@ try {
 
 Push-Location $root
 try {
-    Step 'contract tools (go_only)' { & $py -B -m unittest tests.python.contract.test_go_only }
-    Step 'contract harness (ark-server)' {
+    Step 'contract tools (go_only, fixtures)' {
+        & $py -B -m unittest tests.python.contract.test_go_only
+        if ($LASTEXITCODE -eq 0) { & $py -B tests/python/contract/record_fixtures.py --check }
+    }
+    Step 'contract harness (ark-server alone)' {
         $env:ARK_CONTRACT_SERVER = $bin
         try { & $py -B tests/python/contract/harness.py } finally { Remove-Item Env:ARK_CONTRACT_SERVER }
     }
-    $null = $Quick  # no golden replay on this branch yet
+    if (-not $Quick -and -not (Test-Path "$root/tests/python/contract/goldens/local.json.gz")) {
+        Write-Host '==> golden replay: skipped (no goldens in this tree; record them with golden.py --record)'
+    } elseif (-not $Quick) {
+        Step 'golden replay (ark-server alone)' { & $py -B tests/python/contract/golden.py --go $bin }
+    }
     Step 'JS suite' { node --experimental-vm-modules --test tests/js/ }
-    if ($Legacy) {
+    if ($Legacy -and -not (Test-Path (Join-Path $root 'ark_studio/python/arkstudio'))) {
+        Write-Host '==> legacy: skipped (no ark_studio/python in this tree)'
+    } elseif ($Legacy) {
         Step 'legacy: differential replay vs Python' { & $py -B tests/python/contract/diffreplay.py --go $bin }
     }
 } finally { Pop-Location }

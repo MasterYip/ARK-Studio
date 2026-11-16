@@ -192,6 +192,24 @@ var systems = map[string]string{
 	"kex":     "__ARK_LOAD__\n２.5 1 1\n__ARK_NPROC__\n８\n__ARK_CPU__\n%Cpu(s): 12.5　id\n",
 }
 
+// dfOutputs answer the Go-only df section of the system query
+// (ark_studio/server/internal/gpu/storage.go): a GPU box with a data disk, a bind mount and
+// pseudo filesystems (a), df missing (b: only the marker) and junk (odd).
+var dfOutputs = map[string]string{
+	"a": "__ARK_DF__\n" +
+		"Filesystem          1-blocks          Used     Available Capacity Mounted on\n" +
+		"udev             67430334464             0   67430334464       0% /dev\n" +
+		"tmpfs            13496356864       3194880   13493161984       1% /run\n" +
+		"/dev/nvme0n1p2  983349346304  432673669120  500644196352      47% /\n" +
+		"/dev/nvme0n1p1     535805952       6201344     529604608       2% /boot/efi\n" +
+		"/dev/sda1      7937876074496 7143925706752  793950367744      91% /data\n" +
+		"/dev/sda1      7937876074496 7143925706752  793950367744      91% /data/bind\n" +
+		"/dev/sdb1      3937876074496 1181362822348 2756513252148      30% /scratch\n" +
+		"/dev/loop3          67108864      67108864             0     100% /snap/core20/1974\n",
+	"b":   "__ARK_DF__\n",
+	"odd": "__ARK_DF__\ndf: unrecognized option '-x'\nnot a df row\n",
+}
+
 var (
 	reJobID  = regexp.MustCompile(`ARK_GPU_JOB_ID=(gpu_[0-9a-f]+)`)
 	reDevs   = regexp.MustCompile(`CUDA_VISIBLE_DEVICES=([0-9,]+)`)
@@ -258,6 +276,9 @@ func command(cmd string) {
 			fail(1, "bash: free: command not found\n")
 		}
 		os.Stdout.WriteString(systems[h])
+		if strings.Contains(cmd, "echo __ARK_DF__; df -PB1") { // Go-only storage section (gpu/storage.go)
+			os.Stdout.WriteString(dfOutputs[h])
+		}
 	case strings.HasPrefix(cmd, "echo __ARK_BUS__"): // ALLOCATION_COMMAND
 		allocation(h)
 	case strings.Contains(cmd, "setsid -f bash"):

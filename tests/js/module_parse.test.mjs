@@ -7,7 +7,7 @@ import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 import vm from "node:vm";
 
-const root = fileURLToPath(new URL("../../web/js", import.meta.url));
+const root = fileURLToPath(new URL("../../ark_studio/web/js", import.meta.url));
 
 function walk(dir) {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

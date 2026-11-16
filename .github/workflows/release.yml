@@ -27,7 +27,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION_FILE: go/go.mod
+  GO_VERSION_FILE: ark_studio/server/go.mod
   NODE_VERSION: "22"
 
 jobs:
@@ -56,7 +56,7 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: ${{ env.GO_VERSION_FILE }}
-          cache-dependency-path: go/go.sum
+          cache-dependency-path: ark_studio/server/go.sum
       - name: Vet and test the desktop gate
         working-directory: go
         run: |
@@ -135,19 +135,19 @@ jobs:
       - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version-file: ${{ env.GO_VERSION_FILE }}
-          cache-dependency-path: go/go.sum
+          cache-dependency-path: ark_studio/server/go.sum
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-          cache-dependency-path: desktop/package-lock.json
+          cache-dependency-path: ark_studio/desktop/package-lock.json
       - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
         with:
           toolchain: stable
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          workspaces: desktop/src-tauri -> target
+          workspaces: ark_studio/desktop/src-tauri -> target
           key: ${{ matrix.target }}
 
       - name: Linux build dependencies
@@ -158,18 +158,18 @@ jobs:
 
       - name: Build the ark-server sidecar
         shell: bash
-        run: bash scripts/release/build-server.sh --no-archive --out "$RUNNER_TEMP/sidecar" --sidecar desktop/src-tauri/binaries ${{ matrix.go }}
+        run: bash scripts/release/build-server.sh --no-archive --out "$RUNNER_TEMP/sidecar" --sidecar ark_studio/desktop/src-tauri/binaries ${{ matrix.go }}
 
       - name: Sidecar embeds the agent docs
         if: matrix.name != 'macos-x64' # cross-built on arm64; build-server.sh checked the embedded set
         shell: bash
         run: |
           exe=""; [ "$RUNNER_OS" = Windows ] && exe=".exe"
-          "desktop/src-tauri/binaries/ark-server-${{ matrix.target }}$exe" docs-check
+          "ark_studio/desktop/src-tauri/binaries/ark-server-${{ matrix.target }}$exe" docs-check
 
       - name: Desktop unit tests (data layout, settings)
         if: runner.os == 'Linux'
-        working-directory: desktop/src-tauri
+        working-directory: ark_studio/desktop/src-tauri
         run: cargo test --lib --target ${{ matrix.target }}
 
       - name: Install desktop tooling
@@ -275,13 +275,13 @@ jobs:
       - name: No real server addresses in the app binary
         shell: bash
         run: |
-          rel="desktop/src-tauri/target/${{ matrix.target }}/release"
+          rel="ark_studio/desktop/src-tauri/target/${{ matrix.target }}/release"
           node scripts/release/check-hosts.mjs "$rel"/ark-studio "$rel"/ark-studio.exe "$rel"/ark-server "$rel"/ark-server.exe
       - name: Windows portable zip
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $rel = "desktop/src-tauri/target/${{ matrix.target }}/release"
+          $rel = "ark_studio/desktop/src-tauri/target/${{ matrix.target }}/release"
           $name = "ARK-Studio_${env:VERSION}_x64-portable"
           $stage = Join-Path $env:RUNNER_TEMP $name
           New-Item -ItemType Directory -Force $stage | Out-Null
@@ -301,7 +301,7 @@ jobs:
         shell: bash
         run: |
           mkdir -p out
-          b="desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+          b="ark_studio/desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
           find "$b" -maxdepth 2 -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.dmg' \
             -o -name '*.deb' -o -name '*.AppImage' -o -name '*.sig' -o -name '*.app.tar.gz' \) -exec cp {} out/ \;
           # Both macOS jobs name the app tarball "ARK Studio.app.tar.gz": make it unique per arch.

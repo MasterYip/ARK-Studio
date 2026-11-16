@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { GUIDANCE_STEPS, guidanceKey, guidanceState, readGuidance, saveGuidance } from "../../web/js/guidance-model.js";
+import { GUIDANCE_STEPS, guidanceKey, guidanceState, readGuidance, saveGuidance } from "../../ark_studio/web/js/guidance-model.js";
 
 test("resume survives a reload without leaking progress between accounts", () => {
   const data = new Map();

@@ -1,22 +1,21 @@
-# GPU servers (optional adapter)
+# GPU servers
 
 ARK can list configured GPU servers, probe free GPUs with `nvidia-smi`, rank
 them least utilized first among GPUs that fit a job's memory claim (see *GPU dispatch rule* below), and prepare a bounded job dispatch
-request for review. The capability is **opt-in and read-only by default**.
-ARK delegates SSH authentication to your local SSH agent/config. When the
-separate `queue.enabled` setting is enabled, the persistent queue can launch
-submitted jobs and monitor them in the background.
+request for review. The capability is built into `ark-server` and is **opt-in
+and read-only by default**. ARK delegates SSH authentication to your local SSH
+agent/config. When the separate `queue.enabled` setting is enabled, the
+persistent queue can launch submitted jobs and monitor them in the background.
 
-The implementation lives in these components:
+Where it lives:
 
-- `vendor/gpu_server_probe/` — a minimal, standard-library adapter that mirrors
-  the internal `gpu_server_probe` tool (config, SSH transport, `nvidia-smi`
-  parsing, bounded dispatch requests and the opt-in queue). See
-  [`vendor/gpu_server_probe/NOTICE.md`](../../vendor/gpu_server_probe/NOTICE.md).
-- `arkstudio/gpu_probe.py` — the ARK service that resolves the private config,
-  enforces the enable gate, sanitizes public payloads and serves the API.
-- `web/js/views/settings.js` — **Settings → GPU**: status, configured servers,
-  probe results and a dry-run dispatch form.
+- `ark_studio/server/internal/gpu/` — server list parsing and validation, the
+  SSH transport, `nvidia-smi` parsing, ranking, bounded dispatch requests and
+  the opt-in queue; `ark_studio/server/internal/api/gpu/` serves the API.
+- `ark_studio/web/js/views/settings.js` — **Settings → GPU**: status, configured servers,
+  probe results and a dry-run dispatch form; **Execute → GPU** shows the queue.
+
+Nothing besides `ark-server` and an OpenSSH client is needed.
 
 ## Enable and configure
 
@@ -24,17 +23,17 @@ The implementation lives in these components:
 
    ```bash
    mkdir -p ~/.ark
-   cp vendor/gpu_server_probe/servers_rp.example.yaml ~/.ark/gpu_servers.yaml
+   cp docs/operations/gpu_servers.example.yaml ~/.ark/gpu_servers.yaml
    ```
 
    The config path resolves in this order:
 
-   1. `$ARK_GPU_SERVERS_CONFIG`
+   1. `gpu_servers_config` in the server's `--config` JSON, or `$ARK_GPU_SERVERS_CONFIG`
    2. `$ARK_PRIVATE_DIR/gpu_servers.yaml`
    3. `~/.ark/gpu_servers.yaml`
 
-2. Edit the hosts/ports and set `enabled: true`. Alternatively start ARK with
-   `ARK_GPU_PROBE=1`.
+2. Edit the hosts/ports and set `enabled: true`. Alternatively start
+   `ark-server` with `ARK_GPU_PROBE=1`.
 
 3. Make sure the OpenSSH client is installed and your SSH agent or
    `~/.ssh/config` can reach the hosts (`ssh gpu-a.example.com true`). ARK uses
@@ -74,7 +73,7 @@ or `~/.ssh/config`. Only the fields above are ever returned by the API.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/gpu/status` | capability state, vendor/config paths, SSH availability; no hosts |
+| `GET` | `/api/gpu/status` | capability state, config path, SSH availability; no hosts |
 | `GET` | `/api/gpu/servers` | configured servers (public fields only); `enabled: false` + empty list when disabled |
 | `POST` | `/api/gpu/probe` | explicit read-only probe; body `{servers?, timeout_seconds?}` |
 | `POST` | `/api/gpu/dispatch/prepare` | validate and render a bounded dry-run request |
@@ -109,8 +108,8 @@ and an illustrative `ssh_preview`. Requesting `"execute": true` is rejected.
 - `command` 1–16384 chars, no NUL/control bytes except newline and tab;
 - `env` ≤ 16 variables, names `[A-Za-z_][A-Za-z0-9_]*`, values ≤ 200 chars.
 
-The request is not sent anywhere. Hand it to the `gpu_server_probe` CLI or your
-scheduler yourself.
+The request is not sent anywhere. Submit it to the queue (`POST /api/gpu/jobs`,
+below) or hand it to your own scheduler.
 
 ## Queue Monitoring API
 
@@ -180,21 +179,6 @@ curl --get "$ARK_URL/api/agent/v1/gpu/jobs" \
   --data-urlencode 'limit=500' --data-urlencode 'offset=0'
 ```
 
-## CLI
-
-From the repository root:
-
-```bash
-python -m vendor.gpu_server_probe status
-python -m vendor.gpu_server_probe servers
-python -m vendor.gpu_server_probe probe            # dry run: prints the plan
-python -m vendor.gpu_server_probe probe --live     # read-only nvidia-smi
-python -m vendor.gpu_server_probe dispatch --server gpu-a --gpus 0,1 \
-  --command "python train.py --config config.yaml"
-```
-
-`probe` does not connect unless `--live` is passed. `dispatch` never executes.
-
 ## Security model
 
 - **Opt-in**: `enabled: false` is the default in the schema and in the example;
@@ -203,28 +187,29 @@ python -m vendor.gpu_server_probe dispatch --server gpu-a --gpus 0,1 \
 - **No credentials**: there is no schema field for a password, key, token or
   identity file, and no code that reads one. Authentication is delegated to the
   local SSH agent/config.
-- **Probe boundary**: GPU probing only runs read-only `nvidia-smi` queries.
+- **Probe boundary**: GPU probing only runs read-only queries: `nvidia-smi`,
+  the system metrics (`/proc/loadavg`, `nproc`, `free`, `top`) and, on the Go
+  server, `df -PB1` for the server's storage (Resources graph).
   The separately enabled queue executes submitted commands and requires
   current project write permission; a monitoring read token cannot dispatch.
 - **Explicit action**: job list/get read local state. Explicit log GET requests
   may fetch a remote log; a GPU probe requires `POST` (the UI button).
 - **Private config**: the server list lives at a user-level path, outside the
-  repository and outside project folders. A `.gitignore` rule also blocks a
-  private `servers_rp.yaml` inside the vendor directory.
+  repository and outside project folders; `.gitignore` also blocks a stray
+  `gpu_servers.yaml` inside a checkout.
 - **Clean degradation**: an unreachable host, bad auth, timeout or missing
   `ssh` is returned as a per-server error; it never fails the ARK server or the
   current project.
 
 ## Tests
 
-`tests/python/gpu/test_gpu_probe.py` covers the safe schema, credential rejection,
-`nvidia-smi` parsing, ranking, mocked probes (one success, one unreachable, one
-auth failure, one disabled), missing-OpenSSH behavior, bounded dispatch
-validation, disabled-by-default behavior, missing vendor/config, and the HTTP
-endpoints. `tests/python/gpu/test_gpu_monitoring.py` also covers more than 500 jobs,
-filtered totals, tied timestamps, attempt lookup, batch IDs, timezone boundaries,
-cached failures and HTTP authorization. Tests use local HTTP and mocked SSH;
-none contacts an external GPU host or executes a remote command.
+`go test ./internal/gpu/... ./internal/api/gpu/...` (in `ark_studio/server`)
+covers the safe schema, credential rejection, `nvidia-smi` parsing, ranking,
+mocked probes, missing-OpenSSH behavior, bounded dispatch validation,
+disabled-by-default behavior, the queue's placement rule and the HTTP
+handlers. The contract suite (`tests/python/contract/`) replays the GPU routes
+against a fake `ssh` (`tests/python/contract/fakessh`). No test contacts a
+real GPU host or executes a remote command.
 
 ## Limitations
 
@@ -234,11 +219,8 @@ none contacts an external GPU host or executes a remote command.
   A list of 64 slow hosts can still take several rounds.
 - Host key policy is `StrictHostKeyChecking=accept-new`; pin hosts in
   `~/.ssh/config` if you need stricter verification.
-- `asyncssh` is detected for diagnostics but never required; the OpenSSH client
-  is the transport.
-- The upstream `gpu_server_probe` tool had no public repository or license file
-  in the supplied notes, so no submodule URL is invented and no upstream source
-  is redistributed. See the vendor NOTICE for attribution.
+- The OpenSSH client is the only transport (`ARK_GPU_SSH` names another
+  `ssh` binary).
 
 ## GPU dispatch rule (queue and probe list)
 

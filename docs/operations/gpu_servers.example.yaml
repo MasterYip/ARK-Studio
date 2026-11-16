@@ -1,0 +1,65 @@
+# ARK Studio GPU servers: safe example server list
+#
+# Copy this file to the private config location ark-server reads:
+#
+#   ~/.ark/gpu_servers.yaml               (default)
+#   $ARK_PRIVATE_DIR/gpu_servers.yaml     (if ARK_PRIVATE_DIR is set)
+#   any path named by $ARK_GPU_SERVERS_CONFIG (or "gpu_servers_config" in server.json)
+#
+# Then set `enabled: true` below (or start ark-server with ARK_GPU_PROBE=1).
+# Passwords, private keys, tokens and identity files are NOT supported: ARK
+# uses your SSH agent and ~/.ssh/config. The hosts below use the reserved
+# .invalid domain and are not reachable.
+enabled: false
+
+defaults:
+  port: 22
+  user: ubuntu
+  timeout_seconds: 8
+
+servers:
+  - name: gpu-a
+    host: gpu-a.example.invalid
+    port: 22
+    user: ubuntu
+    tags: [a100, primary]
+    note: "Primary interactive node"
+
+  - name: gpu-b
+    host: gpu-b.example.invalid
+    user: ubuntu
+    tags: [h100]
+    note: "Set a per-server timeout below if this node is slow to answer"
+
+  - name: gpu-c
+    host: gpu-c.example.invalid
+    port: 2222
+    user: lab
+    timeout_seconds: 12
+    tags: [h100]
+    note: "Port-forwarded node; an alias can also live in ~/.ssh/config"
+
+
+# Optional bare-metal execution queue. It stays disabled unless this block is
+# enabled explicitly. Agents submit logical jobs; the queue probes, places,
+# launches over SSH and tracks the remote pid/status/log.
+queue:
+  enabled: false
+  state_dir: /tmp/ark-gpu-queue
+  poll_seconds: 5
+  default_timeout_minutes: 240
+  # Share a card while resources permit. Zero means no additional job-count cap.
+  # Set a positive count or allow_colocation: false to restrict sharing.
+  max_jobs_per_gpu: 0
+  max_utilization_pct: 10
+  min_free_memory_mb: 1024
+  allow_colocation: true
+  # Optional shell setup run inside each allocated job, e.g. conda activation.
+  setup: ""
+  # Map agent-visible ARK paths to paths that exist on the GPU host.
+  path_map:
+    - from: /mnt/shared/research
+      to: /srv/research
+  # Non-secret environment defaults for the remote job.
+  env:
+    PYTHONUNBUFFERED: "1"

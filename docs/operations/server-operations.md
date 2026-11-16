@@ -1,15 +1,19 @@
 # Server Deployment and Operations
 
-The browser server runs directly from a Git checkout with Python 3.10+ and the
-standard library. Deployment uses ARK's CLI and an optional standard systemd
-unit. Instance data and credentials belong outside the checkout.
+The server is one binary, `ark-server`: the release package (`.tar.gz`, `.zip`
+or `.deb`, see `scripts/release/server-package/README.md`), or built from a
+checkout with Go 1.27+. Deployment uses its CLI and an optional standard
+systemd unit. Instance data and credentials belong outside the checkout.
 
 ## Initialize Once
 
 ```sh
+# from a checkout: build and install the binary
 git clone https://github.com/MasterYip/ARK-Studio.git ~/ARK-Studio
-cd ~/ARK-Studio
-python3 -m arkstudio server-init \
+cd ~/ARK-Studio/ark_studio/server
+go generate ./... && go build -o ~/.local/bin/ark-server ./cmd/ark-server
+
+ark-server server-init \
   --config ~/.config/arkstudio/main.json \
   --data-dir ~/.local/share/arkstudio/main \
   --owner admin
@@ -28,7 +32,7 @@ accounts, project grants, password changes and personal agent tokens are managed
 through Settings. Password changes remain authoritative after restart.
 
 ```sh
-python3 -m arkstudio serve --config ~/.config/arkstudio/main.json
+ark-server serve --config ~/.config/arkstudio/main.json
 ```
 
 Paths inside JSON resolve relative to the configuration file. Explicit CLI
@@ -64,16 +68,15 @@ The former `scripts/start_server.sh` launcher is superseded by this native CLI.
 
 ```sh
 mkdir -p ~/.config/systemd/user
-cp deploy/arkstudio@.service ~/.config/systemd/user/
+cp scripts/release/server-package/ark-server@.service ~/.config/systemd/user/
 systemctl --user daemon-reload
-systemctl --user enable --now arkstudio@main.service
+systemctl --user enable --now ark-server@main.service
 sudo loginctl enable-linger "$USER"
 ```
 
-The supplied unit uses `~/ARK-Studio` and
-`~/.config/arkstudio/<instance>.json`. For a different checkout or Python
-interpreter, use `systemctl --user edit arkstudio@main.service` and override
-`WorkingDirectory` or `ExecStart` as appropriate. A nondefault `ExecStart` needs
+The supplied unit runs `~/.local/bin/ark-server` with
+`~/.config/arkstudio/<instance>.json`. For another binary location, use
+`systemctl --user edit ark-server@main.service` and override `ExecStart`. A nondefault `ExecStart` needs
 an empty `ExecStart=` line before its replacement.
 
 Linger allows the user's service manager to start at boot and continue after
@@ -81,10 +84,10 @@ SSH logout. It requires administrator permission once; ordinary service restarts
 do not. A dedicated OS user is recommended for a shared server.
 
 ```sh
-systemctl --user restart arkstudio@main.service
-systemctl --user stop arkstudio@main.service
-systemctl --user status arkstudio@main.service
-journalctl --user -u arkstudio@main.service -n 100
+systemctl --user restart ark-server@main.service
+systemctl --user stop ark-server@main.service
+systemctl --user status ark-server@main.service
+journalctl --user -u ark-server@main.service -n 100
 curl --fail http://127.0.0.1:8890/api/health
 ```
 
@@ -151,10 +154,10 @@ the archive before restarting it. For the initialized layout above:
 ```sh
 umask 077
 mkdir -p ~/ark-backups
-systemctl --user stop arkstudio@main.service
+systemctl --user stop ark-server@main.service
 tar -czf ~/ark-backups/main.tar.gz \
   -C "$HOME" .local/share/arkstudio/main .config/arkstudio/main.json
-systemctl --user start arkstudio@main.service
+systemctl --user start ark-server@main.service
 sha256sum ~/ark-backups/main.tar.gz
 ```
 
@@ -176,7 +179,7 @@ processes can resume automatically.
 ```sh
 git status --short
 git pull --ff-only
-systemctl --user restart arkstudio@main.service
+systemctl --user restart ark-server@main.service
 ```
 
 Resolve local changes before updating. Record the deployed Git commit, retain a

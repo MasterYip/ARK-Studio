@@ -35,6 +35,31 @@ project holds it; memory is split by the probe's per-process `job_id`
 (`ARK_GPU_JOB_ID`). Other used memory or utilisation above 10% counts as
 others'. The queue is only read when its worker is already running.
 
+## Controls
+
+The graph is driven like the Node graph (Map › Node layout):
+
+| Input | Action |
+| --- | --- |
+| toolbar | Read / Edit mode, expand / collapse all details, reset layout, zoom in / out, fit, full screen, `?` shortcuts |
+| `R` / `E` | read / edit mode (remembered) |
+| `F`, `?`, `Esc` | fit, shortcuts, close shortcuts or clear the selection and close the details |
+| arrows, `Enter` | move the selection to the nearest card; open its details (read mode) |
+| `Ctrl+A` | select every card |
+| `+` / `=`, `-` | expand / collapse the selected cards' details |
+| `*`, `/` | the same, recursively (Mind's keys; a card has one level) |
+| click | select; read mode also opens the details panel, edit mode only selects (an open panel follows the selection) |
+| `Ctrl` / `Shift`+click | add to or remove from the selection |
+| left-drag on empty space | box select (`Ctrl` adds, `Shift` selects only cards fully inside) |
+| drag a card | move it (with the rest of the selection); positions are remembered until **Reset layout** |
+| right-drag, right-click | pan; context menu |
+| wheel, `Ctrl`+wheel, `Shift`+wheel | zoom at the pointer, pan vertically, pan horizontally |
+| double-click a card | centre it and open its details |
+| `▾` / `▸` in a card header | fold that card's details, or the whole selection when the card is part of it |
+
+Folded cards keep their header and summary bar and say how many rows are
+hidden. Fold state and moved cards are kept in the browser.
+
 ## Personal devices
 
 A machine registered in a member's own setup layer (and not referenced by
@@ -77,6 +102,8 @@ to paired phones. Response:
     "occupancy": {"gpus_total": 4, "gpus_ours": 1, "gpus_busy_others": 2, "gpus_free": 1,
                   "mem_ours_mb": 20000, "mem_others_mb": 60000, "mem_total_mb": 160000, "util_avg_pct": 53.3},
     "probe": {"probed_at": "…", "ok": true, "error": null},
+    "storage": [{"mount": "/data", "used_bytes": 7143925706752, "total_bytes": 7937876074496,
+                 "free_bytes": 793950367744, "percent": 90.0, "data": true}],
     "detail": {"host": "lab-a100.lab", "user": "ark", "tags": []},
     "actions": ["check", "privacy"],
     "sources": ["gpu-config", "setup", "heartbeat", "mobile"]
@@ -100,8 +127,16 @@ to paired phones. Response:
 }
 ```
 
-Optional keys (`mine`, `prefs`, `details_shared`, `detail`, `verified_at`)
-are omitted when they do not apply. For another member's private device
+Optional keys (`mine`, `prefs`, `details_shared`, `detail`, `verified_at`,
+`storage`) are omitted when they do not apply. `storage` (Go server only) is
+a GPU server's disks from the last probe: the same read-only system query
+runs `df -PB1` (pseudo filesystems, snaps, container layers and `/boot`
+skipped, bind mounts deduplicated). The mount holding a configured data
+folder (`queue.path_map[].to` for that server) comes first with `data:
+true`, then the largest mounts, at most four. No `df`, or output that does
+not parse, just leaves `storage` out; the GPU probe is unaffected. The same
+list is the `storage` member of each server in `POST /api/gpu/probe` (and
+the dashboard's probe). For another member's private device
 `label` becomes "<name>'s device", `status` is `unknown`/`private`,
 `metrics`/`occupancy`/`detail` are null, the owner's own resources are
 removed and shared ones have `path: null, redacted: true`. Hidden devices,

@@ -11,7 +11,7 @@ async function fixture(layout = "mind") {
   const context = vm.createContext({ window: {}, document: {} });
   const core = await loadGraphCore(context);
   const graphModule = new vm.SourceTextModule(
-    await readFile(new URL("../../web/js/graph.js", import.meta.url), "utf8"), { context },
+    await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8"), { context },
   );
   const imports = {
     "./dom.js": {
@@ -34,7 +34,7 @@ async function fixture(layout = "mind") {
     for (const [name, value] of Object.entries(imports["./i18n.js"])) this.setExport(name, value);
   }, { context });
   const markers = new vm.SourceTextModule(
-    await readFile(new URL("../../web/js/markers.js", import.meta.url), "utf8"), { context },
+    await readFile(new URL("../../ark_studio/web/js/markers.js", import.meta.url), "utf8"), { context },
   );
   await markers.link(() => i18n);
   const nodeLayout = await loadNodeGraphLayout(context);

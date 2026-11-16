@@ -5,7 +5,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 async function load() {
-  const source = await readFile(new URL("../../web/js/node-reveal.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../ark_studio/web/js/node-reveal.js", import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, { identifier: "node-reveal.js" });
   await module.link(() => { throw new Error("node-reveal must stay dependency-free"); });
   await module.evaluate();

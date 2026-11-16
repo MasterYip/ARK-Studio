@@ -1,4 +1,0 @@
-include README.md
-include pyproject.toml
-recursive-include arkstudio/skills/assets *
-recursive-include arkstudio/skills/LICENSES *

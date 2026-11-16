@@ -11,10 +11,10 @@ async function fixture() {
     document: { documentElement: { dataset: {} } },
   });
   const module = new vm.SourceTextModule(
-    await readFile(new URL("../../web/js/state.js", import.meta.url), "utf8"), { context },
+    await readFile(new URL("../../ark_studio/web/js/state.js", import.meta.url), "utf8"), { context },
   );
   const store = new vm.SourceTextModule(
-    await readFile(new URL("../../web/js/filter-store.js", import.meta.url), "utf8"), { context },
+    await readFile(new URL("../../ark_studio/web/js/filter-store.js", import.meta.url), "utf8"), { context },
   );
   await store.link(() => { throw new Error("filter-store must stay dependency-free"); });
   await module.link((specifier) => (specifier === "./filter-store.js" ? store : specifier === "./appearance.js"

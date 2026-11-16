@@ -2,12 +2,12 @@
 //
 // Compares the previous node-graph layout/routing (breadth-first columns,
 // orthogonal elbows through the column midpoint) with the layered layout and
-// Bézier router in web/js/node-graph-layout.js.  Without arguments it uses
+// Bézier router in ark_studio/web/js/node-graph-layout.js.  Without arguments it uses
 // two synthetic graphs (300 and 2,000 nodes, fixed seed); pass exported graph
 // JSON ({ nodes: [{id}], edges: [{id, source, target}] }) to add real data,
 // e.g. the demo project's GET /api/graph.
 import { readFile, writeFile } from "node:fs/promises";
-import { layeredLayout, routeNodeEdges, layoutMetrics, NODE_W, NODE_H } from "../../web/js/node-graph-layout.js";
+import { layeredLayout, routeNodeEdges, layoutMetrics, NODE_W, NODE_H } from "../../ark_studio/web/js/node-graph-layout.js";
 
 function legacyPositions(nodes, edges) {
   const outgoing = new Map(nodes.map((node) => [node.id, []]));

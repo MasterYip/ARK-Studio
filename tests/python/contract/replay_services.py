@@ -1,6 +1,6 @@
 """Services modules of the differential replay (assistant, chat, GPU, InfoHub, open).
 
-    python -B tests/python/contract/replay_services.py --go go/ark-server.exe [--auth|--owner] [--only assistant]
+    python -B tests/python/contract/replay_services.py --go ark_studio/server/ark-server.exe [--auth|--owner] [--only assistant]
 
 Quick mode (this script): only the services steps run, after the fixture is
 built, against both servers; responses and the resulting data dirs are
@@ -112,6 +112,9 @@ CREATE TABLE unit_messages(unit_id INTEGER, message_id INTEGER, PRIMARY KEY(unit
 """
 
 
+INFOHUB_NOW = None  # golden.py: a fixed "now" for the InfoHub test data
+
+
 def make_infohub(target: Path) -> dict:
     """InfoHub databases for the import replay (real schema, a minimal one, junk)."""
     import time
@@ -120,7 +123,8 @@ def make_infohub(target: Path) -> dict:
     if full.exists():
         return {"full": str(full), "minimal": str(target / "minimal.db"), "junk": str(target / "junk.db"),
                 "empty": str(target / "empty.db")}
-    old, recent = 978307200, int(time.time()) - 5 * 86400  # 2001-01-01 and five days ago
+    # 2001-01-01 and five days ago (golden.py pins "now" via INFOHUB_NOW)
+    old, recent = 978307200, int(INFOHUB_NOW or time.time()) - 5 * 86400
     con = sqlite3.connect(str(full))
     con.executescript(INFOHUB_SCHEMA)
     units = [

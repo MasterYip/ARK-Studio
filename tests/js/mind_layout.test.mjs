@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { mindLayout, cardOverlaps, ORPHAN_GAP_Y } from "../../web/js/mind-layout.js";
+import { mindLayout, cardOverlaps, ORPHAN_GAP_Y } from "../../ark_studio/web/js/mind-layout.js";
 
 function synthetic(count, orphans, seed) {
   let state = seed;

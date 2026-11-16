@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { LOCAL_OPEN_BRIDGE, isLikelyLocalPath, localOpenRoute } from "../../web/js/rich-model.js";
+import { LOCAL_OPEN_BRIDGE, isLikelyLocalPath, localOpenRoute } from "../../ark_studio/web/js/rich-model.js";
 
 test("desktop app opens local paths itself, whatever its server port", () => {
   assert.deepEqual(localOpenRoute({ shell: "tauri", openLocal: () => {} }), { kind: "desktop" });

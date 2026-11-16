@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { gpuOwnership } from "../../web/js/gpu-model.js";
+import { gpuOwnership } from "../../ark_studio/web/js/gpu-model.js";
 
 const gpu = { index: 0, memory_total_mb: 24000, memory_used_mb: 13000, utilization_pct: 100 };
 const job = (id, extra = {}) => ({ id, status: "running", gpu_indices: [0], ...extra });

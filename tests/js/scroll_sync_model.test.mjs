@@ -5,7 +5,7 @@ import { test } from "node:test";
 import vm from "node:vm";
 
 async function load() {
-  const source = await readFile(new URL("../../web/js/scroll-sync-model.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../../ark_studio/web/js/scroll-sync-model.js", import.meta.url), "utf8");
   const module = new vm.SourceTextModule(source, { identifier: "scroll-sync-model.js" });
   await module.link(() => { throw new Error("scroll-sync-model must stay dependency-free"); });
   await module.evaluate();

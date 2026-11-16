@@ -1,6 +1,6 @@
 """Differential replay: identical request sequences against Python and Go.
 
-    python -B tests/python/contract/diffreplay.py --go go/ark-server.exe [--report out.json]
+    python -B tests/python/contract/diffreplay.py --go ark_studio/server/ark-server.exe [--report out.json]
     python -B tests/python/contract/diffreplay.py --go ... --handoff   # cookie survives a server swap
     python -B tests/python/contract/diffreplay.py --go ... --prod-copy <copy of a projects root>
 
@@ -284,59 +284,90 @@ def qr_checked(data: bytes) -> bytes:
     from serverctl import REPO
     if str(REPO) not in sys.path:
         sys.path.insert(0, str(REPO))
-    from arkstudio import qr
-    ok = payload["qr_svg"] == qr.to_svg(str(payload.get("pairing_url") or ""))
-    return data.replace(json.dumps(payload["qr_svg"], ensure_ascii=False).encode(),
-                        b'"<QR:ok>"' if ok else b'"<QR:bad>"')
+        sys.path.insert(0, str(REPO / "ark_studio" / "python"))
+    try:
+        from arkstudio import qr
+    except ImportError:  # Go-only runs (golden.py): internal/qr has its own CPython vectors
+        label = b'"<QR:svg>"' if payload["qr_svg"].startswith("<svg") else b'"<QR:bad>"'
+    else:
+        ok = payload["qr_svg"] == qr.to_svg(str(payload.get("pairing_url") or ""))
+        label = b'"<QR:ok>"' if ok else b'"<QR:bad>"'
+    return data.replace(json.dumps(payload["qr_svg"], ensure_ascii=False).encode(), label)
 
 
 def compare(step, a, b, na: Normalizer, nb: Normalizer, sent: tuple = (None, None)) -> list[str]:
-    problems = []
-    if replay_probe.is_not_ported(b.status, b.body):  # P1: never acceptable, in any module
-        problems.append("Go answered 501 NOT_PORTED")
-    if a.status != b.status:
-        problems.append(f"status {a.status} != {b.status}")
     # N22: intentional Go-only payload members (go_only.AUGMENTED) are removed
     # from the Go body; its body-derived ETag and Content-Length then differ.
     go_extra = go_only.augmented(step[2]) if b.status == 200 else None
+    return combine(step, canonical(step, a, na, sent[0]), canonical(step, b, nb, sent[1], go_extra),
+                   bool(go_extra))
+
+
+def canonical(step, r, n: Normalizer, sent=None, go_extra=None) -> dict:
+    """One reply in the form compare() checks: status, the COMPARED_HEADERS
+    after N1-N21, the normalized body, and what the Content-Length rule needs.
+    golden.py stores this form (JSON-safe via canonical_json)."""
+    headers = {}
     for name in COMPARED_HEADERS:
-        va = [na.header(name, v) for v in a.all(name)]
-        vb = [nb.header(name, v) for v in b.all(name)]
+        values = [n.header(name, v) for v in r.all(name)]
+        if name == "etag":
+            values = [etag_canonical(r, v, n, sent) for v in values]
+        elif name == "last-modified":
+            values = [last_modified_canonical(v, n) for v in values]
+        headers[name] = values
+    if r.header("content-type") == "application/zip":
+        body = zip_canonical(r.body, n)
+    elif step[2].startswith("/api/providers"):
+        body = n.body(provider_canonical(r.body))
+    elif step[2].startswith(SESSION_LIKE):
+        body = n.body(session_canonical(r.body, step))
+    elif "/api/workspace/terminals" in step[2]:
+        body = n.body(terminal_canonical(r.body))
+    elif step[2].startswith("/api/unit-details"):
+        body = n.body(details_canonical(r.body))
+    elif go_extra:
+        body = n.body(go_extra(r.body) if r.body else r.body)
+    else:
+        body = n.body(r.body)
+    return {"status": r.status, "headers": headers, "body": body,
+            "untouched": body == r.body and not go_extra,
+            "content_encoding": r.header("content-encoding"), "content_length": r.header("content-length"),
+            "not_ported": replay_probe.is_not_ported(r.status, r.body)}
+
+
+def combine(step, a: dict, b: dict, go_extra: bool = False) -> list[str]:
+    """The problems between two canonical replies (a: reference, b: Go)."""
+    problems = []
+    if b["not_ported"]:  # P1: never acceptable, in any module
+        problems.append("Go answered 501 NOT_PORTED")
+    if a["status"] != b["status"]:
+        problems.append(f"status {a['status']} != {b['status']}")
+    for name in COMPARED_HEADERS:
+        va, vb = a["headers"].get(name, []), b["headers"].get(name, [])
         if name == "etag" and go_extra:
             va, vb = ["<GO_ONLY>"] * len(va), ["<GO_ONLY>"] * len(vb)
-        elif name == "etag":
-            va = [etag_canonical(a, v, na, sent[0]) for v in va]
-            vb = [etag_canonical(b, v, nb, sent[1]) for v in vb]
-        elif name == "last-modified":
-            va = [last_modified_canonical(v, na) for v in va]
-            vb = [last_modified_canonical(v, nb) for v in vb]
         if va != vb:
             problems.append(f"header {name}: {va!r} != {vb!r}")
-    if a.header("content-type") == "application/zip" == b.header("content-type"):
-        ba, bb = zip_canonical(a.body, na), zip_canonical(b.body, nb)
-    elif step[2].startswith("/api/providers"):
-        ba, bb = na.body(provider_canonical(a.body)), nb.body(provider_canonical(b.body))
-    elif step[2].startswith(SESSION_LIKE):
-        ba, bb = na.body(session_canonical(a.body, step)), nb.body(session_canonical(b.body, step))
-    elif "/api/workspace/terminals" in step[2]:
-        ba, bb = na.body(terminal_canonical(a.body)), nb.body(terminal_canonical(b.body))
-    elif step[2].startswith("/api/unit-details"):
-        ba, bb = na.body(details_canonical(a.body)), nb.body(details_canonical(b.body))
-    elif go_extra:
-        ba, bb = na.body(a.body), nb.body(go_extra(b.body) if b.body else b.body)
-    else:
-        ba, bb = na.body(a.body), nb.body(b.body)
-    untouched = ba == a.body and bb == b.body and not go_extra  # N3-N7 change lengths legitimately
+    ba, bb = a["body"], b["body"]
+    untouched = a["untouched"] and b["untouched"]  # N3-N7 change lengths legitimately
     if step[1] == "HEAD" and step[2].startswith(("/api/providers",) + SESSION_LIKE):
         untouched = False  # N14: the HEAD reply's length counts the echo path and probe_ms
-    if a.header("content-encoding") != "gzip" and a.header("content-length") != b.header("content-length") \
-            and not problems and untouched and not a.status == b.status == 204:
-        problems.append(f"content-length {a.header('content-length')} != {b.header('content-length')}")
+    if a["content_encoding"] != "gzip" and a["content_length"] != b["content_length"]             and not problems and untouched and not a["status"] == b["status"] == 204:
+        problems.append(f"content-length {a['content_length']} != {b['content_length']}")
     if ba != bb:
         at = next((i for i in range(min(len(ba), len(bb))) if ba[i] != bb[i]), min(len(ba), len(bb)))
         problems.append(f"body differs at byte {at} (len {len(ba)} vs {len(bb)}): "
                         f"py={ba[max(0, at - 60):at + 80]!r} go={bb[max(0, at - 60):at + 80]!r}")
     return problems
+
+
+def canonical_json(form: dict) -> dict:
+    """canonical() with the body as text (UTF-8, surrogate-escaped bytes)."""
+    return dict(form, body=form["body"].decode("utf-8", "surrogateescape"))
+
+
+def canonical_load(form: dict) -> dict:
+    return dict(form, body=form["body"].encode("utf-8", "surrogateescape"))
 
 
 def provider_canonical(data: bytes) -> bytes:
@@ -871,7 +902,8 @@ def downgrade_v10(data_dir: Path) -> None:
 
 
 def replay(go: str, *, auth_users: int = 0, report_path: str = "", nodes: int = 0,
-           as_owner: bool = False, trace: str = "", only: str = "") -> dict:
+           as_owner: bool = False, trace: str = "", only: str = "", py_debug: bool = False,
+           keep_logs: str = "") -> dict:
     ported = go_ported(go)
     replay_services.prepare_env()  # chat: fake model endpoint key, no real provider key
     work = temp_dir("ark-diff-")
@@ -894,7 +926,10 @@ def replay(go: str, *, auth_users: int = 0, report_path: str = "", nodes: int = 
                "ARK_RG": "none", **replay_agents.agent_env(work),
                **replay_sessions.session_env(work), **replay_sessionctx.ctx_env()}
         clock0 = datetime.fromisoformat(start).timestamp() + 5
-        with Server("python", py_dir, env=env) as py, Server(go, go_dir, env=env) as gs:
+        # --py-debug: ARK_DEBUG on the Python server only (tracebacks of 500s in
+        # its log; it changes no reply).  --keep-logs copies both logs out.
+        py_env = dict(env, ARK_DEBUG="1") if py_debug else env
+        with Server("python", py_dir, env=py_env) as py, Server(go, go_dir, env=env) as gs:
             cp, cg = Client(py), Client(gs)
             REPLAY_AS.clear()
             if auth_users:
@@ -1023,6 +1058,10 @@ def replay(go: str, *, auth_users: int = 0, report_path: str = "", nodes: int = 
         # Requests both servers sent to the fake model endpoint (chat).
         result["state"] += replay_services.outbound_problems()
     finally:
+        if keep_logs:
+            Path(keep_logs).mkdir(parents=True, exist_ok=True)
+            for log in work.glob("*.log"):
+                shutil.copy2(log, Path(keep_logs) / log.name)
         _rmtree(work)
     if report_path:
         Path(report_path).write_text(json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -1167,6 +1206,9 @@ def main(argv=None) -> int:
     parser.add_argument("--handoff", action="store_true")
     parser.add_argument("--only", default="", help="replay only the steps of these modules (comma-separated; development)")
     parser.add_argument("--fresh", action="store_true", help="compare what both servers create on an empty root")
+    parser.add_argument("--py-debug", action="store_true",
+                        help="ARK_DEBUG=1 for the Python server: tracebacks of its 500 replies in its log")
+    parser.add_argument("--keep-logs", default="", help="copy both server logs into this folder")
     parser.add_argument("--show", type=int, default=15)
     parser.add_argument("--nodes", type=int, default=0, help="extra generated units in the fixture")
     parser.add_argument("--prod-copy", default="",
@@ -1180,7 +1222,8 @@ def main(argv=None) -> int:
     if args.fresh:
         return 0 if fresh(args.go) else 1
     result = replay(args.go, auth_users=3 if args.auth or args.owner else 0, report_path=args.report,
-                    nodes=args.nodes, as_owner=args.owner, trace=args.trace, only=args.only)
+                    nodes=args.nodes, as_owner=args.owner, trace=args.trace, only=args.only,
+                    py_debug=args.py_debug, keep_logs=args.keep_logs)
     for item in result["mismatches"][:args.show]:
         print(f"#{item['n']} {item['method']} {item['path']}")
         for problem in item["problems"]:

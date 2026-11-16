@@ -111,14 +111,14 @@ window gives Home about 990 px, 1280 gives 830 and 1024 gives 580.
 < 760 px (1024 with the pane): Needs you full width; pipeline | team side
 by side; lower cards 2 x 2.  < 520 px: one column.
 
-Phone (viewport <= 760 px, web/css/mobile.css): one column — header,
+Phone (viewport <= 760 px, ark_studio/web/css/mobile.css): one column — header,
 Needs you, pulse (3 + 2 tiles, chart full width), due & blocked, running,
 pipeline, team, research, activity, start row; 44 px targets.
 ```
 
 Home never sits under a pane.  With the workbench (> 980 px) the open
 sidebars are drawn narrower on a narrow window so the workspace keeps at
-least 480 px (`fitSidebars` in web/js/workbench-model.js; the stored widths
+least 480 px (`fitSidebars` in ark_studio/web/js/workbench-model.js; the stored widths
 return on a wider window).  At 761-980 px a pinned Node details pane docks
 beside the content at up to 46% of the window.  The two starter cards sit
 side by side when there is room and stack otherwise.
@@ -145,7 +145,7 @@ keyboard handler left behind.
 ### The starter prompts
 
 Home offers **two** starter prompts, each with one copy action
-(web/js/starter-prompts.js).  They follow the interface language (English or
+(ark_studio/web/js/starter-prompts.js).  They follow the interface language (English or
 Chinese; one {en, zh} pair per line, so both versions keep the same steps).
 
 - **Set up this environment** (`setup`): once per machine or new repository.
@@ -192,7 +192,7 @@ Settings > Resources open one paged dialog: **1/2 Project setup**, then
 and its own Confirm.  Only project admins can confirm page 1; others see it
 read-only with a note.  A page with nothing proposed says so.  Finish shows
 the combined result per layer.  The paging rules live in
-web/js/setup-review-model.js (tests/js/setup_review_model.test.mjs); the
+ark_studio/web/js/setup-review-model.js (tests/js/setup_review_model.test.mjs); the
 dialog uses the existing `/api/skills/setup/state` and `/confirm` endpoints.
 
 Charts are plain HTML/CSS bars (no library), with `role="img"`, an

@@ -49,7 +49,7 @@ chat_messages(id, at, role, content, tools_json, meta_json)
 ```
 
 - Exactly one `type:` tag; `status:` and `importance:` are defaulted.
-- Reserved values are validated by `arkstudio/tags.py`. Everything else is free.
+- Reserved values are validated by `ark_studio/python/arkstudio/tags.py`. Everything else is free.
 - Namespaces may be non-ASCII (`大话题:`), and values may contain `:`
   (`source:lark:org2`); the first colon separates the namespace.
 - Links are directed; the UI always adds reverse navigation.
@@ -91,8 +91,8 @@ sub-tabs replace the page title as a scrollable chip row.
 ### Editor workspace
 
 `#/editor` (and `#/editor/<encoded key>`) is a VS Code style viewer/editor for
-project files and node attachments (`web/js/views/editor.js`; the pure tab
-model, persistence and type mapping live in `web/js/editor-model.js` with
+project files and node attachments (`ark_studio/web/js/views/editor.js`; the pure tab
+model, persistence and type mapping live in `ark_studio/web/js/editor-model.js` with
 `tests/js/editor_model.test.mjs`).
 
 - **Tabs** are the workspace sub-tabs in the top bar (phone: the title row).
@@ -153,15 +153,15 @@ narrow windows), preview rendered text or restore as a new revision. The bare
 repository lives inside `<project>.ark/history.git/`; SQLite stores each node's
 tracking switch and head. Media bytes and other node fields are not versioned.
 
-Any ARK node can be opened as an Editor tab (`web/js/views/node-editor.js`):
+Any ARK node can be opened as an Editor tab (`ark_studio/web/js/views/node-editor.js`):
 a wide, document-like editor with the same data and rules as the attributes
-panel. Pure pieces live in `web/js/node-model.js` (draft, validation, PATCH
-body, link rows; `tests/js/node_model.test.mjs`); `web/js/unit-edit.js` holds
+panel. Pure pieces live in `ark_studio/web/js/node-model.js` (draft, validation, PATCH
+body, link rows; `tests/js/node_model.test.mjs`); `ark_studio/web/js/unit-edit.js` holds
 the save/upload/open helpers the inspector now shares.
 
 - **Opening**: "Open in Editor" (Alt+Enter) in every node context menu: the
   canvas graph (map, mind map, research map, dashboard graph) and, through
-  one delegated listener in `web/js/unit-menu.js`, every DOM row/card tagged
+  one delegated listener in `ark_studio/web/js/unit-menu.js`, every DOM row/card tagged
   `data-unit-ref` (cards, task board, outlines, Gantt rows, asset grid,
   outreach and dashboard lists; double-click opens too). Also the inspector
   header button, the production report dialog and links inside a node tab
@@ -187,7 +187,7 @@ the save/upload/open helpers the inspector now shares.
 #### Rich rendering (`richText`, all views)
 
 - **Mermaid** ```` ```mermaid ```` blocks render with the vendored
-  `web/vendor/mermaid` (lazy-loaded, runtime-cached by the service worker, not
+  `ark_studio/web/vendor/mermaid` (lazy-loaded, runtime-cached by the service worker, not
   precached: 2.7 MB) using `securityLevel: "strict"` and ARK's light/dark
   theme (diagrams re-render when the theme flips). SVGs are cached by
   theme + source, renders are serialised, and the node preview patches only
@@ -232,7 +232,7 @@ the save/upload/open helpers the inspector now shares.
    origin**: `parent.document`, cookies, `localStorage`, the mobile token and
    same-origin API calls are all unreachable (the browser smoke asserts each
    one throws). No popups, forms or top navigation either.
-2. `web/viz-frame.html` is served with its own CSP: `sandbox allow-scripts;
+2. `ark_studio/web/viz-frame.html` is served with its own CSP: `sandbox allow-scripts;
    default-src 'none'; script-src 'unsafe-inline' 'unsafe-eval';
    connect-src 'none'; img-src/media-src data: blob:; frame-ancestors 'self'`
    (+ `X-Frame-Options: SAMEORIGIN`). So even opened top-level it is
@@ -451,7 +451,7 @@ SessionManager ── Popen(argv, cwd=workspace, env=scrubbed) ── reader thr
   last-activity/counters under a per-session lock. The UI polls `offset`-based
   chunks every 1.6 s; there is no SSE/websocket dependency. The UI says
   "agent running/idle/completed" and never fakes token-level streaming.
-- **Transcript normalization.** `arkstudio/session_transcript.py` maps complete
+- **Transcript normalization.** `ark_studio/python/arkstudio/session_transcript.py` maps complete
   stdout/stderr lines to user/assistant messages, tool calls and results,
   permission requests/resolutions, errors, reasoning and notices. It understands
   the `[[ark-event]] {json}` adapter protocol, generic/Claude Code
@@ -598,11 +598,11 @@ evidence, decision, falsifier, gates) and its "no silent state" stance.
 
 ## 16. Skills and protocol layer
 
-ARK hosts three adapted skill workflows in `arkstudio/skills/`: agent-team
+ARK hosts three adapted skill workflows in `ark_studio/python/arkstudio/skills/`: agent-team
 planning/execution, RRSI harness search, and the academic design protocol. The
 layer is code and templates, not a vendor checkout or a parallel app. A skill
 catalog feeds `GET /api/skills`, the Settings > Skills panel and
-`python -m arkstudio skills ...`. Agent-team manifests are validated and, when
+`ark-server skills ...`. Agent-team manifests are validated and, when
 requested, written into real ARK task units (type `task`, tags
 `skills:agent-team`). RRSI contributes edit budget, history, noise floor, cost
 rule and leakage screening; design contributes a versioned semantic theme,

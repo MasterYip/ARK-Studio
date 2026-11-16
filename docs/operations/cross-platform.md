@@ -1,53 +1,33 @@
 # Cross-platform notes
 
-ARK Studio runs on Windows, Ubuntu/Linux and macOS with the same stdlib-only
-Python server and the same vanilla ES-module workbench. It is a small local web
+ARK Studio runs on Windows, Ubuntu/Linux and macOS with the same single-binary
+Go server (`ark-server`) and the same vanilla ES-module workbench. It is a small local web
 app, not an all-in-one document editor: ARK keeps the graph, planning and task
 API in charge, and hands individual resources to the operating system's default
 application when you ask it to.
 
 ## Requirements
 
-- Python **3.10+** (no third-party Python packages and no npm build).
+- `ark-server` for your platform (release package or desktop app), or Go 1.27+
+  to build it from `ark_studio/server/` (no cgo, no npm build).
 - A modern browser for the workbench UI.
 - A desktop session if you want **Open externally**. The server itself also runs
   headless; only the "open in the OS" action needs a graphical session.
 - Linux: `xdg-open` (usually from `xdg-utils`) or `gio`; macOS: the built-in
-  `open` command; Windows: `os.startfile` with an `explorer` fallback.
+  `open` command; Windows: the shell's default-app association with an
+  `explorer` fallback.
 
 ## Start
 
-### Windows
-
-```powershell
-cd <this task directory>
-python -m arkstudio serve --port 8890
-# or:
-powershell -ExecutionPolicy Bypass -File .\scripts\dev\start.ps1
-```
-
-### macOS and Ubuntu/Linux
-
 ```sh
-cd <this task directory>
-python3 -m arkstudio serve --port 8890
-# or:
-chmod +x scripts/dev/start.sh
-./scripts/dev/start.sh
+cd <your ARK Studio checkout>
+cd ark_studio/server && go generate ./... && go build ./cmd/ark-server && cd ../..
+ark_studio/server/ark-server serve --port 8890     # ark-server.exe on Windows
 ```
 
-`scripts/dev/start.sh` accepts environment variables instead of PowerShell
-parameters:
-
-```sh
-PORT=8890 ROOT="$HOME/ARK/projects" ./scripts/dev/start.sh
-NO_BROWSER=1 ./scripts/dev/start.sh          # do not open the browser
-PYTHON=python3.12 ./scripts/dev/start.sh
-```
-
-Both start scripts launch the same `python -m arkstudio serve` process and then
-open <http://127.0.0.1:8890/> in the default browser. On the first run ARK
-creates a demo project under `runtime/projects/`.
+Then open <http://127.0.0.1:8890/> in the default browser. On the first run
+ARK creates a demo project under `runtime/projects/` (relative to the working
+directory). The desktop app starts the same server for you.
 
 The server binds to loopback by default. Keep it there. Setting `--host
 0.0.0.0` is possible for a trusted LAN but is outside the supported security
@@ -114,7 +94,7 @@ Content-Type: application/json
 - `path` is project-relative. Absolute paths, Windows drive paths, UNC paths,
   `..` traversal and symlink escapes are rejected. A local `file://` URL is
   accepted only when it resolves inside the active project.
-- `url` must be `http` or `https` and is opened with `webbrowser.open`.
+- `url` must be `http` or `https` and is opened in the default browser.
 - The action returns a structured JSON result (`opened`, `kind`, `target`,
   `platform`, `opener`, `mode`). Failures return a clean `400`/`403`/`404` with
   a message the UI shows as a toast.
@@ -129,10 +109,10 @@ Content-Type: application/json
 - Only the active project folder and the task-session workspace are openable.
   There is no arbitrary "open any path on the machine" route.
 - ARK never uses `shell=True` for these actions. It invokes fixed argv lists:
-  - Windows: `os.startfile(path)`, falling back to `explorer path`.
+  - Windows: the default-app association (`ShellExecute`, reported as opener `os.startfile`), falling back to `explorer path`.
   - macOS: `open path`.
   - Linux/Ubuntu: `xdg-open path`, falling back to `gio open path`.
-  - URLs: Python's `webbrowser.open(url, new=2)` on every platform.
+  - URLs: the platform's default browser.
 - Headless Linux (no `DISPLAY` / `WAYLAND_DISPLAY`) returns a clear error rather
   than pretending the file opened. On a remote SSH host, the default app opens
   on the **server's** desktop, not on your laptop.
@@ -169,8 +149,9 @@ bounded command runner with an optional interactive PTY:
 
 | Platform | PTY backend | Dependency |
 |---|---|---|
-| Windows | `pywinpty` / ConPTY (`winpty.PtyProcess` plus raw `cmd.exe /d /s /c`) | `pip install pywinpty` or `pip install "ark-studio[pty]"`; optional |
-| macOS/Linux | standard-library `pty.openpty()` + `subprocess.Popen`, `setsid`/`TIOCSCTTY`, `TIOCSWINSZ` | none |
+| Windows | none: the stdio runner (raw `cmd.exe /d /s /c` command line) | - |
+| Linux | `/dev/ptmx` PTY, `setsid`/`TIOCSCTTY`, `TIOCSWINSZ` | none |
+| macOS | none: the stdio runner | - |
 
 PTY mode keeps the raw UTF-8 byte stream (ANSI escapes included) and sends it
 through the existing polling/SSE entries; the browser renders it with a small
@@ -185,12 +166,10 @@ When `pty=true` is requested but the backend is missing or ConPTY fails to
 start, ARK starts the old stdio subprocess instead and reports
 `pty_requested=true`, `pty=false`, a `pty_fallback` reason and
 `pty_available=false` in `/api/workspace/info`. Nothing fails open or silently
-pretends a PTY exists; CI and hosts without `pywinpty` continue to run the full
-stdio terminal. On Windows the command is passed as one raw command line to
+pretends a PTY exists; hosts without a PTY backend run the full stdio terminal. On Windows the command is passed as one raw command line to
 `cmd.exe /d /s /c` (the standard `subprocess` argv quoting escapes embedded
 quotes with backslashes, which `cmd.exe` does not understand and which silently
-breaks commands such as `python -c "print(1)"`; the same raw form is used for
-the pywinpty low-level spawn). On POSIX the command is one argv element passed
+breaks commands such as `python -c "print(1)"`). On POSIX the command is one argv element passed
 to `$SHELL -lc`; ARK never interpolates paths or other values into the command
 string. Each command has a 1–120 s timeout, a 256 KiB output cap, optional
 stdin and a cancel action that stops the process tree with the same

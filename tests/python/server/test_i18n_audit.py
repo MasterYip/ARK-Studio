@@ -19,7 +19,7 @@ BASELINE_UNWRAPPED = 0
 
 
 def scan_snippet(source: str) -> audit_mod.FileScan:
-    fs = audit_mod.FileScan(ROOT / "web" / "js" / "snippet.js", source)
+    fs = audit_mod.FileScan(ROOT / "ark_studio" / "web" / "js" / "snippet.js", source)
     audit_mod.scan_tokens(fs, audit_mod.tokenize(source)[0])
     return fs
 

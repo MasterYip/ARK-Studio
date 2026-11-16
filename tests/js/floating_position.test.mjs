@@ -5,7 +5,7 @@ import vm from "node:vm";
 
 const listeners = {};
 const context = vm.createContext({ document: { addEventListener(name, fn) { listeners[name] = fn; } } });
-const module = new vm.SourceTextModule(await readFile(new URL("../../web/js/floating-position.js", import.meta.url), "utf8"), { context });
+const module = new vm.SourceTextModule(await readFile(new URL("../../ark_studio/web/js/floating-position.js", import.meta.url), "utf8"), { context });
 await module.link(() => {}); await module.evaluate();
 const { floatingPosition, activationPoint, trackActivationPoint } = module.namespace;
 

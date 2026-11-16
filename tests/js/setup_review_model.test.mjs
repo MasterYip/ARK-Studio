@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
 
-const source = await readFile(new URL("../../web/js/setup-review-model.js", import.meta.url), "utf8");
+const source = await readFile(new URL("../../ark_studio/web/js/setup-review-model.js", import.meta.url), "utf8");
 const module = new vm.SourceTextModule(source, { identifier: "setup-review-model.js" });
 await module.link(() => { throw new Error("setup-review-model must stay dependency-free"); });
 await module.evaluate();

@@ -13,7 +13,7 @@ async function load(url) {
   await module.link((specifier, parent) => load(new URL(specifier, parent.identifier)));
   return module;
 }
-const module = await load(new URL("../../web/js/graph-filter.js", import.meta.url));
+const module = await load(new URL("../../ark_studio/web/js/graph-filter.js", import.meta.url));
 await module.evaluate();
 const start = performance.now();
 const index = new module.namespace.GraphFilterIndex(input.snapshot);

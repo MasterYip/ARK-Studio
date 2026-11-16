@@ -10,7 +10,8 @@ its environment; the other three were previously external vendor skills:
 | `rrsi` | regularized harness improvement: budget, history, cost rule, leakage screen | adapted core algorithm |
 | `design` | theme-first academic design, asset rules, artifact verification | adapted schema + verification |
 
-The code lives in `arkstudio/skills/`; the discoverable catalog is built from it.
+The code lives in `ark_studio/server/internal/skillkit/` (templates, render, validate) and
+`ark_studio/server/internal/skillbrief/`; the discoverable catalog is built from it.
 Nothing here is a link to a vendor checkout and there is no parallel app.
 
 ## Agent interface v2
@@ -76,10 +77,10 @@ rejects token-shaped strings and strips user-info from remotes. The CLI
 provides the same lifecycle, and the terminal user is the human actor:
 
 ```powershell
-python -m arkstudio skills setup discover --project runtime/projects/my.ark --paths E:/code/repo
-python -m arkstudio skills setup summary  --project runtime/projects/my.ark
-python -m arkstudio skills setup confirm  --project runtime/projects/my.ark --digest <digest>
-python -m arkstudio skills setup verify   --project runtime/projects/my.ark
+ark-server skills setup discover --project runtime/projects/my.ark --paths E:/code/repo
+ark-server skills setup summary  --project runtime/projects/my.ark
+ark-server skills setup confirm  --project runtime/projects/my.ark --digest <digest>
+ark-server skills setup verify   --project runtime/projects/my.ark
 ```
 
 Known limit: with authentication disabled (the local default), a local process
@@ -94,15 +95,15 @@ authentication when that matters.
   agent prompt, and can create a real agent-team task unit.
 - **HTTP** `GET /api/skills` returns the catalog plus the protocol summary;
   `GET /api/skills/interface` returns the agent interface descriptor.
-- **CLI** `python -m arkstudio skills list|show|render|validate`.
+- **CLI** `ark-server skills list|show|render|validate`.
 - **Python** `from arkstudio.skills import list_skills, render_template, interface`.
 
 ```powershell
-python -m arkstudio skills list
-python -m arkstudio skills show agent-team
-python -m arkstudio skills render agent-team goal_manifest.md
-python -m arkstudio skills render design theme.json --out build/theme.json
-python -m arkstudio skills validate rrsi round --payload round.json
+ark-server skills list
+ark-server skills show agent-team
+ark-server skills render agent-team goal_manifest.md
+ark-server skills render design theme.json --out build/theme.json
+ark-server skills validate rrsi round --payload round.json
 ```
 
 ## HTTP API

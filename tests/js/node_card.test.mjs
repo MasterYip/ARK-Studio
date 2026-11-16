@@ -4,12 +4,17 @@ import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
   cardMetrics, applyCardMetrics, cleanCardWidth, titleLines, textUnits, CARD_KINDS, CARD_WIDTH_RANGE, CARD_LINE_H, THUMB,
-} from "../../web/js/node-card.js";
+} from "../../ark_studio/web/js/node-card.js";
+import { existsSync } from "node:fs";
+// These cases compare against the frozen Python server's sources; trees
+// without ark_studio/python (the public export) skip them.
+const noPython = !existsSync(new URL("../../ark_studio/python/arkstudio/", import.meta.url))
+  && "the Python reference sources are not in this tree";
 
 const image = (id) => ({ id, url: `media/${id}.png` });
 
-test("width range matches the server's stored limits", async () => {
-  const py = await readFile(new URL("../../arkstudio/store.py", import.meta.url), "utf8");
+test("width range matches the server's stored limits", { skip: noPython }, async () => {
+  const py = await readFile(new URL("../../ark_studio/python/arkstudio/store.py", import.meta.url), "utf8");
   const min = Number(py.match(/^MIN_CARD_W = (\d+)/m)[1]);
   const max = Number(py.match(/^MAX_CARD_W = (\d+)/m)[1]);
   assert.deepEqual(CARD_WIDTH_RANGE, [min, max]);

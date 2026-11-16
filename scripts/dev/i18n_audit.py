@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """Audit ARK Studio's web UI for user-visible English that bypasses i18n.
 
-Stdlib only. Scans web/js/**/*.js and web/*.html and reports:
+Stdlib only. Scans ark_studio/web/js/**/*.js and ark_studio/web/*.html and reports:
 
 * literals in UI positions (h() children, label/title/placeholder/... props,
   toast/confirmDialog/openModal arguments, textContent/title assignments,
   setAttribute("title"|"aria-label"|...)) that contain English words and are
   not wrapped in t();
 * sentence-like English literals anywhere else (``loose`` findings);
-* EN/ZH key parity in web/js/i18n.js;
+* EN/ZH key parity in ark_studio/web/js/i18n.js;
 * t("key") calls whose key is missing from EN or ZH.
 
 Suppress a deliberate literal with a ``// i18n-ignore`` comment on the same
@@ -31,11 +31,11 @@ from html.parser import HTMLParser
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-WEB = ROOT / "web"
+WEB = ROOT / "ark_studio" / "web"
 I18N = WEB / "js" / "i18n.js"
 # The UI dictionaries, one module per language (i18n.js loads the active one).
 I18N_UI = [WEB / "js" / "i18n-en.js", WEB / "js" / "i18n-zh.js"]
-# Translations of server-originated text (codes from arkstudio/messages.py):
+# Translations of server-originated text (codes from ark_studio/python/arkstudio/messages.py):
 # English templates, and the Chinese module loaded only for Chinese.
 I18N_SERVER = WEB / "js" / "i18n_server.js"
 I18N_SERVER_ZH = WEB / "js" / "i18n_server_zh.js"
@@ -555,11 +555,11 @@ def audit(extra_keys: dict | None = None) -> dict:
 
 # --------------------------------------------------------------------------- server text
 # Server-originated English shown in the UI is translated client-side from the
-# server.* templates in web/js/i18n_server.js (see i18n.js localizeServer /
+# server.* templates in ark_studio/web/js/i18n_server.js (see i18n.js localizeServer /
 # serverErrorText).  This section mirrors that matcher in Python and checks the
 # server sources, so a new human-facing server message without an EN/ZH entry
 # fails the audit.
-ARK = ROOT / "arkstudio"
+ARK = ROOT / "ark_studio" / "python" / "arkstudio"
 # Error raises in these files are agent-facing (skill internals, agent docs) or
 # CLI-only (startup flags); they intentionally stay English.  launcher.py is
 # the native Tk connection chooser: its errors go to a tkinter messagebox
@@ -674,7 +674,7 @@ def server_error_messages(root: Path = ARK) -> list[dict]:
                 continue
             if any(re.search(rx, message) for rx in SERVER_AGENT_ONLY):
                 continue
-            found.append({"file": f"arkstudio/{name}", "line": node.lineno, "kind": callee,
+            found.append({"file": f"ark_studio/python/arkstudio/{name}", "line": node.lineno, "kind": callee,
                           "template": message, "sample": _sample(message)})
     return found
 

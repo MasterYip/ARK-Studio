@@ -38,11 +38,11 @@ overview. The guides below cover configuration, integrations and development.
 
 ## Development
 
-> The Python server is deprecated in favour of the Go server `ark-server`
-> (byte-compatible, same data). Python stays runnable for rollback for now.
+> The backend is the Go server `ark-server` (`ark_studio/server/`); all backend changes are
+> made in Go.
 
 - [Go server (ark-server)](development/go-port/README.md): architecture, build, tests, adding routes and [switch-over/rollback](development/go-port/switch-over.md).
 - [Releasing](development/release.md): versioning, the release workflow, signing and the updater key.
-- [Development guide](development/development.md): repository layout, tests and contributions.
+- [Development guide](development/development.md): building and testing ark-server, adding a route, the backend gate (`scripts/dev/check-backend.*`), contributions.
 - [Design notes](development/design.md): data and UI architecture.
 - [Client project cache](development/client-cache.md): offline cache, deltas, push sync and its server contract.

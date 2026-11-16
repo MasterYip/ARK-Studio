@@ -3,7 +3,7 @@ import test from "node:test";
 
 import {
   SETTINGS_TABS, DEFAULT_SETTINGS_TAB, GRAPH_SECTION, resolveSettingsTab, settingsTabScope,
-} from "../../web/js/settings-tabs.js";
+} from "../../ark_studio/web/js/settings-tabs.js";
 
 // Section ids used as Settings tab ids before the regrouping, with the scope
 // each lived in.  Every one must still resolve, and keep its scope.

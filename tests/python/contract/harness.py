@@ -1,8 +1,13 @@
 """Black-box HTTP contract cases, runnable against the Python or the Go server.
 
     python -B tests/python/contract/harness.py                       # Python reference
-    ARK_CONTRACT_SERVER=go/ark-server.exe python -B tests/python/contract/harness.py
+    ARK_CONTRACT_SERVER=ark_studio/server/ark-server.exe python -B tests/python/contract/harness.py
     python -B tests/python/contract/harness.py -k static --keep --list-files
+
+Against ark-server the suite is Go-only by default: fixtures come from the
+recorded archives (fixtures/*.zip, record_fixtures.py) and ``import
+arkstudio`` is blocked (noarkstudio.py), so no Python server code is used.
+``ARK_CONTRACT_FIXTURES=python`` builds fresh fixtures with fixture.py instead.
 
 Each case names the contract route ids it exercises (docs/development/go-port/contract.json).
 Against Go, a case runs only when every route it needs is in ``ark-server
@@ -15,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 from urllib.parse import quote
 import shutil
@@ -24,7 +30,8 @@ import traceback
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from serverctl import ASSET_VERSION, Client, Server, copy_fixture, make_fixture, server_spec, temp_dir  # noqa: E402
+from serverctl import (ASSET_VERSION, Client, Server, copy_fixture, make_fixture, recorded_fixture,  # noqa: E402
+                       server_spec, temp_dir)
 import go_only  # noqa: E402
 
 CASES = []
@@ -369,7 +376,15 @@ def go_ported(spec: str) -> set[str] | None:
     return {item["id"] for item in json.loads(out.stdout)}
 
 
+def go_only_run(spec: str) -> bool:
+    """Against ark-server: recorded fixtures, no arkstudio (the default)."""
+    return spec != "python" and os.environ.get("ARK_CONTRACT_FIXTURES", "recorded") != "python"
+
+
 def run(spec: str, pattern: str = "", keep: bool = False, list_files: bool = False) -> int:
+    if go_only_run(spec):
+        import noarkstudio
+        noarkstudio.install()
     ported = go_ported(spec)
     work = temp_dir("ark-contract-")
     results = []
@@ -378,7 +393,10 @@ def run(spec: str, pattern: str = "", keep: bool = False, list_files: bool = Fal
             cases = [c for c in CASES if c["mode"] == mode and pattern in c["name"]]
             if not cases:
                 continue
-            fixture = make_fixture(work / f"fixture-{mode}", auth=3 if mode == "auth" else 0)
+            if go_only_run(spec):
+                fixture = recorded_fixture(work / f"fixture-{mode}", mode)
+            else:
+                fixture = make_fixture(work / f"fixture-{mode}", auth=3 if mode == "auth" else 0)
             data = copy_fixture(Path(fixture["data_dir"]), work / f"data-{mode}")
             env = {"ARK_ALLOWED_HOSTS": "contract.example"}
             with Server(spec, data, env=env) as server:

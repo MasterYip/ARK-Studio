@@ -7,10 +7,12 @@
 //   node scripts/release/version.mjs --set 2.1.0  update VERSION, then --write
 //   node scripts/release/version.mjs --tag v2.1.0 exit 1 unless the tag matches
 //
-// Copies: pyproject.toml, arkstudio/__init__.py, desktop/package.json,
-// desktop/src-tauri/Cargo.toml, desktop/src-tauri/tauri.conf.json. ark-server
-// gets it at build time: go build -ldflags "-X main.version=<VERSION>".
-import { readFileSync, writeFileSync } from "node:fs";
+// Copies: ark_studio/desktop/package.json, ark_studio/desktop/src-tauri/Cargo.toml,
+// ark_studio/desktop/src-tauri/tauri.conf.json, and the frozen Python server's
+// ark_studio/python/pyproject.toml and arkstudio/__init__.py when that folder is
+// present (it is not in the public export). ark-server gets it at build time:
+// go build -ldflags "-X main.version=<VERSION>".
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -19,11 +21,11 @@ const SEMVER = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 
 // Each target: file, regex whose group 1 is the version, replacement builder.
 export const TARGETS = [
-  ["pyproject.toml", /^version = "([^"]*)"/m, (v) => `version = "${v}"`],
-  ["arkstudio/__init__.py", /^__version__ = "([^"]*)"/m, (v) => `__version__ = "${v}"`],
-  ["desktop/package.json", /^ {2}"version": "([^"]*)"/m, (v) => `  "version": "${v}"`],
-  ["desktop/src-tauri/Cargo.toml", /^version = "([^"]*)"/m, (v) => `version = "${v}"`],
-  ["desktop/src-tauri/tauri.conf.json", /^ {2}"version": "([^"]*)"/m, (v) => `  "version": "${v}"`],
+  ["ark_studio/python/pyproject.toml", /^version = "([^"]*)"/m, (v) => `version = "${v}"`],
+  ["ark_studio/python/arkstudio/__init__.py", /^__version__ = "([^"]*)"/m, (v) => `__version__ = "${v}"`],
+  ["ark_studio/desktop/package.json", /^ {2}"version": "([^"]*)"/m, (v) => `  "version": "${v}"`],
+  ["ark_studio/desktop/src-tauri/Cargo.toml", /^version = "([^"]*)"/m, (v) => `version = "${v}"`],
+  ["ark_studio/desktop/src-tauri/tauri.conf.json", /^ {2}"version": "([^"]*)"/m, (v) => `  "version": "${v}"`],
 ];
 
 export function readVersion(base = root) {
@@ -32,10 +34,14 @@ export function readVersion(base = root) {
   return v;
 }
 
+// Legacy targets: checked and written only when the file exists.
+const OPTIONAL = new Set(["ark_studio/python/pyproject.toml", "ark_studio/python/arkstudio/__init__.py"]);
+const present = (base) => TARGETS.filter(([file]) => !OPTIONAL.has(file) || existsSync(join(base, file)));
+
 export function mismatches(base = root) {
   const want = readVersion(base);
   const out = [];
-  for (const [file, re] of TARGETS) {
+  for (const [file, re] of present(base)) {
     const m = readFileSync(join(base, file), "utf8").match(re);
     if (!m) out.push(`${file}: no version field found`);
     else if (m[1] !== want) out.push(`${file}: ${m[1]} != VERSION ${want}`);
@@ -44,7 +50,7 @@ export function mismatches(base = root) {
 }
 
 function write(base, v) {
-  for (const [file, re, repl] of TARGETS) {
+  for (const [file, re, repl] of present(base)) {
     const path = join(base, file);
     const text = readFileSync(path, "utf8");
     if (!re.test(text)) throw new Error(`${file}: no version field found`);

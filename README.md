@@ -1,9 +1,9 @@
 <p align="center">
   <a href="https://github.com/MasterYip/ARK-Studio">
     <picture>
-      <source media="(prefers-color-scheme: dark)" srcset="web/brand/ark-lockup-loading-dark.svg">
-      <source media="(prefers-color-scheme: light)" srcset="web/brand/ark-lockup-loading.svg">
-      <img src="web/brand/ark-lockup-loading.svg" width="360" alt="ARK Studio">
+      <source media="(prefers-color-scheme: dark)" srcset="ark_studio/web/brand/ark-lockup-loading-dark.svg">
+      <source media="(prefers-color-scheme: light)" srcset="ark_studio/web/brand/ark-lockup-loading.svg">
+      <img src="ark_studio/web/brand/ark-lockup-loading.svg" width="360" alt="ARK Studio">
     </picture>
   </a>
 </p>
@@ -16,7 +16,7 @@
 <p align="center">
   <a href="docs/README.md"><img alt="Documentation" src="https://img.shields.io/badge/Documentation-2563EB?style=for-the-badge&amp;logo=readthedocs&amp;logoColor=white"></a>
   <a href="#getting-started"><img alt="Quick start" src="https://img.shields.io/badge/Quick_Start-16856B?style=for-the-badge"></a>
-  <a href="docs/operations/cross-platform.md#requirements"><img alt="Python 3.10 or newer" src="https://img.shields.io/badge/Python-3.10%2B-3776AB?style=for-the-badge&amp;logo=python&amp;logoColor=white"></a>
+  <a href="docs/operations/cross-platform.md#requirements"><img alt="Go server" src="https://img.shields.io/badge/Server-Go-00ADD8?style=for-the-badge&amp;logo=go&amp;logoColor=white"></a>
   <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-ECECEA?style=for-the-badge&amp;labelColor=2F2F2D&amp;color=ECECEA"></a>
 </p>
 
@@ -40,7 +40,7 @@ needed. Each prompt asks the agent to complete the setup and verify that it work
 
 ```text
 Install ARK Studio from https://github.com/MasterYip/ARK-Studio on this computer.
-Read its README and platform guide, check Python requirements, and keep project
+Read its README and platform guide, check the requirements, and keep project
 data in a persistent folder. Start it on an available loopback port, preferably
 8890, verify /api/health, and open it in my default browser. Leave a reusable
 launcher and tell me the URL, data location, and how to stop and restart it.
@@ -132,28 +132,28 @@ Editor, inspector or agent API.
 
 ### Requirements
 
-- Python **3.10 or newer** and a modern browser.
+- A modern browser.
+- The `ark-server` binary from the [Releases](https://github.com/MasterYip/ARK-Studio/releases)
+  page, or **Go 1.27 or newer** to build it from a checkout (pure Go, no C
+  toolchain).
 - Git to clone the repository, use agent worktrees and enable node text history.
-- No additional Python packages or frontend build step for the core web app.
-  Desktop, interactive Windows terminals and external providers have optional
-  dependencies described below.
+- No frontend build step: the web app is plain ES modules. External providers
+  have optional dependencies described below.
 
 ### Run From Source
 
-> **Deprecation notice.** The Python server (`python -m arkstudio serve`) is
-> deprecated in favour of `ark-server`, a byte-compatible Go server built from
-> `go/` that takes the same flags, configuration and data folders. Python stays
-> runnable as the reference and rollback path for now. See
-> [running ark-server in place of Python](docs/development/go-port/switch-over.md).
+The server is `ark-server`, built from `ark_studio/server/` (see the
+[development guide](docs/development/development.md)).
 
 ```sh
 git clone https://github.com/MasterYip/ARK-Studio.git
-cd ARK-Studio
-python -m arkstudio serve --port 8890
+cd ARK-Studio/ark_studio/server
+go generate ./... && go build ./cmd/ark-server   # ark-server.exe on Windows
+cd ../..
+ark_studio/server/ark-server serve --port 8890
 ```
 
-Use `python3` if that is your Python command. Open
-**<http://127.0.0.1:8890/>**. The server binds to loopback by default.
+Open **<http://127.0.0.1:8890/>**. The server binds to loopback by default.
 
 Select **ARK Studio Demo** to explore a sample research workflow, or create a
 project from the project switcher. The onboarding tour introduces the workspaces,
@@ -163,19 +163,18 @@ graph editing, filtering and phone access; restart it from
 To choose a data directory or skip starter projects:
 
 ```sh
-python -m arkstudio serve --root ./my-projects --no-demo --port 8890
+ark_studio/server/ark-server serve --root ./my-projects --no-demo --port 8890
 ```
 
-Run `python -m arkstudio --help` and
-`python -m arkstudio serve --help` for the complete CLI options.
+Run `ark-server --help` and `ark-server serve --help` for the complete CLI
+options.
 
 ### Desktop and Phone Clients
 
 The [ARK Studio desktop app](docs/guide/desktop.md) (Windows, macOS, Ubuntu)
 runs ARK locally with the bundled Go server or opens a remote server in a
 borderless native window with a tray menu; see [install](docs/guide/install.md).
-The older Python shell (`python -m arkstudio desktop`) is deprecated with the
-Python server. On a phone, use the
+On a phone, use the
 responsive web app or an Android client. **Settings > Project > Access** exposes available
 APK downloads and project-scoped QR pairing. APK availability depends on the
 server build. See [mobile access and Android builds](docs/guide/mobile.md).
@@ -204,10 +203,8 @@ The core workbench runs without a model account or GPU server.
 
 ## Data and Deployment
 
-The server is being moved from Python to the Go `ark-server` (same data, same
-flags; the Python server is deprecated, see
-[switch-over and rollback](docs/development/go-port/switch-over.md)).
-The Python server uses the standard library and SQLite; the browser UI uses
+The server is the Go `ark-server` (one binary, pure Go SQLite).
+It stores data in SQLite; the browser UI uses
 native ES modules and Canvas. Project content is stored in portable project
 folders, while organization accounts and agent-session logs live separately.
 Default locations are relative to the directory where the server starts:
@@ -232,21 +229,19 @@ not API responses. An available shell does not replace a running server.
 
 ## Development
 
-Work directly from a checkout. The production server is the Go `ark-server` in
-`go/` (Go version from `go/go.mod`); the deprecated Python server in `arkstudio/`
-stays as its parity reference and rollback path. Python tests use `unittest`;
-JavaScript tests use the built-in test runner in Node 18 or newer. Node is
-needed for development checks, not for running the app.
+Work directly from a checkout. The backend gate builds `ark-server` and runs
+gofmt, `go vet`, `go test`, the contract suite against the fresh binary and the
+JavaScript tests (Node 18 or newer; Python 3.10+ runs the contract suite).
+Node is needed for development checks, not for running the app.
 
 ```sh
-cd go && go generate ./... && go vet ./... && go test ./... && cd ..
-python -B -m unittest discover -s tests
-node --experimental-vm-modules --test tests
+scripts/dev/check-backend.sh            # Linux, macOS, Git Bash
+scripts/dev/check-backend.ps1           # Windows PowerShell
 ```
 
 Run a separate instance with temporary project and session roots when testing
 changes. See [the development guide](docs/development/development.md) for
-focused checks and contribution guidance.
+focused checks, screenshots and contribution guidance.
 
 Issues and pull requests are welcome. Include reproduction steps, the platform
 and relevant logs with credentials removed. For behavior changes, describe the
@@ -266,5 +261,5 @@ ARK Studio is released under the **[MIT License](LICENSE)**.
 Copyright (c) 2026 Raymon Yip.
 
 Third-party components retain their respective licenses, including notices under
-`web/vendor/` and `arkstudio/skills/LICENSES/`. See
+`ark_studio/web/vendor/` and `ark_studio/server/internal/skillkit/LICENSES/`. See
 [skill attribution](docs/agents/skills-attribution.md) for bundled skill provenance.

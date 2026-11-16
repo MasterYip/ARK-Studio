@@ -11,8 +11,8 @@ node_modules/
 .DS_Store
 
 # Private GPU server inventories never belong in the repository.
-# The committed example is vendor/gpu_server_probe/servers_rp.example.yaml.
-vendor/gpu_server_probe/servers_rp.yaml
+# The committed example is ark_studio/python/vendor/gpu_server_probe/servers_rp.example.yaml.
+ark_studio/python/vendor/gpu_server_probe/servers_rp.yaml
 gpu_servers.yaml
 
 # Android APKs are release artifacts; publish them to the server, not git.

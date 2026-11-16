@@ -7,11 +7,11 @@ import { overlay } from "../../scripts/release/ci-tauri-config.mjs";
 test("VERSION is the single source: every copy agrees", () => {
   assert.match(readVersion(), /^\d+\.\d+\.\d+/);
   assert.deepEqual(mismatches(), []);
-  assert.ok(TARGETS.some(([file]) => file === "desktop/src-tauri/tauri.conf.json"));
+  assert.ok(TARGETS.some(([file]) => file === "ark_studio/desktop/src-tauri/tauri.conf.json"));
 });
 
 test("tauri.conf.json bundles the ark-server sidecar and keeps the updater off by default", () => {
-  const conf = JSON.parse(readFileSync(new URL("../../desktop/src-tauri/tauri.conf.json", import.meta.url), "utf8"));
+  const conf = JSON.parse(readFileSync(new URL("../../ark_studio/desktop/src-tauri/tauri.conf.json", import.meta.url), "utf8"));
   assert.deepEqual(conf.bundle.externalBin, ["binaries/ark-server"]);
   assert.equal(conf.bundle.createUpdaterArtifacts, false);
   assert.equal(conf.plugins.updater.pubkey, "");

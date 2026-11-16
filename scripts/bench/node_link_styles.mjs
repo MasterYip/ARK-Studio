@@ -4,8 +4,8 @@
 // smooth-step loop, xyflow tight S) on the layered node layout: crossings,
 // links through cards, link length, link bounding-box area, route time.
 import { readFile, writeFile } from "node:fs/promises";
-import { layeredLayout, routeNodeEdges, layoutMetrics, sampleRoute } from "../../web/js/node-graph-layout.js";
-import { cardMetrics } from "../../web/js/node-card.js";
+import { layeredLayout, routeNodeEdges, layoutMetrics, sampleRoute } from "../../ark_studio/web/js/node-graph-layout.js";
+import { cardMetrics } from "../../ark_studio/web/js/node-card.js";
 
 const args = process.argv.slice(2);
 const outIndex = args.indexOf("--out");

@@ -24,7 +24,7 @@ function worker() {
   let fetcher, calls = 0;
   const self = { location: new URL("https://ark.test/prefix/sw.js"),
     addEventListener(type, fn) { handlers[type] = fn; }, skipWaiting: async () => {}, clients: { claim: async () => {} } };
-  vm.runInNewContext(fs.readFileSync(new URL("../../web/sw.js", import.meta.url), "utf8"), {
+  vm.runInNewContext(fs.readFileSync(new URL("../../ark_studio/web/sw.js", import.meta.url), "utf8"), {
     self, URL, caches, Response, Headers, setTimeout, clearTimeout,
     fetch: (...args) => { calls++; return fetcher(...args); },
   });

@@ -12,7 +12,7 @@ async function load(url) {
   await module.link((specifier, parent) => load(new URL(specifier, parent.identifier)));
   return module;
 }
-const module = await load(new URL("../../web/js/graph-filter.js", import.meta.url));
+const module = await load(new URL("../../ark_studio/web/js/graph-filter.js", import.meta.url));
 await module.evaluate();
 const { GraphFilterIndex } = module.namespace;
 const node = (id, extra = {}) => ({ id, uid: `N-${id}`, title: `Node ${id}`, type: "claim", status: "open",

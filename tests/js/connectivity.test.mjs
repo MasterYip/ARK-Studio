@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   PROBE_MAX_MS, PROBE_MIN_MS, createConnectivity, isProxyFailure, sseNextStep,
-} from "../../web/js/connectivity.js";
+} from "../../ark_studio/web/js/connectivity.js";
 
 function harness(results) {
   const timers = [];
