@@ -107,8 +107,19 @@ test("the Local graph view routes clicks through the model and draws the rings",
   assert.match(view, /onSelect: onNodeSelect/);
   assert.match(view, /localGraphClickAction\(taps, node, open, event, now\)/);
   assert.match(view, /view\.rings = centerRings\(centerHistory, input\.nodes, data\.center\.id\)/);
-  assert.doesNotMatch(view, /openUnitInEditor/);
+  // Double click re-centres; only Alt+Enter (openInEditor) opens the Editor.
+  const recenterSrc = view.slice(view.indexOf("function recenter"), view.indexOf("function openInEditor"));
+  assert.ok(recenterSrc.length > 0);
+  assert.doesNotMatch(recenterSrc, /openUnitInEditor/);
   const graph = await readFile(new URL("js/graph.js", root), "utf8");
   for (const name of ["showNodeCard(node, extra = null)", "hideNodeCard()", "setRings(rings)"]) assert.ok(graph.includes(`  ${name} {`), name);
   assert.match(graph, /this\.rings\?\.get\(node\.id\)/);
+});
+
+test("Alt+Enter in the Local graph opens the card's node (else the centre) in the Editor", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const src = await readFile(new URL("../../ark_studio/web/js/local-graph-view.js", import.meta.url), "utf8");
+  assert.match(src, /onOpenEditor:\s*openInEditor/);
+  assert.match(src, /const node = cardNodeObj \|\| selected;/);
+  assert.match(src, /ctx\.openUnitInEditor\(node\)/);
 });

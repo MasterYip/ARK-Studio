@@ -81,3 +81,32 @@ test("topic routes filter every member type and navigation keeps other scopes", 
   assert.deepEqual([...state.selectedTypes()], ["idea", "source", "question"]);
   assert.equal(state.activeFilterCount(), 0);
 });
+
+test("the Map scope is every known type, notes included, with nothing hidden by default", async () => {
+  const state = await fixture();
+  state.setTab("map");
+  assert.deepEqual([...state.baseTypes()], [...state.ALL_TYPES]);
+  for (const type of ["note", "agent", "host", "production", "outreach", "related_work", "source", "milestone", "run"]) {
+    assert.ok(state.selectedTypes().includes(type), type);
+  }
+  assert.equal(state.ALL_TYPES.length, 21);
+  assert.equal(state.activeFilterCount(), 0);
+  assert.deepEqual([...state.filtersToParams(state.S.filters, { types: state.baseTypes() }).types], [...state.ALL_TYPES]);
+});
+
+test("Map type chips list the types present plus any switched off", async () => {
+  const state = await fixture();
+  state.setTab("map");
+  const counts = { idea: 7, note: 3, agent: 4, topic: 4 };
+  const all = state.selectedTypes();
+  assert.deepEqual([...state.typeChips(state.baseTypes(), counts, all, true)], ["idea", "topic", "agent", "note"]);
+  // Before the counts arrive, or outside the Map, every scope type is drawn.
+  assert.equal(state.typeChips(state.baseTypes(), {}, all, true).length, 21);
+  assert.equal(state.typeChips(state.baseTypes(), counts, all, false).length, 21);
+  // A switched-off type stays visible (unchecked) even with no nodes.
+  state.toggleTypeFilter(state.S.filters, "run");
+  state.toggleTypeFilter(state.S.filters, "note");
+  const chips = state.typeChips(state.baseTypes(), counts, state.selectedTypes(), true);
+  assert.ok(chips.includes("run") && chips.includes("note"));
+  assert.equal(state.activeFilterCount(), 19);
+});

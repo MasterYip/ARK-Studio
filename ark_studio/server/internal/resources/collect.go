@@ -22,8 +22,9 @@ import (
 type GPUSource interface {
 	// Servers is GpuService.servers(): the object's "enabled" (bool) and
 	// "servers" (public server dicts: name, host, port, user, tags, note,
-	// enabled, timeout_seconds) are read.  An error counts as
-	// {"enabled": false, "servers": []}.
+	// enabled, timeout_seconds; only name, tags, enabled for non-admins) are
+	// read, and the Go-only "registration" (gpu.ScopedSource, T-0018).  An
+	// error counts as {"enabled": false, "servers": []}.
 	Servers() (*pyjson.Object, error)
 	// LastProbe is GpuService.last_probe: nil until an explicit probe, then
 	// {"probed_at": "<ISO, seconds, +00:00>", "servers": [per-server result]}
@@ -108,6 +109,10 @@ func Collect(ctx context.Context, d Deps, p Project, host Host, now float64) (*p
 		if servers, err := d.GPU.Servers(); err == nil && servers != nil {
 			gpu.Set("enabled", pyjson.Truthy(servers.Value("enabled")))
 			gpu.Set("servers", or(servers.Value("servers"), []any{}))
+			// Go only (T-0018): the project's GPU registration (gpu.ScopedSource).
+			if reg, ok := servers.Value("registration").(*pyjson.Object); ok {
+				gpu.Set("registration", reg)
+			}
 		}
 		if probe := d.GPU.LastProbe(); probe != nil {
 			gpu.Set("last_probe", probe)

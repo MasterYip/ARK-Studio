@@ -555,4 +555,5 @@ A run that reports "it failed" without a class is not reviewable.
 - [Claude Code agent teams](https://code.claude.com/docs/en/agent-teams)
 - [DeepSeek Super-agent design](https://m.ithome.com/html/1020615.htm)
 - ARK internal: [`skills.md`](skills.md), [`external-agent.md`](external-agent.md),
+  [`working-mode.md`](working-mode.md) (recommended day-to-day working mode),
   [`skills-attribution.md`](skills-attribution.md)

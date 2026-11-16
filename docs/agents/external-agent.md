@@ -15,6 +15,10 @@ DSH / Codex coordinator
          └─ rich-media rows (SVG/PNG)
 ```
 
+For the day-to-day working mode the Home starter prompts ask for (plan in a
+task node first, dated progress, results as review nodes with their own media,
+decision nodes), see [Recommended agent working mode](working-mode.md).
+
 **Use DSH's own subagent mechanism**, not ARK's `/api/agent-sessions` runner.
 ARK task sessions are a simple managed-process fallback; they do not have the
 planning, tool, context, or subagent capabilities of the DSH app.

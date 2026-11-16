@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -165,7 +166,67 @@ def config(text) -> tuple:
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(text if isinstance(text, bytes) else text.encode("utf-8"))
+    write.gpu_text = text  # register_servers() reads it
     return (CALL, "", "", write, {"X-Replay-Module": GPU})
+
+
+# T-0018 (Go only, docs/operations/gpu.md "Project scope"): ark-server shows,
+# probes, dispatches to and queues on only the GPU servers the project's setup
+# registers.  So that this module keeps comparing those paths with Python,
+# every server list the module writes is also registered in the fixture
+# project (setup/project.json: compute entries with gpu_server; the frozen
+# Python server reads the same file, its GPU routes ignore it).  The
+# registration is cumulative and stays for the rest of the replay: the last
+# server list stays configured too, and later modules (route probe, views)
+# read it.  No step is added (golden.py keys steps by their index).
+_NAME = re.compile(r"^\s*-?\s*\{?\s*name:\s*['\"]?([^\s,}'\"]+)", re.M)
+
+
+def _register(data_dir, names: tuple) -> None:
+    from fixture import project_dir
+    try:
+        project = project_dir(data_dir)
+    except (StopIteration, OSError):
+        return
+    if not project.is_dir():
+        return
+    target = project / "setup" / "project.json"
+    if target.exists():
+        try:
+            data = json.loads(target.read_text(encoding="utf-8"))
+        except ValueError:
+            return
+        if data.get("updated_by") != "replay:gpu-scope":  # a real project layer: leave it alone
+            return
+    target.parent.mkdir(exist_ok=True)
+    compute = [{"id": "gpu-" + re.sub(r"[^a-z0-9._-]+", "-", n.lower())[:44], "kind": "ssh", "gpu_server": n}
+               for n in names]
+    target.write_text(json.dumps({"state": "draft", "updated_by": "replay:gpu-scope", "profile": {"compute": compute}}),
+                      encoding="utf-8")
+
+
+def register_servers(steps: list) -> list:
+    """The module's config() steps, each also registering (cumulatively) the
+    servers it names in the fixture project (same number of steps)."""
+    seen: list = []
+    out = []
+    for step in steps:
+        write = step[3] if step[0] == CALL else None
+        if write is None or not hasattr(write, "gpu_text"):
+            out.append(step)
+            continue
+        text = write.gpu_text
+        if text is not None:
+            raw = text.decode("utf-8", "replace") if isinstance(text, bytes) else text
+            seen.extend(n for n in _NAME.findall(raw) if n not in seen)
+
+        def scoped(*dirs, _write=write, _names=tuple(seen)):
+            _write(*dirs)
+            for d in dirs:
+                _register(d, _names)
+        scoped.gpu_names = tuple(seen)
+        out.append((CALL, "", "", scoped, step[4]))
+    return out
 
 
 def probe_config() -> str:
@@ -260,7 +321,7 @@ def gpu_steps(fixture: dict) -> list:
               (probe, "POST", "/api/gpu/probe", {"servers": ["solo"]}, h)]
     steps += [config("enabled: true\nservers: []\n"), (probe, "POST", "/api/gpu/probe", {}, h),
               (prep, "POST", "/api/gpu/dispatch/prepare", {"command": "x"}, h)]
-    return steps + queue_steps(fixture, h)
+    return register_servers(steps + queue_steps(fixture, h))
 
 
 def queue_steps(fixture: dict, h: dict) -> list:

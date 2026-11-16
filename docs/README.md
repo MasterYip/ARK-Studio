@@ -29,6 +29,7 @@ overview. The guides below cover configuration, integrations and development.
 | [Providers and worktrees](agents/providers.md) | CLI discovery, models, authentication and isolated checkouts |
 | [DeepSeek Harness](agents/dsh.md) | DSH installation and adapter configuration |
 | [External agents](agents/external-agent.md) | Agent access, project context and rich media |
+| [Recommended agent working mode](agents/working-mode.md) | Plan in a task node, progress lines, review nodes with media, decision nodes |
 | [Session context management](agents/session-context.md) | Session ids, opt-in JSONL uploads, watcher, resume and API |
 | [Agent interface](agents/agent-interface.md) | Versioned task and protocol contract |
 | [Skills](agents/skills.md) | Skill discovery, configuration and API |

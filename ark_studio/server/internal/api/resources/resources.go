@@ -22,6 +22,9 @@ import (
 type Handlers struct {
 	// Deps are the server's org, mobile, sessions and GPU sources.
 	Deps resdom.Deps
+	// GPUFor, when set, replaces Deps.GPU with the GPU source scoped to the
+	// request's project and viewer (gpu.ScopedSource, T-0018).
+	GPUFor func(p *project.Project) (resdom.GPUSource, error)
 }
 
 var reDevice = api.PyRe(`/api/resources/devices/([^/]+)`, true)
@@ -29,7 +32,15 @@ var reDevice = api.PyRe(`/api/resources/devices/([^/]+)`, true)
 func (h Handlers) sources(c api.Ctx, p *project.Project) (*pyjson.Object, error) {
 	host, _ := os.Hostname()
 	now := float64(clock.Now().UnixMicro()) / 1e6
-	return resdom.Collect(c.Context(), h.Deps,
+	deps := h.Deps
+	if h.GPUFor != nil {
+		src, err := h.GPUFor(p)
+		if err != nil {
+			return nil, err
+		}
+		deps.GPU = src
+	}
+	return resdom.Collect(c.Context(), deps,
 		resdom.Project{ID: p.ID(), Name: p.Name(), Path: p.Path},
 		resdom.Host{Hostname: host, Fingerprint: setup.MachineFingerprint()}, now)
 	// Deps.GPU is always set by the server, so resources.ErrGPUNotPorted cannot occur.

@@ -3,7 +3,7 @@ import { t, typeLabel, statusLabel, impLabel, relLabel, nsLabel } from "./i18n.j
 import { icon } from "./icons.js";
 import { api } from "./api.js";
 import { sortNeedsValues } from "./needs-model.js";
-import { S, baseTypes, selectedTypes, selectedStatuses, selectedImportance, activeFilterCount, filterDiffFromDefault, hasFilterDefault } from "./state.js";
+import { S, baseTypes, selectedTypes, typeChips, selectedStatuses, selectedImportance, activeFilterCount, filterDiffFromDefault, hasFilterDefault } from "./state.js";
 import { openContextMenu } from "./context-menu.js";
 import { assigneeChip, assigneeFilterSection } from "./assignee.js";
 import { displayName } from "./users.js";
@@ -13,6 +13,39 @@ const KIND_COLORS = {topic: "#3b82f6", todo: "#ef4444", event: "#a855f7", decisi
 
 const OVERLAY = () => document.getElementById("overlay-root");
 const TOASTS = () => document.getElementById("toast-root");
+
+/**
+ * T-0018: the GPU views' "not registered in this project" note.  The server
+ * shows a project only the GPU servers its setup registers; `registration` is
+ * the server's {registered, available, suggested, hint_code}.  One click
+ * registers the suggested servers (those this project's queue jobs already
+ * used), else every available one, in the viewer's own setup layer.
+ * Returns null when the project registers a server.
+ */
+export function gpuRegistrationNote(registration, onRegistered = null) {
+  if (!registration || registration.hint_code !== "not_registered") return null;
+  const names = (registration.suggested?.length ? registration.suggested : registration.available) || [];
+  let button = null;
+  if (names.length) {
+    button = h("button", {
+      class: "ghost-btn sm", type: "button",
+      onclick: async () => {
+        button.disabled = true;
+        try {
+          await api.gpuRegister(names);
+          toast(t("gpu.register.done", { n: names.length }), "ok");
+          onRegistered?.();
+        } catch (err) {
+          toast(err.message, "err");
+          button.disabled = false;
+        }
+      },
+    }, icon("plus", "sm"), t("gpu.register.action", { servers: names.join(", ") }));
+  }
+  return h("div", { class: "settings-note" }, icon("info", "sm"),
+    h("div", null, h("b", null, t("gpu.register.title")), " ", t("gpu.register.hint"),
+      button ? h("div", { class: "row tight", style: { marginTop: "6px" } }, button) : null));
+}
 
 export function toast(message, kind = "") {
   const root = TOASTS();
@@ -781,7 +814,7 @@ export function renderFilterRail(host, ctx) {
 
   // Types
   // Only count types that are in this view's type scope.  A facet may also
-  // contain off-scope types (for example Agent on the Map); showing those
+  // contain off-scope types (for example Agent in Execute); showing those
   // makes the group total disagree with the visible unit total.
   const typeBase = [...base];
   if (typeBase.length) {
@@ -794,7 +827,7 @@ export function renderFilterRail(host, ctx) {
     });
     allToggle.indeterminate = selected.length > 0 && !allSelected;
     const typeWrap = h("div", { class: "type-filter" });
-    for (const type of typeBase) {
+    for (const type of typeChips(typeBase, facets.types, selected, state.tab === "map")) {
       const on = selected.includes(type);
       typeWrap.appendChild(h("button", {
         class: `type-chip ${on ? "on" : ""}`.trim(),

@@ -9,6 +9,12 @@ export const CARD_W = 280;
 const HEADER_H = 50;
 const SUMMARY_H = 22;
 const ROW_H = 26;
+// Expanded detail rows (one per GPU, CPU & memory, one per mount): a title
+// line and usage bars, as on the GPU board (views/tasks.js).
+const GPU_ROW_H = 50;
+const GPU_EXTRA_H = 13;
+const CPU_ROW_H = 50;
+const STORAGE_ROW_H = 34;
 const PAD = 10;
 
 const clamp01 = (n) => Math.max(0, Math.min(1, n));
@@ -144,13 +150,22 @@ export function buildResourcesModel(payload, filters = {}) {
     if (filters.mineOnly && device.scope !== "personal" && !rowsByDevice.get(device.id)?.some((r) => r.metrics?.ours || r.owner === payload?.viewer)
       && device.kind !== "ark" && !(device.occupancy?.gpus_ours)) continue;
     const rows = (rowsByDevice.get(device.id) || []).slice()
-      .sort((a, b) => RESOURCE_TYPES.indexOf(a.kind) - RESOURCE_TYPES.indexOf(b.kind) || String(a.label).localeCompare(String(b.label)));
+      // A server's mounts (after other storage) keep the probe's order: the
+      // data mount first, then the largest.  Other rows sort by label.
+      .sort((a, b) => RESOURCE_TYPES.indexOf(a.kind) - RESOURCE_TYPES.indexOf(b.kind)
+        || Number(Boolean(a.metrics?.storage)) - Number(Boolean(b.metrics?.storage))
+        || (a.metrics?.storage ? 0 : String(a.label).localeCompare(String(b.label))));
     if (types && !rows.length) continue;
     const summary = device.occupancy?.gpus_total || device.metrics?.disk_pct != null || device.metrics?.cpu_pct != null;
     const folded = Boolean(rows.length && collapsed?.has(device.id));
-    const h = HEADER_H + (summary ? SUMMARY_H : 0) + (folded ? 0 : rows.length * ROW_H) + PAD;
+    const shown = folded ? [] : rows;
+    const rowHeights = shown.map((res) => rowHeight(res));
+    const rowTops = [];
+    let top = 0;
+    for (const height of rowHeights) { rowTops.push(top); top += height; }
+    const h = HEADER_H + (summary ? SUMMARY_H : 0) + top + PAD;
     cards.push({
-      id: device.id, device, rows: folded ? [] : rows, allRows: rows, collapsed: folded,
+      id: device.id, device, rows: shown, rowTops, rowHeights, allRows: rows, collapsed: folded,
       collapsible: rows.length > 0, hiddenCount: folded ? rows.length : 0, w: CARD_W, h, summary: Boolean(summary),
       dim: DIM_STATES.has(device.status?.state), personal: device.scope === "personal",
       shares: occupancyShares(device),
@@ -173,11 +188,162 @@ export function buildResourcesModel(payload, filters = {}) {
 
 /** Row geometry inside a card (card-local, top-left origin). */
 export function rowBox(card, index) {
-  const top = HEADER_H + (card.summary ? SUMMARY_H : 0) + index * ROW_H;
-  return { x: PAD, y: top, w: card.w - PAD * 2, h: ROW_H - 4 };
+  const offset = card.rowTops?.[index] ?? index * ROW_H;
+  const height = card.rowHeights?.[index] ?? ROW_H;
+  const top = HEADER_H + (card.summary ? SUMMARY_H : 0) + offset;
+  return { x: PAD, y: top, w: card.w - PAD * 2, h: height - 4 };
 }
 
-export const CARD_METRICS = { HEADER_H, SUMMARY_H, ROW_H, PAD };
+export const CARD_METRICS = { HEADER_H, SUMMARY_H, ROW_H, GPU_ROW_H, GPU_EXTRA_H, CPU_ROW_H, STORAGE_ROW_H, PAD };
+
+// ------------------------------------------------------- detail rows
+// How a row is drawn on an expanded card: "gpu" (title, utilisation and
+// memory bars, jobs / processes), "cpu" (CPU and RAM bars), "storage"
+// (mount · used / total · % over a usage bar) or "line" (one line).
+export function rowKind(res) {
+  const m = res?.metrics || {};
+  if (res?.kind === "gpu") return "gpu";
+  if (res?.kind === "cpu" && (num(m.cpu_pct) !== null || num(m.mem_total_mb))) return "cpu";
+  if (res?.kind === "storage" && num(m.disk_pct) !== null) return "storage";
+  return "line";
+}
+
+/** Height of a row (gap included) on an expanded card. */
+export function rowHeight(res) {
+  switch (rowKind(res)) {
+    case "gpu": return GPU_ROW_H + (gpuDetail(res).extra.length ? GPU_EXTRA_H : 0);
+    case "cpu": return CPU_ROW_H;
+    case "storage": return STORAGE_ROW_H;
+    default: return ROW_H;
+  }
+}
+
+const pctOf = (used, total) => (used !== null && total ? Math.max(0, Math.min(100, used / total * 100)) : null);
+
+/**
+ * Everything one GPU row shows, as the GPU board does: index and model,
+ * utilisation and memory (used / total, ours) with usage tones, temperature,
+ * power, and the jobs / owners / processes on it when the probe has them.
+ */
+export function gpuDetail(res) {
+  const m = res?.metrics || {};
+  const label = String(res?.label || "");
+  const split = label.indexOf(" · ");
+  const index = num(m.index);
+  const title = index !== null ? `GPU ${index}` : (split > 0 ? label.slice(0, split) : label);
+  const model = split > 0 ? label.slice(split + 3) : "";
+  const util = num(m.util_pct);
+  const used = num(m.mem_used_mb);
+  const total = num(m.mem_total_mb);
+  const memPct = pctOf(used, total);
+  const processes = Array.isArray(m.processes) ? m.processes : [];
+  const jobs = [...new Set([m.job, ...processes.map((p) => p.job)].filter(Boolean).map(String))];
+  const owners = [...new Set(processes.map((p) => p.owner).filter(Boolean).map(String))];
+  const extra = [];
+  if (jobs.length) extra.push({ key: "jobs", jobs });
+  if (owners.length) extra.push({ key: "owners", owners });
+  if (processes.length) extra.push({ key: "processes", n: processes.length });
+  return {
+    title, model, util, utilTone: usageTone(util), memUsedMb: used, memTotalMb: total, memPct,
+    memTone: usageTone(memPct), oursPct: pctOf(num(m.mem_ours_mb), total), ours: m.ours === true,
+    temperature: num(m.temperature_c), power: num(m.power_w), processes, jobs, owners, extra,
+  };
+}
+
+/** CPU and RAM of a server (its "CPU & memory" row). */
+export function cpuDetail(res) {
+  const m = res?.metrics || {};
+  const cpu = num(m.cpu_pct);
+  const used = num(m.mem_used_mb);
+  const total = num(m.mem_total_mb);
+  const ramPct = pctOf(used, total);
+  return { cpu, cpuTone: usageTone(cpu), ramUsedMb: used, ramTotalMb: total, ramPct, ramTone: usageTone(ramPct),
+    cores: num(m.cores), load1: num(m.load1) };
+}
+
+/**
+ * A storage row's usage bar: mount (or name), used / total bytes, percent,
+ * tone, and whether it holds the data folder.  The ARK server's project
+ * folder takes its sizes from the device's disk figures (decimal GB).
+ */
+export function storageDetail(res, device = null) {
+  const m = res?.metrics || {};
+  let used = num(m.used_bytes), total = num(m.total_bytes), free = num(m.free_bytes);
+  if (used === null && total === null && device?.metrics) {
+    const usedGb = num(device.metrics.disk_used_gb), totalGb = num(device.metrics.disk_total_gb);
+    if (usedGb !== null) used = usedGb * 1e9;
+    if (totalGb !== null) total = totalGb * 1e9;
+    if (used !== null && total !== null) free = Math.max(0, total - used);
+  }
+  const pct = num(m.disk_pct) ?? pctOf(used, total);
+  return { label: String(res?.label ?? ""), used, total, free, pct, tone: usageTone(pct), data: m.data === true };
+}
+
+/** Megabytes in binary units ("22.5 GiB"), like formatBytes. */
+export function formatMb(mb) {
+  const value = num(mb);
+  return value === null ? "?" : formatBytes(value * 2 ** 20);
+}
+
+/**
+ * "used / total unit" in the total's binary unit, so a bar's label stays
+ * short: "11.7 / 62.5 GiB", "1 / 95.6 GiB", "6.5 / 7.2 TiB" ("?" parts
+ * when unknown).
+ */
+export function formatUsedOf(usedBytes, totalBytes) {
+  const total = num(totalBytes);
+  if (total === null || total < 0) return `${formatBytes(usedBytes)} / ?`;
+  const units = ["B", "KiB", "MiB", "GiB", "TiB", "PiB"];
+  let unit = 0;
+  while (total / 1024 ** unit >= 1024 && unit < units.length - 1) unit += 1;
+  const show = (bytes) => {
+    const value = num(bytes);
+    if (value === null || value < 0) return "?";
+    const scaled = value / 1024 ** unit;
+    return unit === 0 || scaled >= 100 ? String(Math.round(scaled)) : scaled.toFixed(1).replace(/\.0$/, "");
+  };
+  return `${show(usedBytes)} / ${show(total)} ${units[unit]}`;
+}
+
+/**
+ * Details only the GPU board's dashboard carries (power, processes, jobs),
+ * merged into the graph's GPU rows when that dashboard came from the same
+ * probe as the graph (its time within `skewS` of the device's probe), never
+ * otherwise.  Pure: returns a new payload.  `dashboard`: GET /api/gpu/dashboard.
+ */
+export function mergeProbeDetails(payload, dashboard, { skewS = 120 } = {}) {
+  const servers = dashboard?.probe?.servers;
+  if (!payload || !Array.isArray(servers) || !servers.length) return payload;
+  const checked = Date.parse(dashboard.checked_at || "");
+  const jobs = new Map((dashboard.jobs || []).map((job) => [String(job.id), job]));
+  const byDevice = new Map();
+  for (const device of payload.devices || []) {
+    if (device.kind !== "gpu-server") continue;
+    const probed = Date.parse(device.probe?.probed_at || "");
+    if (!Number.isFinite(probed) || !Number.isFinite(checked) || Math.abs(checked - probed) > skewS * 1000) continue;
+    const server = servers.find((item) => item && item.ok && String(item.server) === String(device.label));
+    if (server) byDevice.set(device.id, server);
+  }
+  if (!byDevice.size) return payload;
+  const resources = (payload.resources || []).map((res) => {
+    const server = byDevice.get(res.device);
+    if (!server || res.kind !== "gpu" || res.last_known) return res;
+    const index = num(res.metrics?.index);
+    if (index === null) return res;
+    const gpu = (server.gpus || []).find((item) => num(item?.index) === index);
+    const processes = (server.system?.processes || []).filter((p) => num(p?.gpu_index) === index).map((p) => {
+      const job = p.job_id ? jobs.get(String(p.job_id)) : null;
+      return { pid: p.pid ?? null, memory_mb: num(p.memory_mb), sm_pct: num(p.sm_pct), job_id: p.job_id || null,
+        job: job ? (job.job || job.task || null) : null, owner: job?.owner || null };
+    });
+    const metrics = { ...res.metrics };
+    if (metrics.power_w == null && num(gpu?.power_w) !== null) metrics.power_w = num(gpu.power_w);
+    if (metrics.temperature_c == null && num(gpu?.temperature_c) !== null) metrics.temperature_c = num(gpu.temperature_c);
+    if (!Array.isArray(metrics.processes) && processes.length) metrics.processes = processes;
+    return { ...res, metrics };
+  });
+  return { ...payload, resources };
+}
 
 /**
  * The fold toggle in a card's header (card-local box): left of the owner
@@ -189,10 +355,18 @@ export function collapseToggleBox(card) {
 }
 
 // ------------------------------------------------------------ fold state
-// Mind's keys (graph.js _onKeyDown): + / = expand and - collapse the
-// selected cards one level, * and / recursively.  Resource cards have one
-// level of details, so both pairs fold the selected cards' details; with no
-// selection nothing happens (as in Mind).
+// Mind's keys (graph.js _onKeyDown): + (or =, the same key without Shift)
+// expands and - collapses the selected cards; * and / are Mind's recursive
+// versions and, as resource cards have one level of details, aliases here.
+// With nothing selected they act on the focused card (the one under the
+// pointer); with neither, nothing happens.
+
+/** The cards + / - act on: the selection, else the focused card, else none. */
+export function foldTargets(cards, selectedIds = [], focusedId = null) {
+  const selected = [...(selectedIds || [])];
+  if (selected.length) return collapsibleIds(cards, selected);
+  return focusedId ? collapsibleIds(cards, [focusedId]) : [];
+}
 
 /** A new collapsed set with `ids` folded (`collapse`) or unfolded. */
 export function setCollapsed(collapsed, ids, collapse) {
@@ -226,7 +400,7 @@ const ARROWS = { ArrowLeft: "left", ArrowRight: "right", ArrowUp: "up", ArrowDow
  * The Resources graph's keyboard map, the Node graph's (graph.js
  * _onKeyDown) minus editing keys: returns an action name or null.
  *   ? help, Esc close help / clear selection, F fit, R / E read / edit,
- *   Ctrl+A select all, + or = expand, - collapse, * expand all, / collapse all,
+ *   Ctrl+A select all, + or = expand, - collapse (* and / are aliases),
  *   arrows move the selection, Enter opens details (read mode);
  *   Tab (read mode) and Backspace are swallowed ("none").
  */
@@ -243,10 +417,8 @@ export function resourcesKeyAction(event, { mode = "read", helpOpen = false } = 
   if (plain && (key === "e" || key === "E")) return "mode-edit";
   if (ctrl && !event.shiftKey && String(key).toLowerCase() === "a") return "select-all";
   if (!ctrl && !event.altKey) {
-    if (key === "+" || key === "=") return "expand";
-    if (key === "-") return "collapse";
-    if (key === "*") return "expand-all";
-    if (key === "/") return "collapse-all";
+    if (key === "+" || key === "=" || key === "*") return "expand";
+    if (key === "-" || key === "/") return "collapse";
   }
   if (ARROWS[key] && !ctrl && !event.altKey) return `nav-${ARROWS[key]}`;
   if (key === "Enter" && !ctrl && !event.altKey) return mode === "read" ? "open" : null;

@@ -294,7 +294,11 @@ func (c *reqCtx) projectOverview(p *project.Project) (*pyjson.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	gpu := c.app.gpu().Overview(p.ID())
+	gpuScope, err := c.gpuScope(p)
+	if err != nil {
+		return nil, err
+	}
+	gpu := c.app.gpu().OverviewFor(gpuScope, p.ID())
 	members, err := c.memberNames(p)
 	if err != nil {
 		return nil, err

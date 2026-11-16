@@ -30,6 +30,19 @@ else's confirmation.
 Only references such as `env:WANDB_API_KEY` are recorded. Actual credentials
 are rejected and never belong in this register.
 
+## GPU servers are per project
+
+The ARK server's GPU server list is shared by every project, but a project
+only sees, probes and queues on the servers it registers here: a `compute`
+resource of kind `ssh` whose `gpu_server` names a server from the list, in the
+project layer or in any member's own layer (any state). Registering one in your
+own layer makes it visible to every member of the project, so a member with
+write access can opt the project in; the server's address, user and config
+path stay visible only to organization owners/admins (and in local mode).
+Without a registration the GPU views show a hint and a one-click **Use … in
+this project** button. Details and the migration steps for existing projects:
+[gpu.md](gpu.md#project-scope-and-who-sees-what).
+
 ## Device names
 
 Use a stable device name for `X-ARK-Host`, and a readable device label such as
@@ -52,6 +65,7 @@ Run read-only `POST /api/agent/v1/setup/discover {paths}` with user-provided
 paths before asking about compute or agents; use `paths: []` if none have been
 provided. Its configured GPU server names and provider presets can already
 exist even when those resources have not been registered for this project.
+Discovery returns the server **names only** (no address, tags or note).
 Show those names and ask which apply, then ask about missing environments,
 artifact locations or permissions. Never ask someone to recreate an existing
 server configuration or disclose credentials. Reconcile generated questions

@@ -228,6 +228,10 @@ type Queue struct {
 	stop          chan struct{}
 	running       bool
 	wg            sync.WaitGroup
+	// allowed is the per-job server scope (project id, owner): the worker
+	// places a job only on servers its project registers (T-0018, scope.go).
+	// nil: every configured server.
+	allowed func(projectID, owner string) Scope
 }
 
 const queueDDL = `CREATE TABLE IF NOT EXISTS gpu_jobs (
@@ -557,6 +561,12 @@ func findServer(cfg *pyjson.Object, name any) *pyjson.Object {
 
 // Submit is GpuQueue.submit.
 func (q *Queue) Submit(body *pyjson.Object, start bool) (*pyjson.Object, error) {
+	return q.SubmitChecked(body, start, nil)
+}
+
+// SubmitChecked is Submit with check(config) run after validation (the
+// project scope: Service.QueueSubmitFor).
+func (q *Queue) SubmitChecked(body *pyjson.Object, start bool, check func(cfg *pyjson.Object) error) (*pyjson.Object, error) {
 	cfg, err := q.loadConfig()
 	if err != nil {
 		return nil, err
@@ -564,6 +574,11 @@ func (q *Queue) Submit(body *pyjson.Object, start bool) (*pyjson.Object, error) 
 	job, err := q.validate(body, cfg)
 	if err != nil {
 		return nil, err
+	}
+	if check != nil {
+		if err := check(cfg); err != nil {
+			return nil, err
+		}
 	}
 	now := clock.UTCNow()
 	err = q.exec(`INSERT INTO gpu_jobs
@@ -1197,9 +1212,27 @@ func (q *Queue) Tick() error {
 	if err != nil {
 		return err
 	}
+	scopes := map[[2]string]Scope{}
 	for _, row := range rows {
 		job := public(row)
-		sel := selectGPUs(job, cfg, results, active, reserved)
+		candidates := results
+		if q.allowed != nil {
+			key := [2]string{pyjson.Str(orEmpty(job.Value("project"))), pyjson.Str(orEmpty(job.Value("owner")))}
+			sc, ok := scopes[key]
+			if !ok {
+				sc = q.allowed(key[0], key[1])
+				scopes[key] = sc
+			}
+			if !sc.All {
+				candidates = nil
+				for _, r := range results {
+					if sc.Allows(pyjson.Str(r.Value("server"))) {
+						candidates = append(candidates, r)
+					}
+				}
+			}
+		}
+		sel := selectGPUs(job, cfg, candidates, active, reserved)
 		if sel == nil {
 			continue
 		}

@@ -2,7 +2,7 @@ import { h, clear, emptyState, statusColor, impDot, tagChip, fmtDate, relativeTi
 import { t, typeLabel, statusLabel } from "../i18n.js";
 import { icon } from "../icons.js";
 import { GanttView, ganttControls } from "../gantt.js";
-import { unitCard, viewToggle, openLinkModal, openDispatchModal, typeLegend, openModal, confirmDialog } from "../components.js";
+import { unitCard, viewToggle, openLinkModal, openDispatchModal, typeLegend, openModal, confirmDialog, gpuRegistrationNote } from "../components.js";
 import { sortUnits } from "./ideas.js";
 import { renderSessionWorkspace } from "../session-workspace.js";
 import { sessionLibraryPanel } from "../session-library.js";
@@ -131,8 +131,9 @@ function gpuResourcesPanel(ctx, S, tasks) {
     const active = activeJobs(jobs);
     const queued = jobs.filter((job) => job.status === "queued");
     if (!servers.length) {
-      body.appendChild(h("div", { class: "settings-note" }, icon("alert", "sm"),
-        h("div", null, t("tasks.gpu.no_server"))));
+      // T-0018: no GPU server registered in this project's setup.
+      body.appendChild(gpuRegistrationNote(data.registration, () => refresh(true))
+        || h("div", { class: "settings-note" }, icon("alert", "sm"), h("div", null, t("tasks.gpu.no_server"))));
       return;
     }
     const grid = h("div", { class: "task-gpu-grid" });
@@ -147,9 +148,10 @@ function gpuResourcesPanel(ctx, S, tasks) {
         h("div", { class: "task-gpu-server-head" },
           h("div", null,
             h("b", null, server.server),
-            h("div", { class: "physics-hint" },
-              `${server.user ? server.user + "@" : ""}${server.host}:${server.port}`)),
-          h("div", { class: "row tight" },
+            // Only the server admin (or local mode) gets the address (T-0018).
+            server.host ? h("div", { class: "physics-hint" },
+              `${server.user ? server.user + "@" : ""}${server.host}:${server.port}`) : null),
+          !server.host ? null : h("div", { class: "row tight" },
             h("a", {
               class: "task-gpu-link", href: `ssh://${server.user ? server.user + "@" : ""}${server.host}:${server.port || 22}`,
               title: t("tasks.gpu.open_ssh"),

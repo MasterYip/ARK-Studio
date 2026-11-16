@@ -843,6 +843,16 @@ export const api = {
   gpuSubmit: (body) => request("/api/gpu/jobs", { method: "POST", body }),
   gpuCancel: (id) => request(`/api/gpu/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST", body: {} }),
   gpuJobLogs: (id) => request(`/api/gpu/jobs/${encodeURIComponent(id)}/logs`),
+  // T-0018: GPU servers are scoped to the projects that register them in setup.
+  // Register servers in this project: compute resources (kind ssh, gpu_server)
+  // in the caller's own setup layer (docs/operations/gpu.md "Project scope").
+  gpuRegister: (names) => request("/api/skills/setup/draft", { method: "POST", body: {
+    layer: "user",
+    resources: names.map((name) => ({
+      id: `gpu-${String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 44)}`,
+      kind: "compute", name: String(name), details: { kind: "ssh", gpu_server: String(name), use: "ask" },
+    })),
+  } }),
 
   // Session context (docs/agents/session-context.md): internal + uploaded sessions.
   sessionContexts: (options = {}) => request("/api/session-contexts", options),

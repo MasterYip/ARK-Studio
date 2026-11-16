@@ -41,13 +41,13 @@ The graph is driven like the Node graph (Map › Node layout):
 
 | Input | Action |
 | --- | --- |
-| toolbar | Read / Edit mode, expand / collapse all details, reset layout, zoom in / out, fit, full screen, `?` shortcuts |
+| toolbar | Read / Edit mode, `+` / `−` expand / collapse all details, reset layout, zoom in / out, fit, full screen, `?` shortcuts |
 | `R` / `E` | read / edit mode (remembered) |
 | `F`, `?`, `Esc` | fit, shortcuts, close shortcuts or clear the selection and close the details |
 | arrows, `Enter` | move the selection to the nearest card; open its details (read mode) |
 | `Ctrl+A` | select every card |
-| `+` / `=`, `-` | expand / collapse the selected cards' details |
-| `*`, `/` | the same, recursively (Mind's keys; a card has one level) |
+| `+` (or `=`, the same key without Shift), `-` | expand / collapse the selected cards' details; with nothing selected, the card under the pointer; otherwise nothing (Mind's keys) |
+| `*`, `/` | aliases of `+` and `-` (Mind's recursive keys; a card has one level) |
 | click | select; read mode also opens the details panel, edit mode only selects (an open panel follows the selection) |
 | `Ctrl` / `Shift`+click | add to or remove from the selection |
 | left-drag on empty space | box select (`Ctrl` adds, `Shift` selects only cards fully inside) |
@@ -55,10 +55,33 @@ The graph is driven like the Node graph (Map › Node layout):
 | right-drag, right-click | pan; context menu |
 | wheel, `Ctrl`+wheel, `Shift`+wheel | zoom at the pointer, pan vertically, pan horizontally |
 | double-click a card | centre it and open its details |
-| `▾` / `▸` in a card header | fold that card's details, or the whole selection when the card is part of it |
+| `+` / `−` in a card header | fold that card's details, or the whole selection when the card is part of it |
 
 Folded cards keep their header and summary bar and say how many rows are
 hidden. Fold state and moved cards are kept in the browser.
+
+## Card details
+
+Expanded cards show their resources in full, like the GPU board:
+
+- **GPU**: one row per GPU with its index and model, temperature and power,
+  a utilisation bar and a memory bar (used / total; our share in blue), and
+  a line with the jobs, users and number of processes on it when known.
+- **CPU & memory**: CPU and RAM bars, load and cores.
+- **Storage**: one usage bar per mount labelled mount · used / total · %;
+  the mount holding the data folder is tagged **data** and comes first. The
+  ARK server's project folder and its disk summary are bars too.
+
+Bars use the GPU board's memory thresholds: green, amber from 60%, red from
+85%. The details panel (click a card in read mode, or `Enter`) shows every
+GPU, CPU & memory and every mount of the card, folded or not, plus the
+processes of each GPU (PID, memory, SM share, job, user).
+
+Power, processes, jobs and users are not part of `GET /api/resources/graph`:
+the page takes them from the GPU board's last dashboard kept in the browser,
+and only when that dashboard came from the same probe as the graph (within
+two minutes of the device's `probe.probed_at`). The Resources page never
+requests the dashboard itself, since that probes.
 
 ## Personal devices
 

@@ -197,7 +197,7 @@ test("documentation: index first, on-demand reads, fallback for older servers", 
   assert.match(docs, /404[^.]*GET \/api\/agent\/v1\/interface and GET \/api\/agent\/v1\/skills/);
 });
 
-test("standing rules cover reading, recording, evidence, summaries and offline notes", () => {
+test("standing rules cover reading, planning, recording, review nodes, decisions, summaries and offline notes", () => {
   const rules = P.rules.map((line) => line.en).join("\n");
   for (const needed of [
     "without me reminding you",
@@ -216,6 +216,20 @@ test("standing rules cover reading, recording, evidence, summaries and offline n
     "ark-sync-notes.md",
     "env:NAME",
     "readiness.requires_human",
+    // The recommended working mode (docs/agents/working-mode.md).
+    "GET /api/agent/v1/docs/agents/working-mode.md",
+    "Plan in a node first",
+    "exactly one derived_from parent",
+    "dated line to the task body",
+    "re-read the body just before you write it",
+    "Resource paths",
+    "POST /api/agent/v1/setup/location",
+    "POST /api/agent/v1/setup/resource",
+    "its own unit with status review",
+    "to that unit itself",
+    "![caption](media:<id>)",
+    "type: \"decision\"",
+    "\"reply_to\"",
   ]) assert.ok(rules.includes(needed), needed);
 });
 

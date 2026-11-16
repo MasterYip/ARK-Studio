@@ -13,6 +13,7 @@ import (
 	"arkstudio/go/internal/compat/pyjson"
 	gpudom "arkstudio/go/internal/gpu"
 	"arkstudio/go/internal/platform/pyerr"
+	"arkstudio/go/internal/project"
 	"arkstudio/go/internal/sessions"
 )
 
@@ -20,6 +21,26 @@ import (
 type Handlers struct {
 	// Svc is App.gpu (one GpuService per server).
 	Svc func() *gpudom.Service
+	// Scope is the GPU server scope of project p for this request's viewer
+	// (T-0018: the servers p's setup registers; connection details only for
+	// the server admin/owner or local mode).  nil: unscoped (unit tests).
+	Scope func(p *project.Project) (gpudom.Scope, error)
+	// ScopeByID is Scope for a project id (task-agent jobs name their
+	// project); nil: unscoped.
+	ScopeByID func(projectID string) (gpudom.Scope, error)
+}
+
+// scope is the read-permitted current project and its GPU scope.
+func (h Handlers) scope(c api.Ctx, level string) (*project.Project, gpudom.Scope, error) {
+	p, err := c.Require(level)
+	if err != nil {
+		return nil, gpudom.Scope{}, err
+	}
+	if h.Scope == nil {
+		return p, gpudom.Unscoped(), nil
+	}
+	sc, err := h.Scope(p)
+	return p, sc, err
 }
 
 var (
@@ -164,18 +185,20 @@ func reply(c api.Ctx) func(*pyjson.Object, error) error {
 func (h Handlers) Get(c api.Ctx, path string) (bool, error) {
 	svc := h.Svc()
 	switch path {
-	case "/api/gpu/status":
-		return true, reply(c)(svc.Status())
-	case "/api/gpu/servers":
-		return true, reply(c)(svc.Servers())
-	case "/api/gpu/queue":
-		return true, reply(c)(svc.QueueStatus())
-	case "/api/gpu/dashboard":
-		p, err := c.Require("read")
+	case "/api/gpu/status", "/api/gpu/servers", "/api/gpu/queue", "/api/gpu/dashboard":
+		p, sc, err := h.scope(c, "read")
 		if err != nil {
 			return true, err
 		}
-		return true, reply(c)(svc.Dashboard(p.ID()))
+		switch path {
+		case "/api/gpu/status":
+			return true, reply(c)(svc.StatusFor(sc))
+		case "/api/gpu/servers":
+			return true, reply(c)(svc.ServersFor(sc, p.ID()))
+		case "/api/gpu/queue":
+			return true, reply(c)(svc.QueueStatusFor(sc))
+		}
+		return true, reply(c)(svc.DashboardFor(sc, p.ID()))
 	case "/api/gpu/jobs":
 		if _, err := c.Require("read"); err != nil {
 			return true, err
@@ -237,7 +260,7 @@ func orStrAny(v any) any {
 
 // submitProjectGPUJob is Handler._submit_project_gpu_job.
 func (h Handlers) submitProjectJob(c api.Ctx, body *pyjson.Object) error {
-	p, err := c.Require("write")
+	p, sc, err := h.scope(c, "write")
 	if err != nil {
 		return err
 	}
@@ -245,7 +268,7 @@ func (h Handlers) submitProjectJob(c api.Ctx, body *pyjson.Object) error {
 	if task == "" {
 		task = api.StrOr(body.Value("task_ref"))
 	}
-	job, err := h.Svc().QueueSubmit(body, c.Actor(), p.ID(), api.StrOr(body.Value("session")), task)
+	job, err := h.Svc().QueueSubmitFor(sc, body, c.Actor(), p.ID(), api.StrOr(body.Value("session")), task)
 	if err != nil {
 		return Err(err)
 	}
@@ -270,10 +293,15 @@ func (h Handlers) Post(c api.Ctx, path string, body *pyjson.Object) (bool, error
 	switch path {
 	case "/api/gpu/jobs":
 		return true, h.submitProjectJob(c, body)
-	case "/api/gpu/probe":
-		return true, reply(c)(h.Svc().Probe(body))
-	case "/api/gpu/dispatch/prepare":
-		return true, reply(c)(h.Svc().PrepareDispatch(body))
+	case "/api/gpu/probe", "/api/gpu/dispatch/prepare":
+		p, sc, err := h.scope(c, "read")
+		if err != nil {
+			return true, err
+		}
+		if path == "/api/gpu/probe" {
+			return true, reply(c)(h.Svc().ProbeFor(sc, body, p.ID()))
+		}
+		return true, reply(c)(h.Svc().PrepareDispatchFor(sc, body))
 	}
 	if m := reCancel.FindStringSubmatch(path); m != nil {
 		return true, h.cancelProjectJob(c, m[1])
@@ -417,7 +445,13 @@ func (h Handlers) TaskPost(c api.Ctx, path string) (bool, error) {
 	if task == "" {
 		task = api.StrOr(body.Value("task"))
 	}
-	job, err := h.Svc().QueueSubmit(body, api.StrOr(s.Meta.Value("actor")), project, s.ID, task)
+	sc := gpudom.Unscoped()
+	if h.ScopeByID != nil {
+		if sc, err = h.ScopeByID(project); err != nil {
+			return true, err
+		}
+	}
+	job, err := h.Svc().QueueSubmitFor(sc, body, api.StrOr(s.Meta.Value("actor")), project, s.ID, task)
 	if err != nil {
 		return true, Err(err)
 	}

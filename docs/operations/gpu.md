@@ -69,14 +69,78 @@ tabs are rejected. Unknown fields are errors, and credential-looking fields
 `identity_file`, …) are rejected with an actionable message: use your SSH agent
 or `~/.ssh/config`. Only the fields above are ever returned by the API.
 
+## Project scope and who sees what
+
+The server list is one file for the whole ARK server, but **a project only
+sees the GPU servers its setup registers** (ark-server only; T-0018). A server
+is registered when a compute resource in the project's setup names it in
+`gpu_server` (kind `ssh`), in the project layer or in any member's user layer,
+in any state (draft, proposed or confirmed). Names match case-insensitively.
+See [multi-user-setup.md](multi-user-setup.md) for recording resources.
+
+| | Project registers the server | Project registers no server of the list |
+|---|---|---|
+| Resources graph | the server's device and GPUs | no GPU devices; unknown `gpu_not_registered` |
+| `GET /api/gpu/servers`, `/status`, `/dashboard` | only registered servers (`server_count` counts them) | empty list plus `registration.hint_code: "not_registered"` |
+| `POST /api/gpu/probe` | probes only registered servers | empty reply with the hint; nothing is probed |
+| probe, dispatch or queue naming another server | `404 GPU_SERVER_NOT_REGISTERED` (also for names the list does not know) | same |
+| queue submit / dispatch without a server | placed on (or defaulting to) registered servers only | `403 GPU_NO_REGISTERED_SERVERS` |
+| `POST /api/agent/v1/setup/discover` | offers every configured server **name** (no address, tags or note), so a member can choose which to register | same |
+
+The scoped replies carry a Go-only `registration` object: `registered`,
+`available` (configured names this project does not register), `missing`
+(registered names the list does not have), `suggested` (available names this
+project's queue jobs already ran on) and, when nothing is registered,
+`hint_code` and `hint`. The queue worker places a queued job only on servers
+its project registers; a job of a project that registers none stays queued.
+
+**Connection details** (`host`, `port`, `user`, `note`, `timeout_seconds`,
+`defaults`, `config_path`, the queue `path_map`, `ssh_preview` and the
+transport address of a dispatch request) are returned only to an organization
+**owner or admin**, and in **local mode without accounts**. Every other viewer
+(member, viewer, task agents acting for them) gets the server name, tags,
+enabled flag, status and the probe metrics (GPU utilization and memory, system
+load, storage). Their probe errors have the address replaced with `<host>`,
+and config errors do not name the private path.
+
+**Local mode follows the same rule.** The single local user is the admin (full
+details), but a project still shows only the servers it registers: the list is
+one file for every project on the machine, and a project that registers
+nothing should not start jobs on a machine meant for another. The GPU board
+and Settings → GPU offer a one-click **Use these servers in this project**
+button (it saves compute resources for the suggested, else all available,
+servers into the viewer's own setup layer through
+`POST /api/skills/setup/draft`), so the change costs one click per project.
+
+### Migration (existing installations)
+
+Projects that used GPU servers before this change show none until a server is
+registered. Nothing is written automatically: adding a resource to a confirmed
+setup layer turns it back into a draft, which would undo people's
+confirmations. Per project, one member with write access does one of:
+
+1. Open **Execute → GPU** (or **Settings → GPU**) and click **Use … in this
+   project**. The button lists the servers this project's queue jobs already
+   used (`registration.suggested`), else every configured server; or
+2. In **Setup → Resources**, add a *compute* resource of kind `ssh` with
+   `gpu_server` set to the server name (repeat per server); or
+3. From an agent: `POST /api/agent/v1/setup/resource` with
+   `{"resource": {"id": "gpu-a", "kind": "compute", "details": {"kind": "ssh", "gpu_server": "gpu-a"}}}`.
+
+Queued jobs of a project that registers none of its servers wait in the queue
+until the registration exists; running jobs are not affected.
+
 ## API
+
+Every `/api/gpu/*` route answers for the current project (read access; the
+queue submit needs write) and applies the project scope above.
 
 | Method | Path | Purpose |
 |---|---|---|
-| `GET` | `/api/gpu/status` | capability state, config path, SSH availability; no hosts |
-| `GET` | `/api/gpu/servers` | configured servers (public fields only); `enabled: false` + empty list when disabled |
-| `POST` | `/api/gpu/probe` | explicit read-only probe; body `{servers?, timeout_seconds?}` |
-| `POST` | `/api/gpu/dispatch/prepare` | validate and render a bounded dry-run request |
+| `GET` | `/api/gpu/status` | capability state, SSH availability, registered server count; config path for admins only; no hosts |
+| `GET` | `/api/gpu/servers` | the project's registered servers (public fields for admins; name, tags, enabled otherwise) and `registration`; `enabled: false` + empty list when disabled |
+| `POST` | `/api/gpu/probe` | explicit read-only probe of registered servers; body `{servers?, timeout_seconds?}` |
+| `POST` | `/api/gpu/dispatch/prepare` | validate and render a bounded dry-run request for a registered server |
 
 `POST /api/gpu/probe` returns one result per server. SSH/network failures are
 data, not exceptions:
@@ -96,7 +160,8 @@ Failure kinds: `missing_ssh`, `timeout`, `unreachable`, `auth`,
 
 `POST /api/gpu/dispatch/prepare` always returns `"dry_run": true` and
 `"executed": false`, with the validated request, an illustrative remote command
-and an illustrative `ssh_preview`. Requesting `"execute": true` is rejected.
+and (admins only) an illustrative `ssh_preview`. Requesting `"execute": true`
+is rejected.
 
 ## Bounded dispatch request
 
@@ -197,6 +262,9 @@ curl --get "$ARK_URL/api/agent/v1/gpu/jobs" \
 - **Private config**: the server list lives at a user-level path, outside the
   repository and outside project folders; `.gitignore` also blocks a stray
   `gpu_servers.yaml` inside a checkout.
+- **Project scope**: a project sees, probes, dispatches to and queues on only
+  the servers its setup registers, and only org owners/admins (or local mode)
+  see addresses and the config path (see *Project scope* above).
 - **Clean degradation**: an unreachable host, bad auth, timeout or missing
   `ssh` is returned as a per-server error; it never fails the ARK server or the
   current project.
@@ -207,7 +275,12 @@ curl --get "$ARK_URL/api/agent/v1/gpu/jobs" \
 covers the safe schema, credential rejection, `nvidia-smi` parsing, ranking,
 mocked probes, missing-OpenSSH behavior, bounded dispatch validation,
 disabled-by-default behavior, the queue's placement rule and the HTTP
-handlers. The contract suite (`tests/python/contract/`) replays the GPU routes
+handlers; `internal/gpu/scope_test.go`, `internal/resources/registered_test.go`
+and `internal/server/routes_gpu_test.go` cover the project scope, the member
+view, local mode, the 403/404 refusals and setup discovery. The GPU replay
+registers every server it configures in the fixture project
+(`replay_gpu.register_servers`); the remaining Python differences are listed in
+`tests/python/contract/go_only.py` (`gpu-*` fixes). The contract suite (`tests/python/contract/`) replays the GPU routes
 against a fake `ssh` (`tests/python/contract/fakessh`). No test contacts a
 real GPU host or executes a remote command.
 

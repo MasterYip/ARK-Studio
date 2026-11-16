@@ -67,8 +67,8 @@ export const START_SHARED = {
   ],
   rules: [
     {
-      en: "STANDING RULES: they hold for this whole session, for every task, without me reminding you. ARK is the record: work that is not in ARK did not happen.",
-      zh: "长期规则：它们在本次会话的全程、对每个任务都有效，不需要我提醒。ARK 就是记录：没有写进 ARK 的工作等于没有发生。",
+      en: "STANDING RULES: they hold for this whole session, for every task, without me reminding you. ARK is the record: work that is not in ARK did not happen. The working mode behind them, with examples: GET /api/agent/v1/docs/agents/working-mode.md.",
+      zh: "长期规则：它们在本次会话的全程、对每个任务都有效，不需要我提醒。ARK 就是记录：没有写进 ARK 的工作等于没有发生。这些规则背后的工作方式及示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
     },
     {
       en: "R1. Before starting work, GET /api/agent/v1/context and read the units the work concerns (GET /api/agent/v1/units/<ID>).",
@@ -79,20 +79,20 @@ export const START_SHARED = {
       zh: "R2. 每完成一个有意义的步骤（一个决定、一个结果、一项完成或受阻的工作），立即写入 ARK，不要等我要求，也不要攒到最后再写。",
     },
     {
-      en: "R3. Tasks: every piece of work has a task unit (POST /api/agent/v1/units with type: \"task\") whose status you keep current (POST /api/agent/v1/units/<ID>: open → active → review or blocked → done).",
-      zh: "R3. 任务：每项工作都要有一个任务节点（POST /api/agent/v1/units，type: \"task\"），并随时更新它的状态（POST /api/agent/v1/units/<ID>：open → active → review 或 blocked → done）。",
+      en: "R3. Plan in a node first: before work that takes more than a few steps, create (or update) its task unit (POST /api/agent/v1/units with type: \"task\") with the plan in its body: goal, my request verbatim, steps, evaluation protocol, decision gates, timeline. Link it to exactly one derived_from parent, the problem or parent task it comes from (POST /api/agent/v1/links). Keep its status honest (POST /api/agent/v1/units/<ID>: open → active → review or blocked → done); never leave finished work active.",
+      zh: "R3. 先在节点里做计划：凡是超过几步的工作，开始之前先创建（或更新）它的任务节点（POST /api/agent/v1/units，type: \"task\"），把计划写进正文：目标、我的原话请求、步骤、评估协议、决策关卡、时间线。把它关联到恰好一个 derived_from 父节点，即它所来自的问题或上级任务（POST /api/agent/v1/links）。如实更新它的状态（POST /api/agent/v1/units/<ID>：open → active → review 或 blocked → done）；已完成的工作不要停留在 active。",
     },
     {
-      en: "R4. Progress: comment on the task what you did, the result and the next step (POST /api/agent/v1/units/<ID>/comments with {\"body\": \"...\"}).",
-      zh: "R4. 进展：在任务上评论你做了什么、结果如何、下一步是什么（POST /api/agent/v1/units/<ID>/comments，请求体为 {\"body\": \"...\"}）。",
+      en: "R4. Progress: add a dated line to the task body for each step (\"YYYY-MM-DD HH:MM UTC · what ran, job IDs, problems, next step\"); re-read the body just before you write it, so you never overwrite someone else's edit. Keep resource paths (data, checkpoints, outputs) in a \"Resource paths\" section of the task and in the setup register (POST /api/agent/v1/setup/location; a new resource via POST /api/agent/v1/setup/resource needs my re-confirmation).",
+      zh: "R4. 进展：每一步都在任务正文里加一行带日期的记录（\"YYYY-MM-DD HH:MM UTC · 运行了什么、作业 ID、问题、下一步\"）；写入前重新读取正文，以免覆盖别人的修改。把资源路径（数据、检查点、输出）写在任务的 \"Resource paths\" 一节中，并登记到配置资源清单（POST /api/agent/v1/setup/location；通过 POST /api/agent/v1/setup/resource 新增的资源需要我重新确认）。",
     },
     {
-      en: "R5. Evidence: attach figures, logs, reports and result files to the unit they support (POST /api/agent/v1/media/upload for images, POST /api/agent/v1/assets/upload for other files, POST /api/agent/v1/media for links).",
-      zh: "R5. 证据：把图表、日志、报告和结果文件附到它们所支撑的节点上（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，链接用 POST /api/agent/v1/media）。",
+      en: "R5. Results: publish each result (experiment, figure set, audit, progress check) as its own unit with status review, part_of and derived_from its task, so it shows in Needs you. Attach its figures and files to that unit itself (POST /api/agent/v1/media/upload for images, POST /api/agent/v1/assets/upload for other files, POST /api/agent/v1/media for links) and embed each figure beside the table row or claim it supports, as ![caption](media:<id>) with a plain caption.",
+      zh: "R5. 结果：每个结果（实验、一组图、审查、进度检查）都单独发布为一个状态为 review 的节点，以 part_of 和 derived_from 关联到它的任务，这样它会出现在“待你处理”中。把图表和文件附到这个节点本身（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，链接用 POST /api/agent/v1/media），并把每张图以 ![caption](media:<id>) 嵌在它所支撑的表格行或论断旁边，配上通俗的图注。",
     },
     {
-      en: "R6. Decisions and plans: record decisions, new ideas, claims and next steps as units or comments, and link every new unit to the plan or task it belongs to (POST /api/agent/v1/links).",
-      zh: "R6. 决定与计划：把决定、新想法、论断和下一步记录为节点或评论，并把每个新节点关联到它所属的计划或任务（POST /api/agent/v1/links）。",
+      en: "R6. Decisions: record every decision I make, in chat, in a comment or in an answer, as a decision unit (type: \"decision\", status: \"done\") part_of and derived_from its task, and link every other new unit to the plan or task it belongs to (POST /api/agent/v1/links). My comments on units are instructions: act on them, reply (POST /api/agent/v1/units/<ID>/comments with {\"body\": \"...\", \"reply_to\": <comment id>}) and resolve them.",
+      zh: "R6. 决定：我做出的每个决定（在对话中、评论里或回答问题时）都记录为一个决定节点（type: \"decision\", status: \"done\"），以 part_of 和 derived_from 关联到它的任务；其他每个新节点也要关联到它所属的计划或任务（POST /api/agent/v1/links）。我在节点上的评论就是指示：照做，回复（POST /api/agent/v1/units/<ID>/comments，请求体为 {\"body\": \"...\", \"reply_to\": <comment id>}），并将其标记为已解决。",
     },
     {
       en: "R7. At the end of each work session, or when I stop you, post a short summary comment on the main task: done, open, blocked, next.",
@@ -103,8 +103,8 @@ export const START_SHARED = {
       zh: "R8. 如果无法连接 ARK 或写入失败，告诉我，把所有待记录的内容写进本地笔记（工作目录中的 ark-sync-notes.md），ARK 恢复可用后立即写入 ARK。",
     },
     {
-      en: "R9. Store secrets only as references (env:NAME), never credential values. Before any action listed in readiness.requires_human (push, GPU dispatch, deletion, external messages...), stop and ask me.",
-      zh: "R9. 密钥只以引用形式保存（env:NAME），绝不保存凭据的值。执行 readiness.requires_human 中列出的任何操作（push、GPU 派发、删除、对外发消息...）之前，先停下来问我。",
+      en: "R9. Store secrets only as references (env:NAME), never credential values. Before any action listed in readiness.requires_human (push, GPU dispatch, deletion, external messages...), stop and ask me, and record my approval in ARK.",
+      zh: "R9. 密钥只以引用形式保存（env:NAME），绝不保存凭据的值。执行 readiness.requires_human 中列出的任何操作（push、GPU 派发、删除、对外发消息...）之前，先停下来问我，并把我的批准记录在 ARK 中。",
     },
   ],
 };

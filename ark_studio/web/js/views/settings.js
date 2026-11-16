@@ -6,7 +6,7 @@ const gpuText = (text) => localizeServer(text, "server.gpu.");
 const gpuKind = (kind) => (kind && hasKey(`server.gpu.kind.${kind}`) ? t(`server.gpu.kind.${kind}`) : kind);
 import { icon } from "../icons.js";
 import { api, exportUrl } from "../api.js";
-import { openModal } from "../components.js";
+import { openModal, gpuRegistrationNote } from "../components.js";
 import { formatRemaining } from "../mobile-core.js";
 import { pwaSnapshot, pwaStatusRow, promptInstall } from "../mobile-ui.js";
 import { GraphView, arrowGlyph } from "../graph.js";
@@ -1530,7 +1530,7 @@ export function renderSettings(host, ctx) {
   const skillsPanel = renderSkillsPanel(ctx);
 
   // ------------------------------------------------------------ GPU servers
-  const gpuState = { status: null, servers: [], probe: null, queue: null, jobs: [] };
+  const gpuState = { status: null, servers: [], registration: null, probe: null, queue: null, jobs: [] };
   const gpuPill = (text, kind = "") => h("span", { class: `pill ${kind}`.trim() }, text);
   const gpuStatus = h("span", { class: "settings-status" });
   const gpuFacts = h("div", { class: "settings-lead", style: { whiteSpace: "pre-wrap" } },
@@ -1586,7 +1586,10 @@ export function renderSettings(host, ctx) {
     lines.push(status.vendor
       ? t("settings.gpu.fact_adapter", { name: status.vendor.name, version: status.vendor.version, path: status.vendor.path })
       : t("settings.gpu.fact_adapter_missing"));
-    lines.push(t(status.config_present ? "settings.gpu.fact_config_present" : "settings.gpu.fact_config_missing", { path: status.config_path }));
+    // Only the server admin (or local mode) gets the config path (T-0018).
+    lines.push(status.config_path
+      ? t(status.config_present ? "settings.gpu.fact_config_present" : "settings.gpu.fact_config_missing", { path: status.config_path })
+      : t(status.config_present ? "settings.gpu.fact_config_admin" : "settings.gpu.fact_config_admin_missing"));
     if (status.config_error) lines.push(t("settings.gpu.config_error", { error: gpuText(status.config_error) }));
     lines.push(status.ssh.available ? t("settings.gpu.fact_ssh", { binary: status.ssh.binary }) : t("settings.gpu.fact_ssh_missing", { hint: gpuText(status.ssh.hint) }));
     lines.push(t("settings.gpu.fact_servers", { n: status.server_count }));
@@ -1627,8 +1630,8 @@ export function renderSettings(host, ctx) {
       return;
     }
     if (!servers.length) {
-      gpuServerList.append(h("div", { class: "settings-note" }, icon("info", "sm"),
-        h("div", null, t("settings.gpu.no_servers"))));
+      gpuServerList.append(gpuRegistrationNote(gpuState.registration, loadGpu)
+        || h("div", { class: "settings-note" }, icon("info", "sm"), h("div", null, t("settings.gpu.no_servers"))));
       return;
     }
     for (const server of servers) {
@@ -1637,8 +1640,8 @@ export function renderSettings(host, ctx) {
         h("div", null,
           h("div", { class: "gpu-server-name" }, server.name),
           server.note ? h("div", { class: "physics-hint" }, server.note) : null),
-        h("div", { class: "gpu-server-host" },
-          `${server.user ? server.user + "@" : ""}${server.host}:${server.port}`),
+        server.host ? h("div", { class: "gpu-server-host" },
+          `${server.user ? server.user + "@" : ""}${server.host}:${server.port}`) : null,
         h("div", { class: "row tight" },
           ...(server.tags || []).map((tag) => gpuPill(tag)),
           server.enabled ? gpuPill(t("settings.gpu.pill_enabled"), "ok") : gpuPill(t("settings.gpu.pill_disabled"), "warn"))));
@@ -1657,7 +1660,7 @@ export function renderSettings(host, ctx) {
       const block = h("div", { class: "gpu-result" },
         h("div", { class: "gpu-result-head" },
           h("b", null, result.server),
-          h("span", { class: "gpu-server-host" }, `${result.host}:${result.port}`),
+          result.host ? h("span", { class: "gpu-server-host" }, `${result.host}:${result.port}`) : null,
           result.ok ? gpuPill(t("settings.gpu.reachable"), "ok")
             : gpuPill(gpuKind(result.error?.kind) || t("settings.gpu.failed"), "bad"),
           h("span", { class: "settings-status" }, `${result.duration_ms} ms`)));
@@ -1767,8 +1770,10 @@ export function renderSettings(host, ctx) {
       if (gpuState.status.enabled) {
         const listed = await api.gpuServers();
         gpuState.servers = listed.servers || [];
+        gpuState.registration = listed.registration || null;
       } else {
         gpuState.servers = [];
+        gpuState.registration = null;
       }
       renderGpuServers();
       await loadGpuQueue();

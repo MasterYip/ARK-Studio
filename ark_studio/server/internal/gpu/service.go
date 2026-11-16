@@ -61,6 +61,13 @@ type Service struct {
 	// (servers with GPUs/system data, read by the resources graph).
 	LastProbeSummary *pyjson.Object
 	lastProbe        *pyjson.Object
+	// summaryServers are the servers of LastProbeSummary's probe: a
+	// project's overview shows the summary only when it may see them all.
+	summaryServers []string
+
+	// AllowedFor is the queue worker's per-job scope (project id, owner);
+	// nil: every server (unit tests).  The server sets it (routes_gpu.go).
+	AllowedFor func(projectID, owner string) Scope
 }
 
 // ConfigPath is GpuService.config_path().
@@ -137,7 +144,12 @@ func errOrNil(text string) any {
 }
 
 // Status is GpuService.status().
-func (s *Service) Status() (*pyjson.Object, error) {
+func (s *Service) Status() (*pyjson.Object, error) { return s.StatusFor(Unscoped()) }
+
+// StatusFor is Status for one project and viewer: server_count counts the
+// registered servers; non-admins get no config path, defaults or config
+// error text.
+func (s *Service) StatusFor(sc Scope) (*pyjson.Object, error) {
 	st := s.inspect()
 	if st.fatal != nil {
 		return nil, st.fatal
@@ -152,10 +164,10 @@ func (s *Service) Status() (*pyjson.Object, error) {
 	var defaults any
 	if st.config != nil {
 		servers, _ := st.config.Value("servers").([]any)
-		count = int64(len(servers))
+		count = int64(len(sc.filter(servers)))
 		defaults = st.config.Value("defaults")
 	}
-	return pyjson.NewObject(
+	out := pyjson.NewObject(
 		"available", true,
 		"enabled", s.enabled(st.config),
 		"enabled_source", source,
@@ -178,11 +190,24 @@ func (s *Service) Status() (*pyjson.Object, error) {
 			"remote_commands", "read-only nvidia-smi probe by default; dispatch preparation is dry-run; "+
 				"the opt-in queue may execute allocated jobs over SSH",
 			"storage", "user-level private config; never inside a project folder"),
-		"checked_at", clock.UTCNow()), nil
+		"checked_at", clock.UTCNow())
+	if !sc.Admin {
+		out.Delete("config_path")
+		out.Delete("defaults")
+		out.Set("how_to_enable", memberHowTo)
+		if st.err != "" {
+			out.Set("config_error", memberConfigError)
+		}
+	}
+	return out, nil
 }
 
 // Servers is GpuService.servers().
-func (s *Service) Servers() (*pyjson.Object, error) {
+func (s *Service) Servers() (*pyjson.Object, error) { return s.ServersFor(Unscoped(), "") }
+
+// ServersFor is Servers for one project and viewer: only the registered
+// servers (name, tags, enabled for non-admins) plus "registration".
+func (s *Service) ServersFor(sc Scope, projectID string) (*pyjson.Object, error) {
 	st := s.inspect()
 	if st.fatal != nil {
 		return nil, st.fatal
@@ -194,9 +219,13 @@ func (s *Service) Servers() (*pyjson.Object, error) {
 	switch {
 	case enabled && st.config != nil:
 		servers, _ := st.config.Value("servers").([]any)
-		out := make([]any, len(servers))
-		for i, item := range servers {
+		scoped := sc.filter(servers)
+		out := make([]any, len(scoped))
+		for i, item := range scoped {
 			out[i] = PublicServer(item.(*pyjson.Object))
+			if !sc.Admin {
+				out[i] = memberServer(out[i].(*pyjson.Object))
+			}
 		}
 		payload.Set("servers", out).Set("count", int64(len(out))).Set("defaults", st.config.Value("defaults"))
 	case !st.present:
@@ -205,6 +234,16 @@ func (s *Service) Servers() (*pyjson.Object, error) {
 		payload.Set("hint", "The server list is invalid; fix config_error and reload.")
 	case !enabled:
 		payload.Set("hint", "GPU probing is disabled by default; set enabled: true.")
+	}
+	if !sc.Admin {
+		payload.Delete("config_path")
+		payload.Delete("defaults")
+		if st.err != "" {
+			payload.Set("config_error", memberConfigError)
+		}
+	}
+	if !sc.All && enabled && st.config != nil {
+		payload.Set("registration", s.registration(sc, st.config, projectID))
 	}
 	return payload, nil
 }
@@ -270,9 +309,17 @@ func serverEnabled(server *pyjson.Object) bool {
 
 // Probe is GpuService.probe(body).
 func (s *Service) Probe(body *pyjson.Object) (*pyjson.Object, error) {
+	return s.ProbeFor(Unscoped(), body, "")
+}
+
+// ProbeFor is Probe for one project and viewer: a named server the project
+// does not register is refused (404 GPU_SERVER_NOT_REGISTERED); without
+// names only the registered servers are probed (none: an empty reply with
+// the registration hint, nothing is probed).
+func (s *Service) ProbeFor(sc Scope, body *pyjson.Object, projectID string) (*pyjson.Object, error) {
 	cfg, path, err := s.requireEnabled()
 	if err != nil {
-		return nil, err
+		return nil, sc.redactErr(err)
 	}
 	if body == nil {
 		body = pyjson.NewObject()
@@ -291,6 +338,22 @@ func (s *Service) Probe(body *pyjson.Object) (*pyjson.Object, error) {
 	all, _ := cfg.Value("servers").([]any)
 	if len(all) == 0 {
 		return nil, &Error{409, "No GPU servers are configured in the server list.", "no_servers"}
+	}
+	for i, name := range requested {
+		if !sc.Allows(name) {
+			return nil, errNotRegistered(name)
+		}
+		requested[i] = sc.canonical(name, all)
+	}
+	if !sc.All {
+		all = sc.filter(all)
+		if len(all) == 0 {
+			return pyjson.NewObject("enabled", true, "read_only", true, "probed_at", clock.UTCNow(),
+				"timeout_seconds", nil, "servers", []any{}, "skipped", []any{}, "ranked", []any{},
+				"summary", pyjson.NewObject("configured", int64(0), "probed", int64(0), "ok", int64(0),
+					"failed", int64(0), "gpus", int64(0), "free_gpus", int64(0)),
+				"registration", s.registration(sc, cfg, projectID)), nil
+		}
 	}
 	var targets []*pyjson.Object
 	if len(requested) > 0 {
@@ -382,8 +445,13 @@ func (s *Service) Probe(body *pyjson.Object) (*pyjson.Object, error) {
 		}
 		resultList[i] = r
 	}
+	probedNames := make([]string, len(results))
+	for i, r := range results {
+		probedNames[i] = pyjson.Str(r.Value("server"))
+	}
 	s.summaryMu.Lock()
 	s.LastProbeSummary = pyjson.NewObject("probed_at", clock.UTCNow(), "free_gpus", int64(len(ranked)), "gpus", gpus)
+	s.summaryServers = probedNames
 	s.summaryMu.Unlock()
 	var timeout any
 	if override != 0 {
@@ -397,6 +465,9 @@ func (s *Service) Probe(body *pyjson.Object) (*pyjson.Object, error) {
 	s.summaryMu.Lock()
 	s.lastProbe = pyjson.NewObject("probed_at", payload.Value("probed_at"), "servers", resultList)
 	s.summaryMu.Unlock()
+	if !sc.Admin {
+		memberProbe(payload)
+	}
 	return payload, nil
 }
 
@@ -407,6 +478,28 @@ func (s *Service) LastProbe() *pyjson.Object {
 	s.summaryMu.Lock()
 	defer s.summaryMu.Unlock()
 	return s.lastProbe
+}
+
+// LastProbeFor is LastProbe with only the servers the scope allows, without
+// addresses for non-admins.
+func (s *Service) LastProbeFor(sc Scope) *pyjson.Object {
+	last := s.LastProbe()
+	if last == nil || (sc.All && sc.Admin) {
+		return last
+	}
+	list, _ := last.Value("servers").([]any)
+	out := []any{}
+	for _, item := range list {
+		r, ok := item.(*pyjson.Object)
+		if !ok || !sc.Allows(pyjson.Str(r.Value("server"))) {
+			continue
+		}
+		if !sc.Admin {
+			item = memberProbeResult(r)
+		}
+		out = append(out, item)
+	}
+	return pyjson.NewObject("probed_at", last.Value("probed_at"), "servers", out)
 }
 
 // QueueJobs is the resources graph's queue read: the "jobs" of
@@ -435,7 +528,13 @@ func (s *Service) Summary() *pyjson.Object {
 
 // Dashboard is GpuService.dashboard(project=...).
 func (s *Service) Dashboard(project string) (*pyjson.Object, error) {
-	probe, err := s.Probe(pyjson.NewObject())
+	return s.DashboardFor(Unscoped(), project)
+}
+
+// DashboardFor is Dashboard over ProbeFor; the scoped reply carries
+// "registration" at the top level.
+func (s *Service) DashboardFor(sc Scope, project string) (*pyjson.Object, error) {
+	probe, err := s.ProbeFor(sc, pyjson.NewObject(), project)
 	if err != nil {
 		return nil, err
 	}
@@ -447,8 +546,18 @@ func (s *Service) Dashboard(project string) (*pyjson.Object, error) {
 	if list == nil {
 		list = []any{}
 	}
-	return pyjson.NewObject("checked_at", clock.UTCNow(), "probe", probe, "jobs", list,
-		"queue_enabled", pyjson.Truthy(jobs.Value("queue_enabled"))), nil
+	out := pyjson.NewObject("checked_at", clock.UTCNow(), "probe", probe, "jobs", list,
+		"queue_enabled", pyjson.Truthy(jobs.Value("queue_enabled")))
+	if !sc.All {
+		reg := probe.Value("registration")
+		if reg == nil {
+			cfg, _, _ := s.requireEnabled()
+			reg = s.registration(sc, cfg, project)
+		}
+		probe.Delete("registration")
+		out.Set("registration", reg)
+	}
+	return out, nil
 }
 
 func queueConfig(cfg *pyjson.Object) *pyjson.Object {
@@ -486,6 +595,7 @@ func (s *Service) queueService() (*Queue, error) {
 		if err != nil {
 			return nil, err
 		}
+		q.allowed = s.AllowedFor
 		if !s.Replay {
 			q.Start()
 		}
@@ -502,7 +612,11 @@ func (s *Service) QueueIfStarted() *Queue {
 }
 
 // QueueStatus is GpuService.queue_status().
-func (s *Service) QueueStatus() (*pyjson.Object, error) {
+func (s *Service) QueueStatus() (*pyjson.Object, error) { return s.QueueStatusFor(Unscoped()) }
+
+// QueueStatusFor is QueueStatus; non-admins get no config path, path map or
+// worker error text.
+func (s *Service) QueueStatusFor(sc Scope) (*pyjson.Object, error) {
 	st := s.inspect()
 	if st.fatal != nil {
 		return nil, st.fatal
@@ -518,10 +632,21 @@ func (s *Service) QueueStatus() (*pyjson.Object, error) {
 			"max_jobs_per_gpu", q.Value("max_jobs_per_gpu"), "max_utilization_pct", q.Value("max_utilization_pct"),
 			"min_free_memory_mb", q.Value("min_free_memory_mb"), "path_map", q.Value("path_map"))
 	}
-	return pyjson.NewObject("available", true, "enabled", q != nil && pyjson.Truthy(q.Value("enabled")),
+	out := pyjson.NewObject("available", true, "enabled", q != nil && pyjson.Truthy(q.Value("enabled")),
 		"worker_started", started, "worker_error", startErr, "config_path", st.path,
 		"config_present", st.present, "config_error", errOrNil(st.err), "policy", policy,
-		"checked_at", clock.UTCNow()), nil
+		"checked_at", clock.UTCNow())
+	if !sc.Admin {
+		out.Delete("config_path")
+		policy.Set("path_map", []any{})
+		if st.err != "" {
+			out.Set("config_error", memberConfigError)
+		}
+		if startErr != nil {
+			out.Set("worker_error", memberQueueError)
+		}
+	}
+	return out, nil
 }
 
 func asGpuError(err error, code string) error {
@@ -534,6 +659,19 @@ func asGpuError(err error, code string) error {
 
 // QueueSubmit is GpuService.queue_submit.
 func (s *Service) QueueSubmit(body *pyjson.Object, owner, project, session, task string) (*pyjson.Object, error) {
+	return s.QueueSubmitFor(Unscoped(), body, owner, project, session, task)
+}
+
+// QueueSubmitFor is QueueSubmit for one project: a named server the project
+// does not register is refused (404) before validation; a valid job of a
+// project that registers no server is refused (403).  The worker places a
+// job only on its project's registered servers (Queue.allowed).
+func (s *Service) QueueSubmitFor(sc Scope, body *pyjson.Object, owner, project, session, task string) (*pyjson.Object, error) {
+	if body != nil && !sc.All {
+		if name := pytext.Strip(strField(body, "server")); name != "" && !sc.Allows(name) {
+			return nil, errNotRegistered(name)
+		}
+	}
 	payload := pyjson.NewObject()
 	if body != nil {
 		payload = body.Copy()
@@ -546,7 +684,23 @@ func (s *Service) QueueSubmit(body *pyjson.Object, owner, project, session, task
 	if err != nil {
 		return nil, err
 	}
-	job, err := q.Submit(payload, !s.Replay)
+	var check func(cfg *pyjson.Object) error
+	if !sc.All {
+		check = func(cfg *pyjson.Object) error {
+			servers, _ := cfg.Value("servers").([]any)
+			if len(sc.filter(servers)) == 0 {
+				return errNoneRegistered()
+			}
+			return nil
+		}
+		if name := pytext.Strip(strField(payload, "server")); name != "" {
+			if cfg, err := q.loadConfig(); err == nil {
+				servers, _ := cfg.Value("servers").([]any)
+				payload.Set("server", sc.canonical(name, servers))
+			}
+		}
+	}
+	job, err := q.SubmitChecked(payload, !s.Replay, check)
 	return job, asGpuError(err, "queue_invalid")
 }
 
@@ -604,14 +758,36 @@ func (s *Service) Close() {
 
 // PrepareDispatch is GpuService.prepare_dispatch.
 func (s *Service) PrepareDispatch(body *pyjson.Object) (*pyjson.Object, error) {
+	return s.PrepareDispatchFor(Unscoped(), body)
+}
+
+// PrepareDispatchFor is PrepareDispatch over the registered servers only; a
+// non-admin reply has no transport address, SSH preview or config path.
+func (s *Service) PrepareDispatchFor(sc Scope, body *pyjson.Object) (*pyjson.Object, error) {
 	cfg, path, err := s.requireEnabled()
 	if err != nil {
-		return nil, err
+		return nil, sc.redactErr(err)
 	}
 	if body == nil {
 		body = pyjson.NewObject()
 	}
 	servers, _ := cfg.Value("servers").([]any)
+	if !sc.All {
+		if v := body.Value("server"); pyjson.Truthy(v) {
+			name := pytext.Strip(pyjson.Str(v))
+			if !sc.Allows(name) {
+				return nil, errNotRegistered(name)
+			}
+			if canon := sc.canonical(name, servers); canon != name {
+				body = body.Copy().Set("server", canon)
+			}
+		}
+		scoped := sc.filter(servers)
+		if len(servers) > 0 && len(scoped) == 0 {
+			return nil, errNoneRegistered()
+		}
+		servers = scoped
+	}
 	request, err := BuildRequest(body, servers, clock.UTCNow())
 	if err != nil {
 		var de *DispatchError
@@ -621,11 +797,28 @@ func (s *Service) PrepareDispatch(body *pyjson.Object) (*pyjson.Object, error) {
 		return nil, err
 	}
 	request.Set("config_path", path).Set("prepared_by", "ARK Studio GPU adapter")
+	if !sc.Admin {
+		request.Delete("config_path")
+		request.Delete("ssh_preview")
+		if t, ok := request.Value("transport").(*pyjson.Object); ok {
+			t.Delete("host")
+			t.Delete("port")
+			t.Delete("user")
+		}
+		if srv, ok := request.Value("server").(*pyjson.Object); ok {
+			request.Set("server", memberServer(srv))
+		}
+	}
 	return request, nil
 }
 
 // Overview is overview.gpu_summary(gpu, project=...).
-func (s *Service) Overview(project string) *pyjson.Object {
+func (s *Service) Overview(project string) *pyjson.Object { return s.OverviewFor(Unscoped(), project) }
+
+// OverviewFor is Overview for one project: the registered servers are
+// counted, and the last probe summary is shown only when that probe covered
+// registered servers only.
+func (s *Service) OverviewFor(sc Scope, project string) *pyjson.Object {
 	out := pyjson.NewObject("available", false, "configured", false, "enabled", false, "queue_enabled", false,
 		"servers", int64(0), "jobs", pyjson.NewObject(), "free_gpus", nil, "gpus", nil, "probed_at", nil)
 	st := s.inspect()
@@ -638,11 +831,11 @@ func (s *Service) Overview(project string) *pyjson.Object {
 	out.Set("enabled", cfg != nil && s.enabled(cfg))
 	if cfg != nil {
 		servers, _ := cfg.Value("servers").([]any)
-		out.Set("servers", int64(len(servers)))
+		out.Set("servers", int64(len(sc.filter(servers))))
 	}
 	q := queueConfig(cfg)
 	out.Set("queue_enabled", q != nil && pyjson.Truthy(q.Value("enabled")))
-	if last := s.Summary(); last != nil {
+	if last := s.Summary(); last != nil && s.summaryAllowed(sc) {
 		out.Set("free_gpus", last.Value("free_gpus")).Set("gpus", last.Value("gpus")).Set("probed_at", last.Value("probed_at"))
 	}
 	if out.Value("queue_enabled") == true && out.Value("enabled") == true {
@@ -660,4 +853,15 @@ func (s *Service) Overview(project string) *pyjson.Object {
 		out.Set("jobs", counts)
 	}
 	return out
+}
+
+func (s *Service) summaryAllowed(sc Scope) bool {
+	s.summaryMu.Lock()
+	defer s.summaryMu.Unlock()
+	for _, name := range s.summaryServers {
+		if !sc.Allows(name) {
+			return false
+		}
+	}
+	return true
 }

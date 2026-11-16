@@ -650,6 +650,9 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 	unknowns = append(unknowns, "sshfs_tunnels", "browser_host", "host_metrics")
 	if !pyjson.Truthy(gpu.Value("enabled")) {
 		unknowns = append(unknowns, "gpu_disabled")
+	} else if orObj(gpu.Value("registration")).Value("hint_code") == "not_registered" {
+		// Go only (T-0018): the list has servers, the project registers none.
+		unknowns = append(unknowns, "gpu_not_registered")
 	}
 	return pyjson.NewObject(
 		"generated_at", iso(now),

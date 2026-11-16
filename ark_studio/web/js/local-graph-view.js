@@ -50,6 +50,7 @@ export function createLocalGraphPanel(ctx) {
   let lastCenter = null;
   let historyProject = null;
   let cardNode = null;
+  let cardNodeObj = null;
   const taps = createTapClassifier();
   const save = () => { try { localStorage.setItem(LOCAL_GRAPH_STORE_KEY, JSON.stringify(options)); } catch { /* storage disabled */ } };
   const filtered = () => options.hiddenRelations.length > 0 || options.hiddenTypes.length > 0
@@ -86,6 +87,7 @@ export function createLocalGraphPanel(ctx) {
 
   function openCard(node) {
     cardNode = node.id;
+    cardNodeObj = node;
     keepCenterSelected();
     // The card's link count is the node's in the project, not in this view.
     const degree = (snapshot?.edges || []).filter((edge) => edge.source === node.id || edge.target === node.id).length;
@@ -96,6 +98,7 @@ export function createLocalGraphPanel(ctx) {
     keepCenterSelected();
     if (cardNode === null) return;
     cardNode = null;
+    cardNodeObj = null;
     graph?.hideNodeCard();
   }
 
@@ -104,6 +107,15 @@ export function createLocalGraphPanel(ctx) {
   function recenter(node) {
     closeCard();
     ctx.openUnit?.(node.uid || node.id);
+  }
+
+  // Alt+Enter (as in the main graph): open in the Editor the node whose
+  // card is shown, else the centre.
+  function openInEditor(selected) {
+    const node = cardNodeObj || selected;
+    if (!node || !ctx.openUnitInEditor) return;
+    closeCard();
+    ctx.openUnitInEditor(node);
   }
 
   function onNodeSelect(node, open, event) {
@@ -216,6 +228,7 @@ export function createLocalGraphPanel(ctx) {
         onLayout: (layout) => { setOption({ layout }); },
       },
       onSelect: onNodeSelect,
+      onOpenEditor: openInEditor,
     });
     host.append(pop);
     return graph;

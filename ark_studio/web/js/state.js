@@ -164,18 +164,22 @@ export const VIEW_BY_TAB = {
   settings: "settings",
 };
 
-const TOPIC_TYPES = ["idea", "question", "claim", "evidence", "story", "related_work", "topic", "method", "experiment",
+// Every node type the server knows (store.KnownTypes, in its order).
+export const ALL_TYPES = ["idea", "question", "claim", "evidence", "story", "related_work", "topic", "method", "experiment",
   "run", "task", "milestone", "artifact", "resource", "agent", "host", "production", "outreach", "decision", "source", "note"];
 
 export const TAB_TYPES = {
   overview: [],
   ideas: ["idea", "source", "question"],
-  "plan/story": TOPIC_TYPES,
-  "plan/related": TOPIC_TYPES,
-  "plan/method": TOPIC_TYPES,
-  "plan/experiment": TOPIC_TYPES,
-  "plan/topic": TOPIC_TYPES,
-  map: ["idea", "question", "claim", "evidence", "story", "topic", "method", "experiment", "task", "decision", "artifact", "resource"],
+  "plan/story": ALL_TYPES,
+  "plan/related": ALL_TYPES,
+  "plan/method": ALL_TYPES,
+  "plan/experiment": ALL_TYPES,
+  "plan/topic": ALL_TYPES,
+  // The Map is the whole project graph: every type, nothing hidden by
+  // default, so its total matches Home's node count.  (A shorter list here
+  // hid agents, hosts, notes, outputs, ... while the TYPES filter said "All".)
+  map: ALL_TYPES,
   tasks: ["task", "milestone", "agent", "host", "artifact", "resource"],
   production: ["production", "artifact", "resource"],
   distribution: ["outreach", "milestone", "production"],
@@ -196,6 +200,17 @@ export function baseTypes(tab = S.tab, sub = S.sub) {
 export function selectedTypes(filters = S.filters, base = baseTypes()) {
   if (filters.typesNone) return [];
   return filters.types.length ? filters.types : base;
+}
+
+/**
+ * The TYPES chips to draw.  With `presentOnly` (the Map, whose scope is every
+ * type) a type with no nodes is left out unless it is switched off, so the
+ * list is "every type in the project" and an excluded type stays visible as
+ * an unchecked chip.  Before the counts arrive every type is drawn.
+ */
+export function typeChips(base, counts, selected, presentOnly = false) {
+  if (!presentOnly || !counts || !Object.keys(counts).length) return [...base];
+  return base.filter((type) => Number(counts[type]) > 0 || !selected.includes(type));
 }
 
 export function toggleTypeFilter(filters, type, base = baseTypes()) {

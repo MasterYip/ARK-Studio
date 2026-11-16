@@ -168,13 +168,27 @@ func jsonBody(s string) string {
 	return string(b[1 : len(b)-1])
 }
 
-// setupGPUServers is Handler._setup_gpu_servers (None on any error).
+// setupGPUServers is Handler._setup_gpu_servers (None on any error), names
+// only (T-0018): discovery offers every configured server so a member can
+// choose which to register, and verify checks names; neither needs the
+// address, tags or note of a server the project may not have registered.
 func (c *reqCtx) setupGPUServers() *pyjson.Object {
 	s, err := c.app.gpu().Servers()
 	if err != nil {
 		return nil
 	}
-	return s
+	list, _ := s.Value("servers").([]any)
+	names := make([]any, 0, len(list))
+	for _, item := range list {
+		if o, ok := item.(*pyjson.Object); ok {
+			names = append(names, pyjson.NewObject("name", o.Value("name")))
+		}
+	}
+	out := pyjson.NewObject("servers", names)
+	if hint := s.Value("hint"); hint != nil {
+		out.Set("hint", hint)
+	}
+	return out
 }
 
 var setupActions = map[string]bool{"discover": true, "draft": true, "resource": true, "remove": true,

@@ -172,10 +172,15 @@ Both prompts share their beginning, in this order:
    stay short and leave detail to the docs;
 2. **standing rules** (R1-R9) that hold for the whole session: read context
    and the relevant units before work; after every meaningful step write to
-   ARK unasked (task units with current status, progress comments, evidence
-   via media/assets uploads, decisions and links to the plan); post a summary
-   comment at the end of each work session; if ARK is unreachable, say so and
-   keep `ark-sync-notes.md` to sync later; secrets only as `env:NAME`;
+   ARK unasked; plan in a task node first, linked to exactly one
+   `derived_from` parent, with an honest status; dated progress lines in the
+   task body and resource paths on the task and in the setup register; each
+   result as its own `review` node with its own media attached and embedded
+   beside the claim it supports; every user decision as a `decision` node,
+   and replies to user comments; a summary comment at the end of each work
+   session; if ARK is unreachable, say so and keep `ark-sync-notes.md` to
+   sync later; secrets only as `env:NAME`. The rules point to
+   [Recommended agent working mode](../agents/working-mode.md) for detail;
 
 then their own steps, and last the session block (ARK session id, optional
 JSONL upload).

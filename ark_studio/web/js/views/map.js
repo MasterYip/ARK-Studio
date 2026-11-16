@@ -13,7 +13,6 @@ import { graphPanel } from "./plan.js";
 export function renderMap(host, ctx) {
   const S = ctx.S;
   clear(host);
-  const currentTypes = S.filters.types.length ? S.filters.types : ["question", "claim", "evidence", "experiment", "task", "idea", "method", "artifact", "resource"];
   const page = h("div", { class: "page" },
     h("div", { class: "page-head" },
       h("div", null,

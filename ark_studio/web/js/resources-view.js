@@ -12,13 +12,14 @@
 import { h, clear } from "./dom.js";
 import { t, hasKey } from "./i18n.js";
 import { icon } from "./icons.js";
-import { api, cachedThenFresh } from "./api.js";
+import { api, cachedThenFresh, peekCached } from "./api.js";
 import { openContextMenu } from "./context-menu.js";
 import { layeredLayout, routeNodeEdges } from "./node-graph-layout.js";
 import {
   RESOURCE_TYPES, buildResourcesModel, utilisation, ageSeconds, agoKey, rowBox, CARD_METRICS,
   usageTone, formatBytes, collapseToggleBox, setCollapsed, toggleCollapsed, collapsibleIds,
-  resourcesKeyAction, nearestInDirection, cardsInBox,
+  resourcesKeyAction, nearestInDirection, cardsInBox, foldTargets,
+  rowKind, gpuDetail, cpuDetail, storageDetail, formatMb, formatUsedOf, mergeProbeDetails,
 } from "./resources-model.js";
 
 const REFRESH_MS = 30000;
@@ -130,8 +131,8 @@ export function resourcesGraphPanel(ctx) {
   const tools = h("div", { class: "graph-tools resources-tools", "data-resources-tools": "" },
     h("div", { class: "graph-mode" }, modeReadBtn, modeEditBtn),
     h("span", { class: "sep" }),
-    tool(t("resources.expand_all"), icon("chevron", "sm"), () => foldAll(false), { "data-resources-tool": "expand-all" }),
-    tool(t("resources.collapse_all"), icon("chevronRight", "sm"), () => foldAll(true), { "data-resources-tool": "collapse-all" }),
+    tool(t("resources.expand_all_title"), "+", () => foldAll(false), { "data-resources-tool": "expand-all", class: "resources-fold-btn" }),
+    tool(t("resources.collapse_all_title"), "−", () => foldAll(true), { "data-resources-tool": "collapse-all", class: "resources-fold-btn" }),
     tool(t("resources.reset_layout"), icon("refresh", "sm"), () => resetLayout(), { "data-resources-tool": "reset-layout" }),
     h("span", { class: "sep" }),
     tool(t("graph.zoom_in"), icon("zoomIn", "sm"), () => zoomBy(1.2), { "data-resources-tool": "zoom-in" }),
@@ -155,8 +156,12 @@ export function resourcesGraphPanel(ctx) {
     state.loading = true;
     status.textContent = t("resources.loading");
     try {
+      // Power, processes and jobs per GPU come from the GPU board's last
+      // dashboard when it is the same probe (never requested from here:
+      // the dashboard probes).
+      const dashboard = await peekCached("/api/gpu/dashboard").catch(() => null);
       await cachedThenFresh("/api/resources/graph", (options) => api.resourcesGraph(options), (payload) => {
-        state.payload = payload;
+        state.payload = mergeProbeDetails(payload, dashboard);
         state.error = "";
         rebuild();
         status.textContent = t("resources.updated", { when: ago(state.payload.generated_at) });
@@ -303,9 +308,10 @@ export function resourcesGraphPanel(ctx) {
         row(t("graph.help.shift_wheel"), t("graph.help.pan_horizontal")),
         row(t("graph.help.right_click"), t("graph.help.context_menu"))),
       h("div", { class: "graph-help-group" }, h("h5", null, t("resources.help.fold")),
-        row("+ / -", t("resources.help.fold_one")),
+        row("+ / =", t("resources.help.expand_one")),
+        row("-", t("resources.help.collapse_one")),
         row("* / /", t("resources.help.fold_all")),
-        row("▾ / ▸", t("resources.help.fold_toggle")),
+        row(t("resources.help.toggle_key"), t("resources.help.fold_toggle")),
         row("Ctrl+A", t("graph.help.select_visible"))),
       h("div", { class: "graph-help-note" }, t(readMode ? "resources.help.read_note" : "resources.help.edit_note")),
       h("div", { class: "graph-help-note" }, t("graph.help.note_gesture")));
@@ -413,9 +419,10 @@ export function resourcesGraphPanel(ctx) {
     rebuild();
   }
 
-  // Mind's semantics: the selected cards only; nothing selected, nothing to do.
+  // Mind's semantics: the selected cards; with nothing selected the focused
+  // card (under the pointer); with neither, nothing to do.
   function foldSelected(collapse) {
-    const ids = collapsibleIds(state.model?.cards, [...state.selectedIds]);
+    const ids = foldTargets(state.model?.cards, [...state.selectedIds], state.hover?.device || null);
     if (!ids.length) return;
     applyFold(setCollapsed(state.collapsed, ids, collapse));
   }
@@ -610,14 +617,19 @@ export function resourcesGraphPanel(ctx) {
         ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
         ctx.fillText(t("resources.gpu_summary", { ours: o.gpus_ours, others: o.gpus_busy_others, free: o.gpus_free }), x + 12, by + 15);
       } else {
-        const pct = (device.metrics?.disk_pct ?? device.metrics?.cpu_pct ?? 0) / 100;
-        ctx.fillStyle = pct > 0.9 ? pal.danger : pal.accent;
-        ctx.fillRect(x + 12, by, bw * Math.max(0, Math.min(1, pct)), 8);
+        // Disk (the project folder's disk on the ARK server) or CPU, in the
+        // usage colours (amber from 60%, red from 85%).
+        const m = device.metrics || {};
+        const disk = m.disk_pct != null;
+        const pct = disk ? m.disk_pct : m.cpu_pct;
+        usageBar(ctx, pal, x + 12, by, bw, 8, pct ?? 0, usageTone(pct));
         ctx.fillStyle = pal.sub;
         ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
-        const label = device.metrics?.disk_pct != null ? t("resources.disk_used", { pct: device.metrics.disk_pct })
-          : t("resources.cpu_used", { pct: device.metrics.cpu_pct });
-        ctx.fillText(label, x + 12, by + 15);
+        const sizes = disk && m.disk_total_gb != null && m.disk_used_gb != null;
+        const label = sizes ? t("resources.disk_summary", { sizes: formatUsedOf(m.disk_used_gb * 1e9, m.disk_total_gb * 1e9),
+          pct: Math.round(m.disk_pct) })
+          : disk ? t("resources.disk_used", { pct: m.disk_pct }) : t("resources.cpu_used", { pct: m.cpu_pct });
+        ctx.fillText(ellipsis(ctx, label, bw), x + 12, by + 15);
       }
     }
     // Resource rows (the foldable details).
@@ -632,12 +644,20 @@ export function resourcesGraphPanel(ctx) {
       ctx.strokeStyle = res.metrics?.ours || picked ? pal.accent : pal.line;
       ctx.lineWidth = res.metrics?.ours || picked ? 1.4 : 0.8;
       ctx.stroke();
+      const kind = rowKind(res);
+      if (kind !== "line") {
+        ctx.save();
+        if (res.last_known) ctx.globalAlpha *= 0.75;
+        drawDetailRow(ctx, pal, card, res, kind, rx, ry, box.w, box.h);
+        ctx.restore();
+        return;
+      }
       ctx.font = "600 9px ui-monospace, Consolas, monospace";
       ctx.fillStyle = res.metrics?.ours || res.metrics?.data ? pal.accent : pal.sub;
       const tag = (res.metrics?.data ? t("resources.storage.data_tag") : t(`resources.type.${res.kind}`)).toUpperCase();
       ctx.fillText(ellipsis(ctx, tag, 58), rx + 6, ry + box.h / 2);
       const u = utilisation(res);
-      const meterW = u.util !== null || u.mem !== null ? (res.metrics?.storage ? 46 : 70) : 0;
+      const meterW = u.util !== null || u.mem !== null ? 70 : 0;
       const right = rowRight(res);
       ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
       const rightW = right ? ctx.measureText(right).width + 8 : 0;
@@ -656,24 +676,146 @@ export function resourcesGraphPanel(ctx) {
     ctx.restore();
   }
 
-  // ▾ (details shown) / ▸ (folded) in the card header.
+  // "+" (folded: expand) / "−" (details shown: collapse) in the card header,
+  // as on Mind's cards (graph.js) and the + / - keys.
   function drawFoldToggle(ctx, pal, card, x, y) {
     const box = collapseToggleBox(card);
     const bx = x + box.x, by = y + box.y;
     const hovered = state.hover?.device === card.id && state.hover?.toggle;
     roundRect(ctx, bx, by, box.w, box.h, 5);
-    ctx.fillStyle = hovered ? pal.lane : "transparent";
+    ctx.fillStyle = card.collapsed ? pal.accent : hovered ? pal.lane : "transparent";
     ctx.fill();
-    ctx.strokeStyle = card.collapsed ? pal.accent : pal.line;
+    ctx.strokeStyle = card.collapsed || hovered ? pal.accent : pal.line;
     ctx.lineWidth = 1;
     ctx.stroke();
     const cx = bx + box.w / 2, cy = by + box.h / 2;
     ctx.beginPath();
-    if (card.collapsed) { ctx.moveTo(cx - 2.5, cy - 4.5); ctx.lineTo(cx + 3, cy); ctx.lineTo(cx - 2.5, cy + 4.5); }
-    else { ctx.moveTo(cx - 4.5, cy - 2.5); ctx.lineTo(cx, cy + 3); ctx.lineTo(cx + 4.5, cy - 2.5); }
-    ctx.strokeStyle = card.collapsed ? pal.accent : pal.sub;
-    ctx.lineWidth = 1.6;
+    ctx.moveTo(cx - 4.5, cy); ctx.lineTo(cx + 4.5, cy);
+    if (card.collapsed) { ctx.moveTo(cx, cy - 4.5); ctx.lineTo(cx, cy + 4.5); }
+    ctx.strokeStyle = card.collapsed ? pal.bg : hovered ? pal.ink : pal.sub;
+    ctx.lineWidth = 1.8;
+    ctx.lineCap = "round";
     ctx.stroke();
+    ctx.lineCap = "butt";
+  }
+
+  // A usage bar: track, fill in the usage tone (60% / 85%), and our share
+  // over it in the accent colour (GPU board style).
+  function usageBar(ctx, pal, x, y, w, h, pct, tone, oursPct = null) {
+    roundRect(ctx, x, y, w, h, h / 2);
+    ctx.fillStyle = pal.lane;
+    ctx.fill();
+    if (pct === null || pct === undefined) return;
+    const fill = (value, color) => {
+      const width = w * Math.max(0, Math.min(100, value)) / 100;
+      if (width <= 0) return;
+      roundRect(ctx, x, y, Math.max(width, h), h, h / 2);
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+    fill(pct, TONE_COLOR(pal, tone));
+    if (oursPct) fill(Math.min(oursPct, pct), pal.accent);
+  }
+
+  // One labelled bar line inside a detail row: LABEL [bar] value.
+  function barLine(ctx, pal, rx, cy, w, label, pct, tone, value, oursPct = null, valueW = 84) {
+    ctx.font = "600 8.5px ui-monospace, Consolas, monospace";
+    ctx.fillStyle = pal.sub;
+    ctx.textAlign = "left";
+    ctx.fillText(label, rx + 8, cy);
+    usageBar(ctx, pal, rx + 42, cy - 3, w - 42 - valueW - 8, 6, pct, tone, oursPct);
+    ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+    ctx.fillStyle = pal.ink;
+    ctx.textAlign = "right";
+    ctx.fillText(ellipsis(ctx, value, valueW), rx + w - 8, cy);
+    ctx.textAlign = "left";
+  }
+
+  // Title line of a detail row: bold title, muted subtitle, right-hand meta.
+  function titleLine(ctx, pal, rx, cy, w, title, sub, meta, accent = false) {
+    ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+    const metaW = meta ? Math.min(ctx.measureText(meta).width, w * 0.45) + 10 : 0;
+    ctx.font = "650 11px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+    ctx.fillStyle = accent ? pal.accent : pal.ink;
+    ctx.textAlign = "left";
+    const shownTitle = ellipsis(ctx, title, w - 16 - metaW);
+    ctx.fillText(shownTitle, rx + 8, cy);
+    const tw = ctx.measureText(shownTitle).width;
+    if (sub) {
+      ctx.font = "10.5px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+      ctx.fillStyle = pal.sub;
+      const room = w - 16 - metaW - tw - 6;
+      if (room > 24) ctx.fillText(ellipsis(ctx, sub, room), rx + 8 + tw + 6, cy);
+    }
+    if (meta) {
+      ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+      ctx.fillStyle = pal.sub;
+      ctx.textAlign = "right";
+      ctx.fillText(ellipsis(ctx, meta, w * 0.45), rx + w - 8, cy);
+      ctx.textAlign = "left";
+    }
+  }
+
+  function gpuMeta(d) {
+    return [d.temperature !== null ? `${Math.round(d.temperature)}°C` : "", d.power !== null ? `${Math.round(d.power)} W` : ""] // i18n-ignore: units
+      .filter(Boolean).join(" · ");
+  }
+
+  const pctText = (pct) => (pct === null || pct === undefined ? "—" : `${Math.round(pct)}%`);
+  const memText = (used, total) => (total ? formatUsedOf((used ?? 0) * 2 ** 20, total * 2 ** 20) : "—");
+  const storageText = (d) => (d.total !== null ? `${formatUsedOf(d.used, d.total)} · ${pctText(d.pct)}` : pctText(d.pct));
+
+  function gpuExtraText(d) {
+    return d.extra.map((item) => item.key === "jobs" ? t("resources.gpu.jobs", { jobs: item.jobs.join(", ") })
+      : item.key === "owners" ? t("resources.gpu.owners", { owners: item.owners.join(", ") })
+        : t("resources.gpu.processes", { n: item.n })).join(" · ");
+  }
+
+  // Expanded rows: one block per GPU, CPU & memory, one bar per mount.
+  function drawDetailRow(ctx, pal, card, res, kind, rx, ry, w, h) {
+    if (kind === "gpu") {
+      const d = gpuDetail(res);
+      titleLine(ctx, pal, rx, ry + 10, w, d.title, d.model, gpuMeta(d), d.ours);
+      barLine(ctx, pal, rx, ry + 23, w, t("resources.bar.util"), d.util, d.utilTone, pctText(d.util));
+      barLine(ctx, pal, rx, ry + 36, w, t("resources.bar.mem"), d.memPct, d.memTone, memText(d.memUsedMb, d.memTotalMb), d.oursPct);
+      if (d.extra.length) {
+        ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+        ctx.fillStyle = d.ours ? pal.accent : pal.sub;
+        ctx.fillText(ellipsis(ctx, gpuExtraText(d), w - 16), rx + 8, ry + 49);
+      }
+    } else if (kind === "cpu") {
+      const d = cpuDetail(res);
+      const meta = [d.load1 !== null ? t("resources.cpu.load", { load: d.load1 }) : "",
+        d.cores ? t("resources.cpu.cores", { n: d.cores }) : ""].filter(Boolean).join(" · ");
+      titleLine(ctx, pal, rx, ry + 10, w, res.label, "", meta);
+      barLine(ctx, pal, rx, ry + 23, w, t("resources.bar.cpu"), d.cpu, d.cpuTone, pctText(d.cpu));
+      barLine(ctx, pal, rx, ry + 36, w, t("resources.bar.ram"), d.ramPct, d.ramTone, memText(d.ramUsedMb, d.ramTotalMb));
+    } else {
+      const d = storageDetail(res, card.device);
+      let lx = rx + 8;
+      if (d.data) {
+        ctx.font = "700 8.5px ui-monospace, Consolas, monospace";
+        const tag = t("resources.storage.data_tag").toUpperCase();
+        const tw = ctx.measureText(tag).width + 8;
+        roundRect(ctx, lx, ry + 4, tw, 12, 3);
+        ctx.fillStyle = pal.accent;
+        ctx.fill();
+        ctx.fillStyle = "#fff";
+        ctx.fillText(tag, lx + 4, ry + 10.5);
+        lx += tw + 6;
+      }
+      const sizes = storageText(d);
+      ctx.font = "10px system-ui, 'Segoe UI', 'Microsoft YaHei'";
+      const sizesW = ctx.measureText(sizes).width;
+      ctx.fillStyle = pal.sub;
+      ctx.textAlign = "right";
+      ctx.fillText(sizes, rx + w - 8, ry + 10);
+      ctx.textAlign = "left";
+      ctx.font = `${res.last_known ? "italic " : ""}600 11px system-ui, 'Segoe UI', 'Microsoft YaHei'`;
+      ctx.fillStyle = d.data ? pal.accent : pal.ink;
+      ctx.fillText(ellipsis(ctx, d.label, rx + w - 8 - sizesW - 8 - lx), lx, ry + 10);
+      usageBar(ctx, pal, rx + 8, ry + 19, w - 16, 7, d.pct, d.tone);
+    }
   }
 
   function rowRight(res) {
@@ -687,18 +829,9 @@ export function resourcesGraphPanel(ctx) {
     return "";
   }
 
-  // Two thin bars: utilisation and memory (ours / others for GPUs).  A
-  // server's storage has one bar in the usage colours (60% / 85%).
+  // One-line rows: two thin bars, utilisation and memory (GPU, CPU and
+  // storage rows have their own detail layout, drawDetailRow).
   function drawMeter(ctx, pal, res, u, x, y, w, h) {
-    if (res.metrics?.storage) {
-      roundRect(ctx, x, y + 2, w, h - 4, 3);
-      ctx.fillStyle = pal.lane; ctx.fill();
-      if (u.util !== null) {
-        ctx.fillStyle = TONE_COLOR(pal, usageTone(res.metrics.disk_pct));
-        ctx.fillRect(x, y + 2, w * u.util, h - 4);
-      }
-      return;
-    }
     const half = (h - 2) / 2;
     const bar = (top, value, color) => {
       roundRect(ctx, x, top, w, half, 2);
@@ -766,7 +899,10 @@ export function resourcesGraphPanel(ctx) {
       lines.push(t("resources.metric.gpu_util", { pct: m.util_pct ?? "?" }));
       lines.push(t("resources.metric.gpu_mem", { used: Math.round((m.mem_used_mb || 0) / 1024), total: Math.round((m.mem_total_mb || 0) / 1024),
         ours: Math.round((m.mem_ours_mb || 0) / 1024), others: Math.round((m.mem_others_mb || 0) / 1024) }));
+      if (m.temperature_c != null) lines.push(t("resources.metric.temperature", { c: Math.round(m.temperature_c) }));
+      if (m.power_w != null) lines.push(t("resources.metric.power", { w: Math.round(m.power_w) }));
       if (m.job) lines.push(t("resources.metric.job", { job: m.job }));
+      if (Array.isArray(m.processes) && m.processes.length) lines.push(t("resources.gpu.processes", { n: m.processes.length }));
     } else if (res.kind === "cpu") {
       if (m.cpu_pct != null) lines.push(t("resources.cpu_used", { pct: m.cpu_pct }));
       if (m.mem_total_mb) lines.push(t("resources.metric.ram", { used: Math.round(m.mem_used_mb / 1024), total: Math.round(m.mem_total_mb / 1024) }));
@@ -825,10 +961,12 @@ export function resourcesGraphPanel(ctx) {
       h("p", { class: "physics-hint" }, t("resources.privacy_hint"))) : null;
     const res = target.resource;
     const multi = state.selectedIds.size > 1 ? h("p", { class: "muted" }, t("resources.selected_n", { n: state.selectedIds.size })) : null;
-    const storage = !res && device.storage?.length ? h("div", { class: "resources-res" },
-      h("div", { class: "physics-name" }, t("resources.storage.title")),
-      ...card.allRows.filter((row) => row.metrics?.storage).map((row) => h("p", { class: "muted" },
-        `${row.label}${row.metrics.data ? ` (${t("resources.storage.data_tag")})` : ""} — ${metricLines(row)[0]}`))) : null;
+    // The whole card, expanded or not: every GPU, CPU & memory, every mount.
+    const section = (titleKey, rows) => (rows.length ? h("div", { class: "resources-res" },
+      h("div", { class: "physics-name" }, t(titleKey)), ...rows.map((row) => detailBlock(row, device))) : null);
+    const ofKind = (kind) => card.allRows.filter((row) => rowKind(row) === kind);
+    const overview = res ? [] : [section("resources.gpus_title", ofKind("gpu")), section("resources.type.cpu", ofKind("cpu")),
+      section("resources.storage.title", ofKind("storage"))];
     details.append(...[
       h("div", { class: "resources-details-head" },
         h("b", null, device.label),
@@ -840,12 +978,61 @@ export function resourcesGraphPanel(ctx) {
       st.last_seen ? h("p", { class: "muted" }, t("resources.last_seen", { when: `${ago(st.last_seen)} · ${new Date(st.last_seen).toLocaleString()}` })) : null,
       h("p", { class: "muted" }, `${t(`resources.kind.${device.kind}`)} · ${device.scope === "personal"
         ? t("resources.personal_of", { name: device.owner?.display_name || device.owner?.username || "?" }) : t("resources.shared")}`),
-      storage,
+      ...overview,
       res ? h("div", { class: "resources-res" },
         h("div", { class: "physics-name" }, `${t(`resources.type.${res.kind}`)} · ${res.label}`),
+        rowKind(res) !== "line" ? detailBlock(res, device) : null,
         res.path && !res.metrics?.storage ? h("code", null, res.path) : res.redacted ? h("p", { class: "muted" }, t("resources.path_hidden")) : null,
         ...metricLines(res).map((line) => h("p", { class: "muted" }, line))) : null,
       actions, privacy].filter(Boolean));
+  }
+
+  // DOM version of a detail row for the details panel: bars in the usage
+  // tones, plus everything the card has no room for (processes).
+  function domBar(label, pct, tone, value, oursPct = null) {
+    const width = (v) => `${Math.max(0, Math.min(100, Number(v) || 0))}%`;
+    return h("div", { class: "resources-bar-row" },
+      h("span", { class: "lbl" }, label),
+      h("div", { class: "resources-bar", role: "meter", "aria-valuemin": "0", "aria-valuemax": "100",
+        "aria-valuenow": pct === null || pct === undefined ? undefined : String(Math.round(pct)), "aria-label": label },
+      pct === null || pct === undefined ? null : h("i", { class: `fill ${tone || ""}`.trim(), style: { width: width(pct) } }),
+      oursPct ? h("i", { class: "ours", style: { width: width(Math.min(oursPct, pct ?? 0)) } }) : null),
+      h("b", null, value));
+  }
+
+  function detailBlock(res, device) {
+    const kind = rowKind(res);
+    if (kind === "gpu") {
+      const d = gpuDetail(res);
+      const meta = gpuMeta(d);
+      return h("div", { class: `resources-detail gpu${d.ours ? " ours" : ""}`, "data-resources-detail": res.id },
+        h("div", { class: "resources-detail-head" }, h("b", null, d.title), d.model ? h("span", null, d.model) : null,
+          meta ? h("em", null, meta) : null),
+        domBar(t("resources.bar.util"), d.util, d.utilTone, pctText(d.util)),
+        domBar(t("resources.bar.mem"), d.memPct, d.memTone, memText(d.memUsedMb, d.memTotalMb), d.oursPct),
+        d.jobs.length ? h("p", { class: "muted" }, t("resources.gpu.jobs", { jobs: d.jobs.join(", ") })) : null,
+        d.owners.length ? h("p", { class: "muted" }, t("resources.gpu.owners", { owners: d.owners.join(", ") })) : null,
+        d.processes.length ? h("ul", { class: "resources-procs" }, d.processes.map((p) => h("li", null,
+          [`PID ${p.pid ?? "?"}`, p.memory_mb !== null ? formatMb(p.memory_mb) : "", // i18n-ignore: process id
+            p.sm_pct !== null ? t("resources.gpu.sm", { pct: Math.round(p.sm_pct) }) : "",
+            p.job || "", p.owner || ""].filter(Boolean).join(" · ")))) : null);
+    }
+    if (kind === "cpu") {
+      const d = cpuDetail(res);
+      const meta = [d.load1 !== null ? t("resources.cpu.load", { load: d.load1 }) : "",
+        d.cores ? t("resources.cpu.cores", { n: d.cores }) : ""].filter(Boolean).join(" · ");
+      return h("div", { class: "resources-detail cpu", "data-resources-detail": res.id },
+        h("div", { class: "resources-detail-head" }, h("b", null, res.label), meta ? h("em", null, meta) : null),
+        domBar(t("resources.bar.cpu"), d.cpu, d.cpuTone, pctText(d.cpu)),
+        domBar(t("resources.bar.ram"), d.ramPct, d.ramTone, memText(d.ramUsedMb, d.ramTotalMb)));
+    }
+    const d = storageDetail(res, device);
+    const sizes = storageText(d);
+    return h("div", { class: `resources-detail storage${d.data ? " data" : ""}`, "data-resources-detail": res.id },
+      h("div", { class: "resources-detail-head" },
+        d.data ? h("span", { class: "resources-data-tag" }, t("resources.storage.data_tag")) : null,
+        h("b", { class: "mono" }, d.label), h("em", null, sizes)),
+      domBar(t("resources.bar.disk"), d.pct, d.tone, d.free !== null ? t("resources.storage.free", { free: formatBytes(d.free) }) : ""));
   }
 
   async function checkNow(device, button) {
@@ -1101,8 +1288,8 @@ export function resourcesGraphPanel(ctx) {
       case "mode-read": setMode("read"); break;
       case "mode-edit": setMode("edit"); break;
       case "select-all": selectAll(); break;
-      case "expand": case "expand-all": foldSelected(false); break;
-      case "collapse": case "collapse-all": foldSelected(true); break;
+      case "expand": foldSelected(false); break;
+      case "collapse": foldSelected(true); break;
       case "open": if (state.selected) { openDetails(true); draw(); } break;
       case "none": break;
       default:

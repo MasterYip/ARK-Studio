@@ -60,6 +60,7 @@ func Included(rel string) bool {
 var StartHere = []struct{ Path, Why string }{
 	{"agents/agent-interface.md", "The contract: discovery, setup gate, tokens, task manifests, evidence and conformance levels."},
 	{"agents/external-agent.md", "How an external coordinator (Claude Code, Codex, DSH) reads and writes an ARK project."},
+	{"agents/working-mode.md", "The recommended working mode: plan in a task node, progress lines, review nodes with media, decision nodes."},
 	{"agents/skills.md", "The setup, agent-team, rrsi and design skills and their HTTP endpoints."},
 	{"guide/home-overview.md", "What the Home screen shows a person, and the starter prompts."},
 	{"guide/topics.md", "Topics: curated subgraphs that tell one storyline."},

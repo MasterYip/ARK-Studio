@@ -362,3 +362,39 @@ func RecentHistory(projectPath string, limit int) ([]any, error) {
 	}
 	return out, nil
 }
+
+// RegisteredGPUServers are the gpu_server names of the compute resources in
+// the project's setup layers (project layer and every user layer, any
+// state), deduplicated case-insensitively in layer order.  This is the
+// project's GPU server scope (T-0018, gpu.Scope); an unreadable setup
+// registers nothing.
+func RegisteredGPUServers(projectPath string) []string {
+	layers, err := ReadLayers(projectPath)
+	if err != nil {
+		return nil
+	}
+	records := []any{layers.Value("project")}
+	if users, ok := layers.Value("users").([]any); ok {
+		records = append(records, users...)
+	}
+	var out []string
+	seen := map[string]bool{}
+	for _, rec := range records {
+		r, _ := rec.(*pyjson.Object)
+		profile, _ := r.Value("profile").(*pyjson.Object)
+		items, _ := profile.Value("resources").([]any)
+		for _, item := range items {
+			res, _ := item.(*pyjson.Object)
+			if res == nil || res.Value("kind") != "compute" {
+				continue
+			}
+			details, _ := res.Value("details").(*pyjson.Object)
+			name := pytext.Strip(pyjson.Str(or(details.Value("gpu_server"), "")))
+			if key := pytext.Lower(name); name != "" && !seen[key] {
+				seen[key] = true
+				out = append(out, name)
+			}
+		}
+	}
+	return out
+}

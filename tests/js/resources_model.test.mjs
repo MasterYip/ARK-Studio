@@ -163,7 +163,8 @@ test("folded cards keep their header and summary, hide their rows and count them
   assert.deepEqual(lab.rows, []);
   assert.equal(lab.allRows.length, 5);
   assert.equal(lab.hiddenCount, 5);
-  assert.equal(lab.h, open.cards.find((c) => c.id === "gpu:lab").h - 5 * CARD_METRICS.ROW_H);
+  const openLab = open.cards.find((c) => c.id === "gpu:lab");
+  assert.equal(lab.h, openLab.h - openLab.rowHeights.reduce((sum, height) => sum + height, 0));
   const old = folded.cards.find((c) => c.id === "gpu:old");
   assert.equal(old.collapsible, false, "nothing to fold");
   assert.equal(old.collapsed, false);
@@ -194,7 +195,7 @@ const key = (k, extra = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey
 test("keyboard map matches the Node graph and Mind's fold keys", () => {
   const table = {
     "?": "help", f: "fit", F: "fit", r: "mode-read", R: "mode-read", e: "mode-edit", E: "mode-edit",
-    "+": "expand", "=": "expand", "-": "collapse", "*": "expand-all", "/": "collapse-all",
+    "+": "expand", "=": "expand", "-": "collapse", "*": "expand", "/": "collapse",
     ArrowLeft: "nav-left", ArrowRight: "nav-right", ArrowUp: "nav-up", ArrowDown: "nav-down",
     Enter: "open", Escape: "clear", Tab: "none", Backspace: "none", x: null, Delete: null, " ": null,
   };
@@ -203,7 +204,7 @@ test("keyboard map matches the Node graph and Mind's fold keys", () => {
   assert.equal(resourcesKeyAction(key("A", { metaKey: true })), "select-all");
   assert.equal(resourcesKeyAction(key("a", { ctrlKey: true, shiftKey: true })), null);
   assert.equal(resourcesKeyAction(key("f", { ctrlKey: true })), null, "Ctrl+F stays the browser's");
-  assert.equal(resourcesKeyAction(key("*", { shiftKey: true })), "expand-all", "* needs Shift on most layouts");
+  assert.equal(resourcesKeyAction(key("*", { shiftKey: true })), "expand", "* needs Shift on most layouts");
   assert.equal(resourcesKeyAction(key("+", { ctrlKey: true })), null, "Ctrl++ stays browser zoom");
   assert.equal(resourcesKeyAction(key("Escape"), { helpOpen: true }), "close-help");
   assert.equal(resourcesKeyAction(key("Enter"), { mode: "edit" }), null, "edit mode: Enter does not open");
@@ -238,4 +239,171 @@ test("arrow navigation and box selection", () => {
   assert.deepEqual(cardsInBox(cards, { x1: -10, y1: -10, x2: 260, y2: 20 }, identity), ["a", "b"], "touching");
   assert.deepEqual(cardsInBox(cards, { x1: 260, y1: 20, x2: -10, y2: -10 }, identity, true), [], "contain");
   assert.deepEqual(cardsInBox(cards, { x1: -60, y1: -30, x2: 60, y2: 30 }, identity, true), ["a"]);
+});
+
+// ---------------------------------------------------------------- T-0019
+import {
+  foldTargets, rowKind, rowHeight, gpuDetail, cpuDetail, storageDetail, formatMb, mergeProbeDetails,
+  USAGE_WARN_PCT, USAGE_DANGER_PCT,
+} from "../../ark_studio/web/js/resources-model.js";
+
+test("+ / = expand, - collapses (Shift or not); * and / stay aliases; Ctrl / Alt never fold", () => {
+  for (const [k, shiftKey] of [["+", true], ["+", false], ["=", false], ["*", true]]) {
+    assert.equal(resourcesKeyAction(key(k, { shiftKey })), "expand", `${k} shift=${shiftKey}`);
+  }
+  for (const k of ["-", "/"]) assert.equal(resourcesKeyAction(key(k)), "collapse", k);
+  for (const mod of ["ctrlKey", "metaKey", "altKey"]) {
+    for (const k of ["+", "=", "-"]) assert.equal(resourcesKeyAction(key(k, { [mod]: true })), null, `${mod}+${k}`);
+  }
+  assert.equal(resourcesKeyAction(key("-", { target: { tagName: "INPUT" } })), null, "typing a minus in a field");
+});
+
+test("fold targets: the selection, else the focused card, else nothing", () => {
+  const { cards } = buildResourcesModel(withStorage);
+  assert.deepEqual(foldTargets(cards, ["gpu:lab", "ark"]).sort(), ["ark", "gpu:lab"]);
+  assert.deepEqual(foldTargets(cards, ["gpu:lab"], "ark"), ["gpu:lab"], "the selection wins over the focus");
+  assert.deepEqual(foldTargets(cards, [], "ark"), ["ark"]);
+  assert.deepEqual(foldTargets(cards, new Set(), "gpu:old"), [], "a card without details");
+  assert.deepEqual(foldTargets(cards, [], null), []);
+  assert.deepEqual(foldTargets(cards), []);
+});
+
+const gpuRow = (metrics, label = "GPU 1 · NVIDIA H20") => ({ id: "g", device: "gpu:lab", kind: "gpu", label, metrics });
+
+test("each GPU gets a full detail row: index, model, utilisation and memory bars, temperature, power, jobs", () => {
+  const d = gpuDetail(gpuRow({ index: 1, util_pct: 97, mem_used_mb: 23000, mem_total_mb: 24564, mem_ours_mb: 23000,
+    temperature_c: 77, power_w: 350.5, job: "train", ours: true }, "GPU 1 · NVIDIA GeForce RTX 4090"));
+  assert.equal(d.title, "GPU 1");
+  assert.equal(d.model, "NVIDIA GeForce RTX 4090");
+  assert.equal(d.util, 97);
+  assert.equal(d.utilTone, "danger");
+  assert.equal(Math.round(d.memPct), 94);
+  assert.equal(d.memTone, "danger");
+  assert.equal(Math.round(d.oursPct), 94);
+  assert.equal(d.temperature, 77);
+  assert.equal(d.power, 350.5);
+  assert.deepEqual(d.jobs, ["train"]);
+  assert.equal(d.ours, true);
+  const idle = gpuDetail(gpuRow({ index: 0, util_pct: 0, mem_used_mb: 0, mem_total_mb: 97871 }));
+  assert.equal(idle.utilTone, "ok");
+  assert.equal(idle.memPct, 0);
+  assert.equal(idle.temperature, null);
+  assert.equal(idle.power, null);
+  assert.deepEqual(idle.extra, []);
+  const unknown = gpuDetail(gpuRow({ index: 3, util_pct: 5, mem_used_mb: 100, mem_total_mb: null }));
+  assert.equal(unknown.memPct, null, "no total: no memory bar value");
+  assert.equal(unknown.memTone, null);
+});
+
+test("detail rows are taller than one-line rows and the card grows with them", () => {
+  const busy = gpuRow({ index: 0, util_pct: 1, mem_used_mb: 1, mem_total_mb: 2, job: "x" });
+  const idle = gpuRow({ index: 1, util_pct: 1, mem_used_mb: 1, mem_total_mb: 2 });
+  assert.equal(rowKind(idle), "gpu");
+  assert.equal(rowHeight(idle), CARD_METRICS.GPU_ROW_H);
+  assert.equal(rowHeight(busy), CARD_METRICS.GPU_ROW_H + CARD_METRICS.GPU_EXTRA_H, "a line for jobs / processes");
+  assert.equal(rowKind({ kind: "cpu", metrics: { cpu_pct: 3 } }), "cpu");
+  assert.equal(rowKind({ kind: "cpu", metrics: {} }), "line");
+  assert.equal(rowKind({ kind: "storage", metrics: { disk_pct: 40 } }), "storage");
+  assert.equal(rowKind({ kind: "storage", metrics: {} }), "line");
+  assert.equal(rowKind({ kind: "database" }), "line");
+  const { cards } = buildResourcesModel(withStorage);
+  const lab = cards.find((c) => c.id === "gpu:lab");
+  assert.deepEqual(lab.rows.map(rowKind), ["gpu", "gpu", "cpu", "storage", "storage"]);
+  assert.deepEqual(lab.rowHeights, [CARD_METRICS.GPU_ROW_H, CARD_METRICS.GPU_ROW_H,
+    CARD_METRICS.CPU_ROW_H, CARD_METRICS.STORAGE_ROW_H, CARD_METRICS.STORAGE_ROW_H]);
+  const boxes = lab.rows.map((_, i) => rowBox(lab, i));
+  for (let i = 1; i < boxes.length; i += 1) assert.equal(boxes[i].y, boxes[i - 1].y + lab.rowHeights[i - 1], `row ${i}`);
+  const last = boxes.at(-1);
+  assert.ok(last.y + last.h <= lab.h - CARD_METRICS.PAD, "rows fit in the card");
+  assert.equal(last.h, CARD_METRICS.STORAGE_ROW_H - 4);
+});
+
+test("storage bars: mount, used / total, percent, tone; the data mount is marked", () => {
+  const rows = storageResources(withStorage.devices[1]);
+  const data = storageDetail(rows[0]);
+  assert.deepEqual([data.label, data.pct, data.tone, data.data, data.used, data.total],
+    ["/data", 90, "danger", true, 9 * 2 ** 40, 10 * 2 ** 40]);
+  const root = storageDetail(rows[1]);
+  assert.deepEqual([root.label, root.pct, root.tone, root.data], ["/", 25, "ok", false]);
+  // The ARK server's project folder: sizes from the device (decimal GB).
+  const ark = { metrics: { disk_pct: 72.5, disk_used_gb: 725, disk_total_gb: 1000 } };
+  const folder = storageDetail({ kind: "storage", label: "Project folder", metrics: { disk_pct: 72.5 } }, ark);
+  assert.deepEqual([folder.pct, folder.tone, folder.used, folder.total, folder.free], [72.5, "warn", 725e9, 1000e9, 275e9]);
+  const bare = storageDetail({ kind: "storage", label: "x", metrics: { disk_pct: 10 } });
+  assert.deepEqual([bare.used, bare.total, bare.tone], [null, null, "ok"]);
+});
+
+test("bar thresholds: amber from 60%, red from 85% for GPU memory, utilisation, CPU, RAM and disks", () => {
+  assert.equal(USAGE_WARN_PCT, 60);
+  assert.equal(USAGE_DANGER_PCT, 85);
+  const tones = (pct) => [
+    gpuDetail(gpuRow({ util_pct: pct, mem_used_mb: pct, mem_total_mb: 100 })).utilTone,
+    gpuDetail(gpuRow({ util_pct: pct, mem_used_mb: pct, mem_total_mb: 100 })).memTone,
+    cpuDetail({ kind: "cpu", metrics: { cpu_pct: pct, mem_used_mb: pct, mem_total_mb: 100 } }).cpuTone,
+    cpuDetail({ kind: "cpu", metrics: { cpu_pct: pct, mem_used_mb: pct, mem_total_mb: 100 } }).ramTone,
+    storageDetail({ kind: "storage", metrics: { disk_pct: pct } }).tone,
+  ];
+  for (const [pct, tone] of [[0, "ok"], [59.9, "ok"], [60, "warn"], [84.9, "warn"], [85, "danger"], [100, "danger"]]) {
+    assert.deepEqual(tones(pct), Array(5).fill(tone), `${pct}%`);
+  }
+  assert.equal(formatMb(24564), "24 GiB");
+  assert.equal(formatMb(1100), "1.1 GiB");
+  assert.equal(formatMb(null), "?");
+});
+
+test("power, processes and jobs come from the GPU board's dashboard only when it is the same probe", () => {
+  const graph = {
+    devices: [{ id: "gpu:a", kind: "gpu-server", label: "a", probe: { probed_at: "2026-11-16T09:00:00Z", ok: true } }],
+    resources: [
+      { id: "g0", device: "gpu:a", kind: "gpu", label: "GPU 0 · X", metrics: { index: 0, util_pct: 3, temperature_c: 41 } },
+      { id: "g1", device: "gpu:a", kind: "gpu", label: "GPU 1 · X", metrics: { index: 1, util_pct: 97 } },
+      { id: "c", device: "gpu:a", kind: "cpu", label: "CPU", metrics: { cpu_pct: 3 } },
+    ],
+  };
+  const dashboard = {
+    checked_at: "2026-11-16T09:00:20Z",
+    probe: { servers: [{ server: "a", ok: true,
+      gpus: [{ index: 0, power_w: 70.25, temperature_c: 99 }, { index: 1, power_w: 350.5, temperature_c: 77 }],
+      system: { processes: [{ pid: 1234, gpu_index: 0, memory_mb: 1100, job_id: "gpu_abc", sm_pct: 12 },
+        { pid: 4567, gpu_index: 0, memory_mb: null, job_id: null, sm_pct: null }] } }] },
+    jobs: [{ id: "gpu_abc", task: "Train baseline", owner: "alice" }],
+  };
+  const merged = mergeProbeDetails(graph, dashboard);
+  const [g0, g1, cpu] = merged.resources;
+  assert.equal(g0.metrics.power_w, 70.25);
+  assert.equal(g0.metrics.temperature_c, 41, "the graph's own figure wins");
+  assert.deepEqual(g0.metrics.processes.map((p) => [p.pid, p.memory_mb, p.job, p.owner]),
+    [[1234, 1100, "Train baseline", "alice"], [4567, null, null, null]]);
+  assert.deepEqual([g1.metrics.power_w, g1.metrics.temperature_c, g1.metrics.processes], [350.5, 77, undefined]);
+  assert.equal(cpu, graph.resources[2], "other rows untouched");
+  assert.equal(graph.resources[0].metrics.power_w, undefined, "input not mutated");
+  const d = gpuDetail(g0);
+  assert.deepEqual(d.jobs, ["Train baseline"]);
+  assert.deepEqual(d.owners, ["alice"]);
+  assert.deepEqual(d.extra.map((e) => e.key), ["jobs", "owners", "processes"]);
+  // A later probe (Check now) or another server: nothing is merged.
+  assert.equal(mergeProbeDetails(graph, { ...dashboard, checked_at: "2026-11-16T09:10:00Z" }), graph);
+  assert.equal(mergeProbeDetails({ ...graph, devices: [{ ...graph.devices[0], label: "b" }] }, dashboard).resources[0].metrics.power_w, undefined);
+  assert.equal(mergeProbeDetails(graph, null), graph);
+  assert.equal(mergeProbeDetails(graph, { probe: { servers: [] } }), graph);
+});
+
+test("a server's mounts keep the probe's order (data mount first), after other storage rows", () => {
+  const p = { devices: [{ id: "gpu:s", kind: "gpu-server", storage: [
+    { mount: "/data", percent: 90, data: true }, { mount: "/", percent: 40 }, { mount: "/a", percent: 1 }] }],
+  resources: [{ id: "loc", device: "gpu:s", kind: "storage", label: "zz location" }] };
+  const [card] = buildResourcesModel(p).cards;
+  assert.deepEqual(card.rows.map((r) => r.label), ["zz location", "/data", "/", "/a"]);
+});
+
+test("bar labels: used / total in the total's unit", async () => {
+  const { formatUsedOf } = await import("../../ark_studio/web/js/resources-model.js");
+  const GiB = 2 ** 30, TiB = 2 ** 40;
+  assert.equal(formatUsedOf(11.7 * GiB, 62.5 * GiB), "11.7 / 62.5 GiB");
+  assert.equal(formatUsedOf(1000 * 2 ** 20, 95.6 * GiB), "1 / 95.6 GiB");
+  assert.equal(formatUsedOf(6.5 * TiB, 7.2 * TiB), "6.5 / 7.2 TiB");
+  assert.equal(formatUsedOf(403 * GiB, 916 * GiB), "403 / 916 GiB");
+  assert.equal(formatUsedOf(0, 24564 * 2 ** 20), "0 / 24 GiB");
+  assert.equal(formatUsedOf(null, 10 * GiB), "? / 10 GiB");
+  assert.equal(formatUsedOf(5, null), "5 B / ?");
 });
