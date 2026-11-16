@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en" data-desktop-shell="bundled">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARK Studio</title>
+  <link rel="stylesheet" href="chooser.css">
+  <script type="module" src="chooser.js"></script>
+</head>
+<body>
+  <div class="frame">
+  <header class="titlebar" data-tauri-drag-region="deep"><span class="titlebar-name">ARK Studio</span></header>
+  <div class="content" data-tauri-drag-region="deep">
+  <main class="shell">
+    <header class="brand">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="brand/ark-lockup-loading-dark.svg">
+        <img src="brand/ark-lockup-loading.svg" alt="ARK Studio" height="44">
+      </picture>
+    </header>
+
+    <div id="notice" class="note hidden" role="status"></div>
+
+    <section id="view-connect" class="card" aria-labelledby="connect-title">
+      <h1 id="connect-title" data-i18n="title">Open ARK</h1>
+      <p class="lead" data-i18n="lead">Run ARK on this computer, or connect to an ARK server.</p>
+
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" id="tab-local" aria-controls="panel-local" data-mode="local" data-i18n="tab.local">This computer</button>
+        <button type="button" role="tab" id="tab-remote" aria-controls="panel-remote" data-mode="remote" data-i18n="tab.remote">Remote server</button>
+      </div>
+
+      <form id="panel-local" class="panel" role="tabpanel" aria-labelledby="tab-local" autocomplete="off">
+        <label class="field">
+          <span data-i18n="local.folder">Project folder</span>
+          <span class="row">
+            <input id="local-root" class="input" type="text" spellcheck="false">
+            <button type="button" id="browse" class="btn" data-i18n="local.browse">Browse…</button>
+          </span>
+          <small class="hint"><span data-i18n="local.folder_hint">Your .ark projects live here.</span> <button type="button" id="use-default" class="link" data-i18n="local.use_default">Use the default folder</button></small>
+        </label>
+        <label class="field narrow">
+          <span data-i18n="local.port">Port</span>
+          <input id="local-port" class="input" type="number" min="1024" max="65535" inputmode="numeric">
+          <small class="hint" data-i18n="local.port_hint">If this port is busy, ARK picks a free one.</small>
+        </label>
+        <p id="layout-note" class="warn hidden"></p>
+        <p id="git-missing" class="warn hidden" data-i18n="local.git_missing">Git was not found on this computer. Node history and project history need Git; install it from git-scm.com and restart ARK Studio.</p>
+        <p id="server-missing" class="err hidden" data-i18n="local.server_missing">The bundled ark-server is missing. Reinstall ARK Studio.</p>
+        <button type="submit" id="start-local" class="btn primary wide" data-i18n="local.start">Start ARK</button>
+      </form>
+
+      <form id="panel-remote" class="panel hidden" role="tabpanel" aria-labelledby="tab-remote" autocomplete="off">
+        <label class="field">
+          <span data-i18n="remote.address">Server address</span>
+          <input id="remote-url" class="input" type="text" list="remote-history" placeholder="https://ark.example.com" spellcheck="false" inputmode="url">
+          <datalist id="remote-history"></datalist>
+          <small class="hint" data-i18n="remote.hint">You sign in on the server's own page. ARK Studio does not store passwords.</small>
+        </label>
+        <ul id="recent" class="recent" aria-label="Recent servers"></ul>
+        <button type="submit" id="connect-remote" class="btn primary wide" data-i18n="remote.connect">Connect</button>
+      </form>
+
+      <label class="check">
+        <input id="auto-connect" type="checkbox">
+        <span data-i18n="auto">Open this choice automatically next time</span>
+      </label>
+
+      <div id="status" class="status hidden" role="alert">
+        <p id="status-text"></p>
+        <pre id="status-log" class="log hidden"></pre>
+        <div class="row end">
+          <button type="button" id="open-anyway" class="btn hidden" data-i18n="remote.open_anyway">Open anyway</button>
+          <button type="button" id="show-log" class="btn hidden" data-i18n="log.show">Show server log</button>
+        </div>
+      </div>
+    </section>
+
+    <section id="view-settings" class="card hidden" aria-labelledby="settings-title">
+      <h1 id="settings-title" data-i18n="settings.title">Settings</h1>
+      <h2 data-i18n="settings.trusted">Folders remote servers may open</h2>
+      <p class="lead" data-i18n="settings.trusted_hint">A remote ARK page can ask to open a local file (for example a file:// link in a note). Inside these folders it opens directly; anywhere else ARK Studio asks you first.</p>
+      <ul id="roots" class="recent"></ul>
+      <button type="button" id="add-root" class="btn" data-i18n="settings.add_folder">Add folder…</button>
+
+      <h2 data-i18n="settings.window">Window</h2>
+      <label class="check">
+        <input id="close-to-tray" type="checkbox">
+        <span data-i18n="settings.close_to_tray">Keep running in the tray when the window is closed</span>
+      </label>
+
+      <h2 data-i18n="settings.data">Data</h2>
+      <p class="lead"><span data-i18n="settings.data_hint">Local projects, private keys, logs and these settings are stored in</span> <code id="data-dir"></code></p>
+      <p class="lead"><span data-i18n="settings.projects_hint">Default project folder:</span> <code id="projects-dir"></code> <span id="layout-kind"></span></p>
+      <div class="row">
+        <button type="button" id="open-data" class="btn" data-i18n="settings.open_data">Open data folder</button>
+        <button type="button" id="open-log" class="btn" data-i18n="log.show">Show server log</button>
+      </div>
+
+      <h2 data-i18n="settings.updates">Updates</h2>
+      <p id="update-text" class="lead"></p>
+      <div class="row">
+        <button type="button" id="check-update" class="btn" data-i18n="settings.check">Check for updates</button>
+        <button type="button" id="install-update" class="btn primary hidden" data-i18n="settings.install">Install and restart</button>
+      </div>
+    </section>
+
+    <footer class="foot">
+      <button type="button" id="toggle-settings" class="link" data-i18n="settings.title">Settings</button>
+      <span aria-hidden="true">·</span>
+      <span id="version"></span>
+    </footer>
+  </main>
+  </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,5070 @@
+{
+"text": [
+{
+"text": "Authorization: Bearer abcdefghijklmnop123",
+"extra": [],
+"out": "Authorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "bearer shortsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "bearer short[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mno",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "BEARER [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz",
+"extra": [],
+"out": "x bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "中bearer abcdefghijklmnop",
+"extra": [
+"supersecrettoken1"
+],
+"out": "中bearer abcdefghijklmnop",
+"n": 0
+},
+{
+"text": "arka_0123456789abcdefXYZabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:ark_token][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "中arka_0123456789abcdefgh",
+"extra": [],
+"out": "中arka_0123456789abcdefgh",
+"n": 0
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMNsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:anthropic_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]",
+"n": 1
+},
+{
+"text": "sk-1234567890abcdefghij",
+"extra": [],
+"out": "[REDACTED:openai_key]",
+"n": 1
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token]",
+"n": 1
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP",
+"extra": [],
+"out": "[REDACTED:aws_key]",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQ[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ASIA0123456789ABCDEF",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key]",
+"n": 1
+},
+{
+"text": "xoxb-1234567890-abc",
+"extra": [],
+"out": "[REDACTED:slack_token]",
+"n": 1
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu",
+"n": 0
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:jwt][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----",
+"extra": [],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "password = \"hunter2abc9\"",
+"extra": [],
+"out": "password = \"[REDACTED:credential]\"",
+"n": 1
+},
+{
+"text": "PASSWORD=abcdefgh1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "PASSWORD=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "api_key: 'xyzxyz123456'abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "api_key: '[REDACTED:credential]'[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "\"apiKey\": \"abc123def456\"",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\"",
+"n": 1
+},
+{
+"text": "secret=${SECRET_VALUE1}supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "secret=${SECRET_VALUE1}[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "token = process.env.TOKEN1",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "token = process.env.TOKEN1",
+"n": 0
+},
+{
+"text": "auth_token=getenv(X12345678)",
+"extra": [],
+"out": "auth_token=getenv(X12345678)",
+"n": 0
+},
+{
+"text": "access-token: ********",
+"extra": [
+"supersecrettoken1"
+],
+"out": "access-token: ********",
+"n": 0
+},
+{
+"text": "refresh_token=xxxxxxxxxxabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "refresh_token=xxxxxxxxxx[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "my.db_password: <redacted1>",
+"extra": [],
+"out": "my.db_password: <redacted1>",
+"n": 0
+},
+{
+"text": "passwd=onlyletterssupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=onlyletters[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "passwd=12345678",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=12345678",
+"n": 0
+},
+{
+"text": "client_secret: [REDACTED:x]1",
+"extra": [],
+"out": "client_secret: [REDACTED:x]1",
+"n": 0
+},
+{
+"text": "Ｐassword=abc12345678",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Ｐassword=abc12345678",
+"n": 0
+},
+{
+"text": "pässword=abc12345678abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "pässword=abc12345678[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ſecret=abcdefg12345",
+"extra": [],
+"out": "ſecret=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "SECRETK=abc12345678supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "key=val",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "key=val",
+"n": 0
+},
+{
+"text": "\n",
+"extra": [],
+"out": "\n",
+"n": 0
+},
+{
+"text": " ",
+"extra": [
+"supersecrettoken1"
+],
+"out": " ",
+"n": 0
+},
+{
+"text": "，abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "，[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "日本語テキスト",
+"extra": [],
+"out": "日本語テキスト",
+"n": 0
+},
+{
+"text": "😀supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "😀[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "x",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x",
+"n": 0
+},
+{
+"text": "1",
+"extra": [],
+"out": "1",
+"n": 0
+},
+{
+"text": "_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "_",
+"n": 0
+},
+{
+"text": "-abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "-[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": ".",
+"extra": [],
+"out": ".",
+"n": 0
+},
+{
+"text": "\tsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\t[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "'",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "'",
+"n": 0
+},
+{
+"text": "\"",
+"extra": [],
+"out": "\"",
+"n": 0
+},
+{
+"text": "`",
+"extra": [
+"supersecrettoken1"
+],
+"out": "`",
+"n": 0
+},
+{
+"text": ";abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ";[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "{",
+"extra": [],
+"out": "{",
+"n": 0
+},
+{
+"text": "}supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "}[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "=",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "=",
+"n": 0
+},
+{
+"text": ":",
+"extra": [],
+"out": ":",
+"n": 0
+},
+{
+"text": "xoxb-1234567890-abc_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:slack_token]_",
+"n": 1
+},
+{
+"text": "my.db_password: <redacted1>_. passwd=onlylettersaccess-token: ******** auth_token=getenv(X12345678)中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>_. passwd=onlylettersaccess-token: ******** auth_token=getenv(X12345678)中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "bearer short;_",
+"extra": [],
+"out": "bearer short;_",
+"n": 0
+},
+{
+"text": "\t_\"apiKey\": \"abc123def456\"x\nASIA0123456789ABCDEF refresh_token=xxxxxxxxxx ，_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\t_\"apiKey\": \"[REDACTED:credential]\"x\n[REDACTED:aws_key] refresh_token=xxxxxxxxxx ，_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQ\n{ secret=${SECRET_VALUE1}-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中sk-ant-api03-abcdefghijk_LMN中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQ\n{ secret=${SECRET_VALUE1}[REDACTED:private_key]中sk-ant-api03-abcdefghijk_LMN中",
+"n": 1
+},
+{
+"text": "ſecret=abcdefg12345\n` ",
+"extra": [],
+"out": "ſecret=[REDACTED:credential]\n` ",
+"n": 1
+},
+{
+"text": "， 中sk-1234567890abcdefghij_中bearer abcdefghijklmnop ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "， 中sk-1234567890abcdefghij_中bearer abcdefghijklmnop ",
+"n": 0
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN\nclient_secret: [REDACTED:x]1 abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key]\nclient_secret: [REDACTED:x]1 [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "password = \"hunter2abc9\"中` `-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY----- sk-1234567890abcdefghij-\n",
+"extra": [],
+"out": "password = \"[REDACTED:credential]\"中` `[REDACTED:private_key] [REDACTED:openai_key]\n",
+"n": 3
+},
+{
+"text": "ASIA0123456789ABCDEF x bearer zzzzzzzzzzzzzzzz supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:aws_key] x bearer [REDACTED:bearer] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "my.db_password: <redacted1>_auth_token=getenv(X12345678)\nsecret=${SECRET_VALUE1}_{ ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>_auth_token=getenv(X12345678)\nsecret=${SECRET_VALUE1}_{ ",
+"n": 0
+},
+{
+"text": "\n\nkey=val\n'_",
+"extra": [],
+"out": "\n\nkey=val\n'_",
+"n": 0
+},
+{
+"text": "passwd=onlyletterssk-1234567890abcdefghij\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=[REDACTED:credential]\n",
+"n": 1
+},
+{
+"text": "\"\"中passwd=12345678中-abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\"\"中passwd=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "\tclient_secret: [REDACTED:x]1\n",
+"extra": [],
+"out": "\tclient_secret: [REDACTED:x]1\n",
+"n": 0
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQ_ſecret=abcdefg12345refresh_token=xxxxxxxxxx_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQ_ſecret=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP中bearer short中'中\"apiKey\": \"abc123def456\"\nAKIAABCDEFGHIJKLMNOP😀",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "AKIAABCDEFGHIJKLMNOP中bearer short中'中\"apiKey\": \"[REDACTED:credential]\"\n[REDACTED:aws_key]😀",
+"n": 2
+},
+{
+"text": ":_AIzaSyA0123456789abcdefghijklmnopqrstu_",
+"extra": [],
+"out": ":_AIzaSyA0123456789abcdefghijklmnopqrstu_",
+"n": 0
+},
+{
+"text": "api_key: 'xyzxyz123456' \tsk-ant-api03-abcdefghijk_LMN",
+"extra": [
+"supersecrettoken1"
+],
+"out": "api_key: '[REDACTED:credential]' \t[REDACTED:anthropic_key]",
+"n": 2
+},
+{
+"text": "日本語テキストauth_token=getenv(X12345678)abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "日本語テキストauth_token=getenv(X12345678)[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "_ ",
+"extra": [],
+"out": "_ ",
+"n": 0
+},
+{
+"text": "} client_secret: [REDACTED:x]1 - passwd=12345678_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "} client_secret: [REDACTED:x]1 - passwd=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "=\n:中.\naccess-token: ********，bearer short\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "=\n:中.\naccess-token: ********，bearer short\n",
+"n": 0
+},
+{
+"text": "中arka_0123456789abcdefgh-----BEGIN OPENSSH PRIVATE KEY----- x bearer zzzzzzzzzzzzzzzz中",
+"extra": [],
+"out": "中arka_0123456789abcdefgh[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "}\nBEARER ABC.def-ghi_jkl~mno",
+"extra": [
+"supersecrettoken1"
+],
+"out": "}\nBEARER [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "access-token: ********\n _\npässword=abc12345678_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "access-token: ********\n _\npässword=abc12345678_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "auth_token=getenv(X12345678) ",
+"extra": [],
+"out": "auth_token=getenv(X12345678) ",
+"n": 0
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n1_\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]\n1_\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "pässword=abc12345678中日本語テキスト1_passwd=12345678\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY----- . ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "pässword=abc12345678中日本語テキスト1_passwd=12345678\n[REDACTED:private_key] . ",
+"n": 1
+},
+{
+"text": "\"apiKey\": \"abc123def456\" key=val\n",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\" key=val\n",
+"n": 1
+},
+{
+"text": "_'",
+"extra": [
+"supersecrettoken1"
+],
+"out": "_'",
+"n": 0
+},
+{
+"text": " abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": " [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu -----BEGIN RSA PRIVATE KEY-----\nabc\nAIzaSyA0123456789abcdefghijklmnopqrstu\nauth_token=getenv(X12345678)_\"中",
+"extra": [],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu [REDACTED:private_key]",
+"n": 1
+},
+{
+"text": ". supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": ". [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz\n:\ntoken = process.env.TOKEN1\n-----BEGIN RSA PRIVATE KEY-----\nabc\n\nsecret=${SECRET_VALUE1}中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x bearer [REDACTED:bearer]\n:\ntoken = process.env.TOKEN1\n[REDACTED:private_key]",
+"n": 2
+},
+{
+"text": "\n{\nghp_abcdefghijklmnopqrstuvwxyz0123\nmy.db_password: <redacted1>_=中",
+"extra": [],
+"out": "\n{\n[REDACTED:github_token]\nmy.db_password: <redacted1>_=中",
+"n": 1
+},
+{
+"text": "\t中refresh_token=xxxxxxxxxxſecret=abcdefg12345 :auth_token=getenv(X12345678)",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\t中refresh_token=xxxxxxxxxxſecret=abcdefg12345 :auth_token=getenv(X12345678)",
+"n": 0
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": " _- access-token: ********x\nſecret=abcdefg12345",
+"extra": [],
+"out": " _- access-token: ********x\nſecret=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "ASIA0123456789ABCDEF中bearer abcdefghijklmnop_password = \"hunter2abc9\" api_key: 'xyzxyz123456'supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ASIA0123456789ABCDEF中bearer abcdefghijklmnop_password = \"[REDACTED:credential]\" api_key: '[REDACTED:credential]'[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "ASIA0123456789ABCDEFmy.db_password: <redacted1>AKIAABCDEFGHIJKLMNOPQ_-----BEGIN RSA PRIVATE KEY-----\nabc\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ASIA0123456789ABCDEFmy.db_password: <redacted1>AKIAABCDEFGHIJKLMNOPQ_[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "\t中bearer abcdefghijklmnop",
+"extra": [],
+"out": "\t中bearer abcdefghijklmnop",
+"n": 0
+},
+{
+"text": "refresh_token=xxxxxxxxxxAuthorization: Bearer abcdefghijklmnop123:中AIzaSyA0123456789abcdefghijklmnopqrstu\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxxAuthorization: Bearer [REDACTED:bearer]:中AIzaSyA0123456789abcdefghijklmnopqrstu\n",
+"n": 1
+},
+{
+"text": "\"access-token: ********\n_-----BEGIN RSA PRIVATE KEY-----\nabc\n_my.db_password: <redacted1>_refresh_token=xxxxxxxxxx abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\"access-token: ********\n_[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu} ",
+"extra": [],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu} ",
+"n": 0
+},
+{
+"text": "arka_0123456789abcdefXYZsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:ark_token][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "，passwd=12345678; ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "，passwd=12345678; ",
+"n": 0
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP",
+"extra": [],
+"out": "[REDACTED:aws_key]",
+"n": 1
+},
+{
+"text": "arka_0123456789abcdefXYZ_\npasswd=12345678_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:ark_token]\npasswd=12345678_",
+"n": 1
+},
+{
+"text": "}\n\tx bearer zzzzzzzzzzzzzzzz -----BEGIN RSA PRIVATE KEY-----\nabc\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "}\n\tx bearer [REDACTED:bearer] [REDACTED:private_key]",
+"n": 4
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN中arka_0123456789abcdefgharka_0123456789abcdefXYZrefresh_token=xxxxxxxxxx\n",
+"extra": [],
+"out": "[REDACTED:anthropic_key]中arka_0123456789abcdefgharka_0123456789abcdefXYZrefresh_token=xxxxxxxxxx\n",
+"n": 1
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----中日本語テキスト 'sk-1234567890abcdefghij_PASSWORD=abcdefgh1_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop_xoxb-1234567890-abc_\"\naccess-token: ********中\"中password = \"hunter2abc9\"中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token]-1234567890-abc_\"\naccess-token: ********中\"中password = \"[REDACTED:credential]\"中",
+"n": 2
+},
+{
+"text": "refresh_token=xxxxxxxxxx\n \nASIA0123456789ABCDEF中1_日本語テキスト中password = \"hunter2abc9\"",
+"extra": [],
+"out": "refresh_token=xxxxxxxxxx\n \nASIA0123456789ABCDEF中1_日本語テキスト中password = \"[REDACTED:credential]\"",
+"n": 1
+},
+{
+"text": " } sk-ant-api03-abcdefghijk_LMNclient_secret: [REDACTED:x]1 中bearer abcdefghijklmnop\nmy.db_password: <redacted1>中",
+"extra": [
+"supersecrettoken1"
+],
+"out": " } [REDACTED:anthropic_key]: [REDACTED:x]1 中bearer abcdefghijklmnop\nmy.db_password: <redacted1>中",
+"n": 1
+},
+{
+"text": "secret=${SECRET_VALUE1} arka_0123456789abcdefXYZ_arka_0123456789abcdefXYZ_\napi_key: 'xyzxyz123456'\n中arka_0123456789abcdefgh abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "secret=${SECRET_VALUE1} [REDACTED:ark_token]\napi_key: '[REDACTED:credential]'\n中arka_0123456789abcdefgh [REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "}_client_secret: [REDACTED:x]1\n=BEARER ABC.def-ghi_jkl~mno bearer short_sk-1234567890abcdefghij",
+"extra": [],
+"out": "}_client_secret: [REDACTED:x]1\n=BEARER [REDACTED:bearer] bearer [REDACTED:bearer]",
+"n": 2
+},
+{
+"text": "pässword=abc12345678-----BEGIN RSA PRIVATE KEY-----\nabc\npässword=abc12345678_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123access-token: ******** }AKIAABCDEFGHIJKLMNOP\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token]-token: ******** }[REDACTED:aws_key]\n",
+"n": 2
+},
+{
+"text": "bearer short中SECRETK=abc12345678sk-proj-abcdefghijklmnopqrstuvwxyz.中",
+"extra": [],
+"out": "bearer short中SECRETK=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz__",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxx中secret=${SECRET_VALUE1} } 日本語テキストsecret=${SECRET_VALUE1}abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "refresh_token=xxxxxxxxxx中secret=${SECRET_VALUE1} } 日本語テキストsecret=${SECRET_VALUE1}[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "PASSWORD=abcdefgh1中AIzaSyA0123456789abcdefghijklmnopqrstu_，_secret=${SECRET_VALUE1} key=val\napi_key: 'xyzxyz123456' ",
+"extra": [],
+"out": "PASSWORD=[REDACTED:credential]{SECRET_VALUE1} key=val\napi_key: '[REDACTED:credential]' ",
+"n": 2
+},
+{
+"text": "\"apiKey\": \"abc123def456\"_\t}{ AIzaSyA0123456789abcdefghijklmnopqrstughp_abcdefghijklmnopqrstuvwxyz0123中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\"apiKey\": \"[REDACTED:credential]\"_\t}{ AIzaSyA0123456789abcdefghijklmnopqrstughp_abcdefghijklmnopqrstuvwxyz0123中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN\n中arka_0123456789abcdefgh1ghp_abcdefghijklmnopqrstuvwxyz0123",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key]\n中arka_0123456789abcdefgh1ghp_abcdefghijklmnopqrstuvwxyz0123",
+"n": 1
+},
+{
+"text": "`_secret=${SECRET_VALUE1} sk-1234567890abcdefghij中",
+"extra": [],
+"out": "`_secret=${SECRET_VALUE1} [REDACTED:openai_key]中",
+"n": 1
+},
+{
+"text": "passwd=onlyletters\n1\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=onlyletters\n1\n",
+"n": 0
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkpasswd=onlyletters_{xoxb-1234567890-abc\n'abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:jwt]=onlyletters_{[REDACTED:slack_token]\n'[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyzclient_secret: [REDACTED:x]1 ",
+"extra": [],
+"out": "[REDACTED:openai_key]: [REDACTED:x]1 ",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz key=val中token = process.env.TOKEN1\n中bearer abcdefghijklmnop中passwd=12345678PASSWORD=abcdefgh1_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x bearer [REDACTED:bearer] key=val中token = process.env.TOKEN1\n中bearer abcdefghijklmnop中passwd=[REDACTED:credential] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "PASSWORD=abcdefgh1\npässword=abc12345678AKIAABCDEFGHIJKLMNOPQ中arka_0123456789abcdefgh'_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "PASSWORD=[REDACTED:credential]\npässword=abc12345678AKIAABCDEFGHIJKLMNOPQ中arka_0123456789abcdefgh'_",
+"n": 1
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123\nbearer short中sk-proj-abcdefghijklmnopqrstuvwxyz_",
+"extra": [],
+"out": "[REDACTED:github_token]\nbearer short中sk-proj-abcdefghijklmnopqrstuvwxyz_",
+"n": 1
+},
+{
+"text": "\t _中bearer short",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\t _中bearer short",
+"n": 0
+},
+{
+"text": "passwd=onlyletters passwd=onlyletters中PASSWORD=abcdefgh1 abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=onlyletters passwd=[REDACTED:credential] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "PASSWORD=abcdefgh1\"apiKey\": \"abc123def456\"",
+"extra": [],
+"out": "PASSWORD=[REDACTED:credential]\"apiKey\": \"[REDACTED:credential]\"",
+"n": 2
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123_{\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token]_{\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": ".-----BEGIN RSA PRIVATE KEY-----\nabc\n_refresh_token=xxxxxxxxxx",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ".[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "access-token: ********\n-----BEGIN RSA PRIVATE KEY-----\nabc\nＰassword=abc12345678\"_refresh_token=xxxxxxxxxx ",
+"extra": [],
+"out": "access-token: ********\n[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "passwd=12345678refresh_token=xxxxxxxxxx_-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "SECRETK=abc12345678 pässword=abc12345678_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "SECRETK=[REDACTED:credential] pässword=abc12345678_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123access-token: ********中AIzaSyA0123456789abcdefghijklmnopqrstu  _",
+"extra": [],
+"out": "Authorization: Bearer [REDACTED:bearer]: ********中AIzaSyA0123456789abcdefghijklmnopqrstu  _",
+"n": 1
+},
+{
+"text": ".中\t\"apiKey\": \"abc123def456\"中arka_0123456789abcdefgh_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": ".中\t\"apiKey\": \"[REDACTED:credential]\"中arka_0123456789abcdefgh_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "pässword=abc12345678\ntoken = process.env.TOKEN1auth_token=getenv(X12345678)auth_token=getenv(X12345678)\naccess-token: ********token = process.env.TOKEN1\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "pässword=abc12345678\ntoken = process.env.TOKEN1auth_token=getenv(X12345678)auth_token=getenv(X12345678)\naccess-token: ********token = process.env.TOKEN1\n",
+"n": 0
+},
+{
+"text": "PASSWORD=abcdefgh1_",
+"extra": [],
+"out": "PASSWORD=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "passwd=12345678\n，{",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=12345678\n，{",
+"n": 0
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMNabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": ".中- -----BEGIN OPENSSH PRIVATE KEY-----_SECRETK=abc12345678",
+"extra": [],
+"out": ".中- [REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxx1 secret=${SECRET_VALUE1} secret=${SECRET_VALUE1}\npasswd=onlyletters\nsk-ant-api03-abcdefghijk_LMN\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxx1 secret=${SECRET_VALUE1} secret=${SECRET_VALUE1}\npasswd=onlyletters\n[REDACTED:anthropic_key]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "password = \"hunter2abc9\"_BEARER ABC.def-ghi_jkl~mno\npässword=abc12345678中bearer short中\"apiKey\": \"abc123def456\"中api_key: 'xyzxyz123456' ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "password = \"[REDACTED:credential]\"_BEARER ABC.def-ghi_jkl~mno\npässword=abc12345678中bearer short中\"apiKey\": \"[REDACTED:credential]\"中api_key: '[REDACTED:credential]' ",
+"n": 3
+},
+{
+"text": "_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk\n",
+"extra": [],
+"out": "_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk\n",
+"n": 0
+},
+{
+"text": "arka_0123456789abcdefXYZ_x bearer zzzzzzzzzzzzzzzz\n-----BEGIN OPENSSH PRIVATE KEY-----\n\"apiKey\": \"abc123def456\"\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:ark_token] bearer [REDACTED:bearer]\n[REDACTED:private_key]\n",
+"n": 3
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mno AKIAABCDEFGHIJKLMNOP api_key: 'xyzxyz123456'pässword=abc12345678eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "BEARER [REDACTED:bearer] [REDACTED:aws_key] api_key: '[REDACTED:credential]'pässword=abc12345678eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "x_{ =_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkPASSWORD=abcdefgh1ghp_abcdefghijklmnopqrstuvwxyz0123",
+"extra": [],
+"out": "x_{ =_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkPASSWORD=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "SECRETK=abc12345678\t中:supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential]\t中:[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "bearer short_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "bearer short_",
+"n": 0
+},
+{
+"text": "中arka_0123456789abcdefgh \"中access-token: ********中😀my.db_password: <redacted1> ， ",
+"extra": [],
+"out": "中arka_0123456789abcdefgh \"中access-token: ********中😀my.db_password: <redacted1> ， ",
+"n": 0
+},
+{
+"text": "client_secret: [REDACTED:x]1ghp_abcdefghijklmnopqrstuvwxyz0123AIzaSyA0123456789abcdefghijklmnopqrstu ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "client_secret: [REDACTED:x]1ghp_abcdefghijklmnopqrstuvwxyz0123AIzaSyA0123456789abcdefghijklmnopqrstu ",
+"n": 0
+},
+{
+"text": ";\nPASSWORD=abcdefgh1BEARER ABC.def-ghi_jkl~mno\n;abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ";\nPASSWORD=[REDACTED:credential] ABC.def-ghi_jkl~mno\n;[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "pässword=abc12345678-----BEGIN RSA PRIVATE KEY-----\nabc\n\n日本語テキスト;_",
+"extra": [],
+"out": "pässword=abc12345678[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "access-token: ********中ASIA0123456789ABCDEF中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "access-token: ********中ASIA0123456789ABCDEF中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "'_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "'_",
+"n": 0
+},
+{
+"text": "_ AKIAABCDEFGHIJKLMNOPQ中client_secret: [REDACTED:x]1 password = \"hunter2abc9\"_client_secret: [REDACTED:x]11\n",
+"extra": [],
+"out": "_ AKIAABCDEFGHIJKLMNOPQ中client_secret: [REDACTED:x]1 password = \"[REDACTED:credential]\"_client_secret: [REDACTED:x]11\n",
+"n": 1
+},
+{
+"text": ":ASIA0123456789ABCDEF ſecret=abcdefg12345",
+"extra": [
+"supersecrettoken1"
+],
+"out": ":[REDACTED:aws_key] ſecret=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "password = \"hunter2abc9\"_=abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "password = \"[REDACTED:credential]\"_=[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN😀中_\n",
+"extra": [],
+"out": "[REDACTED:anthropic_key]😀中_\n",
+"n": 1
+},
+{
+"text": "1\n{_AKIAABCDEFGHIJKLMNOPSECRETK=abc12345678\nPASSWORD=abcdefgh1 supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "1\n{_AKIAABCDEFGHIJKLMNOPSECRETK=[REDACTED:credential]\nPASSWORD=[REDACTED:credential] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123 BEARER ABC.def-ghi_jkl~mno中AIzaSyA0123456789abcdefghijklmnopqrstu\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token] BEARER [REDACTED:bearer]中AIzaSyA0123456789abcdefghijklmnopqrstu\n",
+"n": 2
+},
+{
+"text": "\t中:AKIAABCDEFGHIJKLMNOPQ \t_x中",
+"extra": [],
+"out": "\t中:AKIAABCDEFGHIJKLMNOPQ \t_x中",
+"n": 0
+},
+{
+"text": "bearer short-   \n\n，中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "bearer short-   \n\n，中",
+"n": 0
+},
+{
+"text": "secret=${SECRET_VALUE1}abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "secret=${SECRET_VALUE1}[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "refresh_token=xxxxxxxxxx_x\"apiKey\": \"abc123def456\"xgithub_pat_11ABCDEFG0123456789_abcdefghijklmnopASIA0123456789ABCDEF中",
+"extra": [],
+"out": "refresh_token=xxxxxxxxxx_x\"apiKey\": \"[REDACTED:credential]\"xgithub_pat_11ABCDEFG0123456789_abcdefghijklmnopASIA0123456789ABCDEF中",
+"n": 1
+},
+{
+"text": "=_sk-proj-abcdefghijklmnopqrstuvwxyz_PASSWORD=abcdefgh1 -xoxb-1234567890-abcpasswd=onlyletters_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "=_sk-proj-abcdefghijklmnopqrstuvwxyz_PASSWORD=[REDACTED:credential] -[REDACTED:slack_token]=onlyletters_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "api_key: 'xyzxyz123456' refresh_token=xxxxxxxxxx_passwd=onlyletters中😀中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "api_key: '[REDACTED:credential]' refresh_token=xxxxxxxxxx_passwd=onlyletters中😀中",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPASIA0123456789ABCDEFx ghp_abcdefghijklmnopqrstuvwxyz0123 :\n",
+"extra": [],
+"out": "AKIAABCDEFGHIJKLMNOPASIA0123456789ABCDEFx [REDACTED:github_token] :\n",
+"n": 1
+},
+{
+"text": "auth_token=getenv(X12345678) sk-1234567890abcdefghij中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "auth_token=getenv(X12345678) [REDACTED:openai_key]中",
+"n": 1
+},
+{
+"text": "passwd=onlyletters\n\n_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=onlyletters\n\n_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "\t\nghp_abcdefghijklmnopqrstuvwxyz0123",
+"extra": [],
+"out": "\t\n[REDACTED:github_token]",
+"n": 1
+},
+{
+"text": "token = process.env.TOKEN1 \"apiKey\": \"abc123def456\"\n，sk-proj-abcdefghijklmnopqrstuvwxyz_-----BEGIN OPENSSH PRIVATE KEY-----passwd=onlyletters_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "token = process.env.TOKEN1 \"apiKey\": \"[REDACTED:credential]\"\n，[REDACTED:openai_key][REDACTED:private_key]",
+"n": 5
+},
+{
+"text": "passwd=12345678中-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中arka_0123456789abcdefXYZ=",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "bearer short\n\"中AKIAABCDEFGHIJKLMNOP中}",
+"extra": [],
+"out": "bearer short\n\"中AKIAABCDEFGHIJKLMNOP中}",
+"n": 0
+},
+{
+"text": "' sk-proj-abcdefghijklmnopqrstuvwxyz\n\"",
+"extra": [
+"supersecrettoken1"
+],
+"out": "' [REDACTED:openai_key]\n\"",
+"n": 1
+},
+{
+"text": "xoxb-1234567890-abc中-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:slack_token]中[REDACTED:private_key]中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "\"_SECRETK=abc12345678\n ",
+"extra": [],
+"out": "\"_SECRETK=[REDACTED:credential]\n ",
+"n": 1
+},
+{
+"text": "`中sk-ant-api03-abcdefghijk_LMNpassword = \"hunter2abc9\"access-token: ********_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "`中sk-ant-api03-abcdefghijk_LMNpassword = \"[REDACTED:credential]\"access-token: ********_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-1234567890abcdefghij中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]中",
+"n": 1
+},
+{
+"text": "\"apiKey\": \"abc123def456\" arka_0123456789abcdefXYZ日本語テキストsecret=${SECRET_VALUE1}_auth_token=getenv(X12345678)\ntoken = process.env.TOKEN1\n",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\" [REDACTED:ark_token]日本語テキストsecret=${SECRET_VALUE1}_auth_token=getenv(X12345678)\ntoken = process.env.TOKEN1\n",
+"n": 2
+},
+{
+"text": "__sk-proj-abcdefghijklmnopqrstuvwxyz_-----BEGIN OPENSSH PRIVATE KEY----- secret=${SECRET_VALUE1}中\"_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "__sk-proj-abcdefghijklmnopqrstuvwxyz_[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "};中ſecret=abcdefg12345_ghp_abcdefghijklmnopqrstuvwxyz0123\nsk-ant-api03-abcdefghijk_LMN -----BEGIN OPENSSH PRIVATE KEY-----abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "};中ſecret=[REDACTED:credential]\n[REDACTED:anthropic_key] [REDACTED:private_key]",
+"n": 5
+},
+{
+"text": "PASSWORD=abcdefgh1\npassword = \"hunter2abc9\" ` \"github_pat_11ABCDEFG0123456789_abcdefghijklmnop ",
+"extra": [],
+"out": "PASSWORD=[REDACTED:credential]\npassword = \"[REDACTED:credential]\" ` \"[REDACTED:github_token] ",
+"n": 3
+},
+{
+"text": "password = \"hunter2abc9\"token = process.env.TOKEN1pässword=abc12345678github_pat_11ABCDEFG0123456789_abcdefghijklmnop \n中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "password = \"[REDACTED:credential]\"token = process.env.TOKEN1pässword=abc12345678github_pat_11ABCDEFG0123456789_abcdefghijklmnop \n中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": ":中ſecret=abcdefg12345token = process.env.TOKEN1 :\n-----BEGIN RSA PRIVATE KEY-----\nabc\n",
+"extra": [],
+"out": ":中ſecret=[REDACTED:credential] = process.env.TOKEN1 :\n[REDACTED:private_key]\n",
+"n": 2
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz_x bearer zzzzzzzzzzzzzzzz_， ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:openai_key] bearer [REDACTED:bearer]， ",
+"n": 2
+},
+{
+"text": "sk-1234567890abcdefghijBEARER ABC.def-ghi_jkl~mno ASIA0123456789ABCDEF\n\n\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key] ABC.def-ghi_jkl~mno [REDACTED:aws_key]\n\n\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "access-token: ********_pässword=abc12345678 `_x\n",
+"extra": [],
+"out": "access-token: ********_pässword=abc12345678 `_x\n",
+"n": 0
+},
+{
+"text": "{supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "{[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ſecret=abcdefg12345_bearer short ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ſecret=[REDACTED:credential] short ",
+"n": 1
+},
+{
+"text": "中arka_0123456789abcdefgh中",
+"extra": [],
+"out": "中arka_0123456789abcdefgh中",
+"n": 0
+},
+{
+"text": "arka_0123456789abcdefXYZ\"apiKey\": \"abc123def456\"secret=${SECRET_VALUE1}ghp_abcdefghijklmnopqrstuvwxyz0123中my.db_password: <redacted1> 中arka_0123456789abcdefgh",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:ark_token]\"apiKey\": \"[REDACTED:credential]\"secret=${SECRET_VALUE1}[REDACTED:github_token]中my.db_password: <redacted1> 中arka_0123456789abcdefgh",
+"n": 3
+},
+{
+"text": "xoxb-1234567890-abc\nkey=val中arka_0123456789abcdefXYZ_pässword=abc12345678_sk-1234567890abcdefghij_client_secret: [REDACTED:x]1abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:slack_token]\nkey=val中arka_0123456789abcdefXYZ_pässword=abc12345678_sk-1234567890abcdefghij_client_secret: [REDACTED:x]1[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "日本語テキスト_-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中ſecret=abcdefg12345\npasswd=onlyletters中-----BEGIN RSA PRIVATE KEY-----\nabc\n\n中bearer abcdefghijklmnop",
+"extra": [],
+"out": "日本語テキスト_[REDACTED:private_key]中ſecret=[REDACTED:credential]\npasswd=onlyletters中[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "_中中bearer abcdefghijklmnopghp_abcdefghijklmnopqrstuvwxyz0123 access-token: ******** \" supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "_中中bearer abcdefghijklmnopghp_abcdefghijklmnopqrstuvwxyz0123 access-token: ******** \" [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "\n ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\n ",
+"n": 0
+},
+{
+"text": "1_中bearer abcdefghijklmnop\nsk-ant-api03-abcdefghijk_LMN ",
+"extra": [],
+"out": "1_中bearer abcdefghijklmnop\n[REDACTED:anthropic_key] ",
+"n": 1
+},
+{
+"text": "PASSWORD=abcdefgh1中x bearer zzzzzzzzzzzzzzzz中-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----'\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "PASSWORD=[REDACTED:credential] bearer [REDACTED:bearer]中[REDACTED:private_key]'\n",
+"n": 3
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token]中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "}\n_client_secret: [REDACTED:x]1\nASIA0123456789ABCDEF中AKIAABCDEFGHIJKLMNOPQmy.db_password: <redacted1>\n",
+"extra": [],
+"out": "}\n_client_secret: [REDACTED:x]1\nASIA0123456789ABCDEF中AKIAABCDEFGHIJKLMNOPQmy.db_password: <redacted1>\n",
+"n": 0
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:openai_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ſecret=abcdefg12345sk-ant-api03-abcdefghijk_LMN中'x ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ſecret=[REDACTED:credential]'x ",
+"n": 1
+},
+{
+"text": "- \t_中arka_0123456789abcdefgh auth_token=getenv(X12345678)中pässword=abc12345678",
+"extra": [],
+"out": "- \t_中arka_0123456789abcdefgh auth_token=getenv(X12345678)中pässword=abc12345678",
+"n": 0
+},
+{
+"text": "refresh_token=xxxxxxxxxx_  {\n中bearer abcdefghijklmnop\nsk-ant-api03-abcdefghijk_LMN_my.db_password: <redacted1>",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxx_  {\n中bearer abcdefghijklmnop\n[REDACTED:anthropic_key].db_password: <redacted1>",
+"n": 1
+},
+{
+"text": "secret=${SECRET_VALUE1}中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "secret=${SECRET_VALUE1}中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP_}中passwd=onlyletters_sk-ant-api03-abcdefghijk_LMN\nsk-ant-api03-abcdefghijk_LMN AKIAABCDEFGHIJKLMNOPQ\n",
+"extra": [],
+"out": "AKIAABCDEFGHIJKLMNOP_}中passwd=[REDACTED:credential]\n[REDACTED:anthropic_key] AKIAABCDEFGHIJKLMNOPQ\n",
+"n": 2
+},
+{
+"text": "\" access-token: ********\n，xoxb-1234567890-abcpasswd=12345678中github_pat_11ABCDEFG0123456789_abcdefghijklmnop_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\" access-token: ********\n，[REDACTED:slack_token]=12345678中github_pat_11ABCDEFG0123456789_abcdefghijklmnop_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-\" \"apiKey\": \"abc123def456\"\"\nghp_abcdefghijklmnopqrstuvwxyz0123_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "-\" \"apiKey\": \"[REDACTED:credential]\"\"\n[REDACTED:github_token]_",
+"n": 2
+},
+{
+"text": "passwd=12345678 client_secret: [REDACTED:x]1中",
+"extra": [],
+"out": "passwd=12345678 client_secret: [REDACTED:x]1中",
+"n": 0
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:jwt] ",
+"n": 1
+},
+{
+"text": "pässword=abc123456781， abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "pässword=abc123456781， [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY----- 😀_\"中PASSWORD=abcdefgh1中",
+"extra": [],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop \t secret=${SECRET_VALUE1}_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token] \t secret=${SECRET_VALUE1}_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": ": arka_0123456789abcdefXYZ\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ": [REDACTED:ark_token]\n",
+"n": 1
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123",
+"extra": [],
+"out": "Authorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP中bearer short;中api_key: 'xyzxyz123456'_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOP中bearer short;中api_key: '[REDACTED:credential]'_",
+"n": 1
+},
+{
+"text": "access-token: ******** arka_0123456789abcdefXYZ中auth_token=getenv(X12345678)abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "access-token: ******** [REDACTED:ark_token]中auth_token=getenv(X12345678)[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-",
+"extra": [],
+"out": "-",
+"n": 0
+},
+{
+"text": "，_sk-ant-api03-abcdefghijk_LMN ſecret=abcdefg12345;key=val中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "，_sk-ant-api03-abcdefghijk_LMN ſecret=[REDACTED:credential];key=val中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "}中github_pat_11ABCDEFG0123456789_abcdefghijklmnop\nsk-ant-api03-abcdefghijk_LMN",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "}中github_pat_11ABCDEFG0123456789_abcdefghijklmnop\n[REDACTED:anthropic_key]",
+"n": 1
+},
+{
+"text": "  ſecret=abcdefg12345中中bearer abcdefghijklmnop_😀\nAIzaSyA0123456789abcdefghijklmnopqrstu\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----",
+"extra": [],
+"out": "  ſecret=[REDACTED:credential] abcdefghijklmnop_😀\nAIzaSyA0123456789abcdefghijklmnopqrstu\n[REDACTED:private_key]",
+"n": 2
+},
+{
+"text": "xoxb-1234567890-abc}\n-----BEGIN RSA PRIVATE KEY-----\nabc\npasswd=onlyletters Ｐassword=abc12345678_token = process.env.TOKEN1\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:slack_token]}\n[REDACTED:private_key]\n",
+"n": 2
+},
+{
+"text": "}\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "}\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\nsk-proj-abcdefghijklmnopqrstuvwxyzmy.db_password: <redacted1> Authorization: Bearer abcdefghijklmnop123ASIA0123456789ABCDEF_-",
+"extra": [],
+"out": "[REDACTED:private_key]\n[REDACTED:openai_key].db_password: <redacted1> Authorization: Bearer [REDACTED:bearer]",
+"n": 3
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP1PASSWORD=abcdefgh1\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\nkey=valsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOP1PASSWORD=[REDACTED:credential]\n[REDACTED:private_key]\nkey=val[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "SECRETK=abc12345678 ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "SECRETK=[REDACTED:credential] ",
+"n": 1
+},
+{
+"text": "passwd=12345678-中-----BEGIN OPENSSH PRIVATE KEY----- ",
+"extra": [],
+"out": "passwd=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mnosecret=${SECRET_VALUE1}中my.db_password: <redacted1>\nx bearer zzzzzzzzzzzzzzzz_-----BEGIN RSA PRIVATE KEY-----\nabc\n-\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "BEARER [REDACTED:bearer]${SECRET_VALUE1}中my.db_password: <redacted1>\nx bearer [REDACTED:bearer][REDACTED:private_key]\n",
+"n": 3
+},
+{
+"text": "my.db_password: <redacted1>abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "api_key: 'xyzxyz123456'_client_secret: [REDACTED:x]1 ",
+"extra": [],
+"out": "api_key: '[REDACTED:credential]'_client_secret: [REDACTED:x]1 ",
+"n": 1
+},
+{
+"text": "x supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "api_key: 'xyzxyz123456' '中x_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "api_key: '[REDACTED:credential]' '中x_",
+"n": 1
+},
+{
+"text": "ſecret=abcdefg12345_passwd=12345678sk-1234567890abcdefghij中",
+"extra": [],
+"out": "ſecret=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "SECRETK=abc12345678pässword=abc12345678\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential]\n",
+"n": 1
+},
+{
+"text": "auth_token=getenv(X12345678)中key=val =\nrefresh_token=xxxxxxxxxxtoken = process.env.TOKEN1中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "auth_token=getenv(X12345678)中key=val =\nrefresh_token=xxxxxxxxxxtoken = process.env.TOKEN1中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk AKIAABCDEFGHIJKLMNOP中sk-1234567890abcdefghij",
+"extra": [],
+"out": "[REDACTED:jwt] AKIAABCDEFGHIJKLMNOP中sk-1234567890abcdefghij",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxxxoxb-1234567890-abcsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxxxoxb-1234567890-abc[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ſecret=abcdefg12345中access-token: ******** ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ſecret=[REDACTED:credential] ******** ",
+"n": 1
+},
+{
+"text": "PASSWORD=abcdefgh1SECRETK=abc12345678_bearer short",
+"extra": [],
+"out": "PASSWORD=[REDACTED:credential] short",
+"n": 1
+},
+{
+"text": "_ SECRETK=abc12345678_ASIA0123456789ABCDEF\n，\n\n_arka_0123456789abcdefXYZ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "_ SECRETK=[REDACTED:credential]\n，\n\n_arka_0123456789abcdefXYZ",
+"n": 1
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop中-----BEGIN OPENSSH PRIVATE KEY-----\nAKIAABCDEFGHIJKLMNOP abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token]中[REDACTED:private_key]",
+"n": 4
+},
+{
+"text": "`中BEARER ABC.def-ghi_jkl~mno中x bearer zzzzzzzzzzzzzzzz}\n",
+"extra": [],
+"out": "`中BEARER ABC.def-ghi_jkl~mno中x bearer [REDACTED:bearer]}\n",
+"n": 1
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Authorization: Bearer [REDACTED:bearer][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY----- client_secret: [REDACTED:x]1，_AIzaSyA0123456789abcdefghijklmnopqrstu中arka_0123456789abcdefghaccess-token: ********",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "\n\n",
+"extra": [],
+"out": "\n\n",
+"n": 0
+},
+{
+"text": "'_password = \"hunter2abc9\" \"😀 \t中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "'_password = \"[REDACTED:credential]\" \"😀 \t中",
+"n": 1
+},
+{
+"text": "=_access-token: ********-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "=_access-token: ********[REDACTED:private_key]中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "😀\n{\n-_github_pat_11ABCDEFG0123456789_abcdefghijklmnop___;_",
+"extra": [],
+"out": "😀\n{\n-_github_pat_11ABCDEFG0123456789_abcdefghijklmnop___;_",
+"n": 0
+},
+{
+"text": "pässword=abc12345678_\t \"apiKey\": \"abc123def456\"Ｐassword=abc12345678 AKIAABCDEFGHIJKLMNOPQ_key=val中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678_\t \"apiKey\": \"[REDACTED:credential]\"Ｐassword=abc12345678 AKIAABCDEFGHIJKLMNOPQ_key=val中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "my.db_password: <redacted1>中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>中",
+"n": 0
+},
+{
+"text": "` sk-1234567890abcdefghij\n中bearer abcdefghijklmnop\ngithub_pat_11ABCDEFG0123456789_abcdefghijklmnop\n",
+"extra": [],
+"out": "` [REDACTED:openai_key]\n中bearer abcdefghijklmnop\n[REDACTED:github_token]\n",
+"n": 2
+},
+{
+"text": "SECRETK=abc12345678\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential]\n",
+"n": 1
+},
+{
+"text": "Ｐassword=abc12345678-----BEGIN OPENSSH PRIVATE KEY-----\nclient_secret: [REDACTED:x]1\n \nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "Ｐassword=abc12345678[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "PASSWORD=abcdefgh1_auth_token=getenv(X12345678)_bearer short .中",
+"extra": [],
+"out": "PASSWORD=abcdefgh1_auth_token=getenv(X12345678)_bearer short .中",
+"n": 0
+},
+{
+"text": "access-token: ********token = process.env.TOKEN1 \"_1supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "access-token: ********token = process.env.TOKEN1 \"_1[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": " 中sk-1234567890abcdefghij ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": " 中sk-1234567890abcdefghij ",
+"n": 0
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopsk-proj-abcdefghijklmnopqrstuvwxyz_",
+"extra": [],
+"out": "[REDACTED:github_token]-proj-abcdefghijklmnopqrstuvwxyz_",
+"n": 1
+},
+{
+"text": "key=val.1\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "key=val.1\n",
+"n": 0
+},
+{
+"text": "Ｐassword=abc12345678中`中arka_0123456789abcdefgh\nghp_abcdefghijklmnopqrstuvwxyz0123_ghp_abcdefghijklmnopqrstuvwxyz0123bearer short中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "Ｐassword=abc12345678中`中arka_0123456789abcdefgh\n[REDACTED:github_token]_ghp_abcdefghijklmnopqrstuvwxyz0123bearer short中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "1\n",
+"extra": [],
+"out": "1\n",
+"n": 0
+},
+{
+"text": "=\n，\ntoken = process.env.TOKEN1SECRETK=abc12345678_refresh_token=xxxxxxxxxxarka_0123456789abcdefXYZ supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "=\n，\ntoken = process.env.TOKEN1SECRETK=[REDACTED:credential] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ASIA0123456789ABCDEF \n\n= passwd=12345678ASIA0123456789ABCDEF\nghp_abcdefghijklmnopqrstuvwxyz0123 ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key] \n\n= passwd=[REDACTED:credential]\n[REDACTED:github_token] ",
+"n": 3
+},
+{
+"text": "SECRETK=abc12345678_-\n\n-----BEGIN RSA PRIVATE KEY-----\nabc\n\nSECRETK=abc12345678 ",
+"extra": [],
+"out": "SECRETK=[REDACTED:credential]\n\n[REDACTED:private_key]",
+"n": 2
+},
+{
+"text": ":-----BEGIN RSA PRIVATE KEY-----\nabc\n_\nPASSWORD=abcdefgh1 ",
+"extra": [
+"supersecrettoken1"
+],
+"out": ":[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "passwd=12345678_AKIAABCDEFGHIJKLMNOPQ_sk-ant-api03-abcdefghijk_LMN=中xpässword=abc12345678 abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=[REDACTED:credential] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-中key=val_xoxb-1234567890-abc",
+"extra": [],
+"out": "-中key=val_xoxb-1234567890-abc",
+"n": 0
+},
+{
+"text": "xſecret=abcdefg12345\nsk-ant-api03-abcdefghijk_LMN_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "xſecret=[REDACTED:credential]\n[REDACTED:anthropic_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "{ghp_abcdefghijklmnopqrstuvwxyz0123password = \"hunter2abc9\"",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "{[REDACTED:github_token] = \"hunter2abc9\"",
+"n": 1
+},
+{
+"text": ":\n._😀中",
+"extra": [],
+"out": ":\n._😀中",
+"n": 0
+},
+{
+"text": "refresh_token=xxxxxxxxxx",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxx",
+"n": 0
+},
+{
+"text": "SECRETK=abc12345678auth_token=getenv(X12345678)x bearer zzzzzzzzzzzzzzzzabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "SECRETK=abc12345678auth_token=getenv(X12345678)x bearer [REDACTED:bearer][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": ";中\"apiKey\": \"abc123def456\" 中arka_0123456789abcdefgh\n\n\nsk-proj-abcdefghijklmnopqrstuvwxyzxoxb-1234567890-abc",
+"extra": [],
+"out": ";中\"apiKey\": \"[REDACTED:credential]\" 中arka_0123456789abcdefgh\n\n\n[REDACTED:openai_key]",
+"n": 2
+},
+{
+"text": "x_password = \"hunter2abc9\"arka_0123456789abcdefXYZ\n:中-----BEGIN OPENSSH PRIVATE KEY----------BEGIN RSA PRIVATE KEY-----\nabc\n_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x_password = \"[REDACTED:credential]\"[REDACTED:ark_token]\n:中[REDACTED:private_key]",
+"n": 5
+},
+{
+"text": "中arka_0123456789abcdefgh\nx bearer zzzzzzzzzzzzzzzz_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "中arka_0123456789abcdefgh\nx bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "中arka_0123456789abcdefgh\n",
+"extra": [],
+"out": "中arka_0123456789abcdefgh\n",
+"n": 0
+},
+{
+"text": "api_key: 'xyzxyz123456' -:\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "api_key: '[REDACTED:credential]' -:\n",
+"n": 1
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyzclient_secret: [REDACTED:x]1abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]: [REDACTED:x]1[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "token = process.env.TOKEN1中",
+"extra": [],
+"out": "token = process.env.TOKEN1中",
+"n": 0
+},
+{
+"text": "😀x_api_key: 'xyzxyz123456'\nghp_abcdefghijklmnopqrstuvwxyz0123中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "😀x_api_key: '[REDACTED:credential]'\n[REDACTED:github_token]中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "password = \"hunter2abc9\"_xoxb-1234567890-abc中_中ghp_abcdefghijklmnopqrstuvwxyz0123'",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "password = \"[REDACTED:credential]\"_xoxb-1234567890-abc中_中ghp_abcdefghijklmnopqrstuvwxyz0123'",
+"n": 1
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n} ",
+"extra": [],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "sk-1234567890abcdefghij",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:openai_key]",
+"n": 1
+},
+{
+"text": "SECRETK=abc12345678日本語テキスト\nAKIAABCDEFGHIJKLMNOPQxoxb-1234567890-abc_中arka_0123456789abcdefgh abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "SECRETK=[REDACTED:credential]\nAKIAABCDEFGHIJKLMNOPQxoxb-1234567890-abc_中arka_0123456789abcdefgh [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "\n eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk '\npasswd=onlyletters refresh_token=xxxxxxxxxx\nPASSWORD=abcdefgh1 ",
+"extra": [],
+"out": "\n [REDACTED:jwt] '\npasswd=onlyletters refresh_token=xxxxxxxxxx\nPASSWORD=[REDACTED:credential] ",
+"n": 2
+},
+{
+"text": "\n\ntoken = process.env.TOKEN1中中bearer abcdefghijklmnop_AKIAABCDEFGHIJKLMNOPQ_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijksupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\n\ntoken = process.env.TOKEN1中中bearer abcdefghijklmnop_AKIAABCDEFGHIJKLMNOPQ_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "Ｐassword=abc12345678\narka_0123456789abcdefXYZ passwd=onlyletters_:_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "Ｐassword=abc12345678\n[REDACTED:ark_token] passwd=onlyletters_:_",
+"n": 1
+},
+{
+"text": "1",
+"extra": [],
+"out": "1",
+"n": 0
+},
+{
+"text": "}\nsk-proj-abcdefghijklmnopqrstuvwxyz",
+"extra": [
+"supersecrettoken1"
+],
+"out": "}\n[REDACTED:openai_key]",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxx eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "refresh_token=xxxxxxxxxx [REDACTED:jwt]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "😀secret=${SECRET_VALUE1}_",
+"extra": [],
+"out": "😀secret=${SECRET_VALUE1}_",
+"n": 0
+},
+{
+"text": "secret=${SECRET_VALUE1} access-token: ********中-----BEGIN OPENSSH PRIVATE KEY-----中AKIAABCDEFGHIJKLMNOPQ client_secret: [REDACTED:x]1\n:\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "secret=${SECRET_VALUE1} access-token: ********中[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "x_-----BEGIN RSA PRIVATE KEY-----\nabc\n-eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk .",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x_[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQ'{ - ",
+"extra": [],
+"out": "AKIAABCDEFGHIJKLMNOPQ'{ - ",
+"n": 0
+},
+{
+"text": ";中SECRETK=abc12345678\n{_中sk-proj-abcdefghijklmnopqrstuvwxyz passwd=12345678 ",
+"extra": [
+"supersecrettoken1"
+],
+"out": ";中SECRETK=[REDACTED:credential]\n{_中sk-proj-abcdefghijklmnopqrstuvwxyz passwd=12345678 ",
+"n": 1
+},
+{
+"text": "bearer short中__abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "bearer short中__[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "\nrefresh_token=xxxxxxxxxx PASSWORD=abcdefgh1_",
+"extra": [],
+"out": "\nrefresh_token=xxxxxxxxxx PASSWORD=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "passwd=12345678\nＰassword=abc12345678Authorization: Bearer abcdefghijklmnop123 BEARER ABC.def-ghi_jkl~mno supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=12345678\nＰassword=abc12345678Authorization: Bearer [REDACTED:bearer] BEARER [REDACTED:bearer] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "sk-1234567890abcdefghij\n_\"\nkey=val\nASIA0123456789ABCDEF;_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]\n_\"\nkey=val\n[REDACTED:aws_key];_",
+"n": 2
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz\nrefresh_token=xxxxxxxxxx secret=${SECRET_VALUE1}\n\"\n日本語テキスト中",
+"extra": [],
+"out": "[REDACTED:openai_key]\nrefresh_token=xxxxxxxxxx secret=${SECRET_VALUE1}\n\"\n日本語テキスト中",
+"n": 1
+},
+{
+"text": "passwd=onlylettersＰassword=abc12345678日本語テキスト\n_token = process.env.TOKEN1 }",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=[REDACTED:credential]\n_token = process.env.TOKEN1 }",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxx\n-----BEGIN OPENSSH PRIVATE KEY-----'SECRETK=abc12345678中} abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "refresh_token=xxxxxxxxxx\n[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "\n_api_key: 'xyzxyz123456'\n",
+"extra": [],
+"out": "\n_api_key: '[REDACTED:credential]'\n",
+"n": 1
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkpasswd=12345678_access-token: ******** :_.\n;中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:jwt]=12345678_access-token: ******** :_.\n;中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN =_github_pat_11ABCDEFG0123456789_abcdefghijklmnop",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key] =_github_pat_11ABCDEFG0123456789_abcdefghijklmnop",
+"n": 1
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中bearer abcdefghijklmnop_\"apiKey\": \"abc123def456\"中ſecret=abcdefg12345 }\npasswd=onlyletters",
+"extra": [],
+"out": "[REDACTED:private_key]中bearer abcdefghijklmnop_\"apiKey\": \"[REDACTED:credential]\"中ſecret=[REDACTED:credential] }\npasswd=onlyletters",
+"n": 3
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu",
+"n": 0
+},
+{
+"text": "=   \n\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "=   \n\n[REDACTED:jwt][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": ". pässword=abc12345678日本語テキスト\n-\n",
+"extra": [],
+"out": ". pässword=abc12345678日本語テキスト\n-\n",
+"n": 0
+},
+{
+"text": "x\nſecret=abcdefg12345sk-ant-api03-abcdefghijk_LMN中eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_arka_0123456789abcdefXYZsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x\nſecret=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "SECRETK=abc12345678{\npasswd=12345678 _\naccess-token: ********sk-ant-api03-abcdefghijk_LMN中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "SECRETK=[REDACTED:credential]{\npasswd=12345678 _\naccess-token: ********[REDACTED:anthropic_key]中",
+"n": 2
+},
+{
+"text": "日本語テキスト_日本語テキストAuthorization: Bearer abcdefghijklmnop123_1\n",
+"extra": [],
+"out": "日本語テキスト_日本語テキストAuthorization: Bearer [REDACTED:bearer]\n",
+"n": 1
+},
+{
+"text": "Ｐassword=abc12345678 arka_0123456789abcdefXYZ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Ｐassword=abc12345678 [REDACTED:ark_token]",
+"n": 1
+},
+{
+"text": "_\nghp_abcdefghijklmnopqrstuvwxyz0123 abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "_\n[REDACTED:github_token] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "}中pässword=abc12345678中`}token = process.env.TOKEN1\n",
+"extra": [],
+"out": "}中pässword=abc12345678中`}token = process.env.TOKEN1\n",
+"n": 0
+},
+{
+"text": "\" passwd=onlyletters_sk-ant-api03-abcdefghijk_LMN_中arka_0123456789abcdefghsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\" passwd=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ASIA0123456789ABCDEFsk-1234567890abcdefghij -----BEGIN OPENSSH PRIVATE KEY-----",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ASIA0123456789ABCDEFsk-1234567890abcdefghij [REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mno中Authorization: Bearer abcdefghijklmnop123-----BEGIN RSA PRIVATE KEY-----\nabc\n\n",
+"extra": [],
+"out": "BEARER [REDACTED:bearer]中Authorization: Bearer [REDACTED:bearer][REDACTED:private_key]\n",
+"n": 3
+},
+{
+"text": "pässword=abc12345678_`api_key: 'xyzxyz123456' 1\n\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678_`api_key: '[REDACTED:credential]' 1\n\n",
+"n": 1
+},
+{
+"text": "中arka_0123456789abcdefgh\n\"\"apiKey\": \"abc123def456\"中access-token: ********password = \"hunter2abc9\"\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "中arka_0123456789abcdefgh\n\"\"apiKey\": \"[REDACTED:credential]\"中access-token: ********password = \"hunter2abc9\"\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "中arka_0123456789abcdefgh 中bearer abcdefghijklmnop\n",
+"extra": [],
+"out": "中arka_0123456789abcdefgh 中bearer abcdefghijklmnop\n",
+"n": 0
+},
+{
+"text": "x中sk-proj-abcdefghijklmnopqrstuvwxyz_ghp_abcdefghijklmnopqrstuvwxyz0123中-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n，ASIA0123456789ABCDEF中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x中sk-proj-abcdefghijklmnopqrstuvwxyz_ghp_abcdefghijklmnopqrstuvwxyz0123中[REDACTED:private_key]\n，ASIA0123456789ABCDEF中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "- 中arka_0123456789abcdefghAKIAABCDEFGHIJKLMNOP 中arka_0123456789abcdefgh_Ｐassword=abc12345678\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "- 中arka_0123456789abcdefghAKIAABCDEFGHIJKLMNOP 中arka_0123456789abcdefgh_Ｐassword=abc12345678\n",
+"n": 0
+},
+{
+"text": "\"apiKey\": \"abc123def456\"\n",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\"\n",
+"n": 1
+},
+{
+"text": "my.db_password: <redacted1> BEARER ABC.def-ghi_jkl~mno",
+"extra": [
+"supersecrettoken1"
+],
+"out": "my.db_password: <redacted1> BEARER [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "key=val中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "key=val中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "refresh_token=xxxxxxxxxx中sk-1234567890abcdefghij access-token: ********中token = process.env.TOKEN1 key=val\n`\n",
+"extra": [],
+"out": "refresh_token=xxxxxxxxxx中sk-1234567890abcdefghij access-token: ********中token = process.env.TOKEN1 key=val\n`\n",
+"n": 0
+},
+{
+"text": "'_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "'_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key] ",
+"n": 1
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123中`",
+"extra": [],
+"out": "[REDACTED:github_token]中`",
+"n": 1
+},
+{
+"text": "bearer short中`中{\n-\t",
+"extra": [
+"supersecrettoken1"
+],
+"out": "bearer short中`中{\n-\t",
+"n": 0
+},
+{
+"text": "ASIA0123456789ABCDEFabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "Ｐassword=abc12345678 my.db_password: <redacted1>_pässword=abc12345678中xoxb-1234567890-abcx bearer zzzzzzzzzzzzzzzz",
+"extra": [],
+"out": "Ｐassword=abc12345678 my.db_password: <redacted1>_pässword=abc12345678中xoxb-1234567890-abcx bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "{中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "{中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "------BEGIN OPENSSH PRIVATE KEY-----\n.\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "-[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "auth_token=getenv(X12345678)\n中bearer abcdefghijklmnop\nx_",
+"extra": [],
+"out": "auth_token=getenv(X12345678)\n中bearer abcdefghijklmnop\nx_",
+"n": 0
+},
+{
+"text": "ASIA0123456789ABCDEF x;中AKIAABCDEFGHIJKLMNOP -----BEGIN RSA PRIVATE KEY-----\nabc\n中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:aws_key] x;中AKIAABCDEFGHIJKLMNOP [REDACTED:private_key]",
+"n": 2
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中1中access-token: ********_secret=${SECRET_VALUE1}\t abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]中1中access-token: ********_secret=${SECRET_VALUE1}\t [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "pässword=abc12345678中bearer abcdefghijklmnop\n",
+"extra": [],
+"out": "pässword=abc12345678中bearer abcdefghijklmnop\n",
+"n": 0
+},
+{
+"text": "._-----BEGIN OPENSSH PRIVATE KEY-----access-token: ********supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "._[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": ".-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中;_SECRETK=abc12345678\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ".[REDACTED:private_key]中;_SECRETK=[REDACTED:credential]\n",
+"n": 2
+},
+{
+"text": " \"\"apiKey\": \"abc123def456\"\ngithub_pat_11ABCDEFG0123456789_abcdefghijklmnop\n\n`",
+"extra": [],
+"out": " \"\"apiKey\": \"[REDACTED:credential]\"\n[REDACTED:github_token]\n\n`",
+"n": 2
+},
+{
+"text": "passwd=12345678 github_pat_11ABCDEFG0123456789_abcdefghijklmnop ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=12345678 [REDACTED:github_token] ",
+"n": 1
+},
+{
+"text": "\"apiKey\": \"abc123def456\" client_secret: [REDACTED:x]1 BEARER ABC.def-ghi_jkl~mnotoken = process.env.TOKEN1中token = process.env.TOKEN1中PASSWORD=abcdefgh1_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\"apiKey\": \"[REDACTED:credential]\" client_secret: [REDACTED:x]1 BEARER [REDACTED:bearer] = process.env.TOKEN1中token = process.env.TOKEN1中PASSWORD=[REDACTED:credential] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz\n日本語テキストAIzaSyA0123456789abcdefghijklmnopqrstuſecret=abcdefg12345",
+"extra": [],
+"out": "x bearer [REDACTED:bearer]\n日本語テキストAIzaSyA0123456789abcdefghijklmnopqrstuſecret=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQ_-----BEGIN OPENSSH PRIVATE KEY-----中AKIAABCDEFGHIJKLMNOPclient_secret: [REDACTED:x]1supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQ_[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "PASSWORD=abcdefgh1 :eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk -----BEGIN OPENSSH PRIVATE KEY-----",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "PASSWORD=[REDACTED:credential] :[REDACTED:jwt] [REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu中;中",
+"extra": [],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu中;中",
+"n": 0
+},
+{
+"text": "ſecret=abcdefg12345sk-ant-api03-abcdefghijk_LMN\npassword = \"hunter2abc9\";=中，\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ſecret=[REDACTED:credential]\npassword = \"[REDACTED:credential]\";=中，\n",
+"n": 2
+},
+{
+"text": "ASIA0123456789ABCDEFabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ſecret=abcdefg12345_arka_0123456789abcdefXYZ_",
+"extra": [],
+"out": "ſecret=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQ\n=_pässword=abc12345678\n{ supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQ\n=_pässword=abc12345678\n{ [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "{_ſecret=abcdefg12345xＰassword=abc12345678eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_'",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "{_ſecret=[REDACTED:credential]'",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz",
+"extra": [],
+"out": "x bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123 😀_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token] 😀_",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz日本語テキストAKIAABCDEFGHIJKLMNOP abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x bearer [REDACTED:bearer]日本語テキストAKIAABCDEFGHIJKLMNOP [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "PASSWORD=abcdefgh1_",
+"extra": [],
+"out": "PASSWORD=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "，_，}_refresh_token=xxxxxxxxxxsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "，_，}_refresh_token=xxxxxxxxxx[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "secret=${SECRET_VALUE1}中AIzaSyA0123456789abcdefghijklmnopqrstu中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "secret=${SECRET_VALUE1}中AIzaSyA0123456789abcdefghijklmnopqrstu中",
+"n": 0
+},
+{
+"text": "_ ",
+"extra": [],
+"out": "_ ",
+"n": 0
+},
+{
+"text": "ASIA0123456789ABCDEFBEARER ABC.def-ghi_jkl~mno .\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ASIA0123456789ABCDEFBEARER ABC.def-ghi_jkl~mno .\n",
+"n": 0
+},
+{
+"text": "中bearer abcdefghijklmnop中my.db_password: <redacted1>\"apiKey\": \"abc123def456\"中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "中bearer abcdefghijklmnop中my.db_password: <redacted1>\"apiKey\": \"[REDACTED:credential]\"中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "password = \"hunter2abc9\" ",
+"extra": [],
+"out": "password = \"[REDACTED:credential]\" ",
+"n": 1
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----中-----BEGIN OPENSSH PRIVATE KEY-----\n\tsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "  AIzaSyA0123456789abcdefghijklmnopqrstu x bearer zzzzzzzzzzzzzzzz\n日本語テキスト\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "  AIzaSyA0123456789abcdefghijklmnopqrstu x bearer [REDACTED:bearer]\n日本語テキスト\n",
+"n": 1
+},
+{
+"text": "日本語テキスト AKIAABCDEFGHIJKLMNOPQ AIzaSyA0123456789abcdefghijklmnopqrstu\n😀 arka_0123456789abcdefXYZ",
+"extra": [],
+"out": "日本語テキスト AKIAABCDEFGHIJKLMNOPQ AIzaSyA0123456789abcdefghijklmnopqrstu\n😀 [REDACTED:ark_token]",
+"n": 1
+},
+{
+"text": "SECRETK=abc12345678;\nbearer short",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential];\nbearer short",
+"n": 1
+},
+{
+"text": "_\n}-----BEGIN OPENSSH PRIVATE KEY-----中arka_0123456789abcdefgh abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "_\n}[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "{中",
+"extra": [],
+"out": "{中",
+"n": 0
+},
+{
+"text": "SECRETK=abc12345678\nghp_abcdefghijklmnopqrstuvwxyz0123supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential]\n[REDACTED:github_token][REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP\n\nxoxb-1234567890-abc } token = process.env.TOKEN1: ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key]\n\n[REDACTED:slack_token] } token = process.env.TOKEN1: ",
+"n": 2
+},
+{
+"text": "; passwd=12345678_ {_\n access-token: ********\n",
+"extra": [],
+"out": "; passwd=12345678_ {_\n access-token: ********\n",
+"n": 0
+},
+{
+"text": "'\n  😀_:\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "'\n  😀_:\n",
+"n": 0
+},
+{
+"text": "，auth_token=getenv(X12345678)\"apiKey\": \"abc123def456\"sk-proj-abcdefghijklmnopqrstuvwxyzauth_token=getenv(X12345678)arka_0123456789abcdefXYZ\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "，auth_token=getenv(X12345678)\"apiKey\": \"[REDACTED:credential]\"[REDACTED:openai_key]=getenv(X12345678)[REDACTED:ark_token]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "\t \"\ntoken = process.env.TOKEN1_ASIA0123456789ABCDEFPASSWORD=abcdefgh1_PASSWORD=abcdefgh1中",
+"extra": [],
+"out": "\t \"\ntoken = process.env.TOKEN1_ASIA0123456789ABCDEFPASSWORD=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123_;_refresh_token=xxxxxxxxxx中PASSWORD=abcdefgh1\nkey=val___supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token]_;_refresh_token=xxxxxxxxxx中PASSWORD=abcdefgh1\nkey=val___[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "auth_token=getenv(X12345678)中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "auth_token=getenv(X12345678)中",
+"n": 0
+},
+{
+"text": "} ",
+"extra": [],
+"out": "} ",
+"n": 0
+},
+{
+"text": "日本語テキスト\n. ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "日本語テキスト\n. ",
+"n": 0
+},
+{
+"text": "my.db_password: <redacted1>abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "auth_token=getenv(X12345678)_xoxb-1234567890-abc",
+"extra": [],
+"out": "auth_token=getenv(X12345678)_xoxb-1234567890-abc",
+"n": 0
+},
+{
+"text": "key=val\nrefresh_token=xxxxxxxxxx BEARER ABC.def-ghi_jkl~mno key=val\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "key=val\nrefresh_token=xxxxxxxxxx BEARER [REDACTED:bearer] key=val\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnopsk-proj-abcdefghijklmnopqrstuvwxyz中 eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中client_secret: [REDACTED:x]1",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token]-proj-abcdefghijklmnopqrstuvwxyz中 [REDACTED:jwt]中client_secret: [REDACTED:x]1",
+"n": 2
+},
+{
+"text": "1 Authorization: Bearer abcdefghijklmnop123",
+"extra": [],
+"out": "1 Authorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "password = \"hunter2abc9\"_中arka_0123456789abcdefgh ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "password = \"[REDACTED:credential]\"_中arka_0123456789abcdefgh ",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxx\n\t eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中\"apiKey\": \"abc123def456\" \tabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "refresh_token=xxxxxxxxxx\n\t [REDACTED:jwt]中\"apiKey\": \"[REDACTED:credential]\" \t[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "passwd=onlyletters_AKIAABCDEFGHIJKLMNOPQ\n",
+"extra": [],
+"out": "passwd=onlyletters_AKIAABCDEFGHIJKLMNOPQ\n",
+"n": 0
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQ中pässword=abc12345678._BEARER ABC.def-ghi_jkl~mno\ngithub_pat_11ABCDEFG0123456789_abcdefghijklmnop中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQ中pässword=abc12345678._BEARER ABC.def-ghi_jkl~mno\n[REDACTED:github_token]中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "arka_0123456789abcdefXYZ_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:ark_token]",
+"n": 1
+},
+{
+"text": "'中github_pat_11ABCDEFG0123456789_abcdefghijklmnop-----BEGIN RSA PRIVATE KEY-----\nabc\nxclient_secret: [REDACTED:x]1中PASSWORD=abcdefgh1\n",
+"extra": [],
+"out": "'中github_pat_11ABCDEFG0123456789_abcdefghijklmnop[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "ſecret=abcdefg12345\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ſecret=[REDACTED:credential]\n",
+"n": 1
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN github_pat_11ABCDEFG0123456789_abcdefghijklmnopabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key] [REDACTED:github_token][REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "，\n.\n😀 secret=${SECRET_VALUE1}中AKIAABCDEFGHIJKLMNOPQ中__",
+"extra": [],
+"out": "，\n.\n😀 secret=${SECRET_VALUE1}中AKIAABCDEFGHIJKLMNOPQ中__",
+"n": 0
+},
+{
+"text": "Ｐassword=abc12345678\n中arka_0123456789abcdefgh中bearer abcdefghijklmnopsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Ｐassword=abc12345678\n中arka_0123456789abcdefgh中bearer abcdefghijklmnop[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "my.db_password: <redacted1>_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>_",
+"n": 0
+},
+{
+"text": "`\nAuthorization: Bearer abcdefghijklmnop123key=val中token = process.env.TOKEN1 ",
+"extra": [],
+"out": "`\nAuthorization: Bearer [REDACTED:bearer]中token = process.env.TOKEN1 ",
+"n": 1
+},
+{
+"text": "x 中sk-1234567890abcdefghij中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x 中sk-1234567890abcdefghij中",
+"n": 0
+},
+{
+"text": "{_;中{-----BEGIN RSA PRIVATE KEY-----\nabc\n_token = process.env.TOKEN1\n\n_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "{_;中{[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "xoxb-1234567890-abc._ſecret=abcdefg12345_",
+"extra": [],
+"out": "[REDACTED:slack_token]._ſecret=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "my.db_password: <redacted1> '中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "my.db_password: <redacted1> '中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "x\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x\n",
+"n": 0
+},
+{
+"text": "} SECRETK=abc12345678 ſecret=abcdefg12345access-token: ********",
+"extra": [],
+"out": "} SECRETK=[REDACTED:credential] ſecret=[REDACTED:credential] ********",
+"n": 2
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\nſecret=abcdefg12345password = \"hunter2abc9\"secret=${SECRET_VALUE1}_passwd=12345678\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "arka_0123456789abcdefXYZ_x_SECRETK=abc12345678SECRETK=abc12345678中refresh_token=xxxxxxxxxxabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:ark_token]K=abc12345678SECRETK=[REDACTED:credential] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "passwd=12345678_secret=${SECRET_VALUE1}1\n\" sk-1234567890abcdefghij",
+"extra": [],
+"out": "passwd=[REDACTED:credential]{SECRET_VALUE1}1\n\" [REDACTED:openai_key]",
+"n": 2
+},
+{
+"text": "😀\nbearer short}token = process.env.TOKEN1_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "😀\nbearer short}token = process.env.TOKEN1_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPgithub_pat_11ABCDEFG0123456789_abcdefghijklmnop_api_key: 'xyzxyz123456'",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "AKIAABCDEFGHIJKLMNOPgithub_pat_11ABCDEFG0123456789_abcdefghijklmnop_api_key: '[REDACTED:credential]'",
+"n": 1
+},
+{
+"text": "pässword=abc12345678 `中中arka_0123456789abcdefgh\npassword = \"hunter2abc9\"\nauth_token=getenv(X12345678)",
+"extra": [],
+"out": "pässword=abc12345678 `中中arka_0123456789abcdefgh\npassword = \"[REDACTED:credential]\"\nauth_token=getenv(X12345678)",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPQx bearer zzzzzzzzzzzzzzzz中github_pat_11ABCDEFG0123456789_abcdefghijklmnop  ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOPQx bearer [REDACTED:bearer]中github_pat_11ABCDEFG0123456789_abcdefghijklmnop  ",
+"n": 1
+},
+{
+"text": "`中passwd=onlyletters中passwd=12345678\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "`中passwd=[REDACTED:credential]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "secret=${SECRET_VALUE1}日本語テキスト中passwd=12345678中refresh_token=xxxxxxxxxx\n",
+"extra": [],
+"out": "secret=${SECRET_VALUE1}日本語テキスト中passwd=[REDACTED:credential]\n",
+"n": 1
+},
+{
+"text": "arka_0123456789abcdefXYZAKIAABCDEFGHIJKLMNOPQ. -----BEGIN RSA PRIVATE KEY-----\nabc\n_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:ark_token]. [REDACTED:private_key]",
+"n": 4
+},
+{
+"text": "  ; BEARER ABC.def-ghi_jkl~mno_1\n;_.",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "  ; BEARER [REDACTED:bearer]\n;_.",
+"n": 1
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mnosk-ant-api03-abcdefghijk_LMNBEARER ABC.def-ghi_jkl~mno\n-----BEGIN RSA PRIVATE KEY-----\nabc\npässword=abc12345678",
+"extra": [],
+"out": "BEARER [REDACTED:bearer] ABC.def-ghi_jkl~mno\n[REDACTED:private_key]",
+"n": 2
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz中._passwd=onlyletterspassword = \"hunter2abc9\"\t中中arka_0123456789abcdefgh ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x bearer [REDACTED:bearer]中._passwd=onlyletterspassword = \"hunter2abc9\"\t中中arka_0123456789abcdefgh ",
+"n": 1
+},
+{
+"text": "passwd=onlyletters中-----BEGIN OPENSSH PRIVATE KEY-----中😀_中arka_0123456789abcdefgh-中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=onlyletters中[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "passwd=12345678中arka_0123456789abcdefgh\npassword = \"hunter2abc9\"\nSECRETK=abc12345678_my.db_password: <redacted1>_",
+"extra": [],
+"out": "passwd=[REDACTED:credential]\npassword = \"[REDACTED:credential]\"\nSECRETK=[REDACTED:credential] <redacted1>_",
+"n": 3
+},
+{
+"text": "Ｐassword=abc12345678中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Ｐassword=abc12345678中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "sk-1234567890abcdefghijBEARER ABC.def-ghi_jkl~mno_refresh_token=xxxxxxxxxx_，_bearer short eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key] ABC.def-ghi_jkl~mno_refresh_token=xxxxxxxxxx_，_bearer short [REDACTED:jwt] ",
+"n": 2
+},
+{
+"text": "x\n{_AIzaSyA0123456789abcdefghijklmnopqrstu ",
+"extra": [],
+"out": "x\n{_AIzaSyA0123456789abcdefghijklmnopqrstu ",
+"n": 0
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz:\nAIzaSyA0123456789abcdefghijklmnopqrstu\n日本語テキスト ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x bearer [REDACTED:bearer]:\nAIzaSyA0123456789abcdefghijklmnopqrstu\n日本語テキスト ",
+"n": 1
+},
+{
+"text": "api_key: 'xyzxyz123456'\n\"apiKey\": \"abc123def456\" ，\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "api_key: '[REDACTED:credential]'\n\"apiKey\": \"[REDACTED:credential]\" ，\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk ",
+"extra": [],
+"out": "[REDACTED:jwt] ",
+"n": 1
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123\nsk-1234567890abcdefghij中AIzaSyA0123456789abcdefghijklmnopqrstu\nＰassword=abc12345678 access-token: ********supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token]\n[REDACTED:openai_key]中AIzaSyA0123456789abcdefghijklmnopqrstu\nＰassword=abc12345678 access-token: ********[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "1",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "1",
+"n": 0
+},
+{
+"text": ".  _arka_0123456789abcdefXYZ\n，中-----BEGIN OPENSSH PRIVATE KEY-----中",
+"extra": [],
+"out": ".  _arka_0123456789abcdefXYZ\n，中[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "'key=valAuthorization: Bearer abcdefghijklmnop123",
+"extra": [
+"supersecrettoken1"
+],
+"out": "'key=valAuthorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": ";\ntoken = process.env.TOKEN1 bearer short\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ";\ntoken = process.env.TOKEN1 bearer short\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "}中 中_sk-1234567890abcdefghij",
+"extra": [],
+"out": "}中 中_sk-1234567890abcdefghij",
+"n": 0
+},
+{
+"text": "日本語テキスト api_key: 'xyzxyz123456'=supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "日本語テキスト api_key: '[REDACTED:credential]'=[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "_\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "_\n[REDACTED:jwt]",
+"n": 1
+},
+{
+"text": "  =_",
+"extra": [],
+"out": "  =_",
+"n": 0
+},
+{
+"text": "1中bearer abcdefghijklmnopAIzaSyA0123456789abcdefghijklmnopqrstu x bearer zzzzzzzzzzzzzzzz-api_key: 'xyzxyz123456' ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "1中bearer abcdefghijklmnopAIzaSyA0123456789abcdefghijklmnopqrstu x bearer [REDACTED:bearer]: 'xyzxyz123456' ",
+"n": 1
+},
+{
+"text": "token = process.env.TOKEN1中sk-1234567890abcdefghij_\"  _abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "token = process.env.TOKEN1中sk-1234567890abcdefghij_\"  _[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "\" -----BEGIN RSA PRIVATE KEY-----\nabc\n Authorization: Bearer abcdefghijklmnop123_\t",
+"extra": [],
+"out": "\" [REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_my.db_password: <redacted1>_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:jwt].db_password: <redacted1>_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "arka_0123456789abcdefXYZBEARER ABC.def-ghi_jkl~mno中\tpasswd=12345678_sk-1234567890abcdefghij ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:ark_token] ABC.def-ghi_jkl~mno中\tpasswd=[REDACTED:credential] ",
+"n": 2
+},
+{
+"text": "`",
+"extra": [],
+"out": "`",
+"n": 0
+},
+{
+"text": "password = \"hunter2abc9\"_client_secret: [REDACTED:x]1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "password = \"[REDACTED:credential]\"_client_secret: [REDACTED:x]1",
+"n": 1
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN sk-proj-abcdefghijklmnopqrstuvwxyz_sk-proj-abcdefghijklmnopqrstuvwxyz中-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key] [REDACTED:openai_key]中[REDACTED:private_key]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "\t arka_0123456789abcdefXYZpässword=abc12345678_",
+"extra": [],
+"out": "\t [REDACTED:ark_token]ässword=abc12345678_",
+"n": 1
+},
+{
+"text": "pässword=abc12345678access-token: ********\n，_auth_token=getenv(X12345678) Ｐassword=abc12345678refresh_token=xxxxxxxxxx supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678access-token: ********\n，_auth_token=getenv(X12345678) Ｐassword=abc12345678refresh_token=xxxxxxxxxx [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "x日本語テキストSECRETK=abc12345678中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x日本語テキストSECRETK=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "bearer short\nＰassword=abc12345678_ghp_abcdefghijklmnopqrstuvwxyz0123\napi_key: 'xyzxyz123456'\nſecret=abcdefg12345_PASSWORD=abcdefgh1 ",
+"extra": [],
+"out": "bearer short\nＰassword=abc12345678_ghp_abcdefghijklmnopqrstuvwxyz0123\napi_key: '[REDACTED:credential]'\nſecret=[REDACTED:credential] ",
+"n": 2
+},
+{
+"text": "😀_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "😀_",
+"n": 0
+},
+{
+"text": "1`\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----=\nsecret=${SECRET_VALUE1}_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "1`\n[REDACTED:private_key]=\nsecret=${SECRET_VALUE1}_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN中PASSWORD=abcdefgh1_\nAKIAABCDEFGHIJKLMNOPQ\"_\n",
+"extra": [],
+"out": "[REDACTED:anthropic_key]中PASSWORD=[REDACTED:credential]\nAKIAABCDEFGHIJKLMNOPQ\"_\n",
+"n": 2
+},
+{
+"text": "日本語テキスト_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "日本語テキスト_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "} auth_token=getenv(X12345678) AIzaSyA0123456789abcdefghijklmnopqrstu\nsk-ant-api03-abcdefghijk_LMN\n-----BEGIN OPENSSH PRIVATE KEY-----\nghp_abcdefghijklmnopqrstuvwxyz0123",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "} auth_token=getenv(X12345678) AIzaSyA0123456789abcdefghijklmnopqrstu\n[REDACTED:anthropic_key]\n[REDACTED:private_key]",
+"n": 2
+},
+{
+"text": "refresh_token=xxxxxxxxxx中x \t中",
+"extra": [],
+"out": "refresh_token=xxxxxxxxxx中x \t中",
+"n": 0
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnoparka_0123456789abcdefXYZ\nauth_token=getenv(X12345678) ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token]\nauth_token=getenv(X12345678) ",
+"n": 1
+},
+{
+"text": "`refresh_token=xxxxxxxxxx中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "`refresh_token=xxxxxxxxxx中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "'Authorization: Bearer abcdefghijklmnop123中\"apiKey\": \"abc123def456\" my.db_password: <redacted1> {",
+"extra": [],
+"out": "'Authorization: Bearer [REDACTED:bearer]中\"apiKey\": \"[REDACTED:credential]\" my.db_password: <redacted1> {",
+"n": 2
+},
+{
+"text": "Ｐassword=abc12345678supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Ｐassword=abc12345678[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "passwd=12345678  xＰassword=abc12345678\nrefresh_token=xxxxxxxxxx中refresh_token=xxxxxxxxxx中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=12345678  xＰassword=abc12345678\nrefresh_token=xxxxxxxxxx中refresh_token=xxxxxxxxxx中",
+"n": 0
+},
+{
+"text": "access-token: ********=中-----BEGIN OPENSSH PRIVATE KEY-----\nASIA0123456789ABCDEF\"apiKey\": \"abc123def456\"\nmy.db_password: <redacted1> ",
+"extra": [],
+"out": "access-token: ********=中[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "refresh_token=xxxxxxxxxx_Ｐassword=abc12345678 pässword=abc12345678",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxx_Ｐassword=abc12345678 pässword=abc12345678",
+"n": 0
+},
+{
+"text": "my.db_password: <redacted1>'中1\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "my.db_password: <redacted1>'中1\n[REDACTED:jwt][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中AKIAABCDEFGHIJKLMNOP_\t\nauth_token=getenv(X12345678)\naccess-token: ********中my.db_password: <redacted1>",
+"extra": [],
+"out": "[REDACTED:jwt]中AKIAABCDEFGHIJKLMNOP_\t\nauth_token=getenv(X12345678)\naccess-token: ********中my.db_password: <redacted1>",
+"n": 1
+},
+{
+"text": ".中sk-ant-api03-abcdefghijk_LMN_github_pat_11ABCDEFG0123456789_abcdefghijklmnop : supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": ".中sk-ant-api03-abcdefghijk_LMN_github_pat_11ABCDEFG0123456789_abcdefghijklmnop : [REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": ";_ſecret=abcdefg12345__SECRETK=abc12345678_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ";_ſecret=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----\nＰassword=abc12345678ASIA0123456789ABCDEF中",
+"extra": [],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "token = process.env.TOKEN1_，_Ｐassword=abc12345678中client_secret: [REDACTED:x]1 .",
+"extra": [
+"supersecrettoken1"
+],
+"out": "token = process.env.TOKEN1_，_Ｐassword=abc12345678中client_secret: [REDACTED:x]1 .",
+"n": 0
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY----- api_key: 'xyzxyz123456'\nsecret=${SECRET_VALUE1} AKIAABCDEFGHIJKLMNOP\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key] api_key: '[REDACTED:credential]'\nsecret=${SECRET_VALUE1} [REDACTED:aws_key]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "Ｐassword=abc12345678ASIA0123456789ABCDEFpasswd=12345678 ſecret=abcdefg12345中",
+"extra": [],
+"out": "Ｐassword=abc12345678ASIA0123456789ABCDEFpasswd=12345678 ſecret=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "日本語テキスト-supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "日本語テキスト-[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ASIA0123456789ABCDEF Ｐassword=abc12345678中，",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key] Ｐassword=abc12345678中，",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzzBEARER ABC.def-ghi_jkl~mno-\nmy.db_password: <redacted1> passwd=onlyletters中AKIAABCDEFGHIJKLMNOP中",
+"extra": [],
+"out": "x bearer [REDACTED:bearer] ABC.def-ghi_jkl~mno-\nmy.db_password: <redacted1> passwd=onlyletters中AKIAABCDEFGHIJKLMNOP中",
+"n": 1
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mnosecret=${SECRET_VALUE1}_{_`_.",
+"extra": [
+"supersecrettoken1"
+],
+"out": "BEARER [REDACTED:bearer]${SECRET_VALUE1}_{_`_.",
+"n": 1
+},
+{
+"text": ":中AKIAABCDEFGHIJKLMNOP_pässword=abc12345678abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ":中AKIAABCDEFGHIJKLMNOP_pässword=abc12345678[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "日本語テキストpasswd=onlyletters\nSECRETK=abc12345678 ",
+"extra": [],
+"out": "日本語テキストpasswd=onlyletters\nSECRETK=[REDACTED:credential] ",
+"n": 1
+},
+{
+"text": "{\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中AKIAABCDEFGHIJKLMNOP supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "{\n[REDACTED:jwt]中AKIAABCDEFGHIJKLMNOP [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "😀\n中arka_0123456789abcdefgh\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "😀\n中arka_0123456789abcdefgh\n[REDACTED:jwt]",
+"n": 1
+},
+{
+"text": "token = process.env.TOKEN1_中arka_0123456789abcdefgh中",
+"extra": [],
+"out": "token = process.env.TOKEN1_中arka_0123456789abcdefgh中",
+"n": 0
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123 ，",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Authorization: Bearer [REDACTED:bearer] ，",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP\napi_key: 'xyzxyz123456'eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk:\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key]\napi_key: '[REDACTED:credential]'[REDACTED:jwt]:\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "日本語テキスト\n中arka_0123456789abcdefgh-----BEGIN RSA PRIVATE KEY-----\nabc\n\n}中{\n",
+"extra": [],
+"out": "日本語テキスト\n中arka_0123456789abcdefgh[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "pässword=abc12345678\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "xpassword = \"hunter2abc9\" 😀中bearer abcdefghijklmnop_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "xpassword = \"[REDACTED:credential]\" 😀中bearer abcdefghijklmnop_",
+"n": 1
+},
+{
+"text": "bearer short ",
+"extra": [],
+"out": "bearer short ",
+"n": 0
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n中1中AIzaSyA0123456789abcdefghijklmnopqrstu_password = \"hunter2abc9\"x",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": " -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中-----BEGIN OPENSSH PRIVATE KEY----- abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": " [REDACTED:private_key]中[REDACTED:private_key]",
+"n": 4
+},
+{
+"text": "ghp_abcdefghijklmnopqrstuvwxyz0123_sk-ant-api03-abcdefghijk_LMN_",
+"extra": [],
+"out": "[REDACTED:github_token]_sk-ant-api03-abcdefghijk_LMN_",
+"n": 1
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP_bearer short中日本語テキスト日本語テキスト\narka_0123456789abcdefXYZ中ghp_abcdefghijklmnopqrstuvwxyz0123supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AKIAABCDEFGHIJKLMNOP_bearer short中日本語テキスト日本語テキスト\n[REDACTED:ark_token]中ghp_abcdefghijklmnopqrstuvwxyz0123[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key]中",
+"n": 1
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk\n",
+"extra": [],
+"out": "[REDACTED:jwt]\n",
+"n": 1
+},
+{
+"text": ":中-_",
+"extra": [
+"supersecrettoken1"
+],
+"out": ":中-_",
+"n": 0
+},
+{
+"text": "-Ｐassword=abc12345678\n;\n}中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "-Ｐassword=abc12345678\n;\n}中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "xoxb-1234567890-abc\t_api_key: 'xyzxyz123456'password = \"hunter2abc9\"\n\" secret=${SECRET_VALUE1}",
+"extra": [],
+"out": "[REDACTED:slack_token]\t_api_key: '[REDACTED:credential]'password = \"[REDACTED:credential]\"\n\" secret=${SECRET_VALUE1}",
+"n": 3
+},
+{
+"text": "secret=${SECRET_VALUE1}_Ｐassword=abc12345678_' client_secret: [REDACTED:x]1supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "secret=${SECRET_VALUE1}_Ｐassword=abc12345678_' client_secret: [REDACTED:x]1[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "'auth_token=getenv(X12345678)😀\n-----BEGIN OPENSSH PRIVATE KEY-----client_secret: [REDACTED:x]1eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "'auth_token=getenv(X12345678)😀\n[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "中bearer abcdefghijklmnop\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中password = \"hunter2abc9\"\nsecret=${SECRET_VALUE1}Ｐassword=abc12345678_AKIAABCDEFGHIJKLMNOPQ\n",
+"extra": [],
+"out": "中bearer abcdefghijklmnop\n[REDACTED:jwt]中password = \"[REDACTED:credential]\"\nsecret=${SECRET_VALUE1}Ｐassword=abc12345678_AKIAABCDEFGHIJKLMNOPQ\n",
+"n": 2
+},
+{
+"text": "bearer short'中passwd=12345678，中arka_0123456789abcdefXYZ sk-1234567890abcdefghij中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "bearer short'中passwd=[REDACTED:credential] [REDACTED:openai_key]中",
+"n": 2
+},
+{
+"text": "ſecret=abcdefg12345github_pat_11ABCDEFG0123456789_abcdefghijklmnop中xoxb-1234567890-abc中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ſecret=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ſecret=abcdefg12345sk-1234567890abcdefghij \n_",
+"extra": [],
+"out": "ſecret=[REDACTED:credential] \n_",
+"n": 1
+},
+{
+"text": "😀\n\taccess-token: ********arka_0123456789abcdefXYZ AIzaSyA0123456789abcdefghijklmnopqrstu 😀中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "😀\n\taccess-token: ********[REDACTED:ark_token] AIzaSyA0123456789abcdefghijklmnopqrstu 😀中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "日本語テキスト_api_key: 'xyzxyz123456'ghp_abcdefghijklmnopqrstuvwxyz0123arka_0123456789abcdefXYZ中\"apiKey\": \"abc123def456\"",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "日本語テキスト_api_key: '[REDACTED:credential]'[REDACTED:github_token]_0123456789abcdefXYZ中\"apiKey\": \"[REDACTED:credential]\"",
+"n": 3
+},
+{
+"text": "=中x bearer zzzzzzzzzzzzzzzz eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk",
+"extra": [],
+"out": "=中x bearer [REDACTED:bearer] [REDACTED:jwt]",
+"n": 2
+},
+{
+"text": "-\nAKIAABCDEFGHIJKLMNOP\nauth_token=getenv(X12345678)AIzaSyA0123456789abcdefghijklmnopqrstu中github_pat_11ABCDEFG0123456789_abcdefghijklmnoppasswd=onlyletters_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "-\n[REDACTED:aws_key]\nauth_token=getenv(X12345678)AIzaSyA0123456789abcdefghijklmnopqrstu中github_pat_11ABCDEFG0123456789_abcdefghijklmnoppasswd=onlyletters_",
+"n": 1
+},
+{
+"text": "client_secret: [REDACTED:x]1中-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----sk-1234567890abcdefghij_client_secret: [REDACTED:x]1\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "client_secret: [REDACTED:x]1中[REDACTED:private_key][REDACTED:openai_key]: [REDACTED:x]1\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "中bearer abcdefghijklmnop\nx\napi_key: 'xyzxyz123456' ",
+"extra": [],
+"out": "中bearer abcdefghijklmnop\nx\napi_key: '[REDACTED:credential]' ",
+"n": 1
+},
+{
+"text": "`token = process.env.TOKEN1\n😀\tsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "`token = process.env.TOKEN1\n😀\t[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ASIA0123456789ABCDEF_\"apiKey\": \"abc123def456\"xx bearer zzzzzzzzzzzzzzzz ;",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "ASIA0123456789ABCDEF_\"apiKey\": \"[REDACTED:credential]\"xx bearer [REDACTED:bearer] ;",
+"n": 2
+},
+{
+"text": "token = process.env.TOKEN1中refresh_token=xxxxxxxxxx:= github_pat_11ABCDEFG0123456789_abcdefghijklmnop\n",
+"extra": [],
+"out": "token = process.env.TOKEN1中refresh_token=xxxxxxxxxx:= [REDACTED:github_token]\n",
+"n": 1
+},
+{
+"text": "{ ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "{ ",
+"n": 0
+},
+{
+"text": ".中AIzaSyA0123456789abcdefghijklmnopqrstu__中access-token: ********\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ".中AIzaSyA0123456789abcdefghijklmnopqrstu__中access-token: ********\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "，_auth_token=getenv(X12345678)_中bearer abcdefghijklmnopBEARER ABC.def-ghi_jkl~mno",
+"extra": [],
+"out": "，_auth_token=getenv(X12345678)_中bearer abcdefghijklmnopBEARER ABC.def-ghi_jkl~mno",
+"n": 0
+},
+{
+"text": "pässword=abc12345678\n\t_ſecret=abcdefg12345中`中bearer abcdefghijklmnop中password = \"hunter2abc9\"supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678\n\t_ſecret=[REDACTED:credential]`中bearer abcdefghijklmnop中password = \"[REDACTED:credential]\"[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz\nghp_abcdefghijklmnopqrstuvwxyz0123_' {_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]\n[REDACTED:github_token]_' {_",
+"n": 2
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu Authorization: Bearer abcdefghijklmnop123中Ｐassword=abc12345678AKIAABCDEFGHIJKLMNOPQ中BEARER ABC.def-ghi_jkl~mno",
+"extra": [],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu Authorization: Bearer [REDACTED:bearer]中Ｐassword=abc12345678AKIAABCDEFGHIJKLMNOPQ中BEARER ABC.def-ghi_jkl~mno",
+"n": 1
+},
+{
+"text": "api_key: 'xyzxyz123456'中 \"apiKey\": \"abc123def456\"\narka_0123456789abcdefXYZpässword=abc12345678 token = process.env.TOKEN1\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "api_key: '[REDACTED:credential]'中 \"apiKey\": \"[REDACTED:credential]\"\n[REDACTED:ark_token]ässword=abc12345678 token = process.env.TOKEN1\n",
+"n": 3
+},
+{
+"text": "\"中Authorization: Bearer abcdefghijklmnop123{_`中中arka_0123456789abcdefgh_😀abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\"中Authorization: Bearer [REDACTED:bearer]{_`中中arka_0123456789abcdefgh_😀[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ſecret=abcdefg12345_日本語テキスト中bearer short\n",
+"extra": [],
+"out": "ſecret=[REDACTED:credential] short\n",
+"n": 1
+},
+{
+"text": " PASSWORD=abcdefgh1sk-1234567890abcdefghijsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": " PASSWORD=[REDACTED:credential] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "xoxb-1234567890-abc_{_arka_0123456789abcdefXYZſecret=abcdefg12345",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:slack_token]_{_arka_0123456789abcdefXYZſecret=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": ".\napi_key: 'xyzxyz123456':sk-ant-api03-abcdefghijk_LMN中",
+"extra": [],
+"out": ".\napi_key: '[REDACTED:credential]':[REDACTED:anthropic_key]中",
+"n": 2
+},
+{
+"text": ":refresh_token=xxxxxxxxxx passwd=onlyletters \nsk-1234567890abcdefghij中",
+"extra": [
+"supersecrettoken1"
+],
+"out": ":refresh_token=xxxxxxxxxx passwd=onlyletters \n[REDACTED:openai_key]中",
+"n": 1
+},
+{
+"text": "1\narka_0123456789abcdefXYZ }-abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "1\n[REDACTED:ark_token] }-[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY----- xoxb-1234567890-abc\nbearer short\n",
+"extra": [],
+"out": "[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "ASIA0123456789ABCDEF_{\n;PASSWORD=abcdefgh1，\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ASIA0123456789ABCDEF_{\n;PASSWORD=[REDACTED:credential]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "=日本語テキストauth_token=getenv(X12345678)`_\"apiKey\": \"abc123def456\" ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "=日本語テキストauth_token=getenv(X12345678)`_\"apiKey\": \"[REDACTED:credential]\" ",
+"n": 1
+},
+{
+"text": "\"apiKey\": \"abc123def456\"ghp_abcdefghijklmnopqrstuvwxyz0123\nx bearer zzzzzzzzzzzzzzzz",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\"[REDACTED:github_token]\nx bearer [REDACTED:bearer]",
+"n": 3
+},
+{
+"text": "ſecret=abcdefg12345\n\n\nx中arka_0123456789abcdefXYZ\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ſecret=[REDACTED:credential]\n\n\nx中arka_0123456789abcdefXYZ\n",
+"n": 1
+},
+{
+"text": "，}AIzaSyA0123456789abcdefghijklmnopqrstu_😀abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "，}[REDACTED:google_key]😀[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijkkey=val;{中refresh_token=xxxxxxxxxx eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中",
+"extra": [],
+"out": "[REDACTED:jwt]=val;{中refresh_token=xxxxxxxxxx [REDACTED:jwt]中",
+"n": 2
+},
+{
+"text": "bearer short_client_secret: [REDACTED:x]1 supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "bearer [REDACTED:bearer]: [REDACTED:x]1 [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "_中",
+"extra": [],
+"out": "_中",
+"n": 0
+},
+{
+"text": "\"\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "\"\n",
+"n": 0
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n\npässword=abc12345678_-----BEGIN RSA PRIVATE KEY-----\nabc\n中passwd=12345678 secret=${SECRET_VALUE1}\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk 中bearer abcdefghijklmnopAKIAABCDEFGHIJKLMNOPQ\n，",
+"extra": [],
+"out": "_eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk 中bearer abcdefghijklmnopAKIAABCDEFGHIJKLMNOPQ\n，",
+"n": 0
+},
+{
+"text": "中arka_0123456789abcdefgh\npasswd=onlylettersxoxb-1234567890-abc token = process.env.TOKEN1SECRETK=abc12345678 \n supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "中arka_0123456789abcdefgh\npasswd=[REDACTED:credential] token = process.env.TOKEN1SECRETK=[REDACTED:credential] \n [REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "'.___\"passwd=12345678 my.db_password: <redacted1>\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "'.___\"passwd=12345678 my.db_password: <redacted1>\n",
+"n": 0
+},
+{
+"text": "x",
+"extra": [],
+"out": "x",
+"n": 0
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n中1_x",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "\"_x_Authorization: Bearer abcdefghijklmnop123\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\"_x_Authorization: Bearer [REDACTED:bearer]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz_Authorization: Bearer abcdefghijklmnop123 -----BEGIN OPENSSH PRIVATE KEY-----ASIA0123456789ABCDEF_",
+"extra": [],
+"out": "x bearer [REDACTED:bearer]: Bearer [REDACTED:bearer] [REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "'  pässword=abc12345678\n\n\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "'  pässword=abc12345678\n\n\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "auth_token=getenv(X12345678)sk-proj-abcdefghijklmnopqrstuvwxyz ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "auth_token=getenv(X12345678)[REDACTED:openai_key] ",
+"n": 1
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop -\npässword=abc12345678token = process.env.TOKEN1中",
+"extra": [],
+"out": "[REDACTED:github_token] -\npässword=abc12345678token = process.env.TOKEN1中",
+"n": 1
+},
+{
+"text": "中arka_0123456789abcdefgh中-AIzaSyA0123456789abcdefghijklmnopqrstu",
+"extra": [
+"supersecrettoken1"
+],
+"out": "中arka_0123456789abcdefgh中-AIzaSyA0123456789abcdefghijklmnopqrstu",
+"n": 0
+},
+{
+"text": "pässword=abc12345678 -_=api_key: 'xyzxyz123456'_AKIAABCDEFGHIJKLMNOPQ_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "pässword=abc12345678 -_=api_key: '[REDACTED:credential]'_AKIAABCDEFGHIJKLMNOPQ_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "secret=${SECRET_VALUE1}中xgithub_pat_11ABCDEFG0123456789_abcdefghijklmnoppasswd=onlyletters\nAIzaSyA0123456789abcdefghijklmnopqrstu\n",
+"extra": [],
+"out": "secret=${SECRET_VALUE1}中xgithub_pat_11ABCDEFG0123456789_abcdefghijklmnoppasswd=onlyletters\nAIzaSyA0123456789abcdefghijklmnopqrstu\n",
+"n": 0
+},
+{
+"text": "arka_0123456789abcdefXYZ token = process.env.TOKEN1中sk-proj-abcdefghijklmnopqrstuvwxyz;passwd=onlyletters supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:ark_token] token = process.env.TOKEN1中sk-proj-abcdefghijklmnopqrstuvwxyz;passwd=onlyletters [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123password = \"hunter2abc9\"\npässword=abc12345678BEARER ABC.def-ghi_jkl~mno ASIA0123456789ABCDEF_PASSWORD=abcdefgh1中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "Authorization: Bearer [REDACTED:bearer] = \"hunter2abc9\"\npässword=abc12345678BEARER ABC.def-ghi_jkl~mno ASIA0123456789ABCDEF_PASSWORD=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "access-token: ********_passwd=12345678\nsk-ant-api03-abcdefghijk_LMN",
+"extra": [],
+"out": "access-token: ********_passwd=12345678\n[REDACTED:anthropic_key]",
+"n": 1
+},
+{
+"text": "xoxb-1234567890-abc\nsecret=${SECRET_VALUE1}passwd=onlyletters ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:slack_token]\nsecret=${SECRET_VALUE1}passwd=onlyletters ",
+"n": 1
+},
+{
+"text": "中arka_0123456789abcdefgh_}中my.db_password: <redacted1>_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "中arka_0123456789abcdefgh_}中my.db_password: <redacted1>_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "passwd=12345678 ",
+"extra": [],
+"out": "passwd=12345678 ",
+"n": 0
+},
+{
+"text": ";  sk-1234567890abcdefghij\"apiKey\": \"abc123def456\"password = \"hunter2abc9\"\n._supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": ";  [REDACTED:openai_key]\"apiKey\": \"[REDACTED:credential]\"password = \"[REDACTED:credential]\"\n._[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "日本語テキストghp_abcdefghijklmnopqrstuvwxyz0123",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "日本語テキストghp_abcdefghijklmnopqrstuvwxyz0123",
+"n": 0
+},
+{
+"text": "= ",
+"extra": [],
+"out": "= ",
+"n": 0
+},
+{
+"text": "x -----BEGIN RSA PRIVATE KEY-----\nabc\n\n😀中AKIAABCDEFGHIJKLMNOPQ",
+"extra": [
+"supersecrettoken1"
+],
+"out": "x [REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "=\ngithub_pat_11ABCDEFG0123456789_abcdefghijklmnop_secret=${SECRET_VALUE1} abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "=\n[REDACTED:github_token]=${SECRET_VALUE1} [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "\"apiKey\": \"abc123def456\"",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\"",
+"n": 1
+},
+{
+"text": "auth_token=getenv(X12345678)Authorization: Bearer abcdefghijklmnop123 arka_0123456789abcdefXYZ中eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中passwd=12345678_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "auth_token=getenv(X12345678)Authorization: Bearer [REDACTED:bearer] [REDACTED:ark_token]中eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中passwd=[REDACTED:credential] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu\n: Authorization: Bearer abcdefghijklmnop123; ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu\n: Authorization: Bearer [REDACTED:bearer]; ",
+"n": 1
+},
+{
+"text": "access-token: ********",
+"extra": [],
+"out": "access-token: ********",
+"n": 0
+},
+{
+"text": "Ｐassword=abc12345678 ;中1_Authorization: Bearer abcdefghijklmnop123",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Ｐassword=abc12345678 ;中1_Authorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz AKIAABCDEFGHIJKLMNOPQ :_pässword=abc12345678_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "x bearer [REDACTED:bearer] AKIAABCDEFGHIJKLMNOPQ :_pässword=abc12345678_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "中arka_0123456789abcdefghsk-1234567890abcdefghij\"apiKey\": \"abc123def456\"sk-proj-abcdefghijklmnopqrstuvwxyz",
+"extra": [],
+"out": "中arka_0123456789abcdefghsk-1234567890abcdefghij\"apiKey\": \"[REDACTED:credential]\"[REDACTED:openai_key]",
+"n": 2
+},
+{
+"text": "sk-1234567890abcdefghijbearer shortsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:openai_key] short[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMN中passwd=onlyletterspasswd=onlyletterssk-ant-api03-abcdefghijk_LMN BEARER ABC.def-ghi_jkl~mno;",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key]中passwd=[REDACTED:credential] BEARER [REDACTED:bearer];",
+"n": 3
+},
+{
+"text": "Ｐassword=abc12345678\n-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----x bearer zzzzzzzzzzzzzzzz{client_secret: [REDACTED:x]1_token = process.env.TOKEN1中",
+"extra": [],
+"out": "Ｐassword=abc12345678\n[REDACTED:private_key]x bearer [REDACTED:bearer]{client_secret: [REDACTED:x]1_token = process.env.TOKEN1中",
+"n": 2
+},
+{
+"text": "refresh_token=xxxxxxxxxx\naccess-token: ********AKIAABCDEFGHIJKLMNOPQ sk-ant-api03-abcdefghijk_LMN_x =",
+"extra": [
+"supersecrettoken1"
+],
+"out": "refresh_token=xxxxxxxxxx\naccess-token: ********AKIAABCDEFGHIJKLMNOPQ [REDACTED:anthropic_key] =",
+"n": 1
+},
+{
+"text": "secret=${SECRET_VALUE1}passwd=onlyletters中AIzaSyA0123456789abcdefghijklmnopqrstu token = process.env.TOKEN1_access-token: ********\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "secret=${SECRET_VALUE1}passwd=[REDACTED:credential] token = process.env.TOKEN1_access-token: ********\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz",
+"extra": [],
+"out": "[REDACTED:openai_key]",
+"n": 1
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n中access-token: ********_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "token = process.env.TOKEN1_secret=${SECRET_VALUE1} password = \"hunter2abc9\"\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "token = process.env.TOKEN1_secret=${SECRET_VALUE1} password = \"[REDACTED:credential]\"\n",
+"n": 1
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123_",
+"extra": [],
+"out": "Authorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "xsk-proj-abcdefghijklmnopqrstuvwxyz sk-proj-abcdefghijklmnopqrstuvwxyz中passwd=12345678",
+"extra": [
+"supersecrettoken1"
+],
+"out": "xsk-proj-abcdefghijklmnopqrstuvwxyz [REDACTED:openai_key]中passwd=12345678",
+"n": 1
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123_\"apiKey\": \"abc123def456\" passwd=onlyletters中sk-1234567890abcdefghij中api_key: 'xyzxyz123456'refresh_token=xxxxxxxxxx中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "Authorization: Bearer [REDACTED:bearer]\"apiKey\": \"[REDACTED:credential]\" passwd=[REDACTED:credential] 'xyzxyz123456'refresh_token=xxxxxxxxxx中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中中bearer abcdefghijklmnop",
+"extra": [],
+"out": "[REDACTED:private_key]中中bearer abcdefghijklmnop",
+"n": 1
+},
+{
+"text": "client_secret: [REDACTED:x]1_client_secret: [REDACTED:x]1\nAKIAABCDEFGHIJKLMNOPQ x bearer zzzzzzzzzzzzzzzz_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "client_secret: [REDACTED:x]1_client_secret: [REDACTED:x]1\nAKIAABCDEFGHIJKLMNOPQ x bearer [REDACTED:bearer][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-ant-api03-abcdefghijk_LMNpassword = \"hunter2abc9\"",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:anthropic_key] = \"hunter2abc9\"",
+"n": 1
+},
+{
+"text": "ſecret=abcdefg12345_my.db_password: <redacted1> secret=${SECRET_VALUE1} sk-1234567890abcdefghij_`",
+"extra": [],
+"out": "ſecret=[REDACTED:credential] <redacted1> secret=${SECRET_VALUE1} [REDACTED:openai_key]`",
+"n": 2
+},
+{
+"text": ":中__中bearer abcdefghijklmnop\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": ":中__中bearer abcdefghijklmnop\n",
+"n": 0
+},
+{
+"text": ":abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ":[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "passwd=onlyletters -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----中my.db_password: <redacted1>_'my.db_password: <redacted1>",
+"extra": [],
+"out": "passwd=onlyletters [REDACTED:private_key]中my.db_password: <redacted1>_'my.db_password: <redacted1>",
+"n": 1
+},
+{
+"text": "Authorization: Bearer abcdefghijklmnop123.中\"apiKey\": \"abc123def456\"github_pat_11ABCDEFG0123456789_abcdefghijklmnopsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "Authorization: Bearer [REDACTED:bearer]中\"apiKey\": \"[REDACTED:credential]\"[REDACTED:github_token][REDACTED:server_token] [REDACTED:server_token]",
+"n": 5
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz_AKIAABCDEFGHIJKLMNOP_bearer short中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key] short中",
+"n": 1
+},
+{
+"text": "'中passwd=12345678-----BEGIN OPENSSH PRIVATE KEY-----\n",
+"extra": [],
+"out": "'中passwd=[REDACTED:credential]\n",
+"n": 2
+},
+{
+"text": "__bearer short; bearer short中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "__bearer short; bearer short中",
+"n": 0
+},
+{
+"text": "-----BEGIN RSA PRIVATE KEY-----\nabc\n\nＰassword=abc12345678my.db_password: <redacted1>_pässword=abc12345678_github_pat_11ABCDEFG0123456789_abcdefghijklmnopabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "x{_github_pat_11ABCDEFG0123456789_abcdefghijklmnopＰassword=abc12345678\n",
+"extra": [],
+"out": "x{_github_pat_11ABCDEFG0123456789_abcdefghijklmnopＰassword=abc12345678\n",
+"n": 0
+},
+{
+"text": "😀中\"apiKey\": \"abc123def456\"sk-1234567890abcdefghij_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "😀中\"apiKey\": \"[REDACTED:credential]\"[REDACTED:openai_key][REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz\nghp_abcdefghijklmnopqrstuvwxyz0123\n`_'",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]\n[REDACTED:github_token]\n`_'",
+"n": 2
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY----- AKIAABCDEFGHIJKLMNOPQ\n\nrefresh_token=xxxxxxxxxx",
+"extra": [],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "passwd=onlyletters\nASIA0123456789ABCDEF_token = process.env.TOKEN11_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=onlyletters\nASIA0123456789ABCDEF_token = process.env.TOKEN11_",
+"n": 0
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "AKIAABCDEFGHIJKLMNOP_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "key=val中ghp_abcdefghijklmnopqrstuvwxyz0123 AKIAABCDEFGHIJKLMNOPQ\n 中",
+"extra": [],
+"out": "key=val中ghp_abcdefghijklmnopqrstuvwxyz0123 AKIAABCDEFGHIJKLMNOPQ\n 中",
+"n": 0
+},
+{
+"text": ":中}中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": ":中}中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "pässword=abc12345678\nsk-1234567890abcdefghij arka_0123456789abcdefXYZpasswd=onlyletters_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "pässword=abc12345678\n[REDACTED:openai_key] [REDACTED:ark_token]=onlyletters_",
+"n": 2
+},
+{
+"text": "日本語テキストghp_abcdefghijklmnopqrstuvwxyz0123_passwd=onlyletters_xoxb-1234567890-abc._",
+"extra": [],
+"out": "日本語テキストghp_abcdefghijklmnopqrstuvwxyz0123_passwd=[REDACTED:credential]",
+"n": 1
+},
+{
+"text": "sk-1234567890abcdefghij中passwd=onlyletters",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:openai_key]中passwd=onlyletters",
+"n": 1
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu x{ 中bearer abcdefghijklmnop_abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu x{ 中bearer abcdefghijklmnop_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "` refresh_token=xxxxxxxxxx 中arka_0123456789abcdefghgithub_pat_11ABCDEFG0123456789_abcdefghijklmnop_",
+"extra": [],
+"out": "` refresh_token=xxxxxxxxxx 中arka_0123456789abcdefghgithub_pat_11ABCDEFG0123456789_abcdefghijklmnop_",
+"n": 0
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu SECRETK=abc12345678 中arka_0123456789abcdefgh_sk-ant-api03-abcdefghijk_LMN，_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu SECRETK=[REDACTED:credential] 中arka_0123456789abcdefgh_sk-ant-api03-abcdefghijk_LMN，_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": ".中",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ".中",
+"n": 0
+},
+{
+"text": "\"apiKey\": \"abc123def456\"\n中bearer abcdefghijklmnopeyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中\"apiKey\": \"abc123def456\" ",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\"\n中bearer abcdefghijklmnopeyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk中\"apiKey\": \"[REDACTED:credential]\" ",
+"n": 2
+},
+{
+"text": "pässword=abc12345678_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678_",
+"n": 0
+},
+{
+"text": "中bearer abcdefghijklmnopbearer short中arka_0123456789abcdefghAKIAABCDEFGHIJKLMNOP\n}abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "中bearer abcdefghijklmnopbearer short中arka_0123456789abcdefghAKIAABCDEFGHIJKLMNOP\n}[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "arka_0123456789abcdefXYZ_\"apiKey\": \"abc123def456\"\n-----BEGIN RSA PRIVATE KEY-----\nabc\n_中bearer abcdefghijklmnopapi_key: 'xyzxyz123456' ",
+"extra": [],
+"out": "[REDACTED:ark_token]\"apiKey\": \"[REDACTED:credential]\"\n[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "ASIA0123456789ABCDEF中AKIAABCDEFGHIJKLMNOPQ -----BEGIN OPENSSH PRIVATE KEY-----中supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "ASIA0123456789ABCDEF中AKIAABCDEFGHIJKLMNOPQ [REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "passwd=12345678中client_secret: [REDACTED:x]1",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "passwd=[REDACTED:credential] [REDACTED:x]1",
+"n": 1
+},
+{
+"text": " _ASIA0123456789ABCDEFaccess-token: ********_日本語テキスト_AKIAABCDEFGHIJKLMNOP",
+"extra": [],
+"out": " _ASIA0123456789ABCDEFaccess-token: ********_日本語テキスト_AKIAABCDEFGHIJKLMNOP",
+"n": 0
+},
+{
+"text": "AIzaSyA0123456789abcdefghijklmnopqrstu_my.db_password: <redacted1>Authorization: Bearer abcdefghijklmnop123",
+"extra": [
+"supersecrettoken1"
+],
+"out": "AIzaSyA0123456789abcdefghijklmnopqrstu_my.db_password: <redacted1>Authorization: Bearer [REDACTED:bearer]",
+"n": 1
+},
+{
+"text": "password = \"hunter2abc9\"中ghp_abcdefghijklmnopqrstuvwxyz0123\n- x bearer zzzzzzzzzzzzzzzzBEARER ABC.def-ghi_jkl~mno中sk-1234567890abcdefghij中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "password = \"[REDACTED:credential]\"中ghp_abcdefghijklmnopqrstuvwxyz0123\n- x bearer [REDACTED:bearer] ABC.def-ghi_jkl~mno中sk-1234567890abcdefghij中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOP",
+"extra": [],
+"out": "[REDACTED:aws_key]",
+"n": 1
+},
+{
+"text": "; \"apiKey\": \"abc123def456\"\nghp_abcdefghijklmnopqrstuvwxyz0123 Ｐassword=abc12345678，中secret=${SECRET_VALUE1}\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "; \"apiKey\": \"[REDACTED:credential]\"\n[REDACTED:github_token] Ｐassword=abc12345678，中secret=${SECRET_VALUE1}\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "sk-1234567890abcdefghij'\nＰassword=abc12345678 client_secret: [REDACTED:x]1 ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key]'\nＰassword=abc12345678 client_secret: [REDACTED:x]1 ",
+"n": 1
+},
+{
+"text": "BEARER ABC.def-ghi_jkl~mnoAKIAABCDEFGHIJKLMNOPpassword = \"hunter2abc9\" passwd=12345678 ",
+"extra": [],
+"out": "BEARER [REDACTED:bearer] = \"hunter2abc9\" passwd=12345678 ",
+"n": 1
+},
+{
+"text": "}\n`中  \"apiKey\": \"abc123def456\"_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "}\n`中  \"apiKey\": \"[REDACTED:credential]\"_",
+"n": 1
+},
+{
+"text": "token = process.env.TOKEN1AIzaSyA0123456789abcdefghijklmnopqrstughp_abcdefghijklmnopqrstuvwxyz0123 arka_0123456789abcdefXYZ_token = process.env.TOKEN1中my.db_password: <redacted1>中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "token = process.env.TOKEN1AIzaSyA0123456789abcdefghijklmnopqrstughp_abcdefghijklmnopqrstuvwxyz0123 [REDACTED:ark_token] = process.env.TOKEN1中my.db_password: <redacted1>中[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "xoxb-1234567890-abc_api_key: 'xyzxyz123456' pässword=abc12345678\nbearer short ",
+"extra": [],
+"out": "[REDACTED:slack_token]_api_key: '[REDACTED:credential]' pässword=abc12345678\nbearer short ",
+"n": 2
+},
+{
+"text": ".supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": ".[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "\t中arka_0123456789abcdefgh",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\t中arka_0123456789abcdefgh",
+"n": 0
+},
+{
+"text": "AKIAABCDEFGHIJKLMNOPaccess-token: ********_1x bearer zzzzzzzzzzzzzzzzx中",
+"extra": [],
+"out": "AKIAABCDEFGHIJKLMNOPaccess-token: ********_1x bearer [REDACTED:bearer]中",
+"n": 1
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----;_sk-proj-abcdefghijklmnopqrstuvwxyz中pässword=abc12345678_AKIAABCDEFGHIJKLMNOPQ中xoxb-1234567890-abc\n",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]\n",
+"n": 1
+},
+{
+"text": "，_passwd=onlyletters x bearer zzzzzzzzzzzzzzzzPASSWORD=abcdefgh1_key=val abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "，_passwd=onlyletters x bearer [REDACTED:bearer] [REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "sk-proj-abcdefghijklmnopqrstuvwxyz\npassword = \"hunter2abc9\"_\n",
+"extra": [],
+"out": "[REDACTED:openai_key]\npassword = \"[REDACTED:credential]\"_\n",
+"n": 2
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----sk-ant-api03-abcdefghijk_LMN AKIAABCDEFGHIJKLMNOPQghp_abcdefghijklmnopqrstuvwxyz0123xoxb-1234567890-abc_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "中bearer abcdefghijklmnop中{_ſecret=abcdefg12345ghp_abcdefghijklmnopqrstuvwxyz0123 - ",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "中bearer abcdefghijklmnop中{_ſecret=[REDACTED:credential] - ",
+"n": 1
+},
+{
+"text": "SECRETK=abc12345678-\n",
+"extra": [],
+"out": "SECRETK=[REDACTED:credential]\n",
+"n": 1
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop 😀_，",
+"extra": [
+"supersecrettoken1"
+],
+"out": "[REDACTED:github_token] 😀_，",
+"n": 1
+},
+{
+"text": "github_pat_11ABCDEFG0123456789_abcdefghijklmnop\nAKIAABCDEFGHIJKLMNOP xoxb-1234567890-abc passwd=12345678中abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:github_token]\n[REDACTED:aws_key] [REDACTED:slack_token] passwd=[REDACTED:credential] [REDACTED:server_token]",
+"n": 6
+},
+{
+"text": "Ｐassword=abc12345678auth_token=getenv(X12345678)1 AKIAABCDEFGHIJKLMNOPQ\n",
+"extra": [],
+"out": "Ｐassword=abc12345678auth_token=getenv(X12345678)1 AKIAABCDEFGHIJKLMNOPQ\n",
+"n": 0
+},
+{
+"text": "{_auth_token=getenv(X12345678)中AKIAABCDEFGHIJKLMNOP\n:_-----BEGIN OPENSSH PRIVATE KEY-----my.db_password: <redacted1>supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "{_auth_token=getenv(X12345678)中AKIAABCDEFGHIJKLMNOP\n:_[REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "Ｐassword=abc12345678 ASIA0123456789ABCDEF中secret=${SECRET_VALUE1}x_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "Ｐassword=abc12345678 ASIA0123456789ABCDEF中secret=${SECRET_VALUE1}x_",
+"n": 0
+},
+{
+"text": "api_key: 'xyzxyz123456'中AKIAABCDEFGHIJKLMNOP\n`\n'secret=${SECRET_VALUE1}中",
+"extra": [],
+"out": "api_key: '[REDACTED:credential]'中AKIAABCDEFGHIJKLMNOP\n`\n'secret=${SECRET_VALUE1}中",
+"n": 1
+},
+{
+"text": "pässword=abc12345678_😀sk-1234567890abcdefghij\nſecret=abcdefg12345xoxb-1234567890-abc ghp_abcdefghijklmnopqrstuvwxyz0123中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "pässword=abc12345678_😀[REDACTED:openai_key]\nſecret=[REDACTED:credential] [REDACTED:github_token]中",
+"n": 3
+},
+{
+"text": "sk-1234567890abcdefghij eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk\nabcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:openai_key] [REDACTED:jwt]\n[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "1_secret=${SECRET_VALUE1}_中bearer abcdefghijklmnop ",
+"extra": [],
+"out": "1_secret=${SECRET_VALUE1}_中bearer abcdefghijklmnop ",
+"n": 0
+},
+{
+"text": "1BEARER ABC.def-ghi_jkl~mno pässword=abc12345678中arka_0123456789abcdefgh\neyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjM0NTY3ODkwIn0.abcdefghijk_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "1BEARER ABC.def-ghi_jkl~mno pässword=abc12345678中arka_0123456789abcdefgh\n[REDACTED:jwt][REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "\"中access-token: ********，}_.\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "\"中access-token: ********，}_.\n",
+"n": 0
+},
+{
+"text": " _secret=${SECRET_VALUE1}",
+"extra": [],
+"out": " _secret=${SECRET_VALUE1}",
+"n": 0
+},
+{
+"text": "-中passwd=onlyletters \nx",
+"extra": [
+"supersecrettoken1"
+],
+"out": "-中passwd=onlyletters \nx",
+"n": 0
+},
+{
+"text": "'abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "'[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "\"apiKey\": \"abc123def456\"_ſecret=abcdefg12345 ",
+"extra": [],
+"out": "\"apiKey\": \"[REDACTED:credential]\"_ſecret=[REDACTED:credential] ",
+"n": 2
+},
+{
+"text": " -----BEGIN RSA PRIVATE KEY-----\nabc\n Ｐassword=abc12345678ASIA0123456789ABCDEF\nsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": " [REDACTED:private_key]",
+"n": 3
+},
+{
+"text": "-----BEGIN OPENSSH PRIVATE KEY-----AIzaSyA0123456789abcdefghijklmnopqrstu_PASSWORD=abcdefgh1\ngithub_pat_11ABCDEFG0123456789_abcdefghijklmnop }_",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:private_key]",
+"n": 1
+},
+{
+"text": "日本語テキストx中",
+"extra": [],
+"out": "日本語テキストx中",
+"n": 0
+},
+{
+"text": "1\nsecret=${SECRET_VALUE1}\npasswd=onlyletters sk-1234567890abcdefghij_SECRETK=abc12345678_auth_token=getenv(X12345678)中",
+"extra": [
+"supersecrettoken1"
+],
+"out": "1\nsecret=${SECRET_VALUE1}\npasswd=onlyletters [REDACTED:openai_key]K=abc12345678_auth_token=getenv(X12345678)中",
+"n": 1
+},
+{
+"text": "，\n日本語テキスト1_'\n'\nauth_token=getenv(X12345678)abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "，\n日本語テキスト1_'\n'\nauth_token=getenv(X12345678)[REDACTED:server_token] [REDACTED:server_token]",
+"n": 2
+},
+{
+"text": "ASIA0123456789ABCDEFxoxb-1234567890-abcbearer short -----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASC\n-----END PRIVATE KEY-----\n=\nſecret=abcdefg12345",
+"extra": [],
+"out": "ASIA0123456789ABCDEFxoxb-1234567890-abcbearer short [REDACTED:private_key]\n=\nſecret=[REDACTED:credential]",
+"n": 2
+},
+{
+"text": "SECRETK=abc12345678中}中sk-1234567890abcdefghijsupersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "SECRETK=[REDACTED:credential]}中sk-1234567890abcdefghij[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "ASIA0123456789ABCDEF\n.中x\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "[REDACTED:aws_key]\n.中x\n",
+"n": 1
+},
+{
+"text": "x bearer zzzzzzzzzzzzzzzz sk-proj-abcdefghijklmnopqrstuvwxyz",
+"extra": [],
+"out": "x bearer [REDACTED:bearer] [REDACTED:openai_key]",
+"n": 2
+},
+{
+"text": "api_key: 'xyzxyz123456'_",
+"extra": [
+"supersecrettoken1"
+],
+"out": "api_key: '[REDACTED:credential]'_",
+"n": 1
+},
+{
+"text": ".中=中sk-proj-abcdefghijklmnopqrstuvwxyz_ASIA0123456789ABCDEF\nsk-1234567890abcdefghij中，abcdefgh1234 abcdefgh1234",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": ".中=中sk-proj-abcdefghijklmnopqrstuvwxyz_ASIA0123456789ABCDEF\n[REDACTED:openai_key]中，[REDACTED:server_token] [REDACTED:server_token]",
+"n": 3
+},
+{
+"text": "my.db_password: <redacted1>auth_token=getenv(X12345678)",
+"extra": [],
+"out": "my.db_password: <redacted1>auth_token=getenv(X12345678)",
+"n": 0
+},
+{
+"text": "passwd=12345678Authorization: Bearer abcdefghijklmnop123BEARER ABC.def-ghi_jkl~mno_supersecrettoken1 supersecrettoken1",
+"extra": [
+"supersecrettoken1"
+],
+"out": "passwd=[REDACTED:credential] Bearer [REDACTED:bearer] ABC.def-ghi_jkl~mno_[REDACTED:server_token] [REDACTED:server_token]",
+"n": 4
+},
+{
+"text": "password = \"hunter2abc9\"_password = \"hunter2abc9\"_BEARER ABC.def-ghi_jkl~mno中key=val\n",
+"extra": [
+"short",
+"abcdefgh1234"
+],
+"out": "password = \"[REDACTED:credential]\"_password = \"[REDACTED:credential]\"_BEARER ABC.def-ghi_jkl~mno中key=val\n",
+"n": 2
+},
+{
+"text": "arka_0123456789abcdefXYZ中key=val ",
+"extra": [],
+"out": "[REDACTED:ark_token]中key=val ",
+"n": 1
+}
+],
+"value": {
+"in": {
+"a": [
+"password=abc123456",
+{
+"k": "sk-ant-api03-abcdefghijk_LMN",
+"n": 1
+}
+],
+"password=abc123456": true
+},
+"out": {
+"a": [
+"password=[REDACTED:credential]",
+{
+"k": "[REDACTED:anthropic_key]",
+"n": 1
+}
+],
+"password=abc123456": true
+},
+"n": 2
+}
+}

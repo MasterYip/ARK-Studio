@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>GPU dispatch example</title>
+<desc>Four GPUs; a job claiming 20 GB. GPU 1 and GPU 3 are filtered out for memory; GPU 2 wins because it is the least utilised of the GPUs that fit.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6B7280"/></marker><marker id="arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1F5A7A"/></marker></defs>
+<rect width="1200" height="560" fill="#F7F5EF"/>
+<text x="32" y="44" font-size="24" fill="#111827" font-weight="700" text-anchor="start">How the GPU queue picks a GPU</text>
+<text x="32" y="70" font-size="14" fill="#4B5563" font-weight="400" text-anchor="start">Job warmup-b-s0 claims gpu_memory_mb = 20,000 (20 GB) on one GPU.</text>
+<text x="32" y="118" font-size="15" fill="#111827" font-weight="700" text-anchor="start">1  Filter: available = free − already claimed by ARK ≥ claim</text>
+<text x="632" y="118" font-size="15" fill="#111827" font-weight="700" text-anchor="start">2  Rank: least utilised first (ties: more memory)</text>
+<rect x="32" y="146" width="560" height="76" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="52" y="176" font-size="16" fill="#111827" font-weight="700" text-anchor="start">GPU 0</text>
+<rect x="150" y="162" width="300" height="16" rx="4" fill="#ECE8DE" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="150" y="162" width="112" height="16" rx="4" fill="#1F5A7A" fill-opacity="0.35" stroke="none" stroke-width="1"/>
+<rect x="150" y="162" width="112" height="16" rx="4" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<line x1="225" y1="156" x2="225" y2="184" stroke="#B23A48" stroke-width="2" stroke-linecap="round"/>
+<text x="460" y="175" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">30 GB avail.</text>
+<text x="150" y="202" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">free 30 GB</text>
+<text x="572" y="202" font-size="12" fill="#2F7D5B" font-weight="600" text-anchor="end">fits</text>
+<rect x="632" y="146" width="536" height="76" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="652" y="176" font-size="15" fill="#111827" font-weight="700" text-anchor="start">GPU 0  ·  utilisation 92%</text>
+<rect x="652" y="190" width="300" height="12" rx="4" fill="#ECE8DE" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="652" y="190" width="276" height="12" rx="4" fill="#C2683F" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1148" y="176" font-size="13" fill="#4B5563" font-weight="700" text-anchor="end">skipped: busier</text>
+<line x1="596" y1="184" x2="628" y2="184" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="32" y="238" width="560" height="76" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="52" y="268" font-size="16" fill="#111827" font-weight="700" text-anchor="start">GPU 1</text>
+<rect x="150" y="254" width="300" height="16" rx="4" fill="#ECE8DE" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="150" y="254" width="45" height="16" rx="4" fill="#1F5A7A" fill-opacity="0.35" stroke="none" stroke-width="1"/>
+<rect x="150" y="254" width="45" height="16" rx="4" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<line x1="225" y1="248" x2="225" y2="276" stroke="#B23A48" stroke-width="2" stroke-linecap="round"/>
+<text x="460" y="267" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">12 GB avail.</text>
+<text x="150" y="294" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">free 12 GB</text>
+<text x="572" y="294" font-size="12" fill="#B23A48" font-weight="600" text-anchor="end">too small → filtered out</text>
+<rect x="32" y="330" width="560" height="76" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#2F7D5B" stroke-width="2.5"/>
+<text x="52" y="360" font-size="16" fill="#111827" font-weight="700" text-anchor="start">GPU 2</text>
+<rect x="150" y="346" width="300" height="16" rx="4" fill="#ECE8DE" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="150" y="346" width="229" height="16" rx="4" fill="#1F5A7A" fill-opacity="0.35" stroke="none" stroke-width="1"/>
+<rect x="150" y="346" width="229" height="16" rx="4" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<line x1="225" y1="340" x2="225" y2="368" stroke="#B23A48" stroke-width="2" stroke-linecap="round"/>
+<text x="460" y="359" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">61 GB avail.</text>
+<text x="150" y="386" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">free 61 GB</text>
+<text x="572" y="386" font-size="12" fill="#2F7D5B" font-weight="600" text-anchor="end">fits</text>
+<rect x="632" y="330" width="536" height="76" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#2F7D5B" stroke-width="2.5"/>
+<text x="652" y="360" font-size="15" fill="#111827" font-weight="700" text-anchor="start">GPU 2  ·  utilisation 7%</text>
+<rect x="652" y="374" width="300" height="12" rx="4" fill="#ECE8DE" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="652" y="374" width="21" height="12" rx="4" fill="#C2683F" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="1148" y="360" font-size="13" fill="#2F7D5B" font-weight="700" text-anchor="end">chosen ✓</text>
+<line x1="596" y1="368" x2="628" y2="368" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="32" y="422" width="560" height="76" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="52" y="452" font-size="16" fill="#111827" font-weight="700" text-anchor="start">GPU 3</text>
+<rect x="150" y="438" width="300" height="16" rx="4" fill="#ECE8DE" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<rect x="150" y="438" width="150" height="16" rx="4" fill="#1F5A7A" fill-opacity="0.35" stroke="none" stroke-width="1"/>
+<rect x="150" y="438" width="38" height="16" rx="4" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<line x1="225" y1="432" x2="225" y2="460" stroke="#B23A48" stroke-width="2" stroke-linecap="round"/>
+<text x="460" y="451" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">10 GB avail.</text>
+<text x="150" y="478" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">free 40 GB − 30 GB launching</text>
+<text x="572" y="478" font-size="12" fill="#B23A48" font-weight="600" text-anchor="end">too small → filtered out</text>
+<text x="32" y="530" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">The red tick on each bar is the 20 GB claim. The claim is reserved on the chosen GPU before the next job is considered.</text>
+</svg>

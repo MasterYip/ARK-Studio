@@ -1,0 +1,3544 @@
+{
+"probes": {
+"DELETE /api/agent-sessions/x": [
+"regex:^/api/agent-sessions/([^/]+)$",
+404,
+404
+],
+"DELETE /api/agent-sessions/x/steer/x": [
+"regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+404,
+404
+],
+"DELETE /api/chat": [
+"exact:/api/chat",
+200,
+200
+],
+"DELETE /api/links/1": [
+"regex:^/api/links/(\\d+)$",
+200,
+200
+],
+"DELETE /api/me/avatar": [
+"exact:/api/me/avatar",
+200,
+200
+],
+"DELETE /api/media/1": [
+"regex:^/api/media/(\\d+)$",
+200,
+200
+],
+"DELETE /api/mobile/session": [
+"exact:/api/mobile/session",
+401,
+401
+],
+"DELETE /api/org/teams/x": [
+"regex:^/api/org/teams/([^/]+)$",
+404,
+404
+],
+"DELETE /api/org/teams/x/members/x": [
+"regex:^/api/org/teams/([^/]+)/members/([^/]+)$",
+404,
+404
+],
+"DELETE /api/org/users/x": [
+"regex:^/api/org/users/([^/]+)$",
+404,
+404
+],
+"DELETE /api/org/users/x/linux-accounts/x": [
+"regex:^/api/org/users/([^/]+)/linux-accounts/([^/]+)$",
+404,
+404
+],
+"DELETE /api/personal/agent-tokens/([A-Za-z0-9_]+)": [
+"regex:^/api/personal/agent-tokens/([A-Za-z0-9_]+)$",
+404,
+404
+],
+"DELETE /api/project": [
+"exact:/api/project",
+400,
+400
+],
+"DELETE /api/session-contexts/x": [
+"fullmatch:/api/session-contexts/([^/]+)",
+404,
+404
+],
+"DELETE /api/task-agent/x": [
+"prefix:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/x [token]": [
+"prefix:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/x/y/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/x/y/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/x/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/x/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/task-agent/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"DELETE /api/units/x": [
+"regex:^/api/units/([^/]+)$",
+400,
+400
+],
+"DELETE /api/units/x/members/x": [
+"regex:^/api/units/([^/]+)/members/([^/]+)$",
+400,
+400
+],
+"DELETE /api/users/x/avatar": [
+"regex:^/api/users/([^/]+)/avatar$",
+405,
+405
+],
+"DELETE /api/workspace/terminals/x": [
+"regex:^/api/workspace/terminals/([^/]+)$",
+404,
+404
+],
+"DELETE /api/zz-unknown": [
+"extra",
+404,
+404
+],
+"GET /": [
+"exact:/",
+200,
+200
+],
+"GET /api/activity": [
+"exact:/api/activity",
+200,
+200
+],
+"GET /api/agent-sessions": [
+"prefix:/api/agent-sessions ; exact:/api/agent-sessions",
+200,
+200
+],
+"GET /api/agent-sessions/groups": [
+"exact:/api/agent-sessions/groups",
+200,
+200
+],
+"GET /api/agent-sessions/presets": [
+"exact:/api/agent-sessions/presets",
+200,
+200
+],
+"GET /api/agent-sessions/x": [
+"regex:^/api/agent-sessions/([^/]+)$",
+404,
+404
+],
+"GET /api/agent-sessions/x/approvals": [
+"regex:^/api/agent-sessions/([^/]+)/approvals$",
+404,
+404
+],
+"GET /api/agent-sessions/x/artifacts": [
+"regex:^/api/agent-sessions/([^/]+)/artifacts$",
+404,
+404
+],
+"GET /api/agent-sessions/x/artifacts/download": [
+"regex:^/api/agent-sessions/([^/]+)/artifacts/download$",
+404,
+404
+],
+"GET /api/agent-sessions/x/artifacts/read": [
+"regex:^/api/agent-sessions/([^/]+)/artifacts/read$",
+404,
+404
+],
+"GET /api/agent-sessions/x/logs": [
+"regex:^/api/agent-sessions/([^/]+)/logs$",
+404,
+404
+],
+"GET /api/agent-sessions/x/media": [
+"regex:^/api/agent-sessions/([^/]+)/media$",
+404,
+404
+],
+"GET /api/agent-sessions/x/transcript": [
+"regex:^/api/agent-sessions/([^/]+)/transcript$",
+404,
+404
+],
+"GET /api/agent-sessions/x/y/zz-unknown": [
+"nearmiss:/api/agent-sessions",
+404,
+404
+],
+"GET /api/agent-sessions/x/zz-unknown": [
+"nearmiss:/api/agent-sessions",
+404,
+404
+],
+"GET /api/agent-sessions/zz-unknown": [
+"nearmiss:/api/agent-sessions",
+404,
+404
+],
+"GET /api/agent/token": [
+"exact:/api/agent/token",
+200,
+200
+],
+"GET /api/agent/v1/context": [
+"exact:/api/agent/v1/context",
+401,
+401
+],
+"GET /api/agent/v1/context [token]": [
+"exact:/api/agent/v1/context",
+200,
+200
+],
+"GET /api/agent/v1/export": [
+"exact:/api/agent/v1/export",
+401,
+401
+],
+"GET /api/agent/v1/export [token]": [
+"exact:/api/agent/v1/export",
+200,
+200
+],
+"GET /api/agent/v1/gpu/jobs": [
+"exact:/api/agent/v1/gpu/jobs",
+401,
+401
+],
+"GET /api/agent/v1/gpu/jobs [token]": [
+"exact:/api/agent/v1/gpu/jobs",
+422,
+422
+],
+"GET /api/agent/v1/gpu/jobs/x": [
+"regex:^/api/agent/v1/gpu/jobs/([^/]+)(/logs)?$",
+401,
+401
+],
+"GET /api/agent/v1/gpu/jobs/x [token]": [
+"regex:^/api/agent/v1/gpu/jobs/([^/]+)(/logs)?$",
+404,
+404
+],
+"GET /api/agent/v1/insights": [
+"exact:/api/agent/v1/insights",
+401,
+401
+],
+"GET /api/agent/v1/insights [token]": [
+"exact:/api/agent/v1/insights",
+200,
+200
+],
+"GET /api/agent/v1/interface": [
+"exact:/api/agent/v1/interface",
+401,
+401
+],
+"GET /api/agent/v1/interface [token]": [
+"exact:/api/agent/v1/interface",
+200,
+200
+],
+"GET /api/agent/v1/media/1/raw": [
+"fullmatch:/api/agent/v1/media/(\\d+)/raw",
+401,
+401
+],
+"GET /api/agent/v1/media/1/raw [token]": [
+"fullmatch:/api/agent/v1/media/(\\d+)/raw",
+200,
+200
+],
+"GET /api/agent/v1/project/palette": [
+"exact:/api/agent/v1/project/palette",
+401,
+401
+],
+"GET /api/agent/v1/project/palette [token]": [
+"exact:/api/agent/v1/project/palette",
+200,
+200
+],
+"GET /api/agent/v1/sessions/watcher.py": [
+"exact:/api/agent/v1/sessions/watcher.py",
+401,
+401
+],
+"GET /api/agent/v1/sessions/watcher.py [token]": [
+"exact:/api/agent/v1/sessions/watcher.py",
+200,
+200
+],
+"GET /api/agent/v1/sessions/x": [
+"fullmatch:/api/agent/v1/sessions/([^/]+)",
+401,
+401
+],
+"GET /api/agent/v1/sessions/x [token]": [
+"fullmatch:/api/agent/v1/sessions/([^/]+)",
+400,
+400
+],
+"GET /api/agent/v1/setup": [
+"exact:/api/agent/v1/setup",
+401,
+401
+],
+"GET /api/agent/v1/setup [token]": [
+"exact:/api/agent/v1/setup",
+200,
+200
+],
+"GET /api/agent/v1/skills": [
+"exact:/api/agent/v1/skills",
+401,
+401
+],
+"GET /api/agent/v1/skills [token]": [
+"exact:/api/agent/v1/skills",
+200,
+200
+],
+"GET /api/agent/v1/skills/x": [
+"prefix:/api/agent/v1/skills/",
+401,
+401
+],
+"GET /api/agent/v1/skills/x [token]": [
+"prefix:/api/agent/v1/skills/",
+404,
+404
+],
+"GET /api/agent/v1/units": [
+"exact:/api/agent/v1/units",
+401,
+401
+],
+"GET /api/agent/v1/units [token]": [
+"exact:/api/agent/v1/units",
+200,
+200
+],
+"GET /api/agent/v1/units/x": [
+"regex:^/api/agent/v1/units/([^/]+)$",
+401,
+401
+],
+"GET /api/agent/v1/units/x [token]": [
+"regex:^/api/agent/v1/units/([^/]+)$",
+400,
+400
+],
+"GET /api/agent/v1/units/x/comments": [
+"regex:^/api/agent/v1/units/([^/]+)/comments$",
+401,
+401
+],
+"GET /api/agent/v1/units/x/comments [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/comments$",
+400,
+400
+],
+"GET /api/agent/v1/units/x/history": [
+"fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+401,
+401
+],
+"GET /api/agent/v1/units/x/history [token]": [
+"fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+400,
+400
+],
+"GET /api/agent/v1/units/x/history/diff": [
+"derived:_node_history_get:action",
+401,
+401
+],
+"GET /api/agent/v1/units/x/history/diff [token]": [
+"derived:_node_history_get:action",
+400,
+400
+],
+"GET /api/agent/v1/units/x/members": [
+"regex:^/api/agent/v1/units/([^/]+)/members$",
+401,
+401
+],
+"GET /api/agent/v1/units/x/members [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/members$",
+400,
+400
+],
+"GET /api/agent/v1/whoami": [
+"exact:/api/agent/v1/whoami",
+401,
+401
+],
+"GET /api/agent/v1/whoami [token]": [
+"exact:/api/agent/v1/whoami",
+200,
+200
+],
+"GET /api/agent/v1/x": [
+"prefix:/api/agent/v1/",
+401,
+401
+],
+"GET /api/agent/v1/x [token]": [
+"prefix:/api/agent/v1/",
+404,
+404
+],
+"GET /api/agent/v1/x/y/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"GET /api/agent/v1/x/y/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"GET /api/agent/v1/x/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"GET /api/agent/v1/x/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"GET /api/agent/v1/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"GET /api/agent/v1/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"GET /api/assistant/config": [
+"exact:/api/assistant/config",
+200,
+200
+],
+"GET /api/assistant/dispatch": [
+"exact:/api/assistant/dispatch",
+400,
+400
+],
+"GET /api/assistant/insights": [
+"exact:/api/assistant/insights",
+200,
+200
+],
+"GET /api/auth/session": [
+"exact:/api/auth/session",
+200,
+200
+],
+"GET /api/blackbox": [
+"exact:/api/blackbox",
+200,
+200
+],
+"GET /api/bootstrap": [
+"exact:/api/bootstrap",
+200,
+200
+],
+"GET /api/changes": [
+"exact:/api/changes",
+200,
+200
+],
+"GET /api/chat": [
+"exact:/api/chat",
+200,
+200
+],
+"GET /api/chat/status": [
+"exact:/api/chat/status",
+200,
+200
+],
+"GET /api/events": [
+"exact:/api/events",
+"open",
+"open"
+],
+"GET /api/export": [
+"exact:/api/export",
+200,
+200
+],
+"GET /api/export?format=bundle": [
+"derived:_api_get:fmt",
+400,
+400
+],
+"GET /api/export?format=csv": [
+"derived:_api_get:fmt",
+200,
+200
+],
+"GET /api/export?format=json": [
+"derived:_api_get:fmt",
+200,
+200
+],
+"GET /api/export?format=markdown": [
+"derived:_api_get:fmt",
+200,
+200
+],
+"GET /api/export?format=project": [
+"derived:_api_get:fmt",
+200,
+200
+],
+"GET /api/export?format=svg": [
+"derived:_api_get:fmt",
+200,
+200
+],
+"GET /api/gpu/dashboard": [
+"exact:/api/gpu/dashboard",
+409,
+409
+],
+"GET /api/gpu/jobs": [
+"exact:/api/gpu/jobs",
+422,
+422
+],
+"GET /api/gpu/jobs/x": [
+"regex:^/api/gpu/jobs/([^/]+)$",
+404,
+404
+],
+"GET /api/gpu/jobs/x/logs": [
+"regex:^/api/gpu/jobs/([^/]+)/logs$",
+404,
+404
+],
+"GET /api/gpu/queue": [
+"exact:/api/gpu/queue",
+200,
+200
+],
+"GET /api/gpu/servers": [
+"exact:/api/gpu/servers",
+200,
+200
+],
+"GET /api/gpu/status": [
+"exact:/api/gpu/status",
+200,
+200
+],
+"GET /api/graph": [
+"exact:/api/graph",
+200,
+200
+],
+"GET /api/graph/bodies": [
+"exact:/api/graph/bodies",
+200,
+200
+],
+"GET /api/graph/snapshot": [
+"exact:/api/graph/snapshot",
+200,
+200
+],
+"GET /api/health": [
+"exact:/api/health",
+200,
+200
+],
+"GET /api/import/infohub/preview": [
+"exact:/api/import/infohub/preview",
+400,
+400
+],
+"GET /api/import/infohub/sources": [
+"exact:/api/import/infohub/sources",
+200,
+200
+],
+"GET /api/infohub/browse": [
+"exact:/api/infohub/browse",
+400,
+400
+],
+"GET /api/infohub/candidates": [
+"exact:/api/infohub/candidates",
+200,
+200
+],
+"GET /api/infohub/graph": [
+"exact:/api/infohub/graph",
+400,
+400
+],
+"GET /api/infohub/unit": [
+"exact:/api/infohub/unit",
+400,
+400
+],
+"GET /api/me": [
+"exact:/api/me",
+200,
+200
+],
+"GET /api/media/1/raw": [
+"regex:^/api/media/(\\d+)/raw$",
+200,
+200
+],
+"GET /api/mobile/apps": [
+"exact:/api/mobile/apps",
+200,
+200
+],
+"GET /api/mobile/connection": [
+"exact:/api/mobile/connection",
+200,
+200
+],
+"GET /api/mobile/pairs": [
+"exact:/api/mobile/pairs",
+200,
+200
+],
+"GET /api/mobile/session": [
+"exact:/api/mobile/session",
+200,
+200
+],
+"GET /api/mobile/session/projects": [
+"exact:/api/mobile/session/projects",
+401,
+401
+],
+"GET /api/org": [
+"exact:/api/org",
+200,
+200
+],
+"GET /api/org/": [
+"exact:/api/org/",
+200,
+200
+],
+"GET /api/org/audit": [
+"exact:/api/org/audit",
+200,
+200
+],
+"GET /api/org/projects/x": [
+"regex:^/api/org/projects/([^/]+)$",
+404,
+404
+],
+"GET /api/org/teams": [
+"exact:/api/org/teams",
+200,
+200
+],
+"GET /api/org/users": [
+"exact:/api/org/users",
+200,
+200
+],
+"GET /api/org/users/x/linux-accounts": [
+"regex:^/api/org/users/([^/]+)/linux-accounts$",
+404,
+404
+],
+"GET /api/personal/agent-tokens": [
+"exact:/api/personal/agent-tokens",
+200,
+200
+],
+"GET /api/personal/settings": [
+"exact:/api/personal/settings",
+200,
+200
+],
+"GET /api/personal/settings?scope=environment": [
+"derived:_api_get:scope",
+200,
+200
+],
+"GET /api/project": [
+"exact:/api/project",
+200,
+200
+],
+"GET /api/project/assignees": [
+"exact:/api/project/assignees",
+200,
+200
+],
+"GET /api/project/overview": [
+"exact:/api/project/overview",
+200,
+200
+],
+"GET /api/project/settings": [
+"exact:/api/project/settings",
+200,
+200
+],
+"GET /api/projects": [
+"exact:/api/projects",
+200,
+200
+],
+"GET /api/providers": [
+"exact:/api/providers",
+200,
+200
+],
+"GET /api/remote/info": [
+"exact:/api/remote/info",
+200,
+200
+],
+"GET /api/resources/graph": [
+"exact:/api/resources/graph",
+200,
+200
+],
+"GET /api/revision": [
+"exact:/api/revision",
+200,
+200
+],
+"GET /api/search/nodes": [
+"exact:/api/search/nodes",
+400,
+400
+],
+"GET /api/session-contexts": [
+"exact:/api/session-contexts",
+200,
+200
+],
+"GET /api/session-contexts/s_probe0000/context": [
+"derived:_session_contexts_get:action",
+404,
+404
+],
+"GET /api/session-contexts/s_probe0000/transcript": [
+"derived:_session_contexts_get:action",
+404,
+404
+],
+"GET /api/session-contexts/x": [
+"prefix:/api/session-contexts/",
+404,
+404
+],
+"GET /api/session-contexts/x/y/zz-unknown": [
+"nearmiss:/api/session-contexts/",
+404,
+404
+],
+"GET /api/session-contexts/x/zz-unknown": [
+"nearmiss:/api/session-contexts/",
+404,
+404
+],
+"GET /api/session-contexts/zz-unknown": [
+"nearmiss:/api/session-contexts/",
+404,
+404
+],
+"GET /api/settings/effective": [
+"exact:/api/settings/effective",
+200,
+200
+],
+"GET /api/skills": [
+"exact:/api/skills",
+200,
+200
+],
+"GET /api/skills/agent-team/agent": [
+"derived:_skills_get:parts[1]",
+200,
+200
+],
+"GET /api/skills/agent-team/prompt": [
+"derived:_skills_get:parts[1]",
+200,
+200
+],
+"GET /api/skills/interface": [
+"exact:/api/skills/interface ; derived:_skills_get:rest",
+200,
+200
+],
+"GET /api/skills/setup": [
+"derived:_skills_get:parts",
+200,
+200
+],
+"GET /api/skills/setup/setup": [
+"derived:_skills_get:parts",
+404,
+404
+],
+"GET /api/skills/setup/state": [
+"exact:/api/skills/setup/state ; derived:_skills_get:parts",
+200,
+200
+],
+"GET /api/skills/state": [
+"derived:_skills_get:parts",
+404,
+404
+],
+"GET /api/skills/x": [
+"prefix:/api/skills/ ; regex:^/api/skills/([^/]+)$",
+404,
+404
+],
+"GET /api/skills/x/agent": [
+"derived:_skills_get:parts[1]",
+404,
+404
+],
+"GET /api/skills/x/prompt": [
+"regex:^/api/skills/([^/]+)/(prompt|agent)$ ; derived:_skills_get:parts[1]",
+404,
+404
+],
+"GET /api/skills/x/y/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"GET /api/skills/x/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"GET /api/skills/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"GET /api/task-agent/v1/context": [
+"exact:/api/task-agent/v1/context",
+401,
+401
+],
+"GET /api/task-agent/v1/context [token]": [
+"exact:/api/task-agent/v1/context",
+200,
+200
+],
+"GET /api/task-agent/v1/gpu/jobs": [
+"exact:/api/task-agent/v1/gpu/jobs",
+401,
+401
+],
+"GET /api/task-agent/v1/gpu/jobs [token]": [
+"exact:/api/task-agent/v1/gpu/jobs",
+422,
+422
+],
+"GET /api/task-agent/v1/gpu/jobs/x": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)$",
+401,
+401
+],
+"GET /api/task-agent/v1/gpu/jobs/x [token]": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)$",
+404,
+404
+],
+"GET /api/task-agent/v1/gpu/jobs/x/logs": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/logs$",
+401,
+401
+],
+"GET /api/task-agent/v1/gpu/jobs/x/logs [token]": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/logs$",
+404,
+404
+],
+"GET /api/task-agent/v1/links": [
+"exact:/api/task-agent/v1/links",
+401,
+401
+],
+"GET /api/task-agent/v1/links [token]": [
+"exact:/api/task-agent/v1/links",
+200,
+200
+],
+"GET /api/task-agent/v1/project": [
+"exact:/api/task-agent/v1/project",
+401,
+401
+],
+"GET /api/task-agent/v1/project [token]": [
+"exact:/api/task-agent/v1/project",
+200,
+200
+],
+"GET /api/task-agent/v1/session": [
+"exact:/api/task-agent/v1/session",
+401,
+401
+],
+"GET /api/task-agent/v1/session [token]": [
+"exact:/api/task-agent/v1/session",
+200,
+200
+],
+"GET /api/task-agent/v1/snapshot": [
+"exact:/api/task-agent/v1/snapshot",
+401,
+401
+],
+"GET /api/task-agent/v1/snapshot [token]": [
+"exact:/api/task-agent/v1/snapshot",
+200,
+200
+],
+"GET /api/task-agent/v1/units": [
+"exact:/api/task-agent/v1/units",
+401,
+401
+],
+"GET /api/task-agent/v1/units [token]": [
+"exact:/api/task-agent/v1/units",
+200,
+200
+],
+"GET /api/task-agent/v1/units/x": [
+"regex:^/api/task-agent/v1/units/([^/]+)$",
+401,
+401
+],
+"GET /api/task-agent/v1/units/x [token]": [
+"regex:^/api/task-agent/v1/units/([^/]+)$",
+400,
+400
+],
+"GET /api/task-agent/v1/units/x/comments": [
+"regex:^/api/task-agent/v1/units/([^/]+)/comments$",
+401,
+401
+],
+"GET /api/task-agent/v1/units/x/comments [token]": [
+"regex:^/api/task-agent/v1/units/([^/]+)/comments$",
+400,
+400
+],
+"GET /api/task-agent/v1/x": [
+"prefix:/api/task-agent/v1/",
+401,
+401
+],
+"GET /api/task-agent/v1/x [token]": [
+"prefix:/api/task-agent/v1/",
+404,
+404
+],
+"GET /api/task-agent/v1/x/y/zz-unknown": [
+"nearmiss:/api/task-agent/v1/",
+401,
+401
+],
+"GET /api/task-agent/v1/x/y/zz-unknown [token]": [
+"nearmiss:/api/task-agent/v1/",
+404,
+404
+],
+"GET /api/task-agent/v1/x/zz-unknown": [
+"nearmiss:/api/task-agent/v1/",
+401,
+401
+],
+"GET /api/task-agent/v1/x/zz-unknown [token]": [
+"nearmiss:/api/task-agent/v1/",
+404,
+404
+],
+"GET /api/task-agent/v1/zz-unknown": [
+"nearmiss:/api/task-agent/v1/",
+401,
+401
+],
+"GET /api/task-agent/v1/zz-unknown [token]": [
+"nearmiss:/api/task-agent/v1/",
+404,
+404
+],
+"GET /api/timeline": [
+"exact:/api/timeline",
+200,
+200
+],
+"GET /api/topics": [
+"exact:/api/topics",
+200,
+200
+],
+"GET /api/unit-details": [
+"exact:/api/unit-details",
+200,
+200
+],
+"GET /api/units": [
+"exact:/api/units",
+200,
+200
+],
+"GET /api/units/x": [
+"regex:^/api/units/([^/]+)$",
+400,
+400
+],
+"GET /api/units/x/comments": [
+"regex:^/api/units/([^/]+)/comments$",
+400,
+400
+],
+"GET /api/units/x/history": [
+"fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?",
+400,
+400
+],
+"GET /api/units/x/history/diff": [
+"derived:_node_history_get:action",
+400,
+400
+],
+"GET /api/units/x/members": [
+"regex:^/api/units/([^/]+)/members$",
+400,
+400
+],
+"GET /api/users/x/avatar": [
+"regex:^/api/users/([^/]+)/avatar$",
+404,
+404
+],
+"GET /api/workspace": [
+"exact:/api/workspace",
+404,
+404
+],
+"GET /api/workspace/changes": [
+"exact:/api/workspace/changes",
+200,
+200
+],
+"GET /api/workspace/diff": [
+"exact:/api/workspace/diff",
+400,
+400
+],
+"GET /api/workspace/file": [
+"exact:/api/workspace/file",
+400,
+400
+],
+"GET /api/workspace/grep": [
+"exact:/api/workspace/grep",
+400,
+400
+],
+"GET /api/workspace/info": [
+"exact:/api/workspace/info",
+200,
+200
+],
+"GET /api/workspace/raw": [
+"exact:/api/workspace/raw",
+400,
+400
+],
+"GET /api/workspace/search": [
+"exact:/api/workspace/search",
+200,
+200
+],
+"GET /api/workspace/terminals": [
+"exact:/api/workspace/terminals",
+200,
+200
+],
+"GET /api/workspace/terminals/x": [
+"regex:^/api/workspace/terminals/([^/]+)$",
+404,
+404
+],
+"GET /api/workspace/terminals/x/stream": [
+"regex:^/api/workspace/terminals/([^/]+)/stream$",
+404,
+404
+],
+"GET /api/workspace/tree": [
+"exact:/api/workspace/tree",
+200,
+200
+],
+"GET /api/workspace/x": [
+"prefix:/api/workspace/",
+404,
+404
+],
+"GET /api/workspace/x/y/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"GET /api/workspace/x/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"GET /api/workspace/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"GET /api/worktrees": [
+"exact:/api/worktrees",
+200,
+200
+],
+"GET /api/x": [
+"prefix:/api/",
+404,
+404
+],
+"GET /api/x/y/zz-unknown": [
+"nearmiss:/api/",
+404,
+404
+],
+"GET /api/x/zz-unknown": [
+"nearmiss:/api/",
+404,
+404
+],
+"GET /api/zz-unknown": [
+"nearmiss:/api/ ; extra",
+404,
+404
+],
+"GET /download/ARK-Studio-android.apk": [
+"exact:/download/ARK-Studio-android.apk",
+404,
+404
+],
+"GET /download/ARK-Studio-webapp.apk": [
+"exact:/download/ARK-Studio-webapp.apk",
+404,
+404
+],
+"GET /download/ark.apk": [
+"exact:/download/ark.apk",
+404,
+404
+],
+"GET /index.html": [
+"static:/* ; derived:_static:rel",
+200,
+200
+],
+"GET /login": [
+"exact:/login",
+303,
+303
+],
+"GET /login.html": [
+"derived:_static:rel",
+404,
+404
+],
+"GET /logout": [
+"exact:/logout",
+303,
+303
+],
+"GET /sw.js": [
+"derived:_static:rel",
+200,
+200
+],
+"GET /viz-frame.html": [
+"derived:_static:rel",
+200,
+200
+],
+"HEAD /": [
+"exact:/",
+200,
+200
+],
+"HEAD /api/activity": [
+"exact:/api/activity",
+200,
+200
+],
+"HEAD /api/agent-sessions": [
+"prefix:/api/agent-sessions ; exact:/api/agent-sessions",
+200,
+200
+],
+"HEAD /api/agent-sessions/groups": [
+"exact:/api/agent-sessions/groups",
+200,
+200
+],
+"HEAD /api/agent-sessions/presets": [
+"exact:/api/agent-sessions/presets",
+200,
+200
+],
+"HEAD /api/agent-sessions/x": [
+"regex:^/api/agent-sessions/([^/]+)$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/approvals": [
+"regex:^/api/agent-sessions/([^/]+)/approvals$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/artifacts": [
+"regex:^/api/agent-sessions/([^/]+)/artifacts$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/artifacts/download": [
+"regex:^/api/agent-sessions/([^/]+)/artifacts/download$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/artifacts/read": [
+"regex:^/api/agent-sessions/([^/]+)/artifacts/read$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/logs": [
+"regex:^/api/agent-sessions/([^/]+)/logs$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/media": [
+"regex:^/api/agent-sessions/([^/]+)/media$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/transcript": [
+"regex:^/api/agent-sessions/([^/]+)/transcript$",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/y/zz-unknown": [
+"nearmiss:/api/agent-sessions",
+404,
+404
+],
+"HEAD /api/agent-sessions/x/zz-unknown": [
+"nearmiss:/api/agent-sessions",
+404,
+404
+],
+"HEAD /api/agent-sessions/zz-unknown": [
+"nearmiss:/api/agent-sessions",
+404,
+404
+],
+"HEAD /api/agent/token": [
+"exact:/api/agent/token",
+200,
+200
+],
+"HEAD /api/agent/v1/context": [
+"exact:/api/agent/v1/context",
+401,
+401
+],
+"HEAD /api/agent/v1/context [token]": [
+"exact:/api/agent/v1/context",
+200,
+200
+],
+"HEAD /api/agent/v1/export": [
+"exact:/api/agent/v1/export",
+401,
+401
+],
+"HEAD /api/agent/v1/export [token]": [
+"exact:/api/agent/v1/export",
+200,
+200
+],
+"HEAD /api/agent/v1/gpu/jobs": [
+"exact:/api/agent/v1/gpu/jobs",
+401,
+401
+],
+"HEAD /api/agent/v1/gpu/jobs [token]": [
+"exact:/api/agent/v1/gpu/jobs",
+422,
+422
+],
+"HEAD /api/agent/v1/gpu/jobs/x": [
+"regex:^/api/agent/v1/gpu/jobs/([^/]+)(/logs)?$",
+401,
+401
+],
+"HEAD /api/agent/v1/gpu/jobs/x [token]": [
+"regex:^/api/agent/v1/gpu/jobs/([^/]+)(/logs)?$",
+404,
+404
+],
+"HEAD /api/agent/v1/insights": [
+"exact:/api/agent/v1/insights",
+401,
+401
+],
+"HEAD /api/agent/v1/insights [token]": [
+"exact:/api/agent/v1/insights",
+200,
+200
+],
+"HEAD /api/agent/v1/interface": [
+"exact:/api/agent/v1/interface",
+401,
+401
+],
+"HEAD /api/agent/v1/interface [token]": [
+"exact:/api/agent/v1/interface",
+200,
+200
+],
+"HEAD /api/agent/v1/media/1/raw": [
+"fullmatch:/api/agent/v1/media/(\\d+)/raw",
+401,
+401
+],
+"HEAD /api/agent/v1/media/1/raw [token]": [
+"fullmatch:/api/agent/v1/media/(\\d+)/raw",
+200,
+200
+],
+"HEAD /api/agent/v1/project/palette": [
+"exact:/api/agent/v1/project/palette",
+401,
+401
+],
+"HEAD /api/agent/v1/project/palette [token]": [
+"exact:/api/agent/v1/project/palette",
+200,
+200
+],
+"HEAD /api/agent/v1/sessions/watcher.py": [
+"exact:/api/agent/v1/sessions/watcher.py",
+401,
+401
+],
+"HEAD /api/agent/v1/sessions/watcher.py [token]": [
+"exact:/api/agent/v1/sessions/watcher.py",
+200,
+200
+],
+"HEAD /api/agent/v1/sessions/x": [
+"fullmatch:/api/agent/v1/sessions/([^/]+)",
+401,
+401
+],
+"HEAD /api/agent/v1/sessions/x [token]": [
+"fullmatch:/api/agent/v1/sessions/([^/]+)",
+400,
+400
+],
+"HEAD /api/agent/v1/setup": [
+"exact:/api/agent/v1/setup",
+401,
+401
+],
+"HEAD /api/agent/v1/setup [token]": [
+"exact:/api/agent/v1/setup",
+200,
+200
+],
+"HEAD /api/agent/v1/skills": [
+"exact:/api/agent/v1/skills",
+401,
+401
+],
+"HEAD /api/agent/v1/skills [token]": [
+"exact:/api/agent/v1/skills",
+200,
+200
+],
+"HEAD /api/agent/v1/skills/x": [
+"prefix:/api/agent/v1/skills/",
+401,
+401
+],
+"HEAD /api/agent/v1/skills/x [token]": [
+"prefix:/api/agent/v1/skills/",
+404,
+404
+],
+"HEAD /api/agent/v1/units": [
+"exact:/api/agent/v1/units",
+401,
+401
+],
+"HEAD /api/agent/v1/units [token]": [
+"exact:/api/agent/v1/units",
+200,
+200
+],
+"HEAD /api/agent/v1/units/x": [
+"regex:^/api/agent/v1/units/([^/]+)$",
+401,
+401
+],
+"HEAD /api/agent/v1/units/x [token]": [
+"regex:^/api/agent/v1/units/([^/]+)$",
+400,
+400
+],
+"HEAD /api/agent/v1/units/x/comments": [
+"regex:^/api/agent/v1/units/([^/]+)/comments$",
+401,
+401
+],
+"HEAD /api/agent/v1/units/x/comments [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/comments$",
+400,
+400
+],
+"HEAD /api/agent/v1/units/x/history": [
+"fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+401,
+401
+],
+"HEAD /api/agent/v1/units/x/history [token]": [
+"fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+400,
+400
+],
+"HEAD /api/agent/v1/units/x/members": [
+"regex:^/api/agent/v1/units/([^/]+)/members$",
+401,
+401
+],
+"HEAD /api/agent/v1/units/x/members [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/members$",
+400,
+400
+],
+"HEAD /api/agent/v1/whoami": [
+"exact:/api/agent/v1/whoami",
+401,
+401
+],
+"HEAD /api/agent/v1/whoami [token]": [
+"exact:/api/agent/v1/whoami",
+200,
+200
+],
+"HEAD /api/agent/v1/x": [
+"prefix:/api/agent/v1/",
+401,
+401
+],
+"HEAD /api/agent/v1/x [token]": [
+"prefix:/api/agent/v1/",
+404,
+404
+],
+"HEAD /api/agent/v1/x/y/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"HEAD /api/agent/v1/x/y/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"HEAD /api/agent/v1/x/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"HEAD /api/agent/v1/x/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"HEAD /api/agent/v1/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"HEAD /api/agent/v1/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"HEAD /api/assistant/config": [
+"exact:/api/assistant/config",
+200,
+200
+],
+"HEAD /api/assistant/dispatch": [
+"exact:/api/assistant/dispatch",
+400,
+400
+],
+"HEAD /api/assistant/insights": [
+"exact:/api/assistant/insights",
+200,
+200
+],
+"HEAD /api/auth/session": [
+"exact:/api/auth/session",
+200,
+200
+],
+"HEAD /api/blackbox": [
+"exact:/api/blackbox",
+200,
+200
+],
+"HEAD /api/bootstrap": [
+"exact:/api/bootstrap",
+200,
+200
+],
+"HEAD /api/changes": [
+"exact:/api/changes",
+200,
+200
+],
+"HEAD /api/chat": [
+"exact:/api/chat",
+200,
+200
+],
+"HEAD /api/chat/status": [
+"exact:/api/chat/status",
+200,
+200
+],
+"HEAD /api/events": [
+"exact:/api/events",
+200,
+200
+],
+"HEAD /api/export": [
+"exact:/api/export",
+200,
+200
+],
+"HEAD /api/gpu/dashboard": [
+"exact:/api/gpu/dashboard",
+409,
+409
+],
+"HEAD /api/gpu/jobs": [
+"exact:/api/gpu/jobs",
+422,
+422
+],
+"HEAD /api/gpu/jobs/x": [
+"regex:^/api/gpu/jobs/([^/]+)$",
+404,
+404
+],
+"HEAD /api/gpu/jobs/x/logs": [
+"regex:^/api/gpu/jobs/([^/]+)/logs$",
+404,
+404
+],
+"HEAD /api/gpu/queue": [
+"exact:/api/gpu/queue",
+200,
+200
+],
+"HEAD /api/gpu/servers": [
+"exact:/api/gpu/servers",
+200,
+200
+],
+"HEAD /api/gpu/status": [
+"exact:/api/gpu/status",
+200,
+200
+],
+"HEAD /api/graph": [
+"exact:/api/graph",
+200,
+200
+],
+"HEAD /api/graph/bodies": [
+"exact:/api/graph/bodies",
+200,
+200
+],
+"HEAD /api/graph/snapshot": [
+"exact:/api/graph/snapshot",
+200,
+200
+],
+"HEAD /api/health": [
+"exact:/api/health",
+200,
+200
+],
+"HEAD /api/import/infohub/preview": [
+"exact:/api/import/infohub/preview",
+400,
+400
+],
+"HEAD /api/import/infohub/sources": [
+"exact:/api/import/infohub/sources",
+200,
+200
+],
+"HEAD /api/infohub/browse": [
+"exact:/api/infohub/browse",
+400,
+400
+],
+"HEAD /api/infohub/candidates": [
+"exact:/api/infohub/candidates",
+200,
+200
+],
+"HEAD /api/infohub/graph": [
+"exact:/api/infohub/graph",
+400,
+400
+],
+"HEAD /api/infohub/unit": [
+"exact:/api/infohub/unit",
+400,
+400
+],
+"HEAD /api/me": [
+"exact:/api/me",
+200,
+200
+],
+"HEAD /api/media/1/raw": [
+"regex:^/api/media/(\\d+)/raw$",
+200,
+200
+],
+"HEAD /api/mobile/apps": [
+"exact:/api/mobile/apps",
+200,
+200
+],
+"HEAD /api/mobile/connection": [
+"exact:/api/mobile/connection",
+200,
+200
+],
+"HEAD /api/mobile/pairs": [
+"exact:/api/mobile/pairs",
+200,
+200
+],
+"HEAD /api/mobile/session": [
+"exact:/api/mobile/session",
+200,
+200
+],
+"HEAD /api/mobile/session/projects": [
+"exact:/api/mobile/session/projects",
+401,
+401
+],
+"HEAD /api/org": [
+"exact:/api/org",
+200,
+200
+],
+"HEAD /api/org/": [
+"exact:/api/org/",
+200,
+200
+],
+"HEAD /api/org/audit": [
+"exact:/api/org/audit",
+200,
+200
+],
+"HEAD /api/org/projects/x": [
+"regex:^/api/org/projects/([^/]+)$",
+404,
+404
+],
+"HEAD /api/org/teams": [
+"exact:/api/org/teams",
+200,
+200
+],
+"HEAD /api/org/users": [
+"exact:/api/org/users",
+200,
+200
+],
+"HEAD /api/org/users/x/linux-accounts": [
+"regex:^/api/org/users/([^/]+)/linux-accounts$",
+404,
+404
+],
+"HEAD /api/personal/agent-tokens": [
+"exact:/api/personal/agent-tokens",
+200,
+200
+],
+"HEAD /api/personal/settings": [
+"exact:/api/personal/settings",
+200,
+200
+],
+"HEAD /api/project": [
+"exact:/api/project",
+200,
+200
+],
+"HEAD /api/project/assignees": [
+"exact:/api/project/assignees",
+200,
+200
+],
+"HEAD /api/project/overview": [
+"exact:/api/project/overview",
+200,
+200
+],
+"HEAD /api/project/settings": [
+"exact:/api/project/settings",
+200,
+200
+],
+"HEAD /api/projects": [
+"exact:/api/projects",
+200,
+200
+],
+"HEAD /api/providers": [
+"exact:/api/providers",
+200,
+200
+],
+"HEAD /api/remote/info": [
+"exact:/api/remote/info",
+200,
+200
+],
+"HEAD /api/resources/graph": [
+"exact:/api/resources/graph",
+200,
+200
+],
+"HEAD /api/revision": [
+"exact:/api/revision",
+200,
+200
+],
+"HEAD /api/search/nodes": [
+"exact:/api/search/nodes",
+400,
+400
+],
+"HEAD /api/session-contexts": [
+"exact:/api/session-contexts",
+200,
+200
+],
+"HEAD /api/session-contexts/x": [
+"prefix:/api/session-contexts/",
+404,
+404
+],
+"HEAD /api/session-contexts/x/y/zz-unknown": [
+"nearmiss:/api/session-contexts/",
+404,
+404
+],
+"HEAD /api/session-contexts/x/zz-unknown": [
+"nearmiss:/api/session-contexts/",
+404,
+404
+],
+"HEAD /api/session-contexts/zz-unknown": [
+"nearmiss:/api/session-contexts/",
+404,
+404
+],
+"HEAD /api/settings/effective": [
+"exact:/api/settings/effective",
+200,
+200
+],
+"HEAD /api/skills": [
+"exact:/api/skills",
+200,
+200
+],
+"HEAD /api/skills/interface": [
+"exact:/api/skills/interface",
+200,
+200
+],
+"HEAD /api/skills/setup/state": [
+"exact:/api/skills/setup/state",
+200,
+200
+],
+"HEAD /api/skills/x": [
+"prefix:/api/skills/ ; regex:^/api/skills/([^/]+)$",
+404,
+404
+],
+"HEAD /api/skills/x/prompt": [
+"regex:^/api/skills/([^/]+)/(prompt|agent)$",
+404,
+404
+],
+"HEAD /api/skills/x/y/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"HEAD /api/skills/x/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"HEAD /api/skills/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"HEAD /api/task-agent/v1/context": [
+"exact:/api/task-agent/v1/context",
+401,
+401
+],
+"HEAD /api/task-agent/v1/context [token]": [
+"exact:/api/task-agent/v1/context",
+200,
+200
+],
+"HEAD /api/task-agent/v1/gpu/jobs": [
+"exact:/api/task-agent/v1/gpu/jobs",
+401,
+401
+],
+"HEAD /api/task-agent/v1/gpu/jobs [token]": [
+"exact:/api/task-agent/v1/gpu/jobs",
+422,
+422
+],
+"HEAD /api/task-agent/v1/gpu/jobs/x": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)$",
+401,
+401
+],
+"HEAD /api/task-agent/v1/gpu/jobs/x [token]": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)$",
+404,
+404
+],
+"HEAD /api/task-agent/v1/gpu/jobs/x/logs": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/logs$",
+401,
+401
+],
+"HEAD /api/task-agent/v1/gpu/jobs/x/logs [token]": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/logs$",
+404,
+404
+],
+"HEAD /api/task-agent/v1/links": [
+"exact:/api/task-agent/v1/links",
+401,
+401
+],
+"HEAD /api/task-agent/v1/links [token]": [
+"exact:/api/task-agent/v1/links",
+200,
+200
+],
+"HEAD /api/task-agent/v1/project": [
+"exact:/api/task-agent/v1/project",
+401,
+401
+],
+"HEAD /api/task-agent/v1/project [token]": [
+"exact:/api/task-agent/v1/project",
+200,
+200
+],
+"HEAD /api/task-agent/v1/session": [
+"exact:/api/task-agent/v1/session",
+401,
+401
+],
+"HEAD /api/task-agent/v1/session [token]": [
+"exact:/api/task-agent/v1/session",
+200,
+200
+],
+"HEAD /api/task-agent/v1/snapshot": [
+"exact:/api/task-agent/v1/snapshot",
+401,
+401
+],
+"HEAD /api/task-agent/v1/snapshot [token]": [
+"exact:/api/task-agent/v1/snapshot",
+200,
+200
+],
+"HEAD /api/task-agent/v1/units": [
+"exact:/api/task-agent/v1/units",
+401,
+401
+],
+"HEAD /api/task-agent/v1/units [token]": [
+"exact:/api/task-agent/v1/units",
+200,
+200
+],
+"HEAD /api/task-agent/v1/units/x": [
+"regex:^/api/task-agent/v1/units/([^/]+)$",
+401,
+401
+],
+"HEAD /api/task-agent/v1/units/x [token]": [
+"regex:^/api/task-agent/v1/units/([^/]+)$",
+400,
+400
+],
+"HEAD /api/task-agent/v1/units/x/comments": [
+"regex:^/api/task-agent/v1/units/([^/]+)/comments$",
+401,
+401
+],
+"HEAD /api/task-agent/v1/units/x/comments [token]": [
+"regex:^/api/task-agent/v1/units/([^/]+)/comments$",
+400,
+400
+],
+"HEAD /api/task-agent/v1/x": [
+"prefix:/api/task-agent/v1/",
+401,
+401
+],
+"HEAD /api/task-agent/v1/x [token]": [
+"prefix:/api/task-agent/v1/",
+404,
+404
+],
+"HEAD /api/task-agent/v1/x/y/zz-unknown": [
+"nearmiss:/api/task-agent/v1/",
+401,
+401
+],
+"HEAD /api/task-agent/v1/x/y/zz-unknown [token]": [
+"nearmiss:/api/task-agent/v1/",
+404,
+404
+],
+"HEAD /api/task-agent/v1/x/zz-unknown": [
+"nearmiss:/api/task-agent/v1/",
+401,
+401
+],
+"HEAD /api/task-agent/v1/x/zz-unknown [token]": [
+"nearmiss:/api/task-agent/v1/",
+404,
+404
+],
+"HEAD /api/task-agent/v1/zz-unknown": [
+"nearmiss:/api/task-agent/v1/",
+401,
+401
+],
+"HEAD /api/task-agent/v1/zz-unknown [token]": [
+"nearmiss:/api/task-agent/v1/",
+404,
+404
+],
+"HEAD /api/timeline": [
+"exact:/api/timeline",
+200,
+200
+],
+"HEAD /api/topics": [
+"exact:/api/topics",
+200,
+200
+],
+"HEAD /api/unit-details": [
+"exact:/api/unit-details",
+200,
+200
+],
+"HEAD /api/units": [
+"exact:/api/units",
+200,
+200
+],
+"HEAD /api/units/x": [
+"regex:^/api/units/([^/]+)$",
+400,
+400
+],
+"HEAD /api/units/x/comments": [
+"regex:^/api/units/([^/]+)/comments$",
+400,
+400
+],
+"HEAD /api/units/x/history": [
+"fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?",
+400,
+400
+],
+"HEAD /api/units/x/members": [
+"regex:^/api/units/([^/]+)/members$",
+400,
+400
+],
+"HEAD /api/users/x/avatar": [
+"regex:^/api/users/([^/]+)/avatar$",
+404,
+404
+],
+"HEAD /api/workspace": [
+"exact:/api/workspace",
+404,
+404
+],
+"HEAD /api/workspace/changes": [
+"exact:/api/workspace/changes",
+200,
+200
+],
+"HEAD /api/workspace/diff": [
+"exact:/api/workspace/diff",
+400,
+400
+],
+"HEAD /api/workspace/file": [
+"exact:/api/workspace/file",
+400,
+400
+],
+"HEAD /api/workspace/grep": [
+"exact:/api/workspace/grep",
+400,
+400
+],
+"HEAD /api/workspace/info": [
+"exact:/api/workspace/info",
+200,
+200
+],
+"HEAD /api/workspace/raw": [
+"exact:/api/workspace/raw",
+400,
+400
+],
+"HEAD /api/workspace/search": [
+"exact:/api/workspace/search",
+200,
+200
+],
+"HEAD /api/workspace/terminals": [
+"exact:/api/workspace/terminals",
+200,
+200
+],
+"HEAD /api/workspace/terminals/x": [
+"regex:^/api/workspace/terminals/([^/]+)$",
+404,
+404
+],
+"HEAD /api/workspace/terminals/x/stream": [
+"regex:^/api/workspace/terminals/([^/]+)/stream$",
+404,
+404
+],
+"HEAD /api/workspace/tree": [
+"exact:/api/workspace/tree",
+200,
+200
+],
+"HEAD /api/workspace/x": [
+"prefix:/api/workspace/",
+404,
+404
+],
+"HEAD /api/workspace/x/y/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"HEAD /api/workspace/x/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"HEAD /api/workspace/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"HEAD /api/worktrees": [
+"exact:/api/worktrees",
+200,
+200
+],
+"HEAD /api/x": [
+"prefix:/api/",
+404,
+404
+],
+"HEAD /api/x/y/zz-unknown": [
+"nearmiss:/api/",
+404,
+404
+],
+"HEAD /api/x/zz-unknown": [
+"nearmiss:/api/",
+404,
+404
+],
+"HEAD /api/zz-unknown": [
+"nearmiss:/api/",
+404,
+404
+],
+"HEAD /download/ARK-Studio-android.apk": [
+"exact:/download/ARK-Studio-android.apk",
+404,
+404
+],
+"HEAD /download/ARK-Studio-webapp.apk": [
+"exact:/download/ARK-Studio-webapp.apk",
+404,
+404
+],
+"HEAD /download/ark.apk": [
+"exact:/download/ark.apk",
+404,
+404
+],
+"HEAD /index.html": [
+"static:/*",
+200,
+200
+],
+"HEAD /login": [
+"exact:/login",
+303,
+303
+],
+"HEAD /logout": [
+"exact:/logout",
+303,
+303
+],
+"OPTIONS /api/local/open": [
+"extra",
+403,
+403
+],
+"OPTIONS /api/units": [
+"extra",
+404,
+404
+],
+"PATCH /api/agent-sessions/x/steer/x": [
+"regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+404,
+404
+],
+"PATCH /api/links/1": [
+"regex:^/api/links/(\\d+)$",
+200,
+200
+],
+"PATCH /api/me": [
+"exact:/api/me",
+200,
+200
+],
+"PATCH /api/media/1": [
+"regex:^/api/media/(\\d+)$",
+200,
+200
+],
+"PATCH /api/org/teams/x": [
+"regex:^/api/org/teams/([^/]+)$",
+404,
+404
+],
+"PATCH /api/org/users/x": [
+"regex:^/api/org/users/([^/]+)$",
+404,
+404
+],
+"PATCH /api/project": [
+"exact:/api/project",
+200,
+200
+],
+"PATCH /api/project/settings": [
+"exact:/api/project/settings",
+200,
+200
+],
+"PATCH /api/session-contexts/x": [
+"fullmatch:/api/session-contexts/([^/]+)",
+404,
+404
+],
+"PATCH /api/task-agent/x": [
+"prefix:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/x [token]": [
+"prefix:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/x/y/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/x/y/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/x/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/x/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/task-agent/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"PATCH /api/units/x": [
+"regex:^/api/units/([^/]+)$",
+400,
+400
+],
+"PATCH /api/units/x/members": [
+"regex:^/api/units/([^/]+)/members$",
+400,
+400
+],
+"PATCH /api/users/x/avatar": [
+"regex:^/api/users/([^/]+)/avatar$",
+405,
+405
+],
+"PATCH /api/zz-unknown": [
+"extra",
+404,
+404
+],
+"POST /api/agent-sessions": [
+"exact:/api/agent-sessions",
+400,
+400
+],
+"POST /api/agent-sessions/x/approvals/x": [
+"regex:^/api/agent-sessions/([^/]+)/approvals/([^/]+)$",
+404,
+404
+],
+"POST /api/agent-sessions/x/archive": [
+"regex:^/api/agent-sessions/([^/]+)/archive$",
+404,
+404
+],
+"POST /api/agent-sessions/x/context/validate": [
+"regex:^/api/agent-sessions/([^/]+)/context/validate$",
+404,
+404
+],
+"POST /api/agent-sessions/x/continue": [
+"regex:^/api/agent-sessions/([^/]+)/continue$",
+404,
+404
+],
+"POST /api/agent-sessions/x/fork": [
+"regex:^/api/agent-sessions/([^/]+)/fork$",
+404,
+404
+],
+"POST /api/agent-sessions/x/input": [
+"regex:^/api/agent-sessions/([^/]+)/input$",
+404,
+404
+],
+"POST /api/agent-sessions/x/relaunch": [
+"regex:^/api/agent-sessions/([^/]+)/relaunch$",
+404,
+404
+],
+"POST /api/agent-sessions/x/steer": [
+"regex:^/api/agent-sessions/([^/]+)/steer$",
+404,
+404
+],
+"POST /api/agent-sessions/x/steer/reorder": [
+"regex:^/api/agent-sessions/([^/]+)/steer/reorder$",
+404,
+404
+],
+"POST /api/agent-sessions/x/steer/x": [
+"regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+404,
+404
+],
+"POST /api/agent-sessions/x/stop": [
+"regex:^/api/agent-sessions/([^/]+)/stop$",
+404,
+404
+],
+"POST /api/agent/v1/assets/upload": [
+"exact:/api/agent/v1/assets/upload",
+401,
+401
+],
+"POST /api/agent/v1/assets/upload [token]": [
+"exact:/api/agent/v1/assets/upload",
+400,
+400
+],
+"POST /api/agent/v1/gpu/jobs": [
+"exact:/api/agent/v1/gpu/jobs",
+401,
+401
+],
+"POST /api/agent/v1/gpu/jobs [token]": [
+"exact:/api/agent/v1/gpu/jobs",
+422,
+422
+],
+"POST /api/agent/v1/gpu/jobs/x/cancel": [
+"regex:^/api/agent/v1/gpu/jobs/([^/]+)/cancel$",
+401,
+401
+],
+"POST /api/agent/v1/gpu/jobs/x/cancel [token]": [
+"regex:^/api/agent/v1/gpu/jobs/([^/]+)/cancel$",
+404,
+404
+],
+"POST /api/agent/v1/links": [
+"exact:/api/agent/v1/links",
+401,
+401
+],
+"POST /api/agent/v1/links [token]": [
+"exact:/api/agent/v1/links",
+400,
+400
+],
+"POST /api/agent/v1/media": [
+"exact:/api/agent/v1/media",
+401,
+401
+],
+"POST /api/agent/v1/media [token]": [
+"exact:/api/agent/v1/media",
+400,
+400
+],
+"POST /api/agent/v1/media/upload": [
+"exact:/api/agent/v1/media/upload",
+401,
+401
+],
+"POST /api/agent/v1/media/upload [token]": [
+"exact:/api/agent/v1/media/upload",
+400,
+400
+],
+"POST /api/agent/v1/project/palette": [
+"exact:/api/agent/v1/project/palette",
+401,
+401
+],
+"POST /api/agent/v1/project/palette [token]": [
+"exact:/api/agent/v1/project/palette",
+200,
+200
+],
+"POST /api/agent/v1/sessions/x/upload": [
+"fullmatch:/api/agent/v1/sessions/([^/]+)/upload",
+401,
+401
+],
+"POST /api/agent/v1/sessions/x/upload [token]": [
+"fullmatch:/api/agent/v1/sessions/([^/]+)/upload",
+400,
+400
+],
+"POST /api/agent/v1/setup/confirm": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/confirm [token]": [
+"derived:_setup_action:action",
+403,
+403
+],
+"POST /api/agent/v1/setup/discover": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/discover [token]": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/agent/v1/setup/draft": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/draft [token]": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/agent/v1/setup/host": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/host [token]": [
+"derived:_setup_action:action",
+403,
+403
+],
+"POST /api/agent/v1/setup/location": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/location [token]": [
+"derived:_setup_action:action",
+404,
+404
+],
+"POST /api/agent/v1/setup/propose": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/propose [token]": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/agent/v1/setup/remove": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/remove [token]": [
+"derived:_setup_action:action",
+400,
+400
+],
+"POST /api/agent/v1/setup/resource": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/resource [token]": [
+"derived:_setup_action:action",
+400,
+400
+],
+"POST /api/agent/v1/setup/verify": [
+"derived:_setup_action:action",
+401,
+401
+],
+"POST /api/agent/v1/setup/verify [token]": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/agent/v1/setup/x": [
+"regex:^/api/agent/v1/setup/([a-z][a-z-]*)$",
+401,
+401
+],
+"POST /api/agent/v1/setup/x [token]": [
+"regex:^/api/agent/v1/setup/([a-z][a-z-]*)$",
+404,
+404
+],
+"POST /api/agent/v1/units": [
+"exact:/api/agent/v1/units",
+401,
+401
+],
+"POST /api/agent/v1/units [token]": [
+"exact:/api/agent/v1/units",
+400,
+400
+],
+"POST /api/agent/v1/units/x": [
+"regex:^/api/agent/v1/units/([^/]+)$",
+401,
+401
+],
+"POST /api/agent/v1/units/x [token]": [
+"regex:^/api/agent/v1/units/([^/]+)$",
+400,
+400
+],
+"POST /api/agent/v1/units/x/comments": [
+"regex:^/api/agent/v1/units/([^/]+)/comments$",
+401,
+401
+],
+"POST /api/agent/v1/units/x/comments [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/comments$",
+400,
+400
+],
+"POST /api/agent/v1/units/x/comments/1/resolve": [
+"regex:^/api/agent/v1/units/([^/]+)/comments/(\\d+)/resolve$",
+401,
+401
+],
+"POST /api/agent/v1/units/x/comments/1/resolve [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/comments/(\\d+)/resolve$",
+400,
+400
+],
+"POST /api/agent/v1/units/x/history": [
+"fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+401,
+401
+],
+"POST /api/agent/v1/units/x/history [token]": [
+"fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+400,
+400
+],
+"POST /api/agent/v1/units/x/history/apply": [
+"derived:_node_history_write:action",
+401,
+401
+],
+"POST /api/agent/v1/units/x/history/apply [token]": [
+"derived:_node_history_write:action",
+400,
+400
+],
+"POST /api/agent/v1/units/x/history/checkpoint": [
+"derived:_node_history_write:action",
+401,
+401
+],
+"POST /api/agent/v1/units/x/history/checkpoint [token]": [
+"derived:_node_history_write:action",
+400,
+400
+],
+"POST /api/agent/v1/units/x/history/restore": [
+"derived:_node_history_write:action",
+401,
+401
+],
+"POST /api/agent/v1/units/x/history/restore [token]": [
+"derived:_node_history_write:action",
+400,
+400
+],
+"POST /api/agent/v1/units/x/members": [
+"regex:^/api/agent/v1/units/([^/]+)/members$",
+401,
+401
+],
+"POST /api/agent/v1/units/x/members [token]": [
+"regex:^/api/agent/v1/units/([^/]+)/members$",
+400,
+400
+],
+"POST /api/agent/v1/x": [
+"prefix:/api/agent/v1/",
+401,
+401
+],
+"POST /api/agent/v1/x [token]": [
+"prefix:/api/agent/v1/",
+404,
+404
+],
+"POST /api/agent/v1/x/y/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"POST /api/agent/v1/x/y/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"POST /api/agent/v1/x/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"POST /api/agent/v1/x/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"POST /api/agent/v1/zz-unknown": [
+"nearmiss:/api/agent/v1/",
+401,
+401
+],
+"POST /api/agent/v1/zz-unknown [token]": [
+"nearmiss:/api/agent/v1/",
+404,
+404
+],
+"POST /api/assistant/apply": [
+"exact:/api/assistant/apply",
+200,
+200
+],
+"POST /api/assistant/config": [
+"exact:/api/assistant/config",
+200,
+200
+],
+"POST /api/assistant/config/test": [
+"exact:/api/assistant/config/test",
+409,
+409
+],
+"POST /api/assistant/extract": [
+"exact:/api/assistant/extract",
+400,
+400
+],
+"POST /api/auth/logout": [
+"exact:/api/auth/logout",
+200,
+200
+],
+"POST /api/blackbox": [
+"exact:/api/blackbox",
+400,
+400
+],
+"POST /api/blackbox/x/restore": [
+"regex:^/api/blackbox/([^/]+)/restore$",
+400,
+400
+],
+"POST /api/chat": [
+"exact:/api/chat",
+400,
+400
+],
+"POST /api/chat/stream": [
+"exact:/api/chat/stream",
+200,
+200
+],
+"POST /api/gpu/dispatch/prepare": [
+"exact:/api/gpu/dispatch/prepare",
+409,
+409
+],
+"POST /api/gpu/jobs": [
+"exact:/api/gpu/jobs",
+422,
+422
+],
+"POST /api/gpu/jobs/x/cancel": [
+"regex:^/api/gpu/jobs/([^/]+)/cancel$",
+404,
+404
+],
+"POST /api/gpu/probe": [
+"exact:/api/gpu/probe",
+409,
+409
+],
+"POST /api/import/infohub": [
+"exact:/api/import/infohub",
+400,
+400
+],
+"POST /api/infohub/import": [
+"exact:/api/infohub/import",
+400,
+400
+],
+"POST /api/links": [
+"exact:/api/links",
+400,
+400
+],
+"POST /api/local/open": [
+"exact:/api/local/open",
+403,
+403
+],
+"POST /api/me/avatar": [
+"exact:/api/me/avatar",
+415,
+415
+],
+"POST /api/me/password": [
+"exact:/api/me/password",
+409,
+400
+],
+"POST /api/media": [
+"exact:/api/media",
+400,
+400
+],
+"POST /api/media/upload": [
+"exact:/api/media/upload",
+400,
+400
+],
+"POST /api/mobile/login": [
+"exact:/api/mobile/login",
+400,
+401
+],
+"POST /api/mobile/pair": [
+"exact:/api/mobile/pair",
+409,
+409
+],
+"POST /api/mobile/pair/claim": [
+"exact:/api/mobile/pair/claim",
+401,
+401
+],
+"POST /api/mobile/pairs/x/revoke": [
+"regex:^/api/mobile/pairs/([^/]+)/revoke$",
+404,
+404
+],
+"POST /api/mobile/session/project": [
+"exact:/api/mobile/session/project",
+401,
+401
+],
+"POST /api/open": [
+"exact:/api/open",
+400,
+400
+],
+"POST /api/org/password": [
+"exact:/api/org/password",
+401,
+401
+],
+"POST /api/org/projects/x/grants": [
+"regex:^/api/org/projects/([^/]+)/grants$",
+404,
+404
+],
+"POST /api/org/projects/x/grants/revoke": [
+"regex:^/api/org/projects/([^/]+)/grants/revoke$",
+404,
+404
+],
+"POST /api/org/teams": [
+"exact:/api/org/teams",
+400,
+400
+],
+"POST /api/org/teams/x/members": [
+"regex:^/api/org/teams/([^/]+)/members$",
+404,
+404
+],
+"POST /api/org/users": [
+"exact:/api/org/users",
+400,
+400
+],
+"POST /api/org/users/x/linux-accounts": [
+"regex:^/api/org/users/([^/]+)/linux-accounts$",
+404,
+404
+],
+"POST /api/org/users/x/password": [
+"regex:^/api/org/users/([^/]+)/password$",
+404,
+404
+],
+"POST /api/personal/agent-tokens": [
+"exact:/api/personal/agent-tokens",
+200,
+200
+],
+"POST /api/personal/settings": [
+"exact:/api/personal/settings",
+200,
+200
+],
+"POST /api/personal/settings?scope=agents": [
+"derived:do_POST:scope",
+400,
+400
+],
+"POST /api/personal/settings?scope=assistant": [
+"derived:do_POST:scope",
+200,
+200
+],
+"POST /api/personal/settings?scope=environment": [
+"derived:do_POST:scope",
+200,
+200
+],
+"POST /api/projects": [
+"exact:/api/projects",
+400,
+400
+],
+"POST /api/projects/open": [
+"exact:/api/projects/open",
+400,
+400
+],
+"POST /api/providers/refresh": [
+"exact:/api/providers/refresh",
+200,
+200
+],
+"POST /api/resources/devices/x": [
+"fullmatch:/api/resources/devices/([^/]+)",
+404,
+404
+],
+"POST /api/session-contexts/x/continue": [
+"fullmatch:/api/session-contexts/([^/]+)/continue",
+404,
+404
+],
+"POST /api/skills/agent-team/asset": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/agent-team/brief": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/agent-team/confirm": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/discover": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/draft": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/history": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/agent-team/host": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/leakage": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/agent-team/location": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/propose": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/remove": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/render": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/agent-team/resource": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/agent-team/round": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/agent-team/tasks": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/agent-team/validate": [
+"derived:_skills_post:action ; derived:_skills_post:skill_id",
+200,
+200
+],
+"POST /api/skills/agent-team/verify": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/design/asset": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/design/brief": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/design/confirm": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/discover": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/draft": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/history": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/design/host": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/leakage": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/design/location": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/propose": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/remove": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/render": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/design/resource": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/design/round": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/design/tasks": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/design/validate": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/design/verify": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/rrsi/asset": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/rrsi/brief": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/rrsi/confirm": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/discover": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/draft": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/history": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/rrsi/host": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/leakage": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/rrsi/location": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/propose": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/remove": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/render": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/rrsi/resource": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/rrsi/round": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/rrsi/tasks": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/rrsi/validate": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/rrsi/verify": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/setup/confirm": [
+"derived:_setup_action:action",
+409,
+409
+],
+"POST /api/skills/setup/discover": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/skills/setup/draft": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/skills/setup/host": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/skills/setup/location": [
+"derived:_setup_action:action",
+404,
+404
+],
+"POST /api/skills/setup/propose": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/skills/setup/remove": [
+"derived:_setup_action:action",
+400,
+400
+],
+"POST /api/skills/setup/resource": [
+"derived:_setup_action:action",
+400,
+400
+],
+"POST /api/skills/setup/verify": [
+"derived:_setup_action:action",
+200,
+200
+],
+"POST /api/skills/x": [
+"prefix:/api/skills/",
+404,
+404
+],
+"POST /api/skills/x/asset": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/x/brief": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/x/confirm": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/discover": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/draft": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/history": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/x/host": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/leakage": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/x/location": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/propose": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/remove": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/render": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/x/resource": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/round": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/x/tasks": [
+"derived:_skills_post:action",
+400,
+400
+],
+"POST /api/skills/x/validate": [
+"derived:_skills_post:action",
+404,
+404
+],
+"POST /api/skills/x/verify": [
+"derived:_skills_post:action",
+200,
+200
+],
+"POST /api/skills/x/y/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"POST /api/skills/x/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"POST /api/skills/zz-unknown": [
+"nearmiss:/api/skills/",
+404,
+404
+],
+"POST /api/task-agent/v1/gpu/jobs": [
+"exact:/api/task-agent/v1/gpu/jobs",
+401,
+401
+],
+"POST /api/task-agent/v1/gpu/jobs [token]": [
+"exact:/api/task-agent/v1/gpu/jobs",
+403,
+403
+],
+"POST /api/task-agent/v1/gpu/jobs/x/cancel": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/cancel$",
+401,
+401
+],
+"POST /api/task-agent/v1/gpu/jobs/x/cancel [token]": [
+"regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/cancel$",
+403,
+403
+],
+"POST /api/task-agent/x": [
+"prefix:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/x [token]": [
+"prefix:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/x/y/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/x/y/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/x/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/x/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/zz-unknown": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"POST /api/task-agent/zz-unknown [token]": [
+"nearmiss:/api/task-agent/",
+403,
+403
+],
+"POST /api/units": [
+"exact:/api/units",
+400,
+400
+],
+"POST /api/units/x/archive": [
+"regex:^/api/units/([^/]+)/archive$",
+400,
+400
+],
+"POST /api/units/x/comments": [
+"regex:^/api/units/([^/]+)/comments$",
+400,
+400
+],
+"POST /api/units/x/comments/1/resolve": [
+"regex:^/api/units/([^/]+)/comments/(\\d+)/resolve$",
+400,
+400
+],
+"POST /api/units/x/history": [
+"fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?",
+400,
+400
+],
+"POST /api/units/x/history/apply": [
+"derived:_node_history_write:action",
+400,
+400
+],
+"POST /api/units/x/history/checkpoint": [
+"derived:_node_history_write:action",
+400,
+400
+],
+"POST /api/units/x/history/restore": [
+"derived:_node_history_write:action",
+400,
+400
+],
+"POST /api/units/x/insert-between": [
+"regex:^/api/units/([^/]+)/insert-between$",
+400,
+400
+],
+"POST /api/units/x/members": [
+"regex:^/api/units/([^/]+)/members$",
+400,
+400
+],
+"POST /api/units/x/restore": [
+"regex:^/api/units/([^/]+)/restore$",
+400,
+400
+],
+"POST /api/users/x/avatar": [
+"regex:^/api/users/([^/]+)/avatar$",
+405,
+405
+],
+"POST /api/workspace": [
+"exact:/api/workspace",
+404,
+404
+],
+"POST /api/workspace/create": [
+"exact:/api/workspace/create",
+409,
+409
+],
+"POST /api/workspace/delete": [
+"exact:/api/workspace/delete",
+400,
+400
+],
+"POST /api/workspace/file": [
+"exact:/api/workspace/file",
+400,
+400
+],
+"POST /api/workspace/rename": [
+"exact:/api/workspace/rename",
+400,
+400
+],
+"POST /api/workspace/terminals": [
+"exact:/api/workspace/terminals",
+400,
+400
+],
+"POST /api/workspace/terminals/x/cancel": [
+"regex:^/api/workspace/terminals/([^/]+)/cancel$",
+404,
+404
+],
+"POST /api/workspace/terminals/x/resize": [
+"regex:^/api/workspace/terminals/([^/]+)/resize$",
+404,
+404
+],
+"POST /api/workspace/terminals/x/stdin": [
+"regex:^/api/workspace/terminals/([^/]+)/stdin$",
+404,
+404
+],
+"POST /api/workspace/x": [
+"prefix:/api/workspace/",
+404,
+404
+],
+"POST /api/workspace/x/y/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"POST /api/workspace/x/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"POST /api/workspace/zz-unknown": [
+"nearmiss:/api/workspace/",
+404,
+404
+],
+"POST /api/worktrees/create": [
+"exact:/api/worktrees/create",
+400,
+400
+],
+"POST /api/worktrees/remove": [
+"exact:/api/worktrees/remove",
+400,
+400
+],
+"POST /api/zz-unknown": [
+"extra",
+404,
+404
+],
+"POST /login": [
+"exact:/login",
+303,
+403
+],
+"POST /logout": [
+"exact:/logout",
+303,
+303
+],
+"PUT /api/units": [
+"extra",
+501,
+501
+]
+}
+}

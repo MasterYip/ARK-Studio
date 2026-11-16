@@ -1,0 +1,1813 @@
+{
+ "env": {
+  "ARK_ROOT": "/ark-root",
+  "COLUMNS": "80"
+ },
+ "cases": [
+  {
+   "argv": [],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "-h"
+   ],
+   "exit": 0,
+   "ns": null,
+   "stdout": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\n\nARK Studio research workbench\n\npositional arguments:\n  {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n    server-init         initialize persistent server configuration and an\n                        owner account\n    serve               run the local workbench\n    desktop             run the frameless system-tray window\n    remote              open a remote ARK project through SSH\n    mobile-tunnel       publish a loopback ARK server to the LAN for phone\n                        pairing (SSH local forward)\n    new                 create a project folder\n    demo                create the PredActor demo project\n    export              export a project\n    agent               local agent context\n    session-watch       upload an external agent's session JSONL to ARK at an\n                        interval (opt-in)\n    skills              discover ARK skills and render/validate their\n                        templates\n\noptions:\n  -h, --help            show this help message and exit\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "--help"
+   ],
+   "exit": 0,
+   "ns": null,
+   "stdout": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\n\nARK Studio research workbench\n\npositional arguments:\n  {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n    server-init         initialize persistent server configuration and an\n                        owner account\n    serve               run the local workbench\n    desktop             run the frameless system-tray window\n    remote              open a remote ARK project through SSH\n    mobile-tunnel       publish a loopback ARK server to the LAN for phone\n                        pairing (SSH local forward)\n    new                 create a project folder\n    demo                create the PredActor demo project\n    export              export a project\n    agent               local agent context\n    session-watch       upload an external agent's session JSONL to ARK at an\n                        interval (opt-in)\n    skills              discover ARK skills and render/validate their\n                        templates\n\noptions:\n  -h, --help            show this help message and exit\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "--he"
+   ],
+   "exit": 0,
+   "ns": null,
+   "stdout": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\n\nARK Studio research workbench\n\npositional arguments:\n  {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n    server-init         initialize persistent server configuration and an\n                        owner account\n    serve               run the local workbench\n    desktop             run the frameless system-tray window\n    remote              open a remote ARK project through SSH\n    mobile-tunnel       publish a loopback ARK server to the LAN for phone\n                        pairing (SSH local forward)\n    new                 create a project folder\n    demo                create the PredActor demo project\n    export              export a project\n    agent               local agent context\n    session-watch       upload an external agent's session JSONL to ARK at an\n                        interval (opt-in)\n    skills              discover ARK skills and render/validate their\n                        templates\n\noptions:\n  -h, --help            show this help message and exit\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "foo"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: argument command: invalid choice: 'foo' (choose from 'server-init', 'serve', 'desktop', 'remote', 'mobile-tunnel', 'new', 'demo', 'export', 'agent', 'session-watch', 'skills')\n"
+  },
+  {
+   "argv": [
+    "--root",
+    "x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: argument command: invalid choice: 'x' (choose from 'server-init', 'serve', 'desktop', 'remote', 'mobile-tunnel', 'new', 'demo', 'export', 'agent', 'session-watch', 'skills')\n"
+  },
+  {
+   "argv": [
+    "serve"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "-h"
+   ],
+   "exit": 0,
+   "ns": null,
+   "stdout": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\n\noptions:\n  -h, --help            show this help message and exit\n  --config CONFIG       persistent server JSON configuration\n  --require-auth        refuse to start without account authentication\n  --root ROOT\n  --host HOST           bind address (default: 127.0.0.1; 0.0.0.0 with\n                        --expose or ARK_PUBLIC)\n  --port PORT\n  --no-demo             do not create the starter demo project\n  --media-root MEDIA_ROOT\n                        allow local media under this folder (repeatable)\n  --sessions-root SESSIONS_ROOT\n                        task-agent session logs (default: <root>/../agent-\n                        sessions)\n  --public-url PUBLIC_URL\n                        advertised base URL for phone pairing (or\n                        ARK_PUBLIC_URL)\n  --expose              bind 0.0.0.0 for phone/public access; requires account\n                        authentication (or ARK_PUBLIC=1)\n  --auth-user AUTH_USER\n                        sign-in username (or ARK_AUTH_USER)\n  --auth-password AUTH_PASSWORD\n                        sign-in password; visible in the process list, prefer\n                        ARK_AUTH_PASSWORD\n  --auth-password-file AUTH_PASSWORD_FILE\n                        read the sign-in password from a file (or\n                        ARK_AUTH_PASSWORD_FILE)\n  --auth-password-hash AUTH_PASSWORD_HASH\n                        PBKDF2 hash instead of a plaintext password (or\n                        ARK_AUTH_PASSWORD_HASH)\n  --auth-session-ttl AUTH_SESSION_TTL\n                        sign-in session seconds (default: 43200; or\n                        ARK_AUTH_SESSION_TTL)\n  --public-ip PUBLIC_IP\n                        explicit public IP for pairing URLs (or ARK_PUBLIC_IP)\n  --detect-public-ip    opt in to one short public-IP lookup for pairing (or\n                        ARK_DETECT_PUBLIC_IP=1)\n  --trust-proxy         trust X-Forwarded-For/Proto/Prefix from a reverse\n                        proxy (or ARK_TRUST_PROXY=1)\n",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "9"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 9,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--po",
+    "9"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 9,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port=9"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 9,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--p",
+    "9"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: ambiguous option: --p could match --port, --public-url, --public-ip\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --port: invalid int value: 'x'\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    " 12 "
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 12,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "1_0"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 10,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "１２"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 12,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "-5"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": -5,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --port: expected one argument\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "--root"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --port: expected one argument\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--root",
+    "-x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --root: expected one argument\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--expose=1"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --expose: ignored explicit argument '1'\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--expose",
+    "--no-demo"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": true,
+    "host": null,
+    "media_root": [],
+    "no_demo": true,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--media-root",
+    "a",
+    "--media-root=b"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [
+     "a",
+     "b"
+    ],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--media",
+    "a"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [
+     "a"
+    ],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--m",
+    "a"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [
+     "a"
+    ],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--auth-p",
+    "x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: ambiguous option: --auth-p could match --auth-password, --auth-password-file, --auth-password-hash\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--auth-password-f",
+    "f"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "f",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--zz"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: --zz\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "extra"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: extra\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--",
+    "--port"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: -- --port\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "-x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: -x\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "-hx"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument -h/--help: ignored explicit argument 'x'\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--host",
+    "a b"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": "a b",
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--root",
+    "a b"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "a b",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--root",
+    "-1"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "-1",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--root",
+    "-1.5"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "-1.5",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--require-auth",
+    "--tr",
+    "--det"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": true,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": true,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": true
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--config",
+    "c.json",
+    "--host",
+    "0.0.0.0"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "c.json",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": "0.0.0.0",
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--auth-session-ttl",
+    "3600"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 3600,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 8890,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "9",
+    "--port",
+    "10"
+   ],
+   "exit": null,
+   "ns": {
+    "auth_password": "",
+    "auth_password_file": "",
+    "auth_password_hash": "",
+    "auth_session_ttl": 0,
+    "auth_user": "",
+    "command": "serve",
+    "config": "",
+    "detect_public_ip": false,
+    "expose": false,
+    "host": null,
+    "media_root": [],
+    "no_demo": false,
+    "port": 10,
+    "public_ip": "",
+    "public_url": "",
+    "require_auth": false,
+    "root": "/ark-root",
+    "sessions_root": "",
+    "trust_proxy": false
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "²"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --port: invalid int value: '²'\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "'q\"z"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --port: invalid int value: '\\'q\"z'\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--port",
+    "a\tb\u0001é​"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\narkstudio serve: error: argument --port: invalid int value: 'a\\tb\\x01é\\u200b'\n"
+  },
+  {
+   "argv": [
+    "serve",
+    "--web-root",
+    "w"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: --web-root w\n"
+  },
+  {
+   "argv": [
+    "server-init"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio server-init [-h] --config CONFIG --data-dir DATA_DIR\n                             [--owner OWNER] [--password-file PASSWORD_FILE]\n                             [--port PORT] [--public-url PUBLIC_URL]\narkstudio server-init: error: the following arguments are required: --config, --data-dir\n"
+  },
+  {
+   "argv": [
+    "server-init",
+    "--config",
+    "c"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio server-init [-h] --config CONFIG --data-dir DATA_DIR\n                             [--owner OWNER] [--password-file PASSWORD_FILE]\n                             [--port PORT] [--public-url PUBLIC_URL]\narkstudio server-init: error: the following arguments are required: --data-dir\n"
+  },
+  {
+   "argv": [
+    "server-init",
+    "--config",
+    "c",
+    "--data-dir",
+    "d",
+    "--port",
+    "99"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "server-init",
+    "config": "c",
+    "data_dir": "d",
+    "owner": "admin",
+    "password_file": "",
+    "port": 99,
+    "public_url": ""
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "server-init",
+    "--conf",
+    "c",
+    "--data",
+    "d",
+    "--own",
+    "o",
+    "--pass",
+    "p",
+    "--pub",
+    "u"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "server-init",
+    "config": "c",
+    "data_dir": "d",
+    "owner": "o",
+    "password_file": "p",
+    "port": 8890,
+    "public_url": "u"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "desktop",
+    "--no-s",
+    "--loc"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "desktop",
+    "host": "127.0.0.1",
+    "local": true,
+    "no_server": true,
+    "port": 8890,
+    "remote_url": "",
+    "root": "/ark-root"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "remote"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio remote [-h] --ssh SSH [--user USER] [--ssh-port SSH_PORT]\n                        [--remote-port REMOTE_PORT] [--local-port LOCAL_PORT]\n                        [--identity IDENTITY] [--remote-path REMOTE_PATH]\n                        [--mount MOUNT] [--no-open]\narkstudio remote: error: the following arguments are required: --ssh\n"
+  },
+  {
+   "argv": [
+    "remote",
+    "--ssh",
+    "h",
+    "--no-open",
+    "--ssh-port",
+    "2"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "remote",
+    "identity": "",
+    "local_port": 8890,
+    "mount": "",
+    "no_open": true,
+    "remote_path": "",
+    "remote_port": 8890,
+    "ssh": "h",
+    "ssh_port": 2,
+    "user": ""
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "remote",
+    "--s",
+    "h"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio remote [-h] --ssh SSH [--user USER] [--ssh-port SSH_PORT]\n                        [--remote-port REMOTE_PORT] [--local-port LOCAL_PORT]\n                        [--identity IDENTITY] [--remote-path REMOTE_PATH]\n                        [--mount MOUNT] [--no-open]\narkstudio remote: error: ambiguous option: --s could match --ssh, --ssh-port\n"
+  },
+  {
+   "argv": [
+    "remote",
+    "--ssh",
+    "h",
+    "--remote-p",
+    "x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio remote [-h] --ssh SSH [--user USER] [--ssh-port SSH_PORT]\n                        [--remote-port REMOTE_PORT] [--local-port LOCAL_PORT]\n                        [--identity IDENTITY] [--remote-path REMOTE_PATH]\n                        [--mount MOUNT] [--no-open]\narkstudio remote: error: ambiguous option: --remote-p could match --remote-port, --remote-path\n"
+  },
+  {
+   "argv": [
+    "mobile-tunnel"
+   ],
+   "exit": null,
+   "ns": {
+    "ark_port": 8890,
+    "bind": "0.0.0.0",
+    "command": "mobile-tunnel",
+    "identity": "",
+    "local_port": 8891,
+    "ssh": "user@server",
+    "ssh_port": 22
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "mobile-tunnel",
+    "--ssh",
+    "u@h",
+    "--bind",
+    "::1",
+    "--local-port",
+    "0"
+   ],
+   "exit": null,
+   "ns": {
+    "ark_port": 8890,
+    "bind": "::1",
+    "command": "mobile-tunnel",
+    "identity": "",
+    "local_port": 0,
+    "ssh": "u@h",
+    "ssh_port": 22
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "new"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio new [-h] [--root ROOT] [--template {blank,paper,demo}]\n                     [--description DESCRIPTION]\n                     name\narkstudio new: error: the following arguments are required: name\n"
+  },
+  {
+   "argv": [
+    "new",
+    "My paper"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "new",
+    "description": "",
+    "name": "My paper",
+    "root": "/ark-root",
+    "template": "blank"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "new",
+    "a",
+    "b"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: b\n"
+  },
+  {
+   "argv": [
+    "new",
+    "My",
+    "--template",
+    "paper",
+    "--desc",
+    "d"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "new",
+    "description": "d",
+    "name": "My",
+    "root": "/ark-root",
+    "template": "paper"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "new",
+    "--template",
+    "x",
+    "n"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio new [-h] [--root ROOT] [--template {blank,paper,demo}]\n                     [--description DESCRIPTION]\n                     name\narkstudio new: error: argument --template: invalid choice: 'x' (choose from 'blank', 'paper', 'demo')\n"
+  },
+  {
+   "argv": [
+    "new",
+    "-n"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio new [-h] [--root ROOT] [--template {blank,paper,demo}]\n                     [--description DESCRIPTION]\n                     name\narkstudio new: error: the following arguments are required: name\n"
+  },
+  {
+   "argv": [
+    "new",
+    "--",
+    "-n"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "new",
+    "description": "",
+    "name": "-n",
+    "root": "/ark-root",
+    "template": "blank"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "new",
+    "-5"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "new",
+    "description": "",
+    "name": "-5",
+    "root": "/ark-root",
+    "template": "blank"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "demo",
+    "--root",
+    "r"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "demo",
+    "root": "r"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "export"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio export [-h] --project PROJECT\n                        [--format {json,markdown,csv,svg,bundle}]\n                        [--units UNITS] [--depth DEPTH]\n                        [--media-root MEDIA_ROOT] [--out OUT]\narkstudio export: error: the following arguments are required: --project\n"
+  },
+  {
+   "argv": [
+    "export",
+    "--project",
+    "p"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "export",
+    "depth": 1,
+    "format": "json",
+    "media_root": [],
+    "out": "",
+    "project": "p",
+    "units": ""
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "export",
+    "--project",
+    "p",
+    "--format",
+    "bundle",
+    "--units",
+    "a,b",
+    "--depth",
+    "2",
+    "--media-root",
+    "m",
+    "--out",
+    "o"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "export",
+    "depth": 2,
+    "format": "bundle",
+    "media_root": [
+     "m"
+    ],
+    "out": "o",
+    "project": "p",
+    "units": "a,b"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "export",
+    "--project",
+    "p",
+    "--format",
+    "html"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio export [-h] --project PROJECT\n                        [--format {json,markdown,csv,svg,bundle}]\n                        [--units UNITS] [--depth DEPTH]\n                        [--media-root MEDIA_ROOT] [--out OUT]\narkstudio export: error: argument --format: invalid choice: 'html' (choose from 'json', 'markdown', 'csv', 'svg', 'bundle')\n"
+  },
+  {
+   "argv": [
+    "export",
+    "--pro",
+    "p",
+    "--dep",
+    "x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio export [-h] --project PROJECT\n                        [--format {json,markdown,csv,svg,bundle}]\n                        [--units UNITS] [--depth DEPTH]\n                        [--media-root MEDIA_ROOT] [--out OUT]\narkstudio export: error: argument --depth: invalid int value: 'x'\n"
+  },
+  {
+   "argv": [
+    "agent"
+   ],
+   "exit": null,
+   "ns": {
+    "agent_command": null,
+    "command": "agent"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "agent",
+    "context"
+   ],
+   "exit": null,
+   "ns": {
+    "agent_command": "context",
+    "command": "agent",
+    "project": "",
+    "root": "/ark-root"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "agent",
+    "context",
+    "--project",
+    "p"
+   ],
+   "exit": null,
+   "ns": {
+    "agent_command": "context",
+    "command": "agent",
+    "project": "p",
+    "root": "/ark-root"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "agent",
+    "ctx"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio agent [-h] {context} ...\narkstudio agent: error: argument agent_command: invalid choice: 'ctx' (choose from 'context')\n"
+  },
+  {
+   "argv": [
+    "session-watch"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio session-watch [-h] --id ID [--file FILE]\n                               [--agent {claude,codex,dsh,other}]\n                               [--server SERVER] [--project PROJECT]\n                               [--token-env TOKEN_ENV] [--interval INTERVAL]\n                               [--title TITLE] [--once]\narkstudio session-watch: error: the following arguments are required: --id\n"
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "ark-ses-1",
+    "--interval",
+    "12.5",
+    "--once"
+   ],
+   "exit": null,
+   "ns": {
+    "agent": "",
+    "command": "session-watch",
+    "file": "",
+    "id": "ark-ses-1",
+    "interval": "f:12.5",
+    "once": true,
+    "project": "",
+    "server": "http://127.0.0.1:8890",
+    "title": "",
+    "token_env": "ARK_TOKEN"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "x",
+    "--interval",
+    "abc"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio session-watch [-h] --id ID [--file FILE]\n                               [--agent {claude,codex,dsh,other}]\n                               [--server SERVER] [--project PROJECT]\n                               [--token-env TOKEN_ENV] [--interval INTERVAL]\n                               [--title TITLE] [--once]\narkstudio session-watch: error: argument --interval: invalid float value: 'abc'\n"
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "x",
+    "--interval",
+    "1e1"
+   ],
+   "exit": null,
+   "ns": {
+    "agent": "",
+    "command": "session-watch",
+    "file": "",
+    "id": "x",
+    "interval": "f:10.0",
+    "once": false,
+    "project": "",
+    "server": "http://127.0.0.1:8890",
+    "title": "",
+    "token_env": "ARK_TOKEN"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "x",
+    "--interval",
+    "inf"
+   ],
+   "exit": null,
+   "ns": {
+    "agent": "",
+    "command": "session-watch",
+    "file": "",
+    "id": "x",
+    "interval": "f:inf",
+    "once": false,
+    "project": "",
+    "server": "http://127.0.0.1:8890",
+    "title": "",
+    "token_env": "ARK_TOKEN"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "x",
+    "--agent",
+    "gpt"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio session-watch [-h] --id ID [--file FILE]\n                               [--agent {claude,codex,dsh,other}]\n                               [--server SERVER] [--project PROJECT]\n                               [--token-env TOKEN_ENV] [--interval INTERVAL]\n                               [--title TITLE] [--once]\narkstudio session-watch: error: argument --agent: invalid choice: 'gpt' (choose from 'claude', 'codex', 'dsh', 'other')\n"
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "x",
+    "--t",
+    "y"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio session-watch [-h] --id ID [--file FILE]\n                               [--agent {claude,codex,dsh,other}]\n                               [--server SERVER] [--project PROJECT]\n                               [--token-env TOKEN_ENV] [--interval INTERVAL]\n                               [--title TITLE] [--once]\narkstudio session-watch: error: ambiguous option: --t could match --token-env, --title\n"
+  },
+  {
+   "argv": [
+    "session-watch",
+    "--id",
+    "x",
+    "--token",
+    "T"
+   ],
+   "exit": null,
+   "ns": {
+    "agent": "",
+    "command": "session-watch",
+    "file": "",
+    "id": "x",
+    "interval": "f:60.0",
+    "once": false,
+    "project": "",
+    "server": "http://127.0.0.1:8890",
+    "title": "",
+    "token_env": "T"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "skills_command": null
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "list"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "skills_command": "list"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "show"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio skills show [-h] skill\narkstudio skills show: error: the following arguments are required: skill\n"
+  },
+  {
+   "argv": [
+    "skills",
+    "show",
+    "rrsi"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "skill": "rrsi",
+    "skills_command": "show"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "render",
+    "a",
+    "b",
+    "--context",
+    "{}"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "context": "{}",
+    "out": "",
+    "skill": "a",
+    "skills_command": "render",
+    "template": "b"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "validate",
+    "a"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio skills validate [-h] [--payload PAYLOAD]\n                                 [--project-root PROJECT_ROOT]\n                                 skill kind\narkstudio skills validate: error: the following arguments are required: kind\n"
+  },
+  {
+   "argv": [
+    "skills",
+    "validate",
+    "a",
+    "b",
+    "--payload",
+    "p",
+    "--project-r",
+    "r"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "kind": "b",
+    "payload": "p",
+    "project_root": "r",
+    "skill": "a",
+    "skills_command": "validate"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "interface"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "skills_command": "interface"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "brief",
+    "--pay",
+    "x"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "payload": "x",
+    "skills_command": "brief"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "setup"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "digest": "",
+    "note": "",
+    "paths": [],
+    "payload": "",
+    "project": "",
+    "propose": false,
+    "setup_action": "state",
+    "skills_command": "setup"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "setup",
+    "draft"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "digest": "",
+    "note": "",
+    "paths": [],
+    "payload": "",
+    "project": "",
+    "propose": false,
+    "setup_action": "draft",
+    "skills_command": "setup"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "setup",
+    "--project",
+    "p",
+    "discover",
+    "--paths",
+    "a",
+    "b"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "digest": "",
+    "note": "",
+    "paths": [
+     "a",
+     "b"
+    ],
+    "payload": "",
+    "project": "p",
+    "propose": false,
+    "setup_action": "discover",
+    "skills_command": "setup"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "setup",
+    "--paths"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "digest": "",
+    "note": "",
+    "paths": [],
+    "payload": "",
+    "project": "",
+    "propose": false,
+    "setup_action": "state",
+    "skills_command": "setup"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "setup",
+    "--propose",
+    "confirm",
+    "--digest",
+    "d",
+    "--note",
+    "n"
+   ],
+   "exit": null,
+   "ns": {
+    "command": "skills",
+    "digest": "d",
+    "note": "n",
+    "paths": [],
+    "payload": "",
+    "project": "",
+    "propose": true,
+    "setup_action": "confirm",
+    "skills_command": "setup"
+   },
+   "stdout": "",
+   "stderr": ""
+  },
+  {
+   "argv": [
+    "skills",
+    "setup",
+    "x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio skills setup [-h] [--project PROJECT] [--paths [PATHS ...]]\n                              [--payload PAYLOAD] [--propose]\n                              [--digest DIGEST] [--note NOTE]\n                              [{state,summary,questions,discover,draft,confirm,verify}]\narkstudio skills setup: error: argument setup_action: invalid choice: 'x' (choose from 'state', 'summary', 'questions', 'discover', 'draft', 'confirm', 'verify')\n"
+  },
+  {
+   "argv": [
+    "skills",
+    "setup",
+    "state",
+    "summary"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: summary\n"
+  },
+  {
+   "argv": [
+    "skills",
+    "nope"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio skills [-h]\n                        {list,show,render,validate,interface,brief,setup} ...\narkstudio skills: error: argument skills_command: invalid choice: 'nope' (choose from 'list', 'show', 'render', 'validate', 'interface', 'brief', 'setup')\n"
+  },
+  {
+   "argv": [
+    "skills",
+    "list",
+    "--x"
+   ],
+   "exit": 2,
+   "ns": null,
+   "stdout": "",
+   "stderr": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\narkstudio: error: unrecognized arguments: --x\n"
+  }
+ ]
+}

@@ -1,0 +1,58 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="560" viewBox="0 0 1200 560" role="img" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>The ARK loop</title>
+<desc>Six workspaces in a loop: Home, Research, Map, Execute, Output and Editor, with three human checkpoints.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6B7280"/></marker><marker id="arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1F5A7A"/></marker></defs>
+<rect width="1200" height="560" fill="#F7F5EF"/>
+<text x="32" y="44" font-size="24" fill="#111827" font-weight="700" text-anchor="start">The ARK loop</text>
+<text x="32" y="70" font-size="14" fill="#4B5563" font-weight="400" text-anchor="start">One project, six workspaces. People decide; agents do the work; ARK keeps the record.</text>
+<rect x="32" y="120" width="208" height="128" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="32" y="120" width="6" height="128" rx="3" fill="#B7791F" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="50" y="146" font-size="17" fill="#111827" font-weight="700" text-anchor="start">1. Home</text>
+<text x="50" y="168" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Set up the environment</text>
+<text x="50" y="186" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Copy an agent prompt</text>
+<line x1="242" y1="184.0" x2="262" y2="184.0" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="264" y="120" width="208" height="128" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="264" y="120" width="6" height="128" rx="3" fill="#C2683F" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="282" y="146" font-size="17" fill="#111827" font-weight="700" text-anchor="start">2. Research</text>
+<text x="282" y="168" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Idea, then Plan:</text>
+<text x="282" y="186" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Story · Related · Method</text>
+<text x="282" y="204" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">· Experiment</text>
+<line x1="474" y1="184.0" x2="494" y2="184.0" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="496" y="120" width="208" height="128" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="496" y="120" width="6" height="128" rx="3" fill="#7C5C9E" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="514" y="146" font-size="17" fill="#111827" font-weight="700" text-anchor="start">3. Map</text>
+<text x="514" y="168" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">See the argument</text>
+<text x="514" y="186" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Find gaps and weak claims</text>
+<line x1="706" y1="184.0" x2="726" y2="184.0" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="728" y="120" width="208" height="128" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="728" y="120" width="6" height="128" rx="3" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="746" y="146" font-size="17" fill="#111827" font-weight="700" text-anchor="start">4. Execute</text>
+<text x="746" y="168" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Board · Runs · GPU · Files</text>
+<text x="746" y="186" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Agents run tasks</text>
+<line x1="938" y1="184.0" x2="958" y2="184.0" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="960" y="120" width="208" height="128" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="960" y="120" width="6" height="128" rx="3" fill="#2F7D5B" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="978" y="146" font-size="17" fill="#111827" font-weight="700" text-anchor="start">5. Output</text>
+<text x="978" y="168" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Assets · Distribution</text>
+<text x="978" y="186" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Figures, posters, posts</text>
+<path d="M 1064.0 252 V 308 H 136.0 V 254" fill="none" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" marker-end="url(#arrow)" stroke-dasharray="6 5"/>
+<text x="600" y="300" font-size="13" fill="#4B5563" font-weight="400" text-anchor="middle" font-style="italic">Results feed the next idea</text>
+<rect x="32" y="340" width="1136" height="64" rx="8" fill="#F7F5EF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1" stroke-dasharray="5 4"/>
+<text x="52" y="368" font-size="15" fill="#111827" font-weight="700" text-anchor="start">Editor</text>
+<text x="52" y="390" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Open any file or node: images, video, PDF, Markdown, CSV, JSON, code.</text>
+<text x="640" y="368" font-size="15" fill="#111827" font-weight="700" text-anchor="start">Assistant  (Ctrl+J)</text>
+<text x="640" y="390" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Ask about the project. It writes through the same store as the UI.</text>
+<text x="32" y="446" font-size="16" fill="#111827" font-weight="700" text-anchor="start">Human checkpoints</text>
+<circle cx="44" cy="482" r="12" fill="#B23A48" stroke="none" stroke-width="0"/>
+<text x="44" y="487" font-size="13" fill="#FFFFFF" font-weight="700" text-anchor="middle">1</text>
+<text x="64" y="487" font-size="14" fill="#111827" font-weight="700" text-anchor="start">Confirm the setup</text>
+<text x="64" y="509" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">Home → Review &amp; confirm. Agents cannot confirm it.</text>
+<circle cx="428" cy="482" r="12" fill="#B23A48" stroke="none" stroke-width="0"/>
+<text x="428" y="487" font-size="13" fill="#FFFFFF" font-weight="700" text-anchor="middle">2</text>
+<text x="448" y="487" font-size="14" fill="#111827" font-weight="700" text-anchor="start">Accept the work</text>
+<text x="448" y="509" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">The reviewer reads the inspection report and accepts.</text>
+<circle cx="812" cy="482" r="12" fill="#B23A48" stroke="none" stroke-width="0"/>
+<text x="812" y="487" font-size="13" fill="#FFFFFF" font-weight="700" text-anchor="middle">3</text>
+<text x="832" y="487" font-size="14" fill="#111827" font-weight="700" text-anchor="start">Approve risky actions</text>
+<text x="832" y="509" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">Push, GPU jobs, deletion, external posts: ask first.</text>
+</svg>

@@ -1,0 +1,12 @@
+[2026-11-02 09:14:03] run T-0001  provider=codex  worktree=.worktrees/T-0001  access=accept-edits
+[2026-11-02 09:14:05] gate scope   ok   2 files changed, all inside configs/warmup/**
+[2026-11-02 09:14:09] gate static  ok   yaml parses, no secrets found
+[2026-11-02 09:14:41] gate smoke   ok   50 steps, loss 8.21 -> 7.96, finite
+[2026-11-02 09:14:42] needs human  GPU dispatch (readiness.requires_human)  -> waiting for approval
+[2026-11-02 09:16:10] approved     by human:you  "go, one GPU only"
+[2026-11-02 09:16:11] gpu queue    job warmup-b-s0  claim gpu_memory_mb=20000  state=queued
+[2026-11-02 09:30:27] gpu queue    job warmup-b-s0  -> lab-a100:GPU 2 (util 7%, free 61 GB)
+[2026-11-02 10:02:55] train        arm=warmup seed=0 step=5000 loss=2.081 spikes=0
+[2026-11-02 10:35:12] train        arm=none   seed=0 step=5000 loss=2.143 spikes=3 (750,1500,2250)
+[2026-11-02 11:41:30] analyse      6 runs, results.csv written (21 rows)
+[2026-11-02 11:41:33] report       inspection_report.md attached to T-0001 -> status=review

@@ -1,0 +1,21 @@
+# Vendored browser libraries
+
+ARK serves these libraries locally; no CDN is needed for Markdown rendering.
+
+| Library | Version | Upstream | License |
+| --- | --- | --- | --- |
+| DOMPurify | 3.4.17 | https://github.com/cure53/DOMPurify | Apache-2.0 OR MPL-2.0 |
+| Marked | 18.2.0 | https://github.com/markedjs/marked | MIT |
+| jsdiff | 8.0.2 | https://github.com/kpdecker/jsdiff | BSD-3-Clause |
+
+`dompurify/purify.es.js` is the upstream `dist/purify.es.mjs`, renamed for the
+same JavaScript MIME type and release caching as other ARK modules.
+Marked supplies HTML token boundaries; DOMPurify sanitises every raw HTML
+fragment before insertion. Each library's license is retained beside it.
+
+`jsdiff/character.js`, `jsdiff/array.js` and `jsdiff/base.js` are the unmodified
+`libesm/diff/` modules from the `diff@8.0.2` npm release. Git supplies the line
+diff; jsdiff aligns similar changed lines before comparing their characters
+locally, with bounded work for large inputs.
+
+Existing KaTeX, Mermaid and d3-quadtree distributions retain their own licenses.

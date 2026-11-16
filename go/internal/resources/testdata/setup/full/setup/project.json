@@ -1,0 +1,113 @@
+{
+  "state": "confirmed",
+  "confirmation": {
+    "digest": "nope"
+  },
+  "verification": {
+    "host": "alice-pc",
+    "at": "2026-11-14T11:50:00+00:00"
+  },
+  "profile": {
+    "objective": "x",
+    "repositories": [
+      {
+        "id": "Legacy",
+        "path": "/srv/legacy",
+        "remote": "https://bob:pw@github.com/lab/legacy",
+        "role": "PRIMARY"
+      }
+    ],
+    "compute": [
+      {
+        "id": "lab",
+        "kind": "ssh",
+        "gpu_server": "lab-01",
+        "gpus": 4
+      }
+    ],
+    "resources": [
+      {
+        "id": "code",
+        "kind": "repositories",
+        "name": "Code",
+        "details": {
+          "remote": "git@gitlab.com:a/b.git"
+        }
+      },
+      {
+        "id": "data",
+        "kind": "storage",
+        "name": "Data",
+        "details": {
+          "kind": "database"
+        }
+      },
+      {
+        "kind": "bogus",
+        "name": "Fallback"
+      },
+      {
+        "id": "flat",
+        "type": "compute",
+        "subkind": "slurm",
+        "name": "Cluster",
+        "gpus": "8xA100",
+        "use": "ANY"
+      },
+      {
+        "id": "code",
+        "kind": "repository",
+        "name": "dup"
+      },
+      {
+        "id": "env",
+        "kind": "environment",
+        "details": {}
+      },
+      {
+        "id": "cmd",
+        "kind": "command",
+        "details": {
+          "run": "make"
+        }
+      },
+      "not a dict"
+    ]
+  },
+  "locations": [
+    {
+      "resource": "project/code",
+      "host_id": "alice-pc",
+      "path_or_ref": "C:/code",
+      "verified_at": "2026-11-14T11:00:00Z"
+    },
+    {
+      "resource": "project/data",
+      "host_id": "bad host!",
+      "path_or_ref": "/d"
+    },
+    {
+      "resource": "project/data",
+      "host_id": "nas01",
+      "path": "/mnt/d",
+      "host_label": ""
+    },
+    {
+      "resource": "project/legacy",
+      "host_id": " lab-01 ",
+      "path_or_ref": "/srv/legacy"
+    },
+    {
+      "resource": "",
+      "host_id": "x",
+      "path_or_ref": "/y"
+    },
+    "junk"
+  ],
+  "hosts": [
+    {
+      "id": "nas01",
+      "label": "NAS"
+    }
+  ]
+}

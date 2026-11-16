@@ -1,0 +1,580 @@
+{
+ "normalize_arrows": [
+  [
+   "null",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "[]",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"mind_tree\":1}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"mind_tree\":true,\"style\":{\"head\":\"circle\"}}",
+   "{\"style\": {\"head\": \"circle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": true}"
+  ],
+  [
+   "{\"relations\":null}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":null}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":1}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":\"x\"}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"head\":\"open\"}}",
+   "{\"style\": {\"head\": \"open\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"head\":\"bogus\",\"placement\":\"both\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"both\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":2}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 2.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\"1.2345\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.234}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\" 2.5 \"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 2.5}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":true}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":null}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":0.4}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":2.5001}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\"nan\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\"inf\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":1.0005}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":1.2344999}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.234}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\"1_5\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":[1]}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"zzz\":1,\"aaa\":2,\"head\":\"bar\"}}",
+   "{\"style\": {\"head\": \"bar\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"head\":\"diamond_filled\",\"placement\":\"none\",\"size\":0.5}}",
+   "{\"style\": {\"head\": \"diamond_filled\", \"placement\": \"none\", \"size\": 0.5}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"placement\":1}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"reverse\":true}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"head\":\"open\",\"reverse\":false}}",
+   "{\"style\": {\"head\": \"open\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":null}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":[]}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"supports\":{\"head\":\"open\"},\"bogus\":{\"head\":\"open\"}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"supports\": {\"head\": \"open\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"relates_to\":{},\"cites\":{\"size\":9},\"blocks\":{\"placement\":\"source\",\"size\":1.5}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"blocks\": {\"placement\": \"source\", \"size\": 1.5}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"unset\":\"x\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"derived_from\":{\"reverse\":false},\"depends_on\":{\"reverse\":true,\"head\":\"open\",\"size\":2}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"derived_from\": {\"reverse\": false}, \"depends_on\": {\"head\": \"open\", \"reverse\": true, \"size\": 2.0}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"size\":1.5,\"reverse\":true,\"placement\":\"both\"}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"placement\": \"both\", \"reverse\": true, \"size\": 1.5}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"reverse\":1}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"reverse\":\"true\"}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"reverse\":null}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"supports\":{\"reverse\":true,\"zz\":1}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"supports\": {\"reverse\": true}}, \"mind_tree\": false}"
+  ]
+ ],
+ "update_arrows": [
+  [
+   "null",
+   "{\"error\": \"arrow settings must be an object\"}"
+  ],
+  [
+   "{}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"zz\":1,\"aa\":2}",
+   "{\"error\": \"unknown arrow setting: aa\"}"
+  ],
+  [
+   "{\"mind_tree\":\"yes\"}",
+   "{\"error\": \"mind_tree must be true or false\"}"
+  ],
+  [
+   "{\"mind_tree\":false}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":null}",
+   "{\"error\": \"arrow style must be an object\"}"
+  ],
+  [
+   "{\"style\":1}",
+   "{\"error\": \"arrow style must be an object\"}"
+  ],
+  [
+   "{\"style\":\"x\"}",
+   "{\"error\": \"arrow style must be an object\"}"
+  ],
+  [
+   "{\"style\":{}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"head\":\"open\"}}",
+   "{\"style\": {\"head\": \"open\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"head\":\"bogus\",\"placement\":\"both\"}}",
+   "{\"error\": \"arrow style head must be one of: none, triangle, open, stealth, diamond, diamond_filled, circle, bar\"}"
+  ],
+  [
+   "{\"style\":{\"size\":2}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 2.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\"1.2345\"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.234}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\" 2.5 \"}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 2.5}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":true}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":null}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":0.4}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":2.5001}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":\"nan\"}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":\"inf\"}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":1.0005}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":1.2344999}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.234}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"size\":\"1_5\"}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"size\":[1]}}",
+   "{\"error\": \"arrow style size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"style\":{\"zzz\":1,\"aaa\":2,\"head\":\"bar\"}}",
+   "{\"error\": \"unknown arrow style field: aaa\"}"
+  ],
+  [
+   "{\"style\":{\"head\":\"diamond_filled\",\"placement\":\"none\",\"size\":0.5}}",
+   "{\"style\": {\"head\": \"diamond_filled\", \"placement\": \"none\", \"size\": 0.5}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"style\":{\"placement\":1}}",
+   "{\"error\": \"arrow style placement must be one of: target, source, both, none\"}"
+  ],
+  [
+   "{\"style\":{\"reverse\":true}}",
+   "{\"error\": \"unknown arrow style field: reverse\"}"
+  ],
+  [
+   "{\"style\":{\"head\":\"open\",\"reverse\":false}}",
+   "{\"error\": \"unknown arrow style field: reverse\"}"
+  ],
+  [
+   "{\"relations\":null}",
+   "{\"error\": \"arrow relations must be an object\"}"
+  ],
+  [
+   "{\"relations\":[]}",
+   "{\"error\": \"arrow relations must be an object\"}"
+  ],
+  [
+   "{\"relations\":{}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"supports\":{\"head\":\"open\"},\"bogus\":{\"head\":\"open\"}}}",
+   "{\"error\": \"unknown relation: bogus\"}"
+  ],
+  [
+   "{\"relations\":{\"relates_to\":{},\"cites\":{\"size\":9},\"blocks\":{\"placement\":\"source\",\"size\":1.5}}}",
+   "{\"error\": \"arrow style for cites size must be between 0.5 and 2.5\"}"
+  ],
+  [
+   "{\"relations\":{\"unset\":\"x\"}}",
+   "{\"error\": \"arrow style for unset must be an object\"}"
+  ],
+  [
+   "{\"relations\":{\"derived_from\":{\"reverse\":false},\"depends_on\":{\"reverse\":true,\"head\":\"open\",\"size\":2}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"derived_from\": {\"reverse\": false}, \"depends_on\": {\"head\": \"open\", \"reverse\": true, \"size\": 2.0}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"size\":1.5,\"reverse\":true,\"placement\":\"both\"}}}",
+   "{\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"cites\": {\"placement\": \"both\", \"reverse\": true, \"size\": 1.5}}, \"mind_tree\": false}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"reverse\":1}}}",
+   "{\"error\": \"arrow style for cites reverse must be true or false\"}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"reverse\":\"true\"}}}",
+   "{\"error\": \"arrow style for cites reverse must be true or false\"}"
+  ],
+  [
+   "{\"relations\":{\"cites\":{\"reverse\":null}}}",
+   "{\"error\": \"arrow style for cites reverse must be true or false\"}"
+  ],
+  [
+   "{\"relations\":{\"supports\":{\"reverse\":true,\"zz\":1}}}",
+   "{\"error\": \"unknown arrow style for supports field: zz\"}"
+  ]
+ ],
+ "personal_appearance": [
+  [
+   "{\"arrows\":null}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"zz\":1,\"aa\":2}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"mind_tree\":\"yes\"}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"mind_tree\":false}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":null}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":1}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":\"x\"}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"open\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"bogus\",\"placement\":\"both\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":2}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":\"1.2345\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":\" 2.5 \"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":true}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":null}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":0.4}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":2.5001}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":\"nan\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":\"inf\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":1.0005}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":1.2344999}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":\"1_5\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":[1]}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"zzz\":1,\"aaa\":2,\"head\":\"bar\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"diamond_filled\",\"placement\":\"none\",\"size\":0.5}}}",
+   "{\"arrows\": {\"style\": {\"head\": \"diamond_filled\", \"placement\": \"none\", \"size\": 0.5}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"placement\":1}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"reverse\":true}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"open\",\"reverse\":false}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":null}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":[]}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"supports\":{\"head\":\"open\"},\"bogus\":{\"head\":\"open\"}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"relates_to\":{},\"cites\":{\"size\":9},\"blocks\":{\"placement\":\"source\",\"size\":1.5}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"unset\":\"x\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"derived_from\":{\"reverse\":false},\"depends_on\":{\"reverse\":true,\"head\":\"open\",\"size\":2}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"cites\":{\"size\":1.5,\"reverse\":true,\"placement\":\"both\"}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"cites\":{\"reverse\":1}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"cites\":{\"reverse\":\"true\"}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"cites\":{\"reverse\":null}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"relations\":{\"supports\":{\"reverse\":true,\"zz\":1}}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"open\",\"placement\":\"both\",\"size\":2}}}",
+   "{\"arrows\": {\"style\": {\"head\": \"open\", \"placement\": \"both\", \"size\": 2.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"open\",\"placement\":\"both\",\"size\":2},\"relations\":{\"cites\":{\"head\":\"bar\"}},\"mind_tree\":true}}",
+   "{\"arrows\": {\"style\": {\"head\": \"open\", \"placement\": \"both\", \"size\": 2.0}, \"relations\": {\"cites\": {\"head\": \"bar\"}}, \"mind_tree\": true}}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"head\":\"open\",\"placement\":\"both\"}}}",
+   "{}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":1}}}",
+   "{}"
+  ],
+  [
+   "{\"graph\":{\"repulsion\":1,\"distance\":2,\"gravity\":0,\"damping\":0.5},\"arrows\":{\"style\":{\"head\":\"open\",\"placement\":\"both\",\"size\":2}},\"palette\":null}",
+   "{\"graph\": {\"repulsion\": 1.0, \"distance\": 2.0, \"gravity\": 0.0, \"damping\": 0.5}, \"arrows\": {\"style\": {\"head\": \"open\", \"placement\": \"both\", \"size\": 2.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}}"
+  ]
+ ],
+ "project_settings": [
+  [
+   "{}",
+   "{\"graph\": {\"repulsion\": 3286.0639999999985, \"distance\": 0.0, \"gravity\": 0.011506123058542407, \"damping\": 0.3}, \"arrows\": {\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}, \"assistant\": {}, \"agents\": {\"providers\": {}}, \"palette\": {\"enabled\": false, \"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\", \"light\": {\"preset\": \"ark-light\", \"accent\": \"#2563eb\", \"accent2\": \"#1d4ed8\", \"accent_soft\": \"#eaf1ff\", \"background\": \"#f5f6f8\", \"surface\": \"#ffffff\", \"text\": \"#1a2231\", \"muted\": \"#5b6474\", \"line\": \"#d6dce5\", \"success\": \"#047857\", \"warning\": \"#b45309\", \"danger\": \"#dc2626\"}, \"dark\": {\"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\"}, \"saved\": {}}, \"sessions\": {\"accept_uploads\": false}}"
+  ],
+  [
+   "{\"arrows\":{\"style\":{\"size\":\"2\"},\"mind_tree\":true}}",
+   "{\"graph\": {\"repulsion\": 3286.0639999999985, \"distance\": 0.0, \"gravity\": 0.011506123058542407, \"damping\": 0.3}, \"arrows\": {\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 2.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": true}, \"assistant\": {}, \"agents\": {\"providers\": {}}, \"palette\": {\"enabled\": false, \"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\", \"light\": {\"preset\": \"ark-light\", \"accent\": \"#2563eb\", \"accent2\": \"#1d4ed8\", \"accent_soft\": \"#eaf1ff\", \"background\": \"#f5f6f8\", \"surface\": \"#ffffff\", \"text\": \"#1a2231\", \"muted\": \"#5b6474\", \"line\": \"#d6dce5\", \"success\": \"#047857\", \"warning\": \"#b45309\", \"danger\": \"#dc2626\"}, \"dark\": {\"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\"}, \"saved\": {}}, \"sessions\": {\"accept_uploads\": false}}"
+  ],
+  [
+   "{\"sessions\":{\"accept_uploads\":true}}",
+   "{\"graph\": {\"repulsion\": 3286.0639999999985, \"distance\": 0.0, \"gravity\": 0.011506123058542407, \"damping\": 0.3}, \"arrows\": {\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}, \"assistant\": {}, \"agents\": {\"providers\": {}}, \"palette\": {\"enabled\": false, \"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\", \"light\": {\"preset\": \"ark-light\", \"accent\": \"#2563eb\", \"accent2\": \"#1d4ed8\", \"accent_soft\": \"#eaf1ff\", \"background\": \"#f5f6f8\", \"surface\": \"#ffffff\", \"text\": \"#1a2231\", \"muted\": \"#5b6474\", \"line\": \"#d6dce5\", \"success\": \"#047857\", \"warning\": \"#b45309\", \"danger\": \"#dc2626\"}, \"dark\": {\"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\"}, \"saved\": {}}, \"sessions\": {\"accept_uploads\": true}}"
+  ],
+  [
+   "{\"sessions\":{\"accept_uploads\":1}}",
+   "{\"graph\": {\"repulsion\": 3286.0639999999985, \"distance\": 0.0, \"gravity\": 0.011506123058542407, \"damping\": 0.3}, \"arrows\": {\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}, \"assistant\": {}, \"agents\": {\"providers\": {}}, \"palette\": {\"enabled\": false, \"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\", \"light\": {\"preset\": \"ark-light\", \"accent\": \"#2563eb\", \"accent2\": \"#1d4ed8\", \"accent_soft\": \"#eaf1ff\", \"background\": \"#f5f6f8\", \"surface\": \"#ffffff\", \"text\": \"#1a2231\", \"muted\": \"#5b6474\", \"line\": \"#d6dce5\", \"success\": \"#047857\", \"warning\": \"#b45309\", \"danger\": \"#dc2626\"}, \"dark\": {\"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\"}, \"saved\": {}}, \"sessions\": {\"accept_uploads\": false}}"
+  ],
+  [
+   "{\"sessions\":[]}",
+   "{\"graph\": {\"repulsion\": 3286.0639999999985, \"distance\": 0.0, \"gravity\": 0.011506123058542407, \"damping\": 0.3}, \"arrows\": {\"style\": {\"head\": \"triangle\", \"placement\": \"target\", \"size\": 1.0}, \"relations\": {\"relates_to\": {\"placement\": \"none\"}, \"unset\": {\"placement\": \"none\"}}, \"mind_tree\": false}, \"assistant\": {}, \"agents\": {\"providers\": {}}, \"palette\": {\"enabled\": false, \"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\", \"light\": {\"preset\": \"ark-light\", \"accent\": \"#2563eb\", \"accent2\": \"#1d4ed8\", \"accent_soft\": \"#eaf1ff\", \"background\": \"#f5f6f8\", \"surface\": \"#ffffff\", \"text\": \"#1a2231\", \"muted\": \"#5b6474\", \"line\": \"#d6dce5\", \"success\": \"#047857\", \"warning\": \"#b45309\", \"danger\": \"#dc2626\"}, \"dark\": {\"preset\": \"ark\", \"accent\": \"#3b82f6\", \"accent2\": \"#60a5fa\", \"accent_soft\": \"#172554\", \"background\": \"#0f141c\", \"surface\": \"#1d2532\", \"text\": \"#e8eef6\", \"muted\": \"#93a2b6\", \"line\": \"#273243\", \"success\": \"#34d399\", \"warning\": \"#f59e0b\", \"danger\": \"#ef4444\"}, \"saved\": {}}, \"sessions\": {\"accept_uploads\": false}}"
+  ]
+ ],
+ "update_sessions": [
+  [
+   "{}",
+   "{\"accept_uploads\": true}"
+  ],
+  [
+   "{\"accept_uploads\":false}",
+   "{\"accept_uploads\": false}"
+  ],
+  [
+   "{\"accept_uploads\":1}",
+   "{\"error\": \"sessions.accept_uploads must be true or false\"}"
+  ],
+  [
+   "[]",
+   "{\"error\": \"sessions settings must be an object\"}"
+  ],
+  [
+   "null",
+   "{\"error\": \"sessions settings must be an object\"}"
+  ],
+  [
+   "{\"x\":1,\"accept_uploads\":true}",
+   "{\"error\": \"unknown sessions setting: x\"}"
+  ],
+  [
+   "{\"accept_uploads\":null}",
+   "{\"error\": \"sessions.accept_uploads must be true or false\"}"
+  ]
+ ]
+}

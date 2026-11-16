@@ -1,0 +1,56 @@
+{
+  "name": "ARK Studio",
+  "short_name": "ARK",
+  "description": "A local-first, node-first research workbench. Pair a phone to read and steer agent sessions.",
+  "id": "./",
+  "start_url": "./#/overview",
+  "scope": "./",
+  "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "any",
+  "background_color": "#0f141c",
+  "theme_color": "#0f141c",
+  "categories": ["productivity", "research"],
+  "icons": [
+    {
+      "src": "brand/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "brand/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "brand/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Overview",
+      "short_name": "Overview",
+      "url": "./#/overview"
+    },
+    {
+      "name": "Ideas",
+      "short_name": "Ideas",
+      "url": "./#/ideas"
+    },
+    {
+      "name": "Tasks",
+      "short_name": "Tasks",
+      "url": "./#/tasks"
+    },
+    {
+      "name": "Settings",
+      "short_name": "Settings",
+      "url": "./#/settings"
+    }
+  ]
+}

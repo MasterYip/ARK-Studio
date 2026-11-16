@@ -1,0 +1,13 @@
+{
+  "_comment": "Example only. The tutorial never submits this. POST /api/gpu/jobs adds a job to the queue; the dispatcher keeps GPUs whose available memory fits the claim, then takes the least-utilised one.",
+  "name": "warmup-b-s0",
+  "task": "T-0001",
+  "command": "python train.py --config configs/warmup/arm_b.yaml --seed 0",
+  "work_dir": "/data/projects/warmup-study",
+  "gpus": 1,
+  "gpu_memory_mb": 20000,
+  "timeout_minutes": 120,
+  "env": {
+    "WANDB_MODE": "offline"
+  }
+}

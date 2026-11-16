@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#f5f7fa">
+  <meta name="robots" content="noindex, nofollow">
+  <title data-i18n="doc_title">Sign in · ARK Studio</title>
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./css/startup.css">
+  <link rel="stylesheet" href="./css/login.css">
+  <link rel="modulepreload" href="./js/startup-force.js">
+  <link rel="modulepreload" href="./js/graph-core.js">
+  <link rel="modulepreload" href="./js/arrows.js">
+  <link rel="modulepreload" href="./js/icons.js">
+</head>
+<body class="login-body">
+  <div class="entry-graph" data-entry="login" aria-hidden="true"><canvas></canvas></div>
+  <div class="entry-brand" aria-label="ARK Studio">
+    <img class="ark-lockup ark-lockup-light" src="./brand/ark-lockup-loading.svg" alt="" width="227.1584" height="49">
+    <img class="ark-lockup ark-lockup-dark" src="./brand/ark-lockup-loading-dark.svg" alt="" width="227.1584" height="49">
+  </div>
+  <div class="entry-themes">
+    <button type="button" data-startup-theme-toggle aria-pressed="false"></button> <!-- startup-graph.js sets the translated aria-label and title -->
+  </div>
+  <main class="login-shell">
+    <section class="login-card" aria-labelledby="login-title">
+      <div class="login-eyebrow"><i class="login-dot" aria-hidden="true"></i><span data-i18n="eyebrow">Protected server</span></div>
+      <h1 id="login-title" data-i18n="title">Sign in</h1>
+      <p class="login-lead" data-i18n="lead">
+        Open your research workspace.
+      </p>
+
+      {{ERROR}}
+
+      <form class="login-form" method="post" action="./login" autocomplete="on">
+        <input type="hidden" name="csrf" value="{{CSRF}}">
+        <input type="hidden" name="next" id="login-next" value="{{NEXT}}">
+        <label class="login-field">
+          <span data-i18n="username">Username</span>
+          <input class="login-input" type="text" name="username" value="{{USERNAME}}"
+                 autocomplete="username" autocapitalize="off" autocorrect="off"
+                 spellcheck="false" maxlength="64" required>
+        </label>
+        <label class="login-field">
+          <span data-i18n="password">Password</span>
+          <input class="login-input" type="password" name="password"
+                 autocomplete="current-password" maxlength="1024" required>
+        </label>
+        <label class="login-remember">
+          <input type="checkbox" name="remember" value="1">
+          <span data-i18n="remember">Keep me signed in for 7 days</span>
+        </label>
+        <button class="login-submit" type="submit">
+          <span class="login-submit-label" data-i18n="submit">Sign in</span>
+          <span class="login-submit-busy" aria-hidden="true" data-i18n="busy">Signing in…</span>
+        </button>
+      </form>
+
+      <p class="login-transport">{{TRANSPORT}}</p>
+
+    </section>
+    <footer class="login-foot" data-i18n="foot">
+      Your research, connected.
+    </footer>
+  </main>
+  <script src="./js/startup-graph.js"></script>
+  <script src="./js/login.js"></script>
+</body>
+</html>

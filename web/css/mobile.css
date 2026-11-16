@@ -1,0 +1,2474 @@
+/* ==========================================================================
+   ARK mobile / PWA layer
+   Only phone-width rules live here; desktop styles remain in app.css.
+   ========================================================================== */
+
+.mobile-tabbar,
+.mobile-menu-btn,
+.mobile-menu-backdrop,
+.sw-mobile-btn,
+.sw-mobile-scrim {
+  display: none;
+}
+
+.mobile-pair-qr {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.mobile-pair-qr svg {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+}
+
+.mobile-pair-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.mobile-pair-qr-host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  padding: 9px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  color: #0f141c;
+}
+
+@media (max-width: 760px) {
+  :root {
+    --topbar: calc(54px + env(safe-area-inset-top, 0px));
+    --mobile-tabbar: 56px;
+  }
+
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    min-width: 0;
+    overflow-x: hidden;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  #app {
+    min-width: 0;
+    min-height: calc(100dvh - var(--topbar));
+    padding-bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .topbar {
+    gap: 5px;
+    padding: 0 8px;
+    padding-top: env(safe-area-inset-top, 0px);
+    height: var(--topbar);
+  }
+
+  .brand-mark img {
+    width: 24px;
+    height: 24px;
+  }
+
+  .brand-word {
+    display: block;
+    font-size: 0.875rem;
+    letter-spacing: -.03em;
+  }
+
+  .brand-word small {
+    display: none;
+  }
+
+  .tabs {
+    display: none;
+  }
+
+  .top-actions {
+    margin-left: auto;
+    gap: 0;
+  }
+
+  .top-actions .layout-toggles,
+  .top-actions .lang-toggle,
+  .top-actions .search-btn {
+    display: none !important;
+  }
+
+  .top-actions .assistant-top-btn,
+  .top-actions .theme-top-btn {
+    display: none !important;
+  }
+
+  .top-actions .mobile-filter-btn {
+    display: grid;
+    width: 40px;
+    height: 40px;
+  }
+
+  .top-actions .mobile-filter-btn.hidden {
+    display: none !important;
+  }
+
+  .top-actions .icon-btn {
+    width: 40px;
+    height: 40px;
+  }
+
+  .primary-btn .btn-label {
+    display: none;
+  }
+
+  .mobile-menu-btn {
+    display: grid;
+    place-items: center;
+    width: 40px;
+    height: 40px;
+    margin-left: 0;
+    border-radius: 8px;
+    color: var(--sub);
+  }
+
+  .mobile-menu-btn:hover {
+    background: var(--card);
+    color: var(--ink);
+  }
+
+  /* ---------------------------------------------------------- bottom tabs */
+  .mobile-tabbar {
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 78;
+    min-height: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px));
+    padding: 3px 2px calc(3px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line);
+    background: color-mix(in srgb, var(--bg) 96%, transparent);
+    backdrop-filter: blur(14px) saturate(1.2);
+  }
+
+  .mobile-tab {
+    flex: 1 1 0;
+    min-width: 0;
+    min-height: 48px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border-radius: 8px;
+    color: var(--mute);
+    font-size: 0.59375rem;
+    font-weight: 600;
+    line-height: 1.1;
+    padding: 2px;
+  }
+
+  .mobile-tab .icon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .mobile-tab .mobile-tab-label {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .mobile-tab.active {
+    color: var(--accent-2);
+    background: var(--accent-soft);
+  }
+
+  .mobile-tab:active {
+    background: var(--card);
+  }
+
+  /* -------------------------------------------------------- mobile sheet */
+  .mobile-menu-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 120;
+    background: rgba(3, 7, 13, .58);
+    padding: 12px 10px calc(12px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-menu-sheet {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    max-height: 82dvh;
+    overflow: auto;
+    background: var(--lane);
+    border-top: 1px solid var(--line);
+    border-radius: 18px 18px 0 0;
+    box-shadow: var(--shadow);
+    padding: 8px 10px calc(14px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-menu-grab {
+    width: 38px;
+    height: 4px;
+    border-radius: 99px;
+    background: var(--line);
+    margin: 2px auto 9px;
+  }
+
+  .mobile-menu-title {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 2px 4px 9px;
+    color: var(--ink);
+    font-size: 0.875rem;
+    font-weight: 700;
+  }
+
+  .mobile-menu-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .mobile-menu-item {
+    min-height: 62px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 4px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg2);
+    color: var(--sub);
+    font-size: 0.65625rem;
+    text-align: center;
+  }
+
+  .mobile-menu-item .icon {
+    width: 19px;
+    height: 19px;
+    color: var(--accent-2);
+  }
+
+  .mobile-menu-item.active {
+    border-color: var(--accent);
+    color: var(--ink);
+    background: var(--accent-soft);
+  }
+
+  .mobile-menu-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .mobile-menu-actions .btn,
+  .mobile-menu-actions .ghost-btn {
+    flex: 1 1 auto;
+    min-height: 42px;
+    justify-content: center;
+  }
+
+  .mobile-menu-note {
+    margin: 10px 2px 0;
+    color: var(--mute);
+    font-size: 0.625rem;
+    line-height: 1.5;
+  }
+
+  /* ------------------------------------------------------------- layout */
+  .page {
+    padding: 12px 10px 24px;
+    max-width: 100%;
+  }
+
+  .page-head {
+    gap: 8px;
+    margin-bottom: 11px;
+  }
+
+  .page-title {
+    font-size: 1.3125rem;
+  }
+
+  .page-sub {
+    font-size: 0.75rem;
+  }
+
+  .head-actions {
+    margin-left: 0;
+    width: 100%;
+    gap: 6px;
+  }
+
+  .head-actions .primary-btn,
+  .head-actions .ghost-btn,
+  .head-actions .btn {
+    min-height: 40px;
+  }
+
+  .toolbar {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .toolbar .spacer {
+    display: none;
+  }
+
+  .view-toggle {
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .workspace,
+  .workspace.info-mode,
+  .workspace.no-rail {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .rail {
+    top: var(--topbar);
+  }
+
+  .cards,
+  .cards.two,
+  .cards.three,
+  .asset-grid,
+  .role-grid,
+  .settings-grid,
+  .form-grid,
+  .field-row,
+  .field-row.three,
+  .assistant-api-grid,
+  .gpu-grid,
+  .story-layout,
+  .ideas-split,
+  .channel-lanes,
+  .tasks-layout {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .drawer {
+    width: 100vw;
+    max-width: 100vw;
+    top: var(--topbar);
+  }
+
+  .modal {
+    width: min(96vw, 640px);
+    max-height: calc(100dvh - var(--topbar) - 20px);
+  }
+
+  .modal-body {
+    max-height: calc(100dvh - 190px);
+  }
+
+  .assistant-dock {
+    display: none !important;
+  }
+
+  body.assistant-dock-open .content {
+    padding-bottom: 0;
+  }
+
+  /* Touch-friendly native controls across the phone layout. */
+  .page input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .page select,
+  .page textarea,
+  .drawer input:not([type="checkbox"]):not([type="radio"]):not([type="range"]),
+  .drawer select,
+  .drawer textarea,
+  .pair-gate input {
+    font-size: 1rem;
+  }
+
+  .page .btn,
+  .page .ghost-btn,
+  .page .primary-btn,
+  .drawer .btn,
+  .drawer .ghost-btn,
+  .drawer .primary-btn {
+    min-height: 38px;
+  }
+
+  .page .btn.sm,
+  .drawer .btn.sm {
+    min-height: 32px;
+  }
+
+  .toolbar .btn,
+  .toolbar .ghost-btn,
+  .toolbar .primary-btn {
+    min-height: 38px;
+  }
+
+  .pill,
+  .tag {
+    font-size: 0.65625rem;
+  }
+
+  pre,
+  code,
+  .settings-json pre,
+  .chat-command {
+    overflow-wrap: anywhere;
+  }
+
+  .rich,
+  .sw-msg-body,
+  .chat-bubble {
+    overflow-wrap: anywhere;
+  }
+
+  /* ---------------------------------------------------------- settings */
+  .settings-shell {
+    display: block;
+  }
+
+  .settings-nav {
+    position: sticky;
+    top: var(--topbar);
+    z-index: 6;
+    display: flex;
+    flex-direction: row;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 5px 2px;
+    margin: 0 -2px 8px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+    scrollbar-width: none;
+  }
+
+  /* Save bar floats above the bottom tab bar on phones. */
+  .settings-savebar {
+    position: fixed;
+    top: auto;
+    left: 8px;
+    right: 8px;
+    bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px) + 8px);
+    margin: 0;
+    z-index: 30;
+  }
+
+  /* Deep-linked sections stop below the sticky section nav. */
+  .settings-section {
+    scroll-margin-top: calc(var(--topbar) + 64px);
+  }
+
+  .settings-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .settings-nav-item {
+    flex: 0 0 auto !important;
+    min-height: 40px !important;
+    padding: 6px 10px !important;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid var(--line) !important;
+    border-radius: 8px !important;
+    font-size: 0.6875rem;
+    background: var(--lane);
+  }
+
+  .settings-nav-item.active {
+    border-color: var(--accent) !important;
+    background: var(--accent-soft);
+    color: var(--ink);
+  }
+
+  .settings-nav-copy {
+    display: block !important;
+  }
+
+  .settings-nav-copy b {
+    font-size: 0.6875rem !important;
+  }
+
+  .settings-nav-copy small {
+    display: none !important;
+  }
+
+  .settings-content {
+    padding: 0;
+  }
+
+  .settings-panel,
+  .settings-project,
+  .settings-preview {
+    padding: 12px;
+  }
+
+  .settings-preview-host {
+    height: 300px;
+    min-height: 220px;
+  }
+
+  .settings-graph-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .physics-values {
+    align-items: flex-start;
+  }
+
+  .physics-number {
+    width: 92px;
+  }
+
+  .settings-project-path {
+    font-size: 0.5625rem;
+  }
+
+  .mobile-panel .assistant-api-grid {
+    gap: 8px;
+  }
+
+  .mobile-pair-qr {
+    width: min(280px, 82vw) !important;
+    height: auto;
+    margin: 4px auto;
+  }
+
+  .mobile-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .mobile-actions .btn,
+  .mobile-actions .ghost-btn {
+    min-height: 40px;
+  }
+
+  /* ---------------------------------------------------------- session */
+  .sw-workspace {
+    display: block;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .sw-rail,
+  .sw-side {
+    position: fixed;
+    top: var(--topbar);
+    bottom: 0;
+    z-index: 95;
+    width: min(88vw, 360px);
+    height: auto;
+    max-height: none;
+    border-radius: 0 12px 12px 0;
+    box-shadow: var(--shadow);
+    transition: transform .2s ease;
+    padding-bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sw-rail {
+    left: 0;
+    transform: translateX(-104%);
+  }
+
+  .sw-rail.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sw-side {
+    right: 0;
+    left: auto;
+    width: 94vw;
+    max-width: 430px;
+    border-radius: 12px 0 0 12px;
+    transform: translateX(104%);
+  }
+
+  .sw-side.mobile-open {
+    transform: translateX(0);
+  }
+
+  .sw-rail .sw-list {
+    max-height: none;
+  }
+
+  .sw-mobile-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--topbar) 0 0;
+    z-index: 94;
+    background: rgba(3, 7, 13, .48);
+  }
+
+  .sw-mobile-scrim.hidden {
+    display: none;
+  }
+
+  .sw-main {
+    height: calc(100dvh - var(--topbar) - var(--mobile-tabbar) - 28px);
+    min-height: 430px;
+    border-radius: 9px;
+  }
+
+  .sw-main-head {
+    padding: 7px 8px 6px;
+  }
+
+  .sw-title-line {
+    flex-wrap: wrap;
+    gap: 5px;
+  }
+
+  .sw-title-line h2 {
+    font-size: 0.84375rem;
+    min-width: 0;
+    flex: 1 1 60%;
+  }
+
+  .sw-title-meta {
+    gap: 6px;
+    margin-top: 3px;
+    max-height: 48px;
+    overflow: hidden;
+  }
+
+  .sw-meta-item {
+    max-width: 100%;
+    font-size: 0.5625rem;
+  }
+
+  .sw-main-actions {
+    gap: 3px;
+  }
+
+  .sw-main-actions .btn.sm {
+    height: 30px;
+    font-size: 0.625rem;
+  }
+
+  .sw-main-bar {
+    gap: 4px;
+    padding: 3px 7px;
+    min-height: 34px;
+    overflow-x: auto;
+  }
+
+  .sw-session-id,
+  .sw-usage {
+    display: none;
+  }
+
+  .sw-thread {
+    padding: 10px 9px 14px;
+    gap: 9px;
+  }
+
+  .sw-msg-main {
+    max-width: 100%;
+  }
+
+  .sw-msg.assistant .sw-msg-body {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .sw-msg-body {
+    padding: 8px 9px;
+    font-size: 0.75rem;
+  }
+
+  .sw-composer {
+    padding: 7px 8px calc(7px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sw-composer textarea,
+  .sw-composer input,
+  .sw-composer select {
+    font-size: 1rem !important;
+  }
+
+  .sw-composer-tools {
+    gap: 4px;
+  }
+
+  .sw-composer-selectors {
+    gap: 5px;
+  }
+
+  .sw-select {
+    max-width: 46vw;
+    height: 30px;
+    font-size: 0.6875rem;
+  }
+
+  .sw-side-tabs {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+  }
+
+  .sw-side-body {
+    padding-bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px));
+  }
+
+  .sw-approval-banner {
+    flex-wrap: wrap;
+  }
+
+  .sw-mobile-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 4px;
+    height: 30px;
+    min-width: 34px;
+    padding: 0 7px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--bg3);
+    color: var(--sub);
+    font-size: 0.625rem;
+  }
+
+  .sw-mobile-btn.attention {
+    color: var(--amber);
+    border-color: color-mix(in srgb, var(--amber) 38%, transparent);
+    background: color-mix(in srgb, var(--amber) 8%, transparent);
+  }
+
+  /* ------------------------------------------------------------- files */
+  .fw-head {
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
+  .fw-head-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .fw-path {
+    max-width: 100%;
+  }
+
+  .fw-body {
+    grid-template-columns: minmax(0, 1fr);
+    height: auto;
+  }
+
+  .fw-side {
+    max-height: 205px;
+    min-height: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .fw-main {
+    height: max(430px, calc(100dvh - 490px));
+    min-height: 430px;
+  }
+
+  .fw-editor-head {
+    gap: 4px;
+  }
+
+  .fw-tab {
+    max-width: 150px;
+  }
+
+  .fw-terminal {
+    height: auto;
+    max-height: 60dvh;
+  }
+
+  .fw-term-out {
+    font-size: 0.6875rem;
+    max-height: 42dvh;
+  }
+
+  .fw-term-compose input,
+  .fw-term-compose button {
+    font-size: 1rem;
+    min-height: 38px;
+  }
+
+  .fw-session-select {
+    max-width: 52vw;
+  }
+
+  /* --------------------------------------------------------- chat/board */
+  .chat-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .chat-thread-panel {
+    height: calc(100dvh - 230px);
+    min-height: 380px;
+  }
+
+  .chat-msg {
+    max-width: 100%;
+  }
+
+  .board {
+    overflow-x: auto;
+  }
+
+  .board .board-col {
+    flex: 0 0 84vw;
+    max-width: 84vw;
+  }
+
+  .gantt-chart,
+  .timeline {
+    overflow-x: auto;
+  }
+
+  .graph-host {
+    height: min(52dvh, 430px);
+    min-height: 300px;
+  }
+
+  .ideas-graph,
+  .ideas-pane .graph-host,
+  .ideas-graph-wrap {
+    height: min(52dvh, 430px);
+  }
+
+  .toast-wrap {
+    bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px) + 8px);
+    left: 10px;
+    right: 10px;
+  }
+
+  /* ------------------------------------------------------- pairing gate */
+  .pair-gate-wrap {
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: calc(18px + env(safe-area-inset-top, 0px)) 12px calc(18px + env(safe-area-inset-bottom, 0px));
+    background:
+      radial-gradient(1100px 520px at 10% -10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+      var(--bg);
+  }
+
+  .pair-gate-card {
+    width: min(430px, 100%);
+    background: var(--lane);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px 16px;
+    box-shadow: var(--shadow);
+  }
+
+  .pair-gate-brand {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    margin-bottom: 16px;
+    font-size: 1.0625rem;
+  }
+
+  .pair-gate-brand b {
+    font-weight: 800;
+    letter-spacing: -.03em;
+  }
+
+  .pair-gate-brand span {
+    font-weight: 300;
+    letter-spacing: -.02em;
+    margin-left: 2px;
+  }
+
+  .pair-gate-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: var(--accent-2);
+    font-size: 0.625rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-weight: 750;
+  }
+
+  .pair-gate-eyebrow .icon {
+    width: 13px;
+    height: 13px;
+  }
+
+  .pair-gate-card h1 {
+    margin: 6px 0 8px;
+    font-size: 1.375rem;
+    line-height: 1.2;
+    letter-spacing: -.03em;
+  }
+
+  .pair-gate-lead {
+    margin: 0 0 13px;
+    color: var(--sub);
+    font-size: 0.78125rem;
+    line-height: 1.55;
+  }
+
+  .pair-gate-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pair-gate-input {
+    min-height: 46px;
+    font-size: 1rem;
+    width: 100%;
+    font-family: var(--mono);
+  }
+
+  .pair-gate-submit {
+    min-height: 46px;
+    justify-content: center;
+    font-size: 0.84375rem;
+  }
+
+  .pair-gate-status {
+    margin-top: 9px;
+    font-size: 0.6875rem;
+    line-height: 1.5;
+    color: var(--sub);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pair-gate-status.err {
+    color: var(--red);
+  }
+
+  .pair-gate-hint {
+    margin: 13px 0 8px;
+    font-size: 0.65625rem;
+    line-height: 1.55;
+    color: var(--mute);
+  }
+
+  .pair-gate-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+  }
+
+  .pair-gate-facts span {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    font-size: 0.59375rem;
+    color: var(--sub);
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    padding: 3px 7px;
+    background: var(--bg2);
+  }
+
+  .pair-gate-facts .icon {
+    width: 10px;
+    height: 10px;
+  }
+
+  .pair-gate-foot {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 0.59375rem;
+    line-height: 1.55;
+    color: var(--mute);
+  }
+
+  .pwa-status {
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    font-size: 0.65625rem;
+    line-height: 1.5;
+    color: var(--sub);
+  }
+
+  .pwa-status .icon {
+    width: 12px;
+    height: 12px;
+    flex: 0 0 auto;
+    margin-top: 1px;
+  }
+
+  .pwa-status.ok {
+    border-color: color-mix(in srgb, var(--green) 32%, transparent);
+  }
+
+  .pwa-status.ok .icon {
+    color: var(--green);
+  }
+
+  .pwa-status.warn .icon {
+    color: var(--amber);
+  }
+
+  .pwa-status.bad .icon {
+    color: var(--red);
+  }
+
+  .mobile-pair-code,
+  .mobile-tunnel-command {
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    line-height: 1.5;
+    word-break: break-all;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    max-width: 100%;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg2);
+    color: var(--ink);
+  }
+
+  .mobile-panel .physics-hint,
+  .mobile-panel .settings-lead {
+    overflow-wrap: anywhere;
+  }
+
+  .mobile-pair-url {
+    font-family: var(--mono);
+    font-size: 0.65625rem;
+    line-height: 1.5;
+    word-break: break-all;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    background: var(--bg2);
+    color: var(--sub);
+  }
+
+  .mobile-pair-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .mobile-pair-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 5px;
+    font-size: 0.625rem;
+    color: var(--mute);
+  }
+
+  .mobile-pair-qr-host {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 7px;
+    padding: 9px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: #fff;
+    scroll-margin-top: calc(var(--topbar) + 58px);
+  }
+}
+
+/* Very narrow phones (360 px) and large phone text settings. */
+@media (max-width: 380px) {
+  .brand-word {
+    display: none;
+  }
+
+  .mobile-tab {
+    font-size: 0.5625rem;
+  }
+
+  .mobile-tab .icon {
+    width: 18px;
+    height: 18px;
+  }
+
+  .page {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+
+  .sw-main-actions .btn.sm {
+    padding: 0 5px;
+  }
+}
+
+
+/* Pairing gate fallback for wider screens / desktop browsers that reached a
+   tunnel without a token.  The phone-specific overrides live above. */
+.pair-gate-wrap {
+  min-height: 100dvh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background:
+    radial-gradient(1100px 520px at 10% -10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+    var(--bg);
+}
+
+.pair-gate-card {
+  width: min(430px, 100%);
+  background: var(--lane);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px 18px;
+  box-shadow: var(--shadow);
+}
+
+.pair-gate-card h1 {
+  margin: 6px 0 8px;
+  font-size: 1.375rem;
+  line-height: 1.2;
+  letter-spacing: -.03em;
+}
+
+.pair-gate-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pair-gate-input {
+  min-height: 44px;
+  font-size: 1rem;
+  width: 100%;
+  font-family: var(--mono);
+}
+
+.pair-gate-submit {
+  min-height: 44px;
+  justify-content: center;
+}
+
+.pairing-gate .mobile-tabbar {
+  display: none;
+}
+
+.pairing-gate #app {
+  padding-bottom: 0;
+}
+
+
+/* ==========================================================================
+   ChatGPT-style phone layout pass.  Content is the canvas; chrome collapses
+   into a compact header, one-row view bar, full-bottom-sheet filters and a
+   details sheet.  This block intentionally comes last so it wins over the
+   older mobile rules above.
+   ========================================================================== */
+@media (max-width: 760px) {
+  body {
+    overscroll-behavior-y: none;
+  }
+
+  .page {
+    padding: 8px 8px 18px;
+  }
+
+  .page-head {
+    align-items: center;
+    gap: 5px;
+    margin: 0 2px 8px;
+  }
+
+  .page-head .eyebrow,
+  .page-sub {
+    display: none;
+  }
+
+  .page-title {
+    font-size: 1.25rem;
+    line-height: 1.15;
+  }
+
+  .head-actions {
+    width: 100%;
+    margin-left: 0;
+    gap: 5px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+  }
+
+  .head-actions::-webkit-scrollbar {
+    display: none;
+  }
+
+  .head-actions .primary-btn,
+  .head-actions .ghost-btn,
+  .head-actions .btn {
+    flex: 0 0 auto;
+    min-height: 34px;
+    padding: 0 9px;
+    font-size: 0.65625rem;
+  }
+
+  .toolbar {
+    min-height: 36px;
+    padding: 4px 6px;
+    margin-bottom: 7px;
+    gap: 5px;
+    flex-wrap: nowrap;
+    overflow: hidden;
+  }
+
+  .toolbar > .pill,
+  .toolbar > .muted,
+  .toolbar .spacer {
+    display: none !important;
+  }
+
+  .toolbar .count {
+    font-size: 0.625rem;
+    white-space: nowrap;
+  }
+
+  .view-toggle {
+    flex: 0 0 auto;
+  }
+
+  .view-toggle button {
+    height: 30px;
+    padding: 0 9px;
+    font-size: 0.6875rem;
+  }
+
+  /* Graph is the main surface, not a card in a dashboard. */
+  body[data-tab="ideas"] .ideas-graph-wrap,
+  body[data-tab="map"] .graph-panel,
+  body[data-tab="plan"] .graph-panel {
+    --graph-h: max(360px, calc(100dvh - var(--topbar) - var(--mobile-tabbar) - 156px)) !important;
+    margin-left: 0;
+    margin-right: 0;
+  }
+
+  body[data-tab="ideas"] .ideas-graph-wrap {
+    margin-left: -8px;
+    margin-right: -8px;
+  }
+
+  body[data-tab="ideas"] .ideas-graph-wrap,
+  body[data-tab="ideas"] .ideas-split,
+  body[data-tab="ideas"] .ideas-split.solo {
+    height: var(--graph-h) !important;
+    min-height: 0 !important;
+  }
+
+  body[data-tab="ideas"] .ideas-pane,
+  body[data-tab="ideas"] .ideas-split .ideas-pane {
+    height: 100% !important;
+    min-height: 0 !important;
+  }
+
+  body[data-tab="ideas"] .ideas-pane,
+  body[data-tab="map"] .graph-panel,
+  body[data-tab="plan"] .graph-panel {
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  body[data-tab="ideas"] .ideas-pane-head {
+    display: none;
+  }
+
+  body[data-tab="ideas"] .ideas-pane .graph-tools,
+  body[data-tab="map"] .graph-tools,
+  body[data-tab="plan"] .graph-tools {
+    top: 8px;
+    right: 8px;
+    padding: 2px;
+    gap: 0;
+  }
+
+  body[data-tab="ideas"] .ideas-pane .graph-help,
+  body[data-tab="map"] .graph-help,
+  body[data-tab="plan"] .graph-help {
+    top: 46px;
+    right: 8px;
+    width: calc(100vw - 16px);
+    max-height: calc(100dvh - var(--topbar) - var(--mobile-tabbar) - 62px);
+  }
+
+  .graph-tools button {
+    width: 32px;
+    height: 31px;
+  }
+
+  .graph-tools .graph-mode-btn {
+    padding: 0 8px !important;
+    font-size: 0.625rem !important;
+  }
+
+  .graph-resize-handle {
+    display: none;
+  }
+
+  .graph-legend {
+    max-width: calc(100% - 12px);
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+  }
+
+  /* Filter rail: a real bottom sheet, not a narrow drawer. */
+  .rail {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    max-width: none;
+    height: calc(100dvh - var(--topbar));
+    max-height: calc(100dvh - var(--topbar));
+    padding: 10px 14px calc(16px + env(safe-area-inset-bottom, 0px));
+    border: 0;
+    border-radius: 16px 16px 0 0;
+    border-top: 1px solid var(--line);
+    box-shadow: 0 -16px 46px rgba(0, 0, 0, .28);
+    z-index: 90;
+    transform: translateY(105%);
+    transition: transform .22s ease;
+    background: var(--lane);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .rail.open {
+    transform: none;
+  }
+
+  .rail-head {
+    position: sticky;
+    top: -10px;
+    z-index: 3;
+    margin: 0;
+    padding: 6px 2px 9px;
+    background: var(--lane);
+    border-bottom: 1px solid var(--line-soft);
+  }
+
+  .rail-title {
+    font-size: 0.6875rem;
+  }
+
+  .rail-backdrop {
+    display: block;
+    z-index: 89;
+    background: rgba(3, 7, 13, .52);
+  }
+
+  .rail-resizer {
+    display: none !important;
+  }
+
+  .rail-section {
+    margin-bottom: 12px;
+    padding-bottom: 10px;
+  }
+
+  .tag-filter-cloud {
+    max-height: none;
+    overflow: visible;
+  }
+
+  /* Details are a bottom sheet, so the graph/list stays visible behind it. */
+  .drawer {
+    top: auto;
+    bottom: 0;
+    width: 100%;
+    max-width: 100%;
+    height: min(88dvh, 780px);
+    max-height: calc(100dvh - env(safe-area-inset-top, 0px));
+    border-radius: 18px 18px 0 0;
+    border-top: 1px solid var(--line);
+    border-left: 0;
+    border-right: 0;
+    box-shadow: 0 -18px 52px rgba(0, 0, 0, .34);
+    z-index: 92;
+  }
+
+  .drawer-backdrop {
+    z-index: 91;
+  }
+
+  .drawer-head {
+    border-radius: 18px 18px 0 0;
+  }
+
+  .mobile-tabbar {
+    min-height: calc(58px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-tab {
+    min-height: 52px;
+    gap: 3px;
+    font-size: 0.5625rem;
+  }
+
+  .mobile-tab .icon {
+    width: 21px;
+    height: 21px;
+  }
+
+  .mobile-tab.active {
+    background: transparent;
+    color: var(--accent-2);
+  }
+
+  .mobile-tab.active .icon {
+    filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 42%, transparent));
+  }
+
+  .toast-wrap {
+    bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px) + 10px);
+    left: 12px;
+    right: 12px;
+  }
+}
+
+
+/* The Tasks -> Sessions surface is a conversation first, not a dashboard. */
+@media (max-width: 760px) {
+  .page.mobile-session-page {
+    height: calc(100dvh - var(--topbar) - var(--mobile-tabbar) - env(safe-area-inset-bottom, 0px));
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .mobile-session-page .page-head,
+  .mobile-session-page > .toolbar,
+  .mobile-session-page .session-related {
+    display: none !important;
+  }
+
+  .mobile-session-page .sw-shell {
+    height: 100%;
+    min-height: 0;
+    gap: 0;
+  }
+
+  .mobile-session-page .sw-workspace,
+  .mobile-session-page .sw-workspace.info-mode {
+    display: block;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .mobile-session-page .sw-main {
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  .mobile-session-page .sw-main-head {
+    padding: 6px 9px;
+    gap: 4px;
+    min-height: 46px;
+  }
+
+  .mobile-session-page .sw-title-line {
+    gap: 5px;
+    flex-wrap: nowrap;
+    min-width: 0;
+  }
+
+  .mobile-session-page .sw-title-line h2 {
+    font-size: 0.84375rem;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .mobile-session-page .sw-title-meta {
+    display: none;
+  }
+
+  .mobile-session-page .sw-main-actions {
+    gap: 2px;
+    flex-wrap: nowrap;
+  }
+
+  .mobile-session-page .sw-main-actions .btn.sm.ghost,
+  .mobile-session-page .sw-main-actions .icon-btn {
+    display: none !important;
+  }
+
+  .mobile-session-page .sw-main-actions .btn.sm.danger {
+    display: inline-flex !important;
+    height: 28px;
+    font-size: 0.59375rem;
+  }
+
+  .mobile-session-page .sw-main-actions .btn.sm.danger.sw-delete-session {
+    display: none !important;
+  }
+
+  .mobile-session-page .sw-mobile-btn {
+    height: 28px;
+    min-width: 32px;
+    padding: 0 6px;
+    font-size: 0.59375rem;
+  }
+
+  .mobile-session-page .sw-main-bar {
+    min-height: 29px;
+    padding: 3px 8px;
+    gap: 4px;
+  }
+
+  .mobile-session-page .sw-usage {
+    display: none;
+  }
+
+  .mobile-session-page .sw-thread {
+    padding: 10px 10px 16px;
+    gap: 9px;
+    overscroll-behavior-y: contain;
+  }
+
+  .mobile-session-page .sw-composer {
+    padding: 6px 8px calc(7px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-session-page .sw-composer-box {
+    border-radius: 17px;
+    padding: 7px 10px;
+    gap: 3px;
+  }
+
+  .mobile-session-page .sw-composer-input {
+    min-height: 48px;
+    max-height: 118px;
+    font-size: 1rem;
+    line-height: 1.45;
+    resize: none;
+  }
+
+  .mobile-session-page .sw-composer-selectors,
+  .mobile-session-page .sw-composer-hint,
+  .mobile-session-page .sw-composer-kbd,
+  .mobile-session-page .sw-composer-tools .sw-usage {
+    display: none !important;
+  }
+
+  .mobile-session-page .sw-composer-tools {
+    flex-wrap: nowrap;
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .mobile-session-page .sw-config-btn {
+    max-width: 160px;
+    height: 27px;
+    font-size: 0.59375rem;
+  }
+
+  .mobile-session-page .sw-send {
+    width: 34px;
+    height: 34px;
+    min-width: 34px;
+  }
+
+  .mobile-session-page .sw-composer-config {
+    max-height: 36dvh;
+    overflow: auto;
+  }
+
+  .mobile-session-page .sw-rail,
+  .mobile-session-page .sw-side {
+    top: var(--topbar);
+    bottom: 0;
+    max-height: none;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  .mobile-session-page .sw-rail {
+    width: 88vw;
+    height: calc(100dvh - var(--topbar));
+    transform: translateX(-105%);
+  }
+
+  .mobile-session-page .sw-side {
+    width: 94vw;
+    height: calc(100dvh - var(--topbar));
+    transform: translateX(105%);
+  }
+
+  .mobile-session-page .sw-rail.mobile-open,
+  .mobile-session-page .sw-side.mobile-open {
+    transform: none;
+  }
+
+  .mobile-session-page .sw-mobile-scrim {
+    inset: var(--topbar) 0 0;
+    z-index: 100;
+  }
+}
+
+
+/* Chat tab is the same conversation-first shell as Tasks → Sessions. */
+.chat-mobile-head,
+.chat-side-mobile-head,
+.chat-side-actions,
+.chat-scrim {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .page.mobile-chat-page {
+    height: calc(100dvh - var(--topbar) - var(--mobile-tabbar) - env(safe-area-inset-bottom, 0px));
+    min-height: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  .mobile-chat-page .chat-head {
+    display: none !important;
+  }
+
+  .mobile-chat-page .chat-main {
+    display: block;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .mobile-chat-page .chat-thread-panel {
+    height: 100%;
+    min-height: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+
+  .mobile-chat-page .chat-mobile-head {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    flex: 0 0 auto;
+    min-height: 46px;
+    padding: 6px 9px;
+    border-bottom: 1px solid var(--line);
+    background: var(--lane);
+  }
+
+  .mobile-chat-page .chat-mobile-title {
+    min-width: 0;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+  }
+
+  .mobile-chat-page .chat-mobile-eyebrow {
+    font: 0.5rem var(--mono);
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--mute);
+  }
+
+  .mobile-chat-page .chat-mobile-title b {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.84375rem;
+    color: var(--ink);
+  }
+
+  .mobile-chat-page .chat-thread {
+    padding: 10px 10px 16px;
+    gap: 10px;
+    overscroll-behavior-y: contain;
+  }
+
+  .mobile-chat-page .chat-msg {
+    max-width: 100%;
+  }
+
+  .mobile-chat-page .chat-composer {
+    padding: 6px 8px calc(7px + env(safe-area-inset-bottom, 0px));
+    gap: 4px;
+  }
+
+  .mobile-chat-page .chat-composer .textarea,
+  .mobile-chat-page .chat-input {
+    min-height: 48px;
+    max-height: 118px;
+    font-size: 1rem;
+    line-height: 1.45;
+    resize: none;
+  }
+
+  .mobile-chat-page .chat-hint {
+    display: none;
+  }
+
+  .mobile-chat-page .chat-side {
+    display: flex;
+    position: fixed;
+    top: var(--topbar);
+    right: 0;
+    bottom: 0;
+    width: 92vw;
+    max-width: 430px;
+    height: auto;
+    max-height: none;
+    padding: 10px 12px calc(16px + env(safe-area-inset-bottom, 0px));
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: var(--lane);
+    border-left: 1px solid var(--line);
+    border-radius: 14px 0 0 14px;
+    box-shadow: -16px 0 46px rgba(0, 0, 0, .30);
+    z-index: 101;
+    transform: translateX(105%);
+    transition: transform .22s ease;
+  }
+
+  .mobile-chat-page .chat-side.mobile-open {
+    transform: none;
+  }
+
+  .mobile-chat-page .chat-side-mobile-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-height: 36px;
+    padding: 2px 2px 8px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink);
+    font-size: 0.8125rem;
+  }
+
+  .mobile-chat-page .chat-side-actions {
+    display: flex;
+    gap: 6px;
+    margin: 2px 0 4px;
+  }
+
+  .mobile-chat-page .chat-side-actions .btn {
+    flex: 1;
+    justify-content: center;
+  }
+
+  .mobile-chat-page .chat-scrim {
+    display: block;
+    position: fixed;
+    inset: var(--topbar) 0 0;
+    z-index: 100;
+    background: transparent;
+  }
+
+  .mobile-chat-page .chat-scrim.hidden {
+    display: none;
+  }
+
+  .mobile-chat-page .chat-empty {
+    padding: 22px 10px;
+  }
+
+  /* The session side sheet must not dim the conversation behind it. */
+  .mobile-session-page .sw-mobile-scrim {
+    background: transparent !important;
+    backdrop-filter: none !important;
+  }
+}
+
+
+/* Long UIDs, URLs, code and pasted logs must wrap inside the phone column. */
+@media (max-width: 760px) {
+  .page,
+  .drawer,
+  .unit-card,
+  .card,
+  .chat-bubble,
+  .chat-side-card,
+  .sw-msg-body {
+    min-width: 0;
+  }
+
+  .chat-bubble,
+  .chat-bubble .rich,
+  .chat-user-text,
+  .chat-meta,
+  .chat-side,
+  .chat-side-card,
+  .sw-msg-body,
+  .sw-msg-body .rich,
+  .unit-card,
+  .card {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .chat-bubble pre,
+  .chat-bubble code,
+  .chat-bubble .code-block,
+  .sw-msg-body pre,
+  .sw-msg-body code,
+  .sw-msg-body .code-block,
+  .chat-command,
+  .code-box {
+    max-width: 100%;
+    overflow-x: auto;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .chat-bubble img,
+  .chat-bubble video,
+  .sw-msg-body img,
+  .sw-msg-body video,
+  .rich img,
+  .rich video {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .chat-tool-args,
+  .chat-tool-name,
+  .chat-tool-uid {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .chat-mobile-title b,
+  .sw-title-line h2 {
+    max-width: 100%;
+  }
+}
+
+
+/* Logo is the menu; page/session title replaces project chrome. */
+.mobile-nav-title {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .topbar {
+    gap: 6px;
+  }
+
+  .topbar .brand {
+    flex: 0 0 auto;
+  }
+
+  .topbar .brand-word {
+    display: none !important;
+  }
+
+  .topbar .mobile-nav-title {
+    display: block;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--ink);
+    font-size: 0.96875rem;
+    font-weight: 700;
+    letter-spacing: -.02em;
+    padding-left: 2px;
+  }
+
+  .top-actions .mobile-menu-btn {
+    display: none !important;
+  }
+
+  .top-actions {
+    gap: 2px;
+  }
+
+  /* The page/session title already lives in the nav. */
+  .mobile-chat-page .chat-mobile-title {
+    display: none;
+  }
+
+  .mobile-chat-page .chat-mobile-head .icon-btn {
+    margin-left: auto;
+  }
+
+  .mobile-session-page .sw-title-line h2 {
+    display: none;
+  }
+
+  .mobile-session-page .sw-title-line {
+    gap: 4px;
+  }
+}
+
+
+/* Phone conversation typography: readable body text, quiet metadata. */
+@media (max-width: 760px) {
+  .mobile-chat-page .chat-bubble {
+    font-size: 0.90625rem;
+    line-height: 1.68;
+    padding: 11px 13px;
+  }
+
+  .mobile-chat-page .chat-bubble .rich {
+    font-size: 0.90625rem;
+    line-height: 1.68;
+  }
+
+  .mobile-chat-page .chat-meta {
+    font-size: 0.65625rem;
+  }
+
+  .mobile-chat-page .chat-meta b {
+    font-size: 0.6875rem;
+  }
+
+  .mobile-chat-page .chat-avatar {
+    width: 30px;
+    height: 30px;
+  }
+
+  .mobile-chat-page .chat-user-text {
+    font-size: 0.90625rem;
+  }
+
+  .mobile-chat-page .chat-tool,
+  .mobile-chat-page .chat-prompt {
+    font-size: 0.71875rem;
+  }
+
+  .mobile-session-page .sw-msg-body,
+  .mobile-session-page .sw-msg-body .rich {
+    font-size: 0.90625rem;
+    line-height: 1.7;
+  }
+
+  .mobile-session-page .sw-msg-main {
+    max-width: 94%;
+  }
+
+  .mobile-session-page .sw-avatar {
+    width: 28px;
+    height: 28px;
+  }
+
+  .mobile-session-page .sw-item-time,
+  .mobile-session-page .sw-msg-meta {
+    font-size: 0.625rem;
+  }
+
+  /* Access mode is a status, not a micro-label. */
+  .mobile-session-page .sw-access,
+  .mobile-session-page .sw-access-select,
+  .mobile-chat-page .sw-access {
+    font-size: 0.71875rem;
+    text-transform: none;
+    letter-spacing: 0;
+    padding: 2px 7px;
+  }
+
+  .mobile-session-page .sw-mobile-btn,
+  .mobile-chat-page .sw-mobile-btn {
+    font-size: 0.6875rem;
+  }
+
+  .mobile-session-page .sw-mode-btn {
+    font-size: 0.65625rem;
+    height: 25px;
+  }
+
+  .mobile-session-page .sw-config-btn {
+    font-size: 0.6875rem;
+  }
+
+  .mobile-session-page .sw-status-pill,
+  .mobile-session-page .sw-status {
+    font-size: 0.65625rem;
+  }
+
+  /* Card/list text gets the same readable baseline. */
+  .unit-card .card-title,
+  .card .card-title {
+    font-size: 0.9375rem;
+    line-height: 1.4;
+  }
+
+  .unit-card .excerpt,
+  .card .excerpt {
+    font-size: 0.84375rem;
+    line-height: 1.6;
+  }
+
+  .unit-card .card-meta,
+  .card .card-meta {
+    font-size: 0.71875rem;
+  }
+}
+
+
+/* Titles live in the mobile nav; page heads keep only their actions. */
+@media (max-width: 760px) {
+  .page-head .page-title {
+    display: none;
+  }
+
+  .page-head {
+    margin-top: 0;
+  }
+
+  .mobile-session-page .sw-main-head {
+    min-height: 40px;
+  }
+
+  .mobile-session-page .sw-title-line .sw-status,
+  .mobile-session-page .sw-title-line .status-pill {
+    margin-right: 0;
+  }
+
+  .settings-panel,
+  .settings-content {
+    font-size: 0.8125rem;
+  }
+
+  .settings-lead,
+  .settings-note {
+    font-size: 0.78125rem;
+  }
+
+  .settings-nav-item {
+    font-size: 0.75rem;
+  }
+}
+
+
+/* Graph toolbar and segmented controls must fit the phone width. */
+@media (max-width: 760px) {
+  .page .toolbar {
+    overflow: visible;
+  }
+
+  .page .toolbar > .count,
+  .page .toolbar > .btn,
+  .page .toolbar > .ghost-btn,
+  .page .toolbar > .primary-btn,
+  .page .toolbar > label {
+    display: none !important;
+  }
+
+  .page .toolbar .view-toggle {
+    display: flex;
+    width: 100%;
+    flex: 1 1 100%;
+    overflow: hidden;
+  }
+
+  .page .toolbar .view-toggle button {
+    flex: 1 1 0;
+    min-width: 0;
+    justify-content: center;
+    padding: 0 4px;
+    font-size: 0.65625rem;
+  }
+
+  .graph-tools .graph-sel {
+    height: 30px;
+    max-width: 86px;
+    padding: 0 4px;
+    font-size: 0.6875rem !important;
+    line-height: 1;
+  }
+
+  .graph-tools .graph-mode-btn {
+    height: 30px;
+    padding: 0 7px !important;
+    font-size: 0.6875rem !important;
+  }
+
+  .graph-tools button {
+    width: 30px;
+    height: 30px;
+  }
+
+  /* Node details open as a compact side sheet, never a small floating card. */
+  .drawer.mobile-sheet {
+    position: fixed;
+    top: var(--topbar);
+    left: auto;
+    right: 0;
+    bottom: 0;
+    width: min(94vw, 440px);
+    max-width: 94vw;
+    height: auto;
+    max-height: none;
+    border: 0;
+    border-left: 1px solid var(--line);
+    border-radius: 14px 0 0 14px;
+    box-shadow: -18px 0 48px rgba(0, 0, 0, .32);
+    z-index: 96;
+  }
+
+  .drawer.mobile-sheet .drawer-head {
+    border-radius: 14px 0 0 0;
+  }
+}
+
+/* Blue glows look milky on a near-black canvas. */
+html[data-theme="dark"] .primary-btn,
+html[data-theme="dark"] .tab.active,
+html[data-theme="dark"] .btn.primary {
+  box-shadow: none;
+}
+
+/* Phone: workspace sub-tabs replace the page title. */
+@media (max-width: 760px) {
+  .topbar .mobile-nav-title.has-subtabs {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    text-overflow: clip;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x proximity;
+    padding: 2px 0;
+    mask-image: linear-gradient(90deg, #000 0, #000 calc(100% - 18px), transparent);
+  }
+  .topbar .mobile-nav-title.has-subtabs::-webkit-scrollbar { display: none; }
+  .topbar .mobile-subtab {
+    flex: 0 0 auto;
+    scroll-snap-align: center;
+    min-height: 32px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 0.84375rem;
+    font-weight: 600;
+    letter-spacing: -.01em;
+    color: var(--sub);
+    background: transparent;
+  }
+  .topbar .mobile-subtab.stage { font-size: 0.8125rem; padding: 6px 10px; }
+  .topbar .mobile-subtab.on,
+  .topbar .mobile-subtab.stage.on {
+    color: var(--accent-2);
+    background: var(--accent-soft);
+    font-weight: 700;
+  }
+}
+
+/* ======================================================================
+   Phone: Editor workspace (agent/editor-workspace)
+   Open files stay in the Editor's own (scrollable) tab bar; the explorer
+   starts hidden and overlays the viewer when toggled.
+   ====================================================================== */
+@media (max-width: 760px) {
+  .ed-tabbar, .ed-shell:not(.side-closed) .ed-tabbar { padding-left: 42px; min-height: 40px; }
+  .ed-tabbar .ed-tab { font-size: 0.75rem; }
+  .topbar .mobile-editor-chip { display: inline-flex; align-items: center; gap: 5px; }
+  .ed-shell {
+    grid-template-columns: minmax(0, 1fr);
+    height: calc(100dvh - var(--topbar) - var(--mobile-tabbar) - env(safe-area-inset-bottom, 0px));
+    min-height: 320px;
+  }
+  .ed-shell.side-closed { grid-template-columns: minmax(0, 1fr); }
+  .ed-side { position: absolute; inset: 0 auto 0 0; width: min(300px, 86vw); z-index: 5; box-shadow: var(--shadow); }
+  .ed-shell.side-closed .ed-side { display: none; }
+  .ed-side-toggle { z-index: 6; }
+  .ed-toolbar { flex-wrap: wrap; }
+  .ed-toolbar .ed-crumb { flex: 1 1 100%; order: -1; }
+  .ed-toolbar .spacer { display: none; }
+  .ed-statusbar > span:nth-child(n+4):not(.ed-status-cursor) { display: none; }
+  .ed-markdown { padding: 16px 16px 40px; }
+  .ed-empty { margin-top: 3vh; padding: 16px; }
+  .ed-code { font-size: 0.75rem; }
+}
+
+/* Home "Needs you" panel on phones: one column, bigger touch targets. */
+@media (max-width: 760px) {
+  .needs-panel { padding: 12px; border-radius: 12px; }
+  .needs-list { grid-template-columns: minmax(0, 1fr); gap: 10px; }
+  .needs-card { padding: 11px 12px; }
+  .needs-card-head { flex-wrap: wrap; row-gap: 4px; }
+  .needs-title { flex-basis: 100%; order: 3; white-space: normal; }
+  .needs-age { margin-left: auto; }
+  .needs-thumb { width: 132px; }
+  .needs-from { max-width: 132px; font-size: 0.625rem; }
+  .needs-no-media { font-size: 0.6875rem; }
+  .needs-actions .btn { height: 34px; padding: 0 12px; font-size: 0.78125rem; flex: 1 1 auto; justify-content: center; }
+  /* Comments: bigger touch targets, the hint above the button. */
+  .comment-resolve.btn.sm { height: 28px; padding: 0 10px; font-size: 0.71875rem; }
+  .comment-body { font-size: 0.8125rem; }
+  .comments-input { font-size: 0.875rem; }
+  .comments-add-row { flex-direction: column; align-items: stretch; }
+  .comments-add-row .btn { height: 34px; justify-content: center; }
+}
+
+
+/* ==========================================================================
+   Phone shell: never wider than the screen, tab bar always reachable.
+   Chrome on Android grows the layout viewport to the widest piece of content
+   (even with overflow-x:hidden on <body>); the fixed tab bar then sits below
+   the visible area and a blank strip appears on the right.  overflow-x:clip
+   keeps stray content out of the page's scrollable width without turning the
+   shell into a scroll container (sticky headers keep working).
+   ========================================================================== */
+@media (max-width: 760px) {
+  :root {
+    --tabbar-space: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px));
+  }
+
+  html,
+  body {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  #app,
+  .topbar,
+  #overlay-root,
+  .page {
+    max-width: 100%;
+    overflow-x: clip;
+  }
+
+  #app {
+    min-height: calc(100svh - var(--topbar));
+    padding-bottom: var(--tabbar-space);
+  }
+
+  .mobile-tabbar {
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    bottom: 0;
+    overflow: hidden;
+
+  }
+
+  /* On-screen keyboard: the bar would cover the field being typed in (or be
+     pushed off-screen); mobile-ui.js toggles this class from visualViewport. */
+  html.keyboard-open {
+    --tabbar-space: env(safe-area-inset-bottom, 0px);
+  }
+
+  html.keyboard-open .mobile-tabbar,
+  html.keyboard-open .update-bar {
+    display: none !important;
+  }
+
+  .update-bar {
+    bottom: calc(var(--tabbar-space) + 10px);
+  }
+
+  /* Session rail / details sheets and their scrim stop above the tab bar so
+     it stays tappable while a sheet is open. */
+  .sw-mobile-scrim,
+  .mobile-session-page .sw-mobile-scrim {
+    bottom: var(--tabbar-space);
+  }
+
+  .sw-rail,
+  .sw-side,
+  .mobile-session-page .sw-rail,
+  .mobile-session-page .sw-side {
+    bottom: var(--tabbar-space);
+    height: auto;
+    padding-bottom: 0;
+  }
+
+  /* Grid/flex children default to min-width:auto and grow to their widest
+     content (Gantt, tables, long ids); let them shrink to the column. */
+  .two-col > *,
+  .ov-grid > *,
+  .ov-side > *,
+  .page > section,
+  .panel {
+    min-width: 0;
+  }
+
+  .two-col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .gantt-panel {
+    max-width: 100%;
+  }
+
+  /* Modals: 96vw plus the backdrop's 20 px padding was wider than a 360 px
+     screen; size them to the backdrop instead. */
+  .modal-backdrop {
+    padding: 10px;
+  }
+
+  .modal,
+  .modal.wide {
+    width: min(100%, 640px);
+    max-width: 100%;
+  }
+
+  /* Long words, URLs, hashes and code wrap inside their panel; tables and
+     preformatted blocks scroll sideways inside themselves. */
+  .panel,
+  .rich,
+  .hero,
+  .action-item .txt,
+  .feed,
+  .needs-main {
+    overflow-wrap: anywhere;
+  }
+
+  .rich pre,
+  .rich table,
+  .panel pre,
+  .start-preview {
+    display: block;
+    max-width: 100%;
+    overflow-x: auto;
+  }
+
+  .rich code,
+  .panel code {
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+
+  .rich img,
+  .rich video,
+  .panel img,
+  .panel video,
+  .panel canvas {
+    max-width: 100%;
+  }
+}
+
+/* Home "Needs you" on phones: the kind chip sits above the text so the row
+   gets the full width; thumbnails scroll inside their own strip; actions are
+   a two-column grid of 44 px buttons.  The foot must not wrap: a wrapping
+   column flexbox sizes its line to the widest child (the whole thumbnail
+   strip), which is what pushed the page to ~500 px. */
+@media (max-width: 760px) {
+  .needs-panel .panel-head { flex-wrap: wrap; row-gap: 4px; margin-bottom: 4px; }
+  /* The header link shares its class with the history list box in the modal. */
+  .needs-panel .panel-head .needs-history { display: inline-flex; align-items: center; margin: 0 0 0 auto; padding: 0 4px; border: 0; background: none; max-height: none; }
+  .needs-row { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 2px; }
+  .needs-chip { align-self: flex-start; font-size: 0.6875rem; padding: 3px 8px; }
+  .needs-main { width: 100%; gap: 8px; }
+  .needs-line { flex-wrap: wrap; row-gap: 2px; }
+  .needs-title {
+    flex: 1 1 100%; order: 0; min-height: 28px; font-size: 0.9375rem; line-height: 1.35;
+    white-space: normal; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  }
+  .needs-uid { font-size: 0.75rem; }
+  .needs-age, .needs-notes { font-size: 0.75rem; }
+  .needs-age { margin-left: auto; }
+  .needs-excerpt { font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }
+  .needs-foot { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
+  .needs-media-col { width: 100%; max-width: 100%; }
+  .needs-media { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding-bottom: 2px; }
+  .needs-thumb { width: 120px; height: 76px; scroll-snap-align: start; }
+  .needs-from { max-width: 120px; }
+  .needs-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-left: 0; }
+  .needs-actions .btn { min-height: 44px; height: auto; padding: 0 10px; font-size: 0.875rem; min-width: 0; justify-content: center; }
+  .needs-actions .btn:last-child:nth-child(odd) { grid-column: 1 / -1; }
+  .needs-toggle { min-height: 44px; font-size: 0.875rem; }
+}
+
+/* Home on phones (docs/guide/home-overview.md): one column in task order —
+   hero, pulse tiles, Needs you, the pulse, Due and blocked, Running, Pipeline, Team,
+   Research, Activity, then the folded start prompts. */
+@media (max-width: 760px) {
+  .home-page { display: flex; flex-direction: column; gap: 12px; padding-top: 10px; }
+  .home-page > * { min-width: 0; }
+  .home-page .ov-top { order: 1; display: flex; flex-direction: column; gap: 10px; }
+  .home-page .ov-grid { order: 2; display: flex; flex-direction: column; gap: 12px; }
+  .home-page .start-panel { order: 3; margin: 0; }
+  .home-page .ov-grid > .needs-panel { order: 1; }
+  .home-page .ov-pulse { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .home-page .ov-grid > .ov-due { order: 3; }
+  .home-page .ov-grid > .ov-runs { order: 4; }
+  .home-page .ov-side { order: 5; display: flex; flex-direction: column; gap: 12px; }
+  .home-page .ov-grid > .ov-research { order: 6; }
+  .home-page .ov-grid > .ov-activity { order: 7; }
+
+  /* Compact hero: kicker, name, two-line description, one primary button. */
+  .home-page .ov-top > .hero { padding: 14px; }
+  .home-page .hero-kicker { margin-bottom: 6px; font-size: 0.6875rem; }
+  .home-page .hero h1 { font-size: 1.375rem; margin-bottom: 4px; }
+  .home-page .hero-desc { font-size: 0.875rem; margin-bottom: 0; }
+  .home-page .hero-meta,
+  .home-page .hero-secondary,
+  .home-page .hero-more { display: none; }
+  .home-page .hero-actions { padding-top: 10px; }
+  .home-page .hero-actions .primary-btn { width: 100%; min-height: 44px; justify-content: center; font-size: 0.875rem; }
+
+  /* Panel chrome: readable headings, 44 px targets for the header links. */
+  .home-page .panel { padding: 12px; border-radius: 12px; }
+  .home-page .panel-head h3 { font-size: 0.75rem; }
+  .home-page .panel-head .link,
+  .home-page .panel-head .btn { min-height: 44px; padding: 0 10px; font-size: 0.8125rem; }
+
+  /* Start prompts: collapsed panel is one compact line. */
+  .home-page .start-panel .panel-head { flex-direction: row; flex-wrap: wrap; align-items: center; margin-bottom: 0; }
+  .home-page .start-panel:not(.collapsed) .panel-head { margin-bottom: 10px; }
+  .home-page .start-desc { font-size: 0.875rem; }
+  .home-page .start-card-head b { font-size: 0.9375rem; }
+  .home-page .start-actions .btn { min-height: 44px; font-size: 0.8125rem; }
+
+  /* Pulse: 3 tiles per row, the 14-day chart full width. */
+  .home-page .ov-kpi { min-height: 64px; padding: 8px 10px; }
+  .home-page .ov-kpi-v { font-size: 1.5rem; }
+  .home-page .ov-kpi-k, .home-page .ov-kpi-d { font-size: 0.71875rem; }
+  .home-page .ov-trend { grid-column: 1 / -1; }
+  .home-page .ov-legend { flex-wrap: wrap; white-space: normal; font-size: 0.75rem; }
+  .home-page .ov-trend-head { flex-direction: column; gap: 2px; }
+
+  /* Tappable rows. */
+  .home-page .ov-row, .home-page .ov-stage, .home-page .ov-team-row:not(.head), .home-page .ov-feed-row { min-height: 44px; font-size: 0.875rem; }
+  .home-page .ov-row-d, .home-page .ov-stage-n, .home-page .ov-uid { font-size: 0.75rem; }
+  .home-page .ov-stage-name { font-size: 0.875rem; }
+  .home-page .ov-team-row { grid-template-columns: minmax(0, 1fr) repeat(4, 42px); }
+  .home-page .ov-feed { max-height: none; }
+  .home-page .ov-feed-txt { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow-wrap: anywhere; }
+  .home-page .ov-rstat b { font-size: 1.375rem; }
+  .home-page .ov-rstat span { font-size: 0.75rem; }
+  .home-page .ov-gpu, .home-page .ov-hint { min-height: 44px; font-size: 0.8125rem; }
+  .home-page .needs-summary { font-size: 0.75rem; flex-basis: 100%; order: 3; }
+}

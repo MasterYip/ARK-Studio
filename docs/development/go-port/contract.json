@@ -1,0 +1,9319 @@
+{
+ "generated_from": [
+  "arkstudio/server.py",
+  "arkstudio/__main__.py",
+  "arkstudio/server_config.py"
+ ],
+ "routes": [
+  {
+   "id": "exact:/",
+   "kind": "exact",
+   "pattern": "/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_static",
+   "line": 6053,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/",
+   "auth_gate": "session",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/activity",
+   "kind": "exact",
+   "pattern": "/api/activity",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4134,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, activity}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/activity",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "prefix:/api/agent-sessions",
+   "kind": "prefix",
+   "pattern": "/api/agent-sessions",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4139,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _sessions_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/agent-sessions",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/agent-sessions",
+   "kind": "exact",
+   "pattern": "/api/agent-sessions",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5027,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._filter_session_listing()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/agent-sessions",
+   "kind": "exact",
+   "pattern": "/api/agent-sessions",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5364,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "access_mode"
+   ],
+   "response": [
+    "{ok, session}"
+   ],
+   "errors": [
+    "403 DEMO_AGENTS_DISABLED"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/agent-sessions/groups",
+   "kind": "exact",
+   "pattern": "/api/agent-sessions/groups",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5025,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._filter_session_groups()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/groups",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/agent-sessions/presets",
+   "kind": "exact",
+   "pattern": "/api/agent-sessions/presets",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5020,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, presets, personal_config_required}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/presets",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5030,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6013,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.sessions.delete()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/approvals$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/approvals$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5045,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **sessions.approvals()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/approvals",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/approvals/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/approvals/([^/]+)$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5419,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "decision",
+    "action",
+    "message"
+   ],
+   "response": [
+    "{ok, **self.app.sessions.decide_approval()}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token",
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/approvals/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/archive$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/archive$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5452,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session, archived}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/archive",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/artifacts$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/artifacts$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5065,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **sessions.list_artifacts()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/artifacts",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/artifacts/download$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/artifacts/download$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5057,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path"
+   ],
+   "body": [],
+   "response": [
+    "raw body"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/artifacts/download",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/artifacts/read$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/artifacts/read$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5053,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **sessions.read_artifact()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/artifacts/read",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/context/validate$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/context/validate$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5438,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "context",
+    "attachments"
+   ],
+   "response": [
+    "{ok, **self.app.sessions.validate_context()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/context/validate",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/continue$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/continue$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5397,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "text",
+    "message",
+    "platform",
+    "model",
+    "effort",
+    "access_mode",
+    "context"
+   ],
+   "response": [
+    "{ok, session, continued}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/continue",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/fork$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/fork$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5428,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session, forked_from, relation}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/fork",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/input$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/input$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5390,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "text",
+    "message",
+    "context"
+   ],
+   "response": [
+    "{ok, session, accepted}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/input",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/logs$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/logs$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5034,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "stream",
+    "offset",
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **sessions.logs()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/logs",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/media$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/media$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5049,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **sessions.workspace_index()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/media",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/relaunch$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/relaunch$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5456,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session, relaunched}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/relaunch",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/steer$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/steer$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5408,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "text",
+    "message",
+    "context"
+   ],
+   "response": [
+    "{ok, **self.app.sessions.steer()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/steer",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/steer/reorder$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/steer/reorder$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5414,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "order"
+   ],
+   "response": [
+    "{ok, session}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/steer/reorder",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6021,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session, removed}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/steer/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5905,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "text"
+   ],
+   "response": [
+    "{ok, session, updated}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/steer/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/steer/([^/]+)$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5443,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session, removed}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/steer/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/stop$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/stop$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5448,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/stop",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/agent-sessions/([^/]+)/transcript$",
+   "kind": "regex",
+   "pattern": "^/api/agent-sessions/([^/]+)/transcript$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_sessions_get",
+   "line": 5041,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **sessions.transcript()}"
+   ],
+   "errors": [],
+   "guards": [
+    "agent-session access"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent-sessions/x/transcript",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/agent/token",
+   "kind": "exact",
+   "pattern": "/api/agent/token",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4050,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, token}"
+   ],
+   "errors": [],
+   "guards": [
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/token",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/assets/upload",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/assets/upload",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5831,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._upload_asset()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/assets/upload",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/context",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/context",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4359,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **assistant.context()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/context",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/export",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/export",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4329,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _api_get"
+   ],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/export",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/gpu/jobs",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/gpu/jobs",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4334,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<gpu list filters>"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.queue_list()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/gpu/jobs",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/gpu/jobs",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/gpu/jobs",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5806,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/gpu/jobs",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/gpu/jobs/([^/]+)(/logs)?$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/gpu/jobs/([^/]+)(/logs)?$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4338,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "tail"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **IfExp}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/gpu/jobs/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/gpu/jobs/([^/]+)/cancel$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/gpu/jobs/([^/]+)/cancel$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5809,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, job}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/gpu/jobs/x/cancel",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/insights",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/insights",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4383,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, insights}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/insights",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/interface",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/interface",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4356,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **skills.interface.describe()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/interface",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/links",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/links",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5827,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "source",
+    "target",
+    "relation",
+    "note"
+   ],
+   "response": [
+    "{ok, **store.create_link()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/links",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/media",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/media",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5835,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "unit",
+    "url",
+    "kind",
+    "caption"
+   ],
+   "response": [
+    "{ok, **store.add_media()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/media",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/agent/v1/media/(\\d+)/raw",
+   "kind": "fullmatch",
+   "pattern": "/api/agent/v1/media/(\\d+)/raw",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4332,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _api_get"
+   ],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/media/1/raw",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/media/upload",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/media/upload",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5833,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._embed_media()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/media/upload",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/project/palette",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/project/palette",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4361,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, palette, presets}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/project/palette",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/project/palette",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/project/palette",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5815,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, palette}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/project/palette",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/sessions/watcher.py",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/sessions/watcher.py",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4341,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "raw text/x-python; charset=utf-8"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/sessions/watcher.py",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/agent/v1/sessions/([^/]+)",
+   "kind": "fullmatch",
+   "pattern": "/api/agent/v1/sessions/([^/]+)",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4347,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **state}"
+   ],
+   "errors": [
+    "404 SESSION_NOT_ACCESSIBLE"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/sessions/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/agent/v1/sessions/([^/]+)/upload",
+   "kind": "fullmatch",
+   "pattern": "/api/agent/v1/sessions/([^/]+)/upload",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5791,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.context_store().upload()}"
+   ],
+   "errors": [
+    "403 SESSION_UPLOADS_DISABLED"
+   ],
+   "guards": [
+    "project:write"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/sessions/x/upload",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/setup",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/setup",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4389,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _setup_state"
+   ],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/setup",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/setup/([a-z][a-z-]*)$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/setup/([a-z][a-z-]*)$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5813,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _setup_action"
+   ],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/setup/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/skills",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/skills",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4385,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **skills.catalog_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/skills",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/agent/v1/skills/",
+   "kind": "prefix",
+   "pattern": "/api/agent/v1/skills/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4387,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **skills.get_skill()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/skills/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/units",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/units",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4367,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<unit filters>",
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **store.list_units()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/units",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/units",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5825,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4375,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5856,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)/comments$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)/comments$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4378,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **_comments_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/comments",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)/comments$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)/comments$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5840,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "body",
+    "kind",
+    "reply_to"
+   ],
+   "response": [
+    "{ok, comment, **_comments_payload}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/comments",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)/comments/(\\d+)/resolve$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)/comments/(\\d+)/resolve$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5851,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "resolved"
+   ],
+   "response": [
+    "{ok, comment, **_comments_payload}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/comments/1/resolve",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+   "kind": "fullmatch",
+   "pattern": "/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4372,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _node_history_get"
+   ],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/history",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+   "kind": "fullmatch",
+   "pattern": "/api/agent/v1/units/([^/]+)/history(?:/([^/]+))?",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5804,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _node_history_write"
+   ],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/history",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)/members$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)/members$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4381,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.topic()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/members",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/agent/v1/units/([^/]+)/members$",
+   "kind": "regex",
+   "pattern": "^/api/agent/v1/units/([^/]+)/members$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_agent_write",
+   "line": 5846,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "add",
+    "members"
+   ],
+   "response": [
+    "{ok, report, **store.topic}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/units/x/members",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/agent/v1/whoami",
+   "kind": "exact",
+   "pattern": "/api/agent/v1/whoami",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_agent_get",
+   "line": 4326,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._agent_whoami()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/agent/v1/whoami",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/agent/v1/",
+   "kind": "prefix",
+   "pattern": "/api/agent/v1/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4047,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [
+    "agent-token (X-ARK-Token / Bearer, or personal arka_ token)"
+   ],
+   "notes": [
+    "delegates to _agent_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/agent/v1/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/agent/v1/",
+   "kind": "prefix",
+   "pattern": "/api/agent/v1/",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5334,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [
+    "agent-token (X-ARK-Token / Bearer, or personal arka_ token)"
+   ],
+   "notes": [
+    "delegates to _agent_write"
+   ],
+   "role": "dispatch",
+   "sample": "/api/agent/v1/x",
+   "auth_gate": "session, agent token or personal token",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/assistant/apply",
+   "kind": "exact",
+   "pattern": "/api/assistant/apply",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5516,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "insight"
+   ],
+   "response": [
+    "{ok, **assistant.apply()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/apply",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/assistant/config",
+   "kind": "exact",
+   "pattern": "/api/assistant/config",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4037,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._assistant_config_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/config",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/assistant/config",
+   "kind": "exact",
+   "pattern": "/api/assistant/config",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5495,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._assistant_config_payload()}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/config",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/assistant/config/test",
+   "kind": "exact",
+   "pattern": "/api/assistant/config/test",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5503,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **assistant_config.test_connection()}"
+   ],
+   "errors": [
+    "409 PERSONAL_CONFIG_REQUIRED",
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/config/test",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/assistant/dispatch",
+   "kind": "exact",
+   "pattern": "/api/assistant/dispatch",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4166,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "task"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **assistant.dispatch_prompt()}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/dispatch",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/assistant/extract",
+   "kind": "exact",
+   "pattern": "/api/assistant/extract",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5518,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "text",
+    "source",
+    "limit"
+   ],
+   "response": [
+    "{ok, **assistant.extract_ideas()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/extract",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/assistant/insights",
+   "kind": "exact",
+   "pattern": "/api/assistant/insights",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4164,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, insights}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/assistant/insights",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/auth/logout",
+   "kind": "exact",
+   "pattern": "/api/auth/logout",
+   "methods": [
+    "POST"
+   ],
+   "function": "_handle_auth_post",
+   "line": 3108,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "raw body"
+   ],
+   "errors": [
+    "403 AUTH_CSRF"
+   ],
+   "guards": [
+    "same-origin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/auth/logout",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/auth/session",
+   "kind": "exact",
+   "pattern": "/api/auth/session",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4011,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, auth_required, authenticated, user, expires_at, role, is_admin, local, org}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/auth/session",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/auth/session",
+   "kind": "exact",
+   "pattern": "/api/auth/session",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_handle_auth_get",
+   "line": 3047,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, auth_required, authenticated, user, expires_at, role, is_admin, local, org}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/auth/session",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/blackbox",
+   "kind": "exact",
+   "pattern": "/api/blackbox",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3919,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, enabled, snapshots}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/blackbox",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/blackbox",
+   "kind": "exact",
+   "pattern": "/api/blackbox",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5467,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "reason"
+   ],
+   "response": [
+    "{ok, snapshot}"
+   ],
+   "errors": [],
+   "guards": [
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/blackbox",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/blackbox/([^/]+)/restore$",
+   "kind": "regex",
+   "pattern": "^/api/blackbox/([^/]+)/restore$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5472,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, restored, project}"
+   ],
+   "errors": [],
+   "guards": [
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/blackbox/x/restore",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/bootstrap",
+   "kind": "exact",
+   "pattern": "/api/bootstrap",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3839,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.bootstrap()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/bootstrap",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/changes",
+   "kind": "exact",
+   "pattern": "/api/changes",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3948,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "since",
+    "bodies"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **store.changes()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/changes",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/chat",
+   "kind": "exact",
+   "pattern": "/api/chat",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3927,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.chat_state()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/chat",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/chat",
+   "kind": "exact",
+   "pattern": "/api/chat",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6004,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.chat_clear()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/chat",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "exact:/api/chat",
+   "kind": "exact",
+   "pattern": "/api/chat",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5521,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.chat_send()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/chat",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/chat/status",
+   "kind": "exact",
+   "pattern": "/api/chat/status",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3929,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **chat.harness_status()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/chat/status",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/chat/stream",
+   "kind": "exact",
+   "pattern": "/api/chat/stream",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5173,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "ndjson stream"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/chat/stream",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/events",
+   "kind": "exact",
+   "pattern": "/api/events",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3946,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/events",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/export",
+   "kind": "exact",
+   "pattern": "/api/export",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4178,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "format",
+    "project",
+    "sessions"
+   ],
+   "body": [],
+   "response": [
+    "zip download",
+    "raw application/json; charset=utf-8",
+    "raw text/markdown; charset=utf-8",
+    "raw text/csv; charset=utf-8",
+    "raw image/svg+xml; charset=utf-8"
+   ],
+   "errors": [
+    "404 PROJECT_NOT_ACCESSIBLE",
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/export",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/gpu/dashboard",
+   "kind": "exact",
+   "pattern": "/api/gpu/dashboard",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4021,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.dashboard()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/dashboard",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/gpu/dispatch/prepare",
+   "kind": "exact",
+   "pattern": "/api/gpu/dispatch/prepare",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5319,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.prepare_dispatch()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/dispatch/prepare",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/gpu/jobs",
+   "kind": "exact",
+   "pattern": "/api/gpu/jobs",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4024,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<gpu list filters>"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.queue_list()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/jobs",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/gpu/jobs",
+   "kind": "exact",
+   "pattern": "/api/gpu/jobs",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5308,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/jobs",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/gpu/jobs/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/gpu/jobs/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4031,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, job}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/jobs/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/gpu/jobs/([^/]+)/cancel$",
+   "kind": "regex",
+   "pattern": "^/api/gpu/jobs/([^/]+)/cancel$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5311,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, job}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/jobs/x/cancel",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/gpu/jobs/([^/]+)/logs$",
+   "kind": "regex",
+   "pattern": "^/api/gpu/jobs/([^/]+)/logs$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4034,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "tail"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.queue_logs()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/jobs/x/logs",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/gpu/probe",
+   "kind": "exact",
+   "pattern": "/api/gpu/probe",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5317,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.probe()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/probe",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/gpu/queue",
+   "kind": "exact",
+   "pattern": "/api/gpu/queue",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4017,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.queue_status()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/queue",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/gpu/servers",
+   "kind": "exact",
+   "pattern": "/api/gpu/servers",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4015,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.servers()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/servers",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/gpu/status",
+   "kind": "exact",
+   "pattern": "/api/gpu/status",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4013,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.status()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/gpu/status",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/graph",
+   "kind": "exact",
+   "pattern": "/api/graph",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4070,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<unit filters>",
+    "context",
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **data}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/graph",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/graph/bodies",
+   "kind": "exact",
+   "pattern": "/api/graph/bodies",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4067,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/graph/bodies",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/graph/snapshot",
+   "kind": "exact",
+   "pattern": "/api/graph/snapshot",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4063,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "bodies"
+   ],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/graph/snapshot",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/health",
+   "kind": "exact",
+   "pattern": "/api/health",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3832,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **payload}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/health",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/import/infohub",
+   "kind": "exact",
+   "pattern": "/api/import/infohub",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5524,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "path",
+    "mode",
+    "update"
+   ],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/import/infohub",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/import/infohub/preview",
+   "kind": "exact",
+   "pattern": "/api/import/infohub/preview",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4173,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **importer.preview()}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/import/infohub/preview",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/import/infohub/sources",
+   "kind": "exact",
+   "pattern": "/api/import/infohub/sources",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4171,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, sources}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/import/infohub/sources",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/infohub/browse",
+   "kind": "exact",
+   "pattern": "/api/infohub/browse",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4079,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path",
+    "q",
+    "kind",
+    "tags",
+    "status",
+    "days",
+    "mine",
+    "roots",
+    "order",
+    "limit",
+    "offset"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **data}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/infohub/browse",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/infohub/candidates",
+   "kind": "exact",
+   "pattern": "/api/infohub/candidates",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4077,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, candidates}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/infohub/candidates",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/infohub/graph",
+   "kind": "exact",
+   "pattern": "/api/infohub/graph",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4110,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path",
+    "q",
+    "kind",
+    "tags",
+    "status",
+    "days",
+    "mine",
+    "roots",
+    "order",
+    "limit",
+    "connected",
+    "context"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **data}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/infohub/graph",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/infohub/import",
+   "kind": "exact",
+   "pattern": "/api/infohub/import",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5532,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "path",
+    "key",
+    "as_idea",
+    "copy"
+   ],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/infohub/import",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/infohub/unit",
+   "kind": "exact",
+   "pattern": "/api/infohub/unit",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4099,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path",
+    "key",
+    "id"
+   ],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/infohub/unit",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/links",
+   "kind": "exact",
+   "pattern": "/api/links",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5484,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "source",
+    "target",
+    "relation",
+    "note"
+   ],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/links",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/links/(\\d+)$",
+   "kind": "regex",
+   "pattern": "^/api/links/(\\d+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6026,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.delete_link()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/links/1",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/links/(\\d+)$",
+   "kind": "regex",
+   "pattern": "^/api/links/(\\d+)$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5913,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "relation"
+   ],
+   "response": [
+    "{ok, **store.update_link()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/links/1",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "exact:/api/local/open",
+   "kind": "exact",
+   "pattern": "/api/local/open",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5127,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/local/open",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/me",
+   "kind": "exact",
+   "pattern": "/api/me",
+   "methods": [
+    "GET",
+    "HEAD",
+    "PATCH"
+   ],
+   "function": "_handle_profile",
+   "line": 3664,
+   "flags": [
+    "no task read token"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.profile_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/me",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD",
+    "PATCH"
+   ]
+  },
+  {
+   "id": "exact:/api/me/avatar",
+   "kind": "exact",
+   "pattern": "/api/me/avatar",
+   "methods": [
+    "DELETE",
+    "POST"
+   ],
+   "function": "_handle_profile",
+   "line": 3671,
+   "flags": [
+    "no task read token"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "data",
+    "content_type"
+   ],
+   "response": [
+    "{ok, **self.app.profile_payload()}"
+   ],
+   "errors": [
+    "413 AVATAR_TOO_LARGE",
+    "400 AVATAR_INVALID"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/me/avatar",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "DELETE",
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/me/password",
+   "kind": "exact",
+   "pattern": "/api/me/password",
+   "methods": [
+    "POST"
+   ],
+   "function": "_handle_profile",
+   "line": 3692,
+   "flags": [
+    "no task read token"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/me/password",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/media",
+   "kind": "exact",
+   "pattern": "/api/media",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5491,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "unit",
+    "url",
+    "kind",
+    "caption"
+   ],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/media",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/media/(\\d+)$",
+   "kind": "regex",
+   "pattern": "^/api/media/(\\d+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6029,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.delete_media()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/media/1",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/media/(\\d+)$",
+   "kind": "regex",
+   "pattern": "^/api/media/(\\d+)$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5910,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, media}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/media/1",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "regex:^/api/media/(\\d+)/raw$",
+   "kind": "regex",
+   "pattern": "^/api/media/(\\d+)/raw$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4216,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "download"
+   ],
+   "body": [],
+   "response": [
+    "file stream (Range)"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/media/1/raw",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/media/upload",
+   "kind": "exact",
+   "pattern": "/api/media/upload",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5489,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._embed_media()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/media/upload",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/mobile/apps",
+   "kind": "exact",
+   "pattern": "/api/mobile/apps",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3972,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, apps}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/apps",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/mobile/connection",
+   "kind": "exact",
+   "pattern": "/api/mobile/connection",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3974,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.mobile_connection()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/connection",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/mobile/login",
+   "kind": "exact",
+   "pattern": "/api/mobile/login",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5301,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/login",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/mobile/pair",
+   "kind": "exact",
+   "pattern": "/api/mobile/pair",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5276,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.create_pairing()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/pair",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/mobile/pair/claim",
+   "kind": "exact",
+   "pattern": "/api/mobile/pair/claim",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5281,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/pair/claim",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/mobile/pairs",
+   "kind": "exact",
+   "pattern": "/api/mobile/pairs",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3977,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, pairs}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/pairs",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/mobile/pairs/([^/]+)/revoke$",
+   "kind": "regex",
+   "pattern": "^/api/mobile/pairs/([^/]+)/revoke$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5306,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.revoke_pairing()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/pairs/x/revoke",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/mobile/session",
+   "kind": "exact",
+   "pattern": "/api/mobile/session",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3981,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, required, authenticated, token_present, reason, login_required, permission, read_only, expires_at, project, auth_required, auth_user, cache_id, cache_schema, connection}",
+    "{ok, **self.app.mobile_status()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/session",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/mobile/session",
+   "kind": "exact",
+   "pattern": "/api/mobile/session",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5951,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, logged_out}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/session",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "exact:/api/mobile/session/project",
+   "kind": "exact",
+   "pattern": "/api/mobile/session/project",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5303,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._mobile_switch_project()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/session/project",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/mobile/session/projects",
+   "kind": "exact",
+   "pattern": "/api/mobile/session/projects",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3979,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._mobile_projects()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/mobile/session/projects",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/open",
+   "kind": "exact",
+   "pattern": "/api/open",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5321,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.open_external()}"
+   ],
+   "errors": [
+    "403"
+   ],
+   "guards": [
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/open",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org",
+   "kind": "exact",
+   "pattern": "/api/org",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3850,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.mobile_org_overview()}",
+    "{ok, **self.app.org.org_overview()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/org/",
+   "kind": "exact",
+   "pattern": "/api/org/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3850,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.mobile_org_overview()}",
+    "{ok, **self.app.org.org_overview()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org/audit",
+   "kind": "exact",
+   "pattern": "/api/org/audit",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3860,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, audit}"
+   ],
+   "errors": [],
+   "guards": [
+    "org-admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/audit",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org/password",
+   "kind": "exact",
+   "pattern": "/api/org/password",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5185,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/password",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/projects/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/projects/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3877,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, project}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/projects/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/projects/([^/]+)/grants$",
+   "kind": "regex",
+   "pattern": "^/api/org/projects/([^/]+)/grants$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5232,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, grant, project}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/projects/x/grants",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/projects/([^/]+)/grants/revoke$",
+   "kind": "regex",
+   "pattern": "^/api/org/projects/([^/]+)/grants/revoke$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5241,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, result, project}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/projects/x/grants/revoke",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org/teams",
+   "kind": "exact",
+   "pattern": "/api/org/teams",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3858,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, teams}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/teams",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org/teams",
+   "kind": "exact",
+   "pattern": "/api/org/teams",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5218,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, team, teams}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/teams",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/teams/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/teams/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5987,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/teams/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/teams/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/teams/([^/]+)$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5888,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, team, teams}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/teams/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/teams/([^/]+)/members$",
+   "kind": "regex",
+   "pattern": "^/api/org/teams/([^/]+)/members$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5225,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/teams/x/members",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/teams/([^/]+)/members/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/teams/([^/]+)/members/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5994,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/teams/x/members/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org/users",
+   "kind": "exact",
+   "pattern": "/api/org/users",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3854,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, users, linux_accounts}"
+   ],
+   "errors": [],
+   "guards": [
+    "org-admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/org/users",
+   "kind": "exact",
+   "pattern": "/api/org/users",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5178,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, user, users}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/users/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/users/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5968,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/users/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/users/([^/]+)$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5878,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "disabled"
+   ],
+   "response": [
+    "{ok, user, users}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/users/([^/]+)/linux-accounts$",
+   "kind": "regex",
+   "pattern": "^/api/org/users/([^/]+)/linux-accounts$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3865,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, user, linux_accounts, capability}"
+   ],
+   "errors": [
+    "404 USER_NOT_FOUND"
+   ],
+   "guards": [
+    "org-admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users/x/linux-accounts",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/users/([^/]+)/linux-accounts$",
+   "kind": "regex",
+   "pattern": "^/api/org/users/([^/]+)/linux-accounts$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5210,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, assignment, linux_accounts}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users/x/linux-accounts",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/users/([^/]+)/linux-accounts/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/org/users/([^/]+)/linux-accounts/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5978,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, result, linux_accounts}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users/x/linux-accounts/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/org/users/([^/]+)/password$",
+   "kind": "regex",
+   "pattern": "^/api/org/users/([^/]+)/password$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5199,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/org/users/x/password",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/personal/agent-tokens",
+   "kind": "exact",
+   "pattern": "/api/personal/agent-tokens",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3883,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.org.list_agent_tokens()}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [
+    "own account (personal tokens)"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/personal/agent-tokens",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/personal/agent-tokens",
+   "kind": "exact",
+   "pattern": "/api/personal/agent-tokens",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5249,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.org.create_agent_token()}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [
+    "own account (personal tokens)"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/personal/agent-tokens",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/personal/agent-tokens/([A-Za-z0-9_]+)$",
+   "kind": "regex",
+   "pattern": "^/api/personal/agent-tokens/([A-Za-z0-9_]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5961,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.org.revoke_agent_token()}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [
+    "own account (personal tokens)"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/personal/agent-tokens/([A-Za-z0-9_]+)",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/personal/settings",
+   "kind": "exact",
+   "pattern": "/api/personal/settings",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3889,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "scope"
+   ],
+   "body": [],
+   "response": [
+    "{ok, scope, settings}",
+    "{ok, scope, settings, effective}"
+   ],
+   "errors": [
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/personal/settings",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/personal/settings",
+   "kind": "exact",
+   "pattern": "/api/personal/settings",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5255,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "scope"
+   ],
+   "response": [
+    "{ok, scope, settings}",
+    "{ok, scope, settings, effective}"
+   ],
+   "errors": [
+    "400 INVALID_SCOPE",
+    "None"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/personal/settings",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/project",
+   "kind": "exact",
+   "pattern": "/api/project",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3904,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.project_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/project",
+   "kind": "exact",
+   "pattern": "/api/project",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6001,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.delete_project()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "exact:/api/project",
+   "kind": "exact",
+   "pattern": "/api/project",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5895,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.update_project()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "exact:/api/project/assignees",
+   "kind": "exact",
+   "pattern": "/api/project/assignees",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3917,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.assignable_users()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project/assignees",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/project/overview",
+   "kind": "exact",
+   "pattern": "/api/project/overview",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3906,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **data}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project/overview",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/project/settings",
+   "kind": "exact",
+   "pattern": "/api/project/settings",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3925,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, settings}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project/settings",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/project/settings",
+   "kind": "exact",
+   "pattern": "/api/project/settings",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5897,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.update_project_settings()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/project/settings",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "exact:/api/projects",
+   "kind": "exact",
+   "pattern": "/api/projects",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3841,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, projects, session}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/projects",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/projects",
+   "kind": "exact",
+   "pattern": "/api/projects",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5463,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.create_project()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/projects",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/projects/open",
+   "kind": "exact",
+   "pattern": "/api/projects/open",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5465,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.open_project()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/projects/open",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/providers",
+   "kind": "exact",
+   "pattern": "/api/providers",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4039,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.providers.snapshot()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/providers",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/providers/refresh",
+   "kind": "exact",
+   "pattern": "/api/providers/refresh",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5339,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.providers.refresh()}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/providers/refresh",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/remote/info",
+   "kind": "exact",
+   "pattern": "/api/remote/info",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3970,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.remote_info()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/remote/info",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/resources/devices/([^/]+)",
+   "kind": "fullmatch",
+   "pattern": "/api/resources/devices/([^/]+)",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5315,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.update_device_privacy()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/resources/devices/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/resources/graph",
+   "kind": "exact",
+   "pattern": "/api/resources/graph",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4019,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.resources_graph()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/resources/graph",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/revision",
+   "kind": "exact",
+   "pattern": "/api/revision",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3943,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, revision, cursor}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/revision",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/search/nodes",
+   "kind": "exact",
+   "pattern": "/api/search/nodes",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3931,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "q",
+    "stream"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **search_mod.search_nodes()}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/search/nodes",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/session-contexts",
+   "kind": "exact",
+   "pattern": "/api/session-contexts",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4141,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _session_contexts_get"
+   ],
+   "role": "endpoint",
+   "sample": "/api/session-contexts",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/session-contexts",
+   "kind": "exact",
+   "pattern": "/api/session-contexts",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_session_contexts_get",
+   "line": 5001,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.session_contexts()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/session-contexts",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/session-contexts/",
+   "kind": "prefix",
+   "pattern": "/api/session-contexts/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4141,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _session_contexts_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/session-contexts/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/session-contexts/([^/]+)",
+   "kind": "fullmatch",
+   "pattern": "/api/session-contexts/([^/]+)",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6017,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.delete_session_context()}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/session-contexts/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/session-contexts/([^/]+)",
+   "kind": "fullmatch",
+   "pattern": "/api/session-contexts/([^/]+)",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5900,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/session-contexts/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "fullmatch:/api/session-contexts/([^/]+)/continue",
+   "kind": "fullmatch",
+   "pattern": "/api/session-contexts/([^/]+)/continue",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5384,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.continue_session_context()}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/session-contexts/x/continue",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/settings/effective",
+   "kind": "exact",
+   "pattern": "/api/settings/effective",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3902,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.effective_settings_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/settings/effective",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/skills",
+   "kind": "exact",
+   "pattern": "/api/skills",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4043,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **skills.catalog_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/skills",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/skills/interface",
+   "kind": "exact",
+   "pattern": "/api/skills/interface",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_skills_get",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: rest == 'interface' (string split dispatch)"
+   ],
+   "role": "endpoint",
+   "sample": "/api/skills/interface",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/skills/setup/state",
+   "kind": "exact",
+   "pattern": "/api/skills/setup/state",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_skills_get",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: parts == ['setup', 'state']"
+   ],
+   "role": "endpoint",
+   "sample": "/api/skills/setup/state",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "prefix:/api/skills/",
+   "kind": "prefix",
+   "pattern": "/api/skills/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4045,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _skills_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/skills/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/skills/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/skills/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_skills_get",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: len(parts) == 1; ?docs=0 omits documents"
+   ],
+   "role": "endpoint",
+   "sample": "/api/skills/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "prefix:/api/skills/",
+   "kind": "prefix",
+   "pattern": "/api/skills/",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5337,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _skills_post"
+   ],
+   "role": "dispatch",
+   "sample": "/api/skills/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/skills/([^/]+)/(prompt|agent)$",
+   "kind": "regex",
+   "pattern": "^/api/skills/([^/]+)/(prompt|agent)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_skills_get",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: len(parts) == 2"
+   ],
+   "role": "endpoint",
+   "sample": "/api/skills/x/prompt",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/task-agent/v1/context",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/context",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5073,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.task_context()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/context",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/gpu/jobs",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/gpu/jobs",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5097,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<gpu list filters>"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.queue_list()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/gpu/jobs",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/gpu/jobs",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/gpu/jobs",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5134,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "task"
+   ],
+   "response": [
+    "{ok, job}"
+   ],
+   "errors": [
+    "403 GPU_QUEUE_PERMISSION"
+   ],
+   "guards": [
+    "task-agent read token",
+    "project:write"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/gpu/jobs",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/task-agent/v1/gpu/jobs/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/task-agent/v1/gpu/jobs/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5111,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, job}"
+   ],
+   "errors": [
+    "404 GPU_JOB_NOT_FOUND"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/gpu/jobs/x",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/cancel$",
+   "kind": "regex",
+   "pattern": "^/api/task-agent/v1/gpu/jobs/([^/]+)/cancel$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5153,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, job}"
+   ],
+   "errors": [
+    "403 GPU_QUEUE_PERMISSION",
+    "404 GPU_JOB_NOT_FOUND"
+   ],
+   "guards": [
+    "task-agent read token",
+    "project:write"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/gpu/jobs/x/cancel",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/task-agent/v1/gpu/jobs/([^/]+)/logs$",
+   "kind": "regex",
+   "pattern": "^/api/task-agent/v1/gpu/jobs/([^/]+)/logs$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5103,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "tail"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.gpu.queue_logs()}"
+   ],
+   "errors": [
+    "404 GPU_JOB_NOT_FOUND"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/gpu/jobs/x/logs",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/links",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/links",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5090,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, links, total, read_only}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/links",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/project",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/project",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5075,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, project, stats, read_only}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/project",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/session",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/session",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5095,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, session}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/session",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/snapshot",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/snapshot",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5093,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.sessions.context_snapshot()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/snapshot",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/task-agent/v1/units",
+   "kind": "exact",
+   "pattern": "/api/task-agent/v1/units",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5078,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<unit filters>",
+    "limit",
+    "offset",
+    "ids"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **store.list_units()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/units",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/task-agent/v1/units/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/task-agent/v1/units/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5085,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit, read_only}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/units/x",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "regex:^/api/task-agent/v1/units/([^/]+)/comments$",
+   "kind": "regex",
+   "pattern": "^/api/task-agent/v1/units/([^/]+)/comments$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_task_agent_get",
+   "line": 5088,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **_comments_payload, read_only}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/task-agent/v1/units/x/comments",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/task-agent/v1/",
+   "kind": "prefix",
+   "pattern": "/api/task-agent/v1/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4143,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [
+    "task-agent read token"
+   ],
+   "notes": [
+    "delegates to _task_agent_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/task-agent/v1/x",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/task-agent/",
+   "kind": "prefix",
+   "pattern": "/api/task-agent/",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 5947,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [
+    "403"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "dispatch",
+   "sample": "/api/task-agent/x",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/task-agent/",
+   "kind": "prefix",
+   "pattern": "/api/task-agent/",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5871,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [
+    "403"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "dispatch",
+   "sample": "/api/task-agent/x",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/task-agent/",
+   "kind": "prefix",
+   "pattern": "/api/task-agent/",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5168,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [
+    "403"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "dispatch",
+   "sample": "/api/task-agent/x",
+   "auth_gate": "task-agent read token",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/timeline",
+   "kind": "exact",
+   "pattern": "/api/timeline",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4131,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<unit filters>"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.require().store.timeline()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/timeline",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/topics",
+   "kind": "exact",
+   "pattern": "/api/topics",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4155,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.topics()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/topics",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/unit-details",
+   "kind": "exact",
+   "pattern": "/api/unit-details",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 3953,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "ids"
+   ],
+   "body": [],
+   "response": [
+    "{ok, units, missing, cursor, etags}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/unit-details",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/units",
+   "kind": "exact",
+   "pattern": "/api/units",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4054,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "<unit filters>",
+    "limit",
+    "offset",
+    "ids",
+    "facets"
+   ],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/units",
+   "kind": "exact",
+   "pattern": "/api/units",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5481,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4150,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6035,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.archive_unit()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5920,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, unit}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/archive$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/archive$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5559,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.archive_unit()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/archive",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/comments$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/comments$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4153,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, comments}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/comments",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/comments$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/comments$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5543,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "body",
+    "kind",
+    "reply_to"
+   ],
+   "response": [
+    "{ok, comment, comments}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/comments",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/comments/(\\d+)/resolve$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/comments/(\\d+)/resolve$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5549,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "resolved"
+   ],
+   "response": [
+    "{ok, comment, comments}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/comments/1/resolve",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?",
+   "kind": "fullmatch",
+   "pattern": "/api/units/([^/]+)/history(?:/([^/]+))?",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4147,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _node_history_get"
+   ],
+   "role": "endpoint",
+   "sample": "/api/units/x/history",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?",
+   "kind": "fullmatch",
+   "pattern": "/api/units/([^/]+)/history(?:/([^/]+))?",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5478,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _node_history_write"
+   ],
+   "role": "endpoint",
+   "sample": "/api/units/x/history",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/insert-between$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/insert-between$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5565,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "title",
+    "type"
+   ],
+   "response": [
+    "{ok, **store.insert_between()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/insert-between",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/members$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/members$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4161,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "full"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **self.app.require().store.topic()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/members",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/members$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/members$",
+   "methods": [
+    "PATCH"
+   ],
+   "function": "do_PATCH",
+   "line": 5916,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, report, **store.topic}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/members",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "PATCH"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/members$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/members$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5554,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "add",
+    "members"
+   ],
+   "response": [
+    "{ok, report, **store.topic}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/members",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/members/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/members/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6032,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.remove_topic_member()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/members/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/units/([^/]+)/restore$",
+   "kind": "regex",
+   "pattern": "^/api/units/([^/]+)/restore$",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5562,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **store.restore_unit()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/units/x/restore",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/users/([^/]+)/avatar$",
+   "kind": "regex",
+   "pattern": "^/api/users/([^/]+)/avatar$",
+   "methods": [
+    "DELETE",
+    "GET",
+    "HEAD",
+    "PATCH",
+    "POST"
+   ],
+   "function": "_handle_profile",
+   "line": 3648,
+   "flags": [
+    "no task read token"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "raw body"
+   ],
+   "errors": [
+    "405",
+    "404 AVATAR_NOT_FOUND"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/users/x/avatar",
+   "auth_gate": "session or paired device",
+   "project_scope": "global",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace",
+   "kind": "exact",
+   "pattern": "/api/workspace",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4137,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _workspace_get"
+   ],
+   "role": "endpoint",
+   "sample": "/api/workspace",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace",
+   "kind": "exact",
+   "pattern": "/api/workspace",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5329,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [
+    "no task read token",
+    "project:admin"
+   ],
+   "notes": [
+    "delegates to _workspace_post"
+   ],
+   "role": "endpoint",
+   "sample": "/api/workspace",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/changes",
+   "kind": "exact",
+   "pattern": "/api/workspace/changes",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4715,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "base"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **ws.changes()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/changes",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/create",
+   "kind": "exact",
+   "pattern": "/api/workspace/create",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4794,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **ws.create_path()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/create",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/delete",
+   "kind": "exact",
+   "pattern": "/api/workspace/delete",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4798,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **ws.delete_path()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/delete",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/diff",
+   "kind": "exact",
+   "pattern": "/api/workspace/diff",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4717,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path",
+    "base"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **ws.diff_file()}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/diff",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/file",
+   "kind": "exact",
+   "pattern": "/api/workspace/file",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4702,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **ws.read_file()}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/file",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/file",
+   "kind": "exact",
+   "pattern": "/api/workspace/file",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4792,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **ws.write_file()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/file",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/grep",
+   "kind": "exact",
+   "pattern": "/api/workspace/grep",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4689,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "q",
+    "include",
+    "exclude",
+    "stream"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **search_mod.search_files()}"
+   ],
+   "errors": [
+    "400"
+   ],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/grep",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/info",
+   "kind": "exact",
+   "pattern": "/api/workspace/info",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4679,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **data}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/info",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/raw",
+   "kind": "exact",
+   "pattern": "/api/workspace/raw",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4707,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path",
+    "download"
+   ],
+   "body": [],
+   "response": [
+    "file stream (Range)"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/raw",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/rename",
+   "kind": "exact",
+   "pattern": "/api/workspace/rename",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4796,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **ws.rename_path()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/rename",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/search",
+   "kind": "exact",
+   "pattern": "/api/workspace/search",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4686,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "q",
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **ws.search()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/search",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/terminals",
+   "kind": "exact",
+   "pattern": "/api/workspace/terminals",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4722,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **ws.terminals.list()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/terminals",
+   "kind": "exact",
+   "pattern": "/api/workspace/terminals",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4800,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "command",
+    "cwd",
+    "timeout",
+    "pty",
+    "cols",
+    "rows"
+   ],
+   "response": [
+    "{ok, terminal, pty_available, stream}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/workspace/terminals/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/workspace/terminals/([^/]+)$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4730,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "offset",
+    "limit"
+   ],
+   "body": [],
+   "response": [
+    "{ok, terminal}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "regex:^/api/workspace/terminals/([^/]+)$",
+   "kind": "regex",
+   "pattern": "^/api/workspace/terminals/([^/]+)$",
+   "methods": [
+    "DELETE"
+   ],
+   "function": "do_DELETE",
+   "line": 6007,
+   "flags": [
+    "same-origin"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self.app.workspace.terminals.close()}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token",
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "DELETE"
+   ]
+  },
+  {
+   "id": "regex:^/api/workspace/terminals/([^/]+)/cancel$",
+   "kind": "regex",
+   "pattern": "^/api/workspace/terminals/([^/]+)/cancel$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4824,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, terminal}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals/x/cancel",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/workspace/terminals/([^/]+)/resize$",
+   "kind": "regex",
+   "pattern": "^/api/workspace/terminals/([^/]+)/resize$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4814,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "cols",
+    "rows"
+   ],
+   "response": [
+    "{ok, **ws.terminals.resize()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals/x/resize",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/workspace/terminals/([^/]+)/stdin$",
+   "kind": "regex",
+   "pattern": "^/api/workspace/terminals/([^/]+)/stdin$",
+   "methods": [
+    "POST"
+   ],
+   "function": "_workspace_post",
+   "line": 4819,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [
+    "text"
+   ],
+   "response": [
+    "{ok, terminal}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals/x/stdin",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "regex:^/api/workspace/terminals/([^/]+)/stream$",
+   "kind": "regex",
+   "pattern": "^/api/workspace/terminals/([^/]+)/stream$",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4725,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "offset"
+   ],
+   "body": [],
+   "response": [
+    "SSE stream"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/terminals/x/stream",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "exact:/api/workspace/tree",
+   "kind": "exact",
+   "pattern": "/api/workspace/tree",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_workspace_get",
+   "line": 4683,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "path",
+    "depth"
+   ],
+   "body": [],
+   "response": [
+    "{ok, **ws.tree()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/workspace/tree",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "prefix:/api/workspace/",
+   "kind": "prefix",
+   "pattern": "/api/workspace/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4137,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _workspace_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/workspace/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "GET",
+    "HEAD"
+   ]
+  },
+  {
+   "id": "prefix:/api/workspace/",
+   "kind": "prefix",
+   "pattern": "/api/workspace/",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5329,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [
+    "no task read token",
+    "project:admin"
+   ],
+   "notes": [
+    "delegates to _workspace_post"
+   ],
+   "role": "dispatch",
+   "sample": "/api/workspace/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": [
+    "POST"
+   ]
+  },
+  {
+   "id": "exact:/api/worktrees",
+   "kind": "exact",
+   "pattern": "/api/worktrees",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_api_get",
+   "line": 4041,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **self._worktrees_payload()}"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/worktrees",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/worktrees/create",
+   "kind": "exact",
+   "pattern": "/api/worktrees/create",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5343,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token",
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/worktrees/create",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/api/worktrees/remove",
+   "kind": "exact",
+   "pattern": "/api/worktrees/remove",
+   "methods": [
+    "POST"
+   ],
+   "function": "do_POST",
+   "line": 5350,
+   "flags": [
+    "same-origin",
+    "json-body"
+   ],
+   "parent": null,
+   "query": [],
+   "body": [
+    "path",
+    "name",
+    "branch"
+   ],
+   "response": [
+    "{ok, **result}"
+   ],
+   "errors": [],
+   "guards": [
+    "no task read token",
+    "project:admin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/api/worktrees/remove",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "prefix:/api/",
+   "kind": "prefix",
+   "pattern": "/api/",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "do_GET",
+   "line": 3785,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "delegates to _api_get"
+   ],
+   "role": "dispatch",
+   "sample": "/api/x",
+   "auth_gate": "session or paired device",
+   "project_scope": "project read (GET/HEAD) / write (others)",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/download/ARK-Studio-android.apk",
+   "kind": "exact",
+   "pattern": "/download/ARK-Studio-android.apk",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "do_GET",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: ANDROID_APKS loop"
+   ],
+   "role": "endpoint",
+   "sample": "/download/ARK-Studio-android.apk",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/download/ARK-Studio-webapp.apk",
+   "kind": "exact",
+   "pattern": "/download/ARK-Studio-webapp.apk",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "do_GET",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: ANDROID_APKS loop"
+   ],
+   "role": "endpoint",
+   "sample": "/download/ARK-Studio-webapp.apk",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/download/ark.apk",
+   "kind": "exact",
+   "pattern": "/download/ark.apk",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "do_GET",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: ANDROID_APKS loop"
+   ],
+   "role": "endpoint",
+   "sample": "/download/ark.apk",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "static:/*",
+   "kind": "static",
+   "pattern": "/*",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_static",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: web/ file, SPA fallback to index.html for extension-less paths; login.html is 404"
+   ],
+   "role": "endpoint",
+   "sample": "/index.html",
+   "auth_gate": "session",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/login",
+   "kind": "exact",
+   "pattern": "/login",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_handle_auth_get",
+   "line": 3050,
+   "flags": [],
+   "parent": null,
+   "query": [
+    "next"
+   ],
+   "body": [],
+   "response": [
+    "redirect",
+    "login HTML"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/login",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/login",
+   "kind": "exact",
+   "pattern": "/login",
+   "methods": [
+    "POST"
+   ],
+   "function": "_handle_auth_post",
+   "line": null,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [],
+   "errors": [],
+   "guards": [],
+   "notes": [
+    "manual: `if path != '/login': return False`; form or JSON body username/password/csrf/next/remember"
+   ],
+   "role": "endpoint",
+   "sample": "/login",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/logout",
+   "kind": "exact",
+   "pattern": "/logout",
+   "methods": [
+    "GET",
+    "HEAD"
+   ],
+   "function": "_handle_auth_get",
+   "line": 3038,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "redirect"
+   ],
+   "errors": [],
+   "guards": [],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/logout",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  },
+  {
+   "id": "exact:/logout",
+   "kind": "exact",
+   "pattern": "/logout",
+   "methods": [
+    "POST"
+   ],
+   "function": "_handle_auth_post",
+   "line": 3120,
+   "flags": [],
+   "parent": null,
+   "query": [],
+   "body": [],
+   "response": [
+    "redirect"
+   ],
+   "errors": [
+    "403 AUTH_CSRF"
+   ],
+   "guards": [
+    "same-origin"
+   ],
+   "notes": [],
+   "role": "endpoint",
+   "sample": "/logout",
+   "auth_gate": "public",
+   "project_scope": "global",
+   "mobile_device": []
+  }
+ ],
+ "cli_commands": [
+  "agent",
+  "agent context",
+  "demo",
+  "desktop",
+  "export",
+  "mobile-tunnel",
+  "new",
+  "remote",
+  "serve",
+  "server-init",
+  "skills",
+  "skills brief",
+  "skills interface",
+  "skills list",
+  "skills render",
+  "skills setup",
+  "skills show",
+  "skills validate"
+ ],
+ "cli_flags": [
+  {
+   "command": "agent context",
+   "flags": [
+    "--project"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 318
+  },
+  {
+   "command": "agent context",
+   "flags": [
+    "--root"
+   ],
+   "default": "str(_default_root())",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 319
+  },
+  {
+   "command": "demo",
+   "flags": [
+    "--root"
+   ],
+   "default": "str(_default_root())",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 302
+  },
+  {
+   "command": "desktop",
+   "flags": [
+    "--root"
+   ],
+   "default": "str(_default_root())",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 260
+  },
+  {
+   "command": "desktop",
+   "flags": [
+    "--host"
+   ],
+   "default": "\"127.0.0.1\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 261
+  },
+  {
+   "command": "desktop",
+   "flags": [
+    "--port"
+   ],
+   "default": "8890",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 262
+  },
+  {
+   "command": "desktop",
+   "flags": [
+    "--no-server"
+   ],
+   "default": null,
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 263
+  },
+  {
+   "command": "desktop",
+   "flags": [
+    "--remote-url"
+   ],
+   "default": "os.environ.get(\"ARK_REMOTE_URL\", \"\")",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 265
+  },
+  {
+   "command": "desktop",
+   "flags": [
+    "--local"
+   ],
+   "default": null,
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 267
+  },
+  {
+   "command": "export",
+   "flags": [
+    "--project"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": "True",
+   "nargs": null,
+   "line": 305
+  },
+  {
+   "command": "export",
+   "flags": [
+    "--format"
+   ],
+   "default": "\"json\"",
+   "type": null,
+   "action": null,
+   "choices": "[\"json\", \"markdown\", \"csv\", \"svg\", \"bundle\"]",
+   "required": null,
+   "nargs": null,
+   "line": 306
+  },
+  {
+   "command": "export",
+   "flags": [
+    "--units"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 308
+  },
+  {
+   "command": "export",
+   "flags": [
+    "--depth"
+   ],
+   "default": "1",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 309
+  },
+  {
+   "command": "export",
+   "flags": [
+    "--media-root"
+   ],
+   "default": "[]",
+   "type": null,
+   "action": "\"append\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 311
+  },
+  {
+   "command": "export",
+   "flags": [
+    "--out"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 313
+  },
+  {
+   "command": "mobile-tunnel",
+   "flags": [
+    "--ssh"
+   ],
+   "default": "os.environ.get(\"ARK_SSH_TARGET\", \"user@server\")",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 284
+  },
+  {
+   "command": "mobile-tunnel",
+   "flags": [
+    "--ssh-port"
+   ],
+   "default": "22",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 286
+  },
+  {
+   "command": "mobile-tunnel",
+   "flags": [
+    "--ark-port"
+   ],
+   "default": "8890",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 287
+  },
+  {
+   "command": "mobile-tunnel",
+   "flags": [
+    "--local-port"
+   ],
+   "default": "8891",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 289
+  },
+  {
+   "command": "mobile-tunnel",
+   "flags": [
+    "--bind"
+   ],
+   "default": "\"0.0.0.0\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 291
+  },
+  {
+   "command": "mobile-tunnel",
+   "flags": [
+    "--identity"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 293
+  },
+  {
+   "command": "new",
+   "flags": [
+    "name"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 296
+  },
+  {
+   "command": "new",
+   "flags": [
+    "--root"
+   ],
+   "default": "str(_default_root())",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 297
+  },
+  {
+   "command": "new",
+   "flags": [
+    "--template"
+   ],
+   "default": "\"blank\"",
+   "type": null,
+   "action": null,
+   "choices": "[\"blank\", \"paper\", \"demo\"]",
+   "required": null,
+   "nargs": null,
+   "line": 298
+  },
+  {
+   "command": "new",
+   "flags": [
+    "--description"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 299
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--ssh"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": "True",
+   "nargs": null,
+   "line": 271
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--user"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 272
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--ssh-port"
+   ],
+   "default": "22",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 273
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--remote-port"
+   ],
+   "default": "8890",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 274
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--local-port"
+   ],
+   "default": "8890",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 275
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--identity"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 276
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--remote-path"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 277
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--mount"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 278
+  },
+  {
+   "command": "remote",
+   "flags": [
+    "--no-open"
+   ],
+   "default": null,
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 279
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--config"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 216
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--require-auth"
+   ],
+   "default": null,
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 217
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--root"
+   ],
+   "default": "str(_default_root())",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 218
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--host"
+   ],
+   "default": "None",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 219
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--port"
+   ],
+   "default": "_env_int(\"ARK_PORT\", 8890)",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 222
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--no-demo"
+   ],
+   "default": null,
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 223
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--media-root"
+   ],
+   "default": "[]",
+   "type": null,
+   "action": "\"append\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 224
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--sessions-root"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 226
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--public-url"
+   ],
+   "default": "os.environ.get(\"ARK_PUBLIC_URL\", \"\")",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 228
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--expose"
+   ],
+   "default": "_env_bool(\"ARK_PUBLIC\")",
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 230
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--auth-user"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 234
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--auth-password"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 236
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--auth-password-file"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 239
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--auth-password-hash"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 241
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--auth-session-ttl"
+   ],
+   "default": "0",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 244
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--public-ip"
+   ],
+   "default": "os.environ.get(\"ARK_PUBLIC_IP\", \"\")",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 248
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--detect-public-ip"
+   ],
+   "default": "_env_bool(\"ARK_DETECT_PUBLIC_IP\")",
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 250
+  },
+  {
+   "command": "serve",
+   "flags": [
+    "--trust-proxy"
+   ],
+   "default": "_env_bool(\"ARK_TRUST_PROXY\")",
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 254
+  },
+  {
+   "command": "server-init",
+   "flags": [
+    "--config"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": "True",
+   "nargs": null,
+   "line": 208
+  },
+  {
+   "command": "server-init",
+   "flags": [
+    "--data-dir"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": "True",
+   "nargs": null,
+   "line": 209
+  },
+  {
+   "command": "server-init",
+   "flags": [
+    "--owner"
+   ],
+   "default": "\"admin\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 210
+  },
+  {
+   "command": "server-init",
+   "flags": [
+    "--password-file"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 211
+  },
+  {
+   "command": "server-init",
+   "flags": [
+    "--port"
+   ],
+   "default": "8890",
+   "type": "int",
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 212
+  },
+  {
+   "command": "server-init",
+   "flags": [
+    "--public-url"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 213
+  },
+  {
+   "command": "skills brief",
+   "flags": [
+    "--payload"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 346
+  },
+  {
+   "command": "skills render",
+   "flags": [
+    "skill"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 333
+  },
+  {
+   "command": "skills render",
+   "flags": [
+    "template"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 334
+  },
+  {
+   "command": "skills render",
+   "flags": [
+    "--context"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 335
+  },
+  {
+   "command": "skills render",
+   "flags": [
+    "--out"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 337
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "setup_action"
+   ],
+   "default": "\"state\"",
+   "type": null,
+   "action": null,
+   "choices": "[\"state\", \"summary\", \"questions\", \"discover\",\n                                        \"draft\", \"confirm\", \"verify\"]",
+   "required": null,
+   "nargs": "\"?\"",
+   "line": 350
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "--project"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 353
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "--paths"
+   ],
+   "default": "[]",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": "\"*\"",
+   "line": 354
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "--payload"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 356
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "--propose"
+   ],
+   "default": null,
+   "type": null,
+   "action": "\"store_true\"",
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 357
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "--digest"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 359
+  },
+  {
+   "command": "skills setup",
+   "flags": [
+    "--note"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 360
+  },
+  {
+   "command": "skills show",
+   "flags": [
+    "skill"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 331
+  },
+  {
+   "command": "skills validate",
+   "flags": [
+    "skill"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 339
+  },
+  {
+   "command": "skills validate",
+   "flags": [
+    "kind"
+   ],
+   "default": null,
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 340
+  },
+  {
+   "command": "skills validate",
+   "flags": [
+    "--payload"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 341
+  },
+  {
+   "command": "skills validate",
+   "flags": [
+    "--project-root"
+   ],
+   "default": "\"\"",
+   "type": null,
+   "action": null,
+   "choices": null,
+   "required": null,
+   "nargs": null,
+   "line": 343
+  }
+ ],
+ "config_keys": [
+  {
+   "key": "auth_password_file",
+   "type": "path",
+   "env": null
+  },
+  {
+   "key": "auth_password_hash",
+   "type": "string",
+   "env": null
+  },
+  {
+   "key": "auth_session_ttl",
+   "type": "int",
+   "env": null
+  },
+  {
+   "key": "auth_user",
+   "type": "string",
+   "env": null
+  },
+  {
+   "key": "blackbox_dir",
+   "type": "path (env)",
+   "env": "ARK_BLACKBOX_DIR"
+  },
+  {
+   "key": "detect_public_ip",
+   "type": "bool",
+   "env": null
+  },
+  {
+   "key": "expose",
+   "type": "bool",
+   "env": null
+  },
+  {
+   "key": "gpu_queue_db",
+   "type": "path (env)",
+   "env": "ARK_GPU_QUEUE_DB"
+  },
+  {
+   "key": "gpu_servers_config",
+   "type": "path (env)",
+   "env": "ARK_GPU_SERVERS_CONFIG"
+  },
+  {
+   "key": "host",
+   "type": "string",
+   "env": null
+  },
+  {
+   "key": "media_root",
+   "type": "list[path]",
+   "env": null
+  },
+  {
+   "key": "no_demo",
+   "type": "bool",
+   "env": null
+  },
+  {
+   "key": "org_db",
+   "type": "path (env)",
+   "env": "ARK_ORG_DB"
+  },
+  {
+   "key": "port",
+   "type": "int",
+   "env": null
+  },
+  {
+   "key": "private_dir",
+   "type": "path (env)",
+   "env": "ARK_PRIVATE_DIR"
+  },
+  {
+   "key": "public_ip",
+   "type": "string",
+   "env": null
+  },
+  {
+   "key": "public_url",
+   "type": "string",
+   "env": null
+  },
+  {
+   "key": "require_auth",
+   "type": "bool",
+   "env": null
+  },
+  {
+   "key": "root",
+   "type": "path",
+   "env": null
+  },
+  {
+   "key": "sessions_root",
+   "type": "path",
+   "env": null
+  },
+  {
+   "key": "trust_proxy",
+   "type": "bool",
+   "env": null
+  }
+ ],
+ "env_vars": {
+  "APPDATA": [
+   "arkstudio/providers.py"
+  ],
+  "ARK_AGENT_TOKEN": [
+   "arkstudio/chat.py",
+   "arkstudio/sessions.py"
+  ],
+  "ARK_ALLOWED_HOSTS": [
+   "arkstudio/server.py"
+  ],
+  "ARK_ASSET_VERSION": [
+   "arkstudio/server.py"
+  ],
+  "ARK_AUTH_PASSWORD": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_AUTH_PASSWORD_FILE": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_AUTH_PASSWORD_HASH": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_AUTH_SESSION_TTL": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_AUTH_SYNC": [
+   "arkstudio/server.py"
+  ],
+  "ARK_AUTH_USER": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_BLACKBOX": [
+   "arkstudio/server.py"
+  ],
+  "ARK_BLACKBOX_DIR": [
+   "arkstudio/server.py",
+   "arkstudio/server_config.py (config key blackbox_dir)"
+  ],
+  "ARK_BLACKBOX_INTERVAL": [
+   "arkstudio/server.py"
+  ],
+  "ARK_DEBUG": [
+   "arkstudio/server.py"
+  ],
+  "ARK_DETECT_PUBLIC_IP": [
+   "arkstudio/__main__.py",
+   "arkstudio/mobile.py"
+  ],
+  "ARK_DSH_COMMAND": [
+   "arkstudio/chat.py"
+  ],
+  "ARK_DSH_TIMEOUT": [
+   "arkstudio/chat.py"
+  ],
+  "ARK_GPU_JOB_ID": [
+   "vendor/gpu_server_probe/queue.py"
+  ],
+  "ARK_GPU_JOB_STATUS": [
+   "vendor/gpu_server_probe/queue.py"
+  ],
+  "ARK_GPU_QUEUE_DB": [
+   "arkstudio/server_config.py (config key gpu_queue_db)",
+   "vendor/gpu_server_probe/queue.py"
+  ],
+  "ARK_GPU_SERVERS_CONFIG": [
+   "arkstudio/server_config.py (config key gpu_servers_config)",
+   "vendor/gpu_server_probe/cli.py"
+  ],
+  "ARK_GPU_SSH": [
+   "vendor/gpu_server_probe/ssh.py"
+  ],
+  "ARK_HOST": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_LINUX_UID_MIN": [
+   "arkstudio/linux_account.py"
+  ],
+  "ARK_LOCAL_OPEN_ORIGINS": [
+   "arkstudio/desktop.py",
+   "arkstudio/server.py"
+  ],
+  "ARK_LOCAL_OPEN_ROOTS": [
+   "arkstudio/desktop.py",
+   "arkstudio/server.py"
+  ],
+  "ARK_ORG_DB": [
+   "arkstudio/org.py",
+   "arkstudio/server_config.py (config key org_db)"
+  ],
+  "ARK_PORT": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_PRIVATE_DIR": [
+   "arkstudio/server_config.py (config key private_dir)",
+   "vendor/gpu_server_probe/cli.py"
+  ],
+  "ARK_PROJECT": [
+   "arkstudio/session_watch.py"
+  ],
+  "ARK_PROJECT_ASSISTANT_KEY_ENVS": [
+   "arkstudio/settings.py"
+  ],
+  "ARK_PROJECT_PATH": [
+   "arkstudio/demo_agent.py"
+  ],
+  "ARK_PUBLIC": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_PUBLIC_IP": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_PUBLIC_URL": [
+   "arkstudio/__main__.py",
+   "arkstudio/server.py"
+  ],
+  "ARK_READ_TOKEN": [
+   "arkstudio/demo_agent.py"
+  ],
+  "ARK_REMOTE_URL": [
+   "arkstudio/__main__.py",
+   "arkstudio/desktop.py",
+   "arkstudio/launcher.py"
+  ],
+  "ARK_RG": [
+   "arkstudio/search.py"
+  ],
+  "ARK_ROOT": [
+   "arkstudio/__main__.py",
+   "arkstudio/launcher.py"
+  ],
+  "ARK_SEARCH_CACHE_MB": [
+   "arkstudio/search.py"
+  ],
+  "ARK_SESSION_LINE_KB": [
+   "arkstudio/session_context.py"
+  ],
+  "ARK_SESSION_MAX_MB": [
+   "arkstudio/session_context.py"
+  ],
+  "ARK_SESSION_PROJECT_MAX_MB": [
+   "arkstudio/session_context.py"
+  ],
+  "ARK_SSH_TARGET": [
+   "arkstudio/__main__.py",
+   "arkstudio/mobile.py"
+  ],
+  "ARK_SUDO_BINARY": [
+   "arkstudio/linux_account.py"
+  ],
+  "ARK_TASK_APPROVALS": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_APPROVAL_MODE": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_CUSTOM_APPROVALS": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_CUSTOM_COMMAND": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_CUSTOM_FOLLOWUP": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_CUSTOM_LABEL": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_FULL_ACCESS": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_PLAN_MODE": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_READ_ONLY": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_SHELL_COMMAND": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_WORKTREE": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TASK_WORKTREE_BRANCH": [
+   "arkstudio/sessions.py"
+  ],
+  "ARK_TRUST_PROXY": [
+   "arkstudio/__main__.py"
+  ],
+  "ARK_TUNNEL_PORT": [
+   "arkstudio/mobile.py"
+  ],
+  "ARK_URL": [
+   "arkstudio/session_watch.py"
+  ],
+  "CLAUDE_CONFIG_DIR": [
+   "arkstudio/session_watch.py"
+  ],
+  "CODEX_HOME": [
+   "arkstudio/providers.py",
+   "arkstudio/session_watch.py"
+  ],
+  "COMSPEC": [
+   "arkstudio/providers.py"
+  ],
+  "CUDA_VISIBLE_DEVICES": [
+   "vendor/gpu_server_probe/queue.py"
+  ],
+  "DISPLAY": [
+   "arkstudio/platform_support.py"
+  ],
+  "DSH_PERMISSION_MODE": [
+   "arkstudio/sessions.py"
+  ],
+  "INFOHUB_DB": [
+   "arkstudio/importer.py"
+  ],
+  "LOGNAME": [
+   "arkstudio/linux_account.py"
+  ],
+  "PATH": [
+   "arkstudio/providers.py",
+   "arkstudio/sessions.py"
+  ],
+  "SHELL": [
+   "arkstudio/workspace.py"
+  ],
+  "TENCENTHUB_API_KEY": [
+   "arkstudio/sessions.py"
+  ],
+  "USER": [
+   "arkstudio/linux_account.py"
+  ],
+  "WAYLAND_DISPLAY": [
+   "arkstudio/platform_support.py"
+  ],
+  "XDG_CONFIG_HOME": [
+   "arkstudio/providers.py"
+  ]
+ },
+ "root_files": {
+  "data / agent-sessions": [
+   "arkstudio/server_config.py"
+  ],
+  "data / blackbox": [
+   "arkstudio/server_config.py"
+  ],
+  "data / gpu-queue.sqlite3": [
+   "arkstudio/server_config.py"
+  ],
+  "data / org.sqlite3": [
+   "arkstudio/server_config.py"
+  ],
+  "data / private": [
+   "arkstudio/server_config.py"
+  ],
+  "data / private/gpu_servers.yaml": [
+   "arkstudio/server_config.py"
+  ],
+  "data / projects": [
+   "arkstudio/server_config.py"
+  ],
+  "folder / .auth-secret": [
+   "arkstudio/auth.py"
+  ],
+  "folder / .auth-sessions.json": [
+   "arkstudio/auth.py"
+  ],
+  "folder / README.md": [
+   "arkstudio/projects.py"
+  ],
+  "folder / ark.sqlite3.gz": [
+   "arkstudio/blackbox.py"
+  ],
+  "folder / bundle.zip": [
+   "arkstudio/__main__.py"
+  ],
+  "folder / config.json": [
+   "arkstudio/providers.py"
+  ],
+  "folder / manifest.json": [
+   "arkstudio/blackbox.py"
+  ],
+  "folder / meta.json": [
+   "arkstudio/sessions.py"
+  ],
+  "folder / opencode.json": [
+   "arkstudio/providers.py"
+  ],
+  "folder / opencode.jsonc": [
+   "arkstudio/providers.py"
+  ],
+  "folder / stderr.jsonl": [
+   "arkstudio/session_context.py"
+  ],
+  "folder / stdout.jsonl": [
+   "arkstudio/session_context.py",
+   "arkstudio/sessions.py"
+  ],
+  "folder / workspace": [
+   "arkstudio/sessions.py"
+  ],
+  "path / assets": [
+   "arkstudio/server.py"
+  ],
+  "path / project.json": [
+   "arkstudio/db.py",
+   "arkstudio/demo.py"
+  ],
+  "path / project.json.tmp": [
+   "arkstudio/db.py"
+  ],
+  "project.path / ark.sqlite3": [
+   "arkstudio/blackbox.py"
+  ],
+  "project.path / assets": [
+   "arkstudio/blackbox.py"
+  ],
+  "project.path / project.json": [
+   "arkstudio/blackbox.py"
+  ],
+  "root / data": [
+   "arkstudio/importer.py"
+  ],
+  "root / infohub.db": [
+   "arkstudio/importer.py"
+  ],
+  "root / vendor": [
+   "arkstudio/gpu_probe.py"
+  ],
+  "self.path / HEAD": [
+   "arkstudio/node_history.py"
+  ],
+  "self.path / ark.sqlite3": [
+   "arkstudio/store.py"
+  ],
+  "self.path / history.git": [
+   "arkstudio/store.py"
+  ],
+  "self.path / logs": [
+   "arkstudio/store.py"
+  ],
+  "self.path / project.json": [
+   "arkstudio/store.py"
+  ],
+  "self.root / .agent-token": [
+   "arkstudio/projects.py"
+  ],
+  "self.root / .archived": [
+   "arkstudio/sessions.py"
+  ],
+  "self.root / .blackbox": [
+   "arkstudio/server.py"
+  ],
+  "self.root / .client-cache-salt": [
+   "arkstudio/server.py"
+  ],
+  "self.root / .mobile-sessions.json": [
+   "arkstudio/server.py"
+  ],
+  "self.root.parent / agent-sessions": [
+   "arkstudio/server.py"
+  ],
+  "self.root.parent / blackbox": [
+   "arkstudio/server.py"
+  ],
+  "target / meta.json": [
+   "arkstudio/session_context.py"
+  ],
+  "target / meta.json.tmp": [
+   "arkstudio/session_context.py"
+  ],
+  "target / project.json": [
+   "arkstudio/demo.py"
+  ]
+ }
+}

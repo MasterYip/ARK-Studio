@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Learning-rate sweep</title>
+<style>
+  :root { --surface:#F7F5EF; --panel:#ECE8DE; --ink:#111827; --ink2:#4B5563;
+          --a:#1F5A7A; --b:#C2683F; --grid:#E2DED3; }
+  @media (prefers-color-scheme: dark) {
+    :root { --surface:#14181F; --panel:#1F2530; --ink:#E5E7EB; --ink2:#9CA3AF;
+            --a:#5B9BC4; --b:#D98157; --grid:#2A3140; }
+  }
+  body { margin:0; padding:16px; background:var(--surface); color:var(--ink);
+         font:14px/1.45 Inter, "Segoe UI", Arial, sans-serif; }
+  h1 { font-size:17px; margin:0 0 2px; }
+  p { margin:0 0 10px; color:var(--ink2); font-size:13px; }
+  .row { display:flex; gap:8px; margin:0 0 8px; }
+  button { font:inherit; font-size:12px; padding:4px 10px; border-radius:6px; cursor:pointer;
+           border:1px solid var(--ink2); background:transparent; color:var(--ink); }
+  button[aria-pressed="true"] { background:var(--ink); color:var(--surface); }
+  #tip { position:fixed; pointer-events:none; background:var(--ink); color:var(--surface);
+         padding:4px 8px; border-radius:6px; font-size:12px; display:none; }
+  svg text { fill:var(--ink2); font-size:11px; }
+  table { border-collapse:collapse; font-size:12px; margin-top:8px; }
+  td, th { padding:2px 10px; border-bottom:1px solid var(--grid); text-align:right; }
+</style>
+</head>
+<body>
+<h1>Learning-rate sweep (X-0002)</h1>
+<p>Final loss and loss spikes per run for six peak learning rates, mean of 3 seeds.
+Fictional tutorial data. Hover a bar for the exact value.</p>
+<div class="row" role="group" aria-label="Metric">
+  <button type="button" data-metric="loss" aria-pressed="true">Final loss</button>
+  <button type="button" data-metric="spikes" aria-pressed="false">Spikes per run</button>
+</div>
+<div id="chart"></div>
+<div id="tip"></div>
+<table id="table" aria-label="Data table"></table>
+<script>
+(() => {
+  const rows = [["1e-4", 2.31, 0.0], ["3e-4", 2.11, 0.3], ["6e-4", 2.05, 0.7], ["1e-3", 2.09, 1.7], ["2e-3", 2.38, 4.0], ["4e-3", 3.02, 7.3]];
+  const chart = document.getElementById("chart");
+  const tip = document.getElementById("tip");
+  const W = 560, H = 260, L = 48, R = 12, T = 14, B = 34;
+  function draw(metric) {
+    const key = metric === "loss" ? 1 : 2;
+    const max = metric === "loss" ? 3.5 : 8;
+    const step = (W - L - R) / rows.length;
+    let out = "";
+    for (let g = 0; g <= 4; g += 1) {
+      const v = max * g / 4, y = H - B - (H - T - B) * g / 4;
+      out += `<line x1="${L}" x2="${W - R}" y1="${y}" y2="${y}" stroke="var(--grid)"/>`;
+      out += `<text x="${L - 6}" y="${y + 4}" text-anchor="end">${v.toFixed(metric === "loss" ? 1 : 0)}</text>`;
+    }
+    rows.forEach((r, i) => {
+      const h = (H - T - B) * r[key] / max, x = L + i * step + step * 0.2;
+      const best = metric === "loss" ? r[1] === Math.min(...rows.map((q) => q[1])) : false;
+      out += `<rect data-i="${i}" x="${x}" y="${H - B - h}" width="${step * 0.6}" height="${Math.max(h, 1)}"
+        rx="4" fill="${key === 1 ? "var(--a)" : "var(--b)"}" opacity="${best ? 1 : 0.78}"/>`;
+      out += `<text x="${x + step * 0.3}" y="${H - B + 16}" text-anchor="middle">${r[0]}</text>`;
+    });
+    out += `<text x="${(W + L) / 2}" y="${H - 2}" text-anchor="middle">peak learning rate</text>`;
+    chart.innerHTML = `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img"
+      aria-label="Bar chart of ${metric === "loss" ? "final loss" : "spikes per run"} by learning rate">${out}</svg>`;
+    chart.querySelectorAll("rect").forEach((el) => {
+      el.addEventListener("mousemove", (ev) => {
+        const r = rows[Number(el.dataset.i)];
+        tip.textContent = `lr ${r[0]} · ${metric === "loss" ? "final loss " + r[1].toFixed(2) : r[2].toFixed(1) + " spikes/run"}`;
+        tip.style.display = "block";
+        tip.style.left = `${ev.clientX + 12}px`;
+        tip.style.top = `${ev.clientY + 12}px`;
+      });
+      el.addEventListener("mouseleave", () => { tip.style.display = "none"; });
+    });
+  }
+  document.querySelectorAll("button[data-metric]").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll("button[data-metric]").forEach((b) =>
+        b.setAttribute("aria-pressed", String(b === button)));
+      draw(button.dataset.metric);
+    });
+  });
+  document.getElementById("table").innerHTML = "<tr><th>lr</th><th>final loss</th><th>spikes/run</th></tr>" +
+    rows.map((r) => `<tr><td>${r[0]}</td><td>${r[1].toFixed(2)}</td><td>${r[2].toFixed(1)}</td></tr>`).join("");
+  draw("loss");
+})();
+</script>
+</body>
+</html>

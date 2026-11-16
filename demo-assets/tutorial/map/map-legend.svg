@@ -1,0 +1,93 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="554" viewBox="0 0 1200 554" role="img" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Map legend: unit types and colours</title>
+<desc>Every unit type with its colour and ID prefix, as drawn on the Map.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6B7280"/></marker><marker id="arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1F5A7A"/></marker></defs>
+<rect width="1200" height="554" fill="#F7F5EF"/>
+<text x="32" y="44" font-size="24" fill="#111827" font-weight="700" text-anchor="start">Map legend</text>
+<text x="32" y="70" font-size="14" fill="#4B5563" font-weight="400" text-anchor="start">Node colour = type. The ID prefix tells you the type in text, too.</text>
+<rect x="32" y="110" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="56" cy="131" r="10" fill="#f59e0b" stroke="#111827" stroke-width="0.5"/>
+<text x="76" y="136" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Idea</text>
+<text x="286" y="136" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">I-0001</text>
+<rect x="320" y="110" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="344" cy="131" r="10" fill="#38bdf8" stroke="#111827" stroke-width="0.5"/>
+<text x="364" y="136" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Question</text>
+<text x="574" y="136" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">Q-0001</text>
+<rect x="608" y="110" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="632" cy="131" r="10" fill="#a78bfa" stroke="#111827" stroke-width="0.5"/>
+<text x="652" y="136" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Claim</text>
+<text x="862" y="136" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">C-0001</text>
+<rect x="896" y="110" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="920" cy="131" r="10" fill="#34d399" stroke="#111827" stroke-width="0.5"/>
+<text x="940" y="136" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Evidence</text>
+<text x="1150" y="136" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">E-0001</text>
+<rect x="32" y="164" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="56" cy="185" r="10" fill="#fb7185" stroke="#111827" stroke-width="0.5"/>
+<text x="76" y="190" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Story</text>
+<text x="286" y="190" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">S-0001</text>
+<rect x="320" y="164" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="344" cy="185" r="10" fill="#2dd4bf" stroke="#111827" stroke-width="0.5"/>
+<text x="364" y="190" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Related work</text>
+<text x="574" y="190" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">RW-0001</text>
+<rect x="608" y="164" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="632" cy="185" r="10" fill="#6366f1" stroke="#111827" stroke-width="0.5"/>
+<text x="652" y="190" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Topic</text>
+<text x="862" y="190" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">TP-0001</text>
+<rect x="896" y="164" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="920" cy="185" r="10" fill="#fb923c" stroke="#111827" stroke-width="0.5"/>
+<text x="940" y="190" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Method</text>
+<text x="1150" y="190" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">M-0001</text>
+<rect x="32" y="218" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="56" cy="239" r="10" fill="#c084fc" stroke="#111827" stroke-width="0.5"/>
+<text x="76" y="244" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Experiment</text>
+<text x="286" y="244" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">X-0001</text>
+<rect x="320" y="218" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="344" cy="239" r="10" fill="#94a3b8" stroke="#111827" stroke-width="0.5"/>
+<text x="364" y="244" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Run</text>
+<text x="574" y="244" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">RUN-0001</text>
+<rect x="608" y="218" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="632" cy="239" r="10" fill="#60a5fa" stroke="#111827" stroke-width="0.5"/>
+<text x="652" y="244" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Task</text>
+<text x="862" y="244" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">T-0001</text>
+<rect x="896" y="218" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="920" cy="239" r="10" fill="#818cf8" stroke="#111827" stroke-width="0.5"/>
+<text x="940" y="244" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Milestone</text>
+<text x="1150" y="244" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">MS-0001</text>
+<rect x="32" y="272" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="56" cy="293" r="10" fill="#22d3ee" stroke="#111827" stroke-width="0.5"/>
+<text x="76" y="298" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Artifact</text>
+<text x="286" y="298" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">F-0001</text>
+<rect x="320" y="272" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="344" cy="293" r="10" fill="#4ade80" stroke="#111827" stroke-width="0.5"/>
+<text x="364" y="298" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Resource</text>
+<text x="574" y="298" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">R-0001</text>
+<rect x="608" y="272" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="632" cy="293" r="10" fill="#facc15" stroke="#111827" stroke-width="0.5"/>
+<text x="652" y="298" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Agent</text>
+<text x="862" y="298" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">A-0001</text>
+<rect x="896" y="272" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="920" cy="293" r="10" fill="#a3a3a3" stroke="#111827" stroke-width="0.5"/>
+<text x="940" y="298" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Host</text>
+<text x="1150" y="298" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">H-0001</text>
+<rect x="32" y="326" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="56" cy="347" r="10" fill="#e879f9" stroke="#111827" stroke-width="0.5"/>
+<text x="76" y="352" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Production</text>
+<text x="286" y="352" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">P-0001</text>
+<rect x="320" y="326" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="344" cy="347" r="10" fill="#f87171" stroke="#111827" stroke-width="0.5"/>
+<text x="364" y="352" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Outreach</text>
+<text x="574" y="352" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">O-0001</text>
+<rect x="608" y="326" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="632" cy="347" r="10" fill="#fcd34d" stroke="#111827" stroke-width="0.5"/>
+<text x="652" y="352" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Decision</text>
+<text x="862" y="352" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">D-0001</text>
+<rect x="896" y="326" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="920" cy="347" r="10" fill="#7dd3fc" stroke="#111827" stroke-width="0.5"/>
+<text x="940" y="352" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Source</text>
+<text x="1150" y="352" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">SRC-0001</text>
+<rect x="32" y="380" width="270" height="42" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<circle cx="56" cy="401" r="10" fill="#cbd5e1" stroke="#111827" stroke-width="0.5"/>
+<text x="76" y="406" font-size="14" fill="#111827" font-weight="600" text-anchor="start">Note</text>
+<text x="286" y="406" font-size="12" fill="#4B5563" font-weight="400" text-anchor="end" font-family="'JetBrains Mono', Consolas, monospace">N-0001</text>
+<text x="32" y="464" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Status shows as the ring: open · active · review · blocked · done. Importance p0–p3 sets the size.</text>
+</svg>

@@ -1,0 +1,137 @@
+{
+  "meta": {
+    "name": "academic-clean",
+    "version": 1,
+    "description": "Restrained, warm, publication-first technical clarity for ARK artifacts.",
+    "intent": [
+      "put the scientific content and its relationships first",
+      "keep the same semantic grammar across paper, web and video",
+      "prefer precise, legible, editable vector output"
+    ],
+    "avoid": [
+      "decorative gradients",
+      "low-contrast gray text",
+      "appearance-named tokens such as blue_box"
+    ]
+  },
+  "color": {
+    "roles": {
+      "surface": {"value": "#F7F5EF", "opacity": 1.0, "usage": "page and figure background"},
+      "surface_alt": {"value": "#ECE8DE", "opacity": 1.0, "usage": "panels, context bands and quiet regions"},
+      "text_primary": {"value": "#111827", "opacity": 1.0, "usage": "headings, axes and body text"},
+      "text_secondary": {"value": "#4B5563", "opacity": 1.0, "usage": "captions, secondary labels and metadata"},
+      "data_primary": {"value": "#1F5A7A", "opacity": 1.0, "usage": "the primary scientific entity"},
+      "data_secondary": {"value": "#C2683F", "opacity": 1.0, "usage": "the comparison or baseline entity"},
+      "baseline": {"value": "#6B7280", "opacity": 1.0, "usage": "reference lines, axes and neutral structure"},
+      "uncertainty": {"value": "#8C99A6", "opacity": 0.55, "usage": "bands, intervals and uncertainty fills"},
+      "success": {"value": "#2F7D5B", "opacity": 1.0, "usage": "validated or successful state"},
+      "warning": {"value": "#B7791F", "opacity": 1.0, "usage": "caution and degraded state"},
+      "failure": {"value": "#B23A48", "opacity": 1.0, "usage": "failure or contradiction"},
+      "focus": {"value": "#2B6CB0", "opacity": 1.0, "usage": "keyboard focus and interactive selection"}
+    },
+    "categorical": ["#1F5A7A", "#C2683F", "#2F7D5B", "#7C5C9E", "#B7791F", "#5F6B73"],
+    "sequential": ["#E6EEF2", "#B7CDD9", "#7FA8BC", "#4A7F9B", "#1F5A7A"],
+    "diverging": ["#B23A48", "#D9A3A2", "#F7F5EF", "#8FB8C7", "#1F5A7A"],
+    "opacity": {
+      "invisible": 0.0,
+      "ghost": 0.12,
+      "subtle": 0.24,
+      "muted": 0.4,
+      "supporting": 0.62,
+      "solid": 1.0
+    }
+  },
+  "typography": {
+    "sans": {"family": ["Inter", "Segoe UI", "Helvetica Neue", "sans-serif"], "weight": 400, "style": "normal", "letter_spacing_em": 0},
+    "serif": {"family": ["Source Serif 4", "Georgia", "serif"], "weight": 400, "style": "normal", "letter_spacing_em": 0},
+    "mono": {"family": ["JetBrains Mono", "Consolas", "monospace"], "weight": 400, "style": "normal", "letter_spacing_em": 0},
+    "math": "STIX Two Math",
+    "roles_pt": {"body": 9.0, "caption": 7.5, "label": 8.0, "title": 12.0, "axis": 8.0},
+    "line_height": {"body": 1.45, "caption": 1.35, "title": 1.2},
+    "casing": {"title": "title", "label": "none", "axis": "none"}
+  },
+  "shape": {
+    "strokes": {
+      "hairline": {"color": "baseline", "width_pt": 0.5, "style": "solid", "cap": "round", "join": "round"},
+      "standard": {"color": "text_primary", "width_pt": 0.8, "style": "solid", "cap": "round", "join": "round"},
+      "emphasis": {"color": "data_primary", "width_pt": 1.4, "style": "solid", "cap": "round", "join": "round"},
+      "uncertain": {"color": "uncertainty", "width_pt": 0.7, "style": "dashed", "cap": "round", "join": "round"}
+    },
+    "shadows": {
+      "quiet": {"color": "baseline", "opacity": 0.12, "blur": 8, "offset_x": 0, "offset_y": 2}
+    },
+    "vocabulary": {
+      "panel": {"geometry": "rounded_rectangle", "fill": "surface_alt", "fill_opacity": 1.0, "stroke": {"color": "baseline", "width_pt": 0.5, "style": "solid", "cap": "round", "join": "round"}, "radius": 6, "padding": [8, 10, 8, 10], "shadow": "quiet", "emphasis": "normal"},
+      "focal": {"geometry": "rounded_rectangle", "fill": "data_primary", "fill_opacity": 0.12, "stroke": {"color": "data_primary", "width_pt": 1.4, "style": "solid", "cap": "round", "join": "round"}, "radius": 4, "padding": [6, 8, 6, 8], "shadow": "none", "emphasis": "strong"},
+      "node": {"geometry": "circle", "fill": "data_primary", "fill_opacity": 1.0, "stroke": {"color": "text_primary", "width_pt": 0.5, "style": "solid", "cap": "round", "join": "round"}, "radius": 0, "padding": [2, 2, 2, 2], "shadow": "none", "emphasis": "quiet"}
+    },
+    "arrowheads": {
+      "standard": {"length": 6, "width": 4, "style": "open"},
+      "dependency": {"length": 7, "width": 5, "style": "filled"}
+    },
+    "icon": {"stroke_pt": 1.2, "size": 16, "join": "round"}
+  },
+  "spacing": {
+    "base": 4.0,
+    "scale": [2, 4, 8, 12, 16, 24, 32],
+    "density": "balanced"
+  },
+  "layout": {
+    "figure_width_in": {"single": 3.4, "double": 7.0, "full": 7.2},
+    "aspect_ratios": {"golden": 1.618, "square": 1.0, "wide": 1.778},
+    "grid_columns": 12,
+    "gutter": 8.0,
+    "outer_margin": 12.0,
+    "alignment": "optical",
+    "reading_order": "left_to_right"
+  },
+  "chart": {
+    "axes": {"spine_width_pt": 0.6, "tick_length_pt": 3.0, "label_size_pt": 8.0, "grid": false},
+    "lines": {"width_pt": 1.2, "dash_uncertainty": "3 2", "marker_size_pt": 3.5},
+    "markers": {"shape": "circle", "edge_width_pt": 0.6},
+    "grid": {"enabled": false, "color": "baseline", "width_pt": 0.3, "opacity": 0.25},
+    "legend": {"location": "outside_right", "frame": false, "font_size_pt": 7.5},
+    "uncertainty": {"band_opacity": 0.22, "error_bar_cap_pt": 2.0, "show_n": true},
+    "rules": [
+      "show uncertainty for every aggregate",
+      "state units and sample size",
+      "use shape or line style as well as hue",
+      "keep data processing separate from styling"
+    ]
+  },
+  "web": {
+    "content_width_px": 1080,
+    "breakpoints_px": {"sm": 640, "md": 900, "lg": 1200},
+    "radius_scale_px": {"sm": 4, "md": 8, "lg": 12},
+    "focus_ring": {"width_px": 2, "offset_px": 2, "color": "focus"},
+    "transitions_ms": {"fast": 120, "normal": 200, "slow": 320}
+  },
+  "motion": {
+    "principles": ["explain change, never decorate", "respect reduced motion"],
+    "curves": {
+      "enter": {"duration_ms": 200, "easing": "cubic-bezier(0.2, 0, 0, 1)", "distance_px": 6, "opacity_from": 0},
+      "exit": {"duration_ms": 120, "easing": "cubic-bezier(0.4, 0, 1, 1)", "distance_px": 0, "opacity_from": 1}
+    },
+    "reduced_motion": "crossfade"
+  },
+  "video": {
+    "width": 1920,
+    "height": 1080,
+    "fps": 30,
+    "safe_area_percent": 5,
+    "title_duration_s": 2.0,
+    "transition": "crossfade",
+    "caption": {"size_pt": 28, "max_lines": 2, "background_opacity": 0.62}
+  },
+  "variants": {
+    "web": {
+      "color": {
+        "roles": {
+          "surface": {"value": "#FBFAF7", "opacity": 1.0, "usage": "page background"},
+          "text_secondary": {"value": "#525B66", "opacity": 1.0, "usage": "captions and metadata"}
+        }
+      },
+      "spacing": {"density": "open"}
+    }
+  }
+}

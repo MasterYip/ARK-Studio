@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">ARK Studio Web</string>
+    <string name="app_eyebrow">MOBILE CONSOLE</string>
+
+    <string name="servers_heading">Servers</string>
+    <string name="servers_subtitle">Choose a saved ARK server. Your last connection stays selected on this phone.</string>
+    <string name="servers_count">%1$d SAVED</string>
+    <string name="no_servers_title">No servers saved yet</string>
+    <string name="no_servers_body">Scan the pairing QR from ARK on your computer, or add a server URL manually. Everything stays on this phone.</string>
+    <string name="empty_hint">Use the buttons below to get started</string>
+
+    <string name="add_scan_qr">Add via Scan QR</string>
+    <string name="add_manual">Add server manually</string>
+    <string name="pairing_tip">Desktop tip: Settings \u2192 Mobile \u2192 Generate pairing QR</string>
+
+    <string name="connect">Connect</string>
+    <string name="retry">Retry</string>
+    <string name="delete">Delete</string>
+    <string name="server_active">ACTIVE</string>
+    <string name="server_unreachable">UNREACHABLE</string>
+    <string name="server_last_used">LAST USED</string>
+    <string name="server_new">NEW</string>
+    <string name="last_used">Last used %1$s</string>
+    <string name="last_attempt">Last attempt %1$s</string>
+    <string name="never_connected">Not connected yet</string>
+
+    <string name="add_server_title">Add a server</string>
+    <string name="name_optional">Name (optional)</string>
+    <string name="name_hint">Living room laptop</string>
+    <string name="server_url_label">Server URL</string>
+    <string name="url_hint">http://192.168.1.20:8891</string>
+    <string name="manual_hint">Use the ARK URL from your computer. Pairing links with a #pair= fragment are supported and stored without the one-time token.</string>
+    <string name="save_connect">Add &amp; connect</string>
+    <string name="cancel">Cancel</string>
+    <string name="invalid_url">Enter a full http(s) URL, for example http://192.168.1.20:8891/</string>
+    <string name="server_added">Server added</string>
+    <string name="server_updated">Server updated</string>
+
+    <string name="delete_server_title">Delete server?</string>
+    <string name="delete_server_message">Remove \u201c%1$s\u201d from this phone? The ARK server itself is not changed.</string>
+    <string name="server_deleted">Server removed</string>
+
+    <string name="scan_prompt">Scan the ARK pairing QR</string>
+    <string name="scan_invalid">That QR code does not contain an ARK server URL.</string>
+
+    <string name="reload">Reload</string>
+    <string name="swipe_back_again">Swipe back again to return to servers</string>
+    <string name="change_server">Servers</string>
+    <string name="choose_file">Choose a file</string>
+    <string name="file_chooser_failed">No file picker is available.</string>
+    <string name="file_link">This file link points to the ARK server\'s filesystem. Use the Files tab to download it.</string>
+    <string name="link_failed">No app can open that link.</string>
+
+    <string name="download_started">Download started</string>
+    <string name="download_failed">Could not download: %1$s</string>
+    <string name="download_permission">Allow storage access to save this download.</string>
+
+    <string name="error_title">Can\'t reach this server</string>
+    <string name="error_note">Nothing was removed. This server is still in your list, so you can retry when it is back online.</string>
+    <string name="server_list">Server list</string>
+    <string name="error_server">%1$s\n%2$s</string>
+    <string name="error_host_lookup">Host not found</string>
+    <string name="error_connection_refused">Connection refused</string>
+    <string name="error_timeout">Connection timed out</string>
+    <string name="error_io">Connection failed</string>
+    <string name="error_ssl">Secure connection failed</string>
+    <string name="error_ssl_detail">The server certificate could not be verified.</string>
+    <string name="error_bad_url">Invalid server URL</string>
+    <string name="error_unsupported_scheme">Unsupported URL scheme</string>
+    <string name="error_generic">Could not load the server</string>
+
+    <string name="time_just_now">just now</string>
+    <string name="time_minutes">%1$dm ago</string>
+    <string name="time_hours">%1$dh ago</string>
+    <string name="time_days">%1$dd ago</string>
+</resources>

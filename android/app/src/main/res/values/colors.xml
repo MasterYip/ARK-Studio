@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="ark_blue">#2563EB</color>
+    <color name="ark_blue_dark">#1D4ED8</color>
+    <color name="ark_bg">#F8FAFC</color>
+    <color name="ark_card">#FFFFFF</color>
+    <color name="ark_text">#0F172A</color>
+    <color name="ark_muted">#64748B</color>
+    <color name="ark_faint">#94A3B8</color>
+    <color name="ark_border">#E2E8F0</color>
+    <color name="ark_accent">#2563EB</color>
+    <color name="ark_accent_soft">#EFF6FF</color>
+    <color name="ark_on_accent">#FFFFFF</color>
+    <color name="ark_danger">#DC2626</color>
+    <color name="ark_danger_soft">#FEF2F2</color>
+    <color name="ark_ok">#16A34A</color>
+    <color name="ark_ok_soft">#F0FDF4</color>
+    <color name="ark_warn">#D97706</color>
+    <color name="ark_warn_soft">#FFFBEB</color>
+    <color name="ark_code_bg">#F1F5F9</color>
+    <color name="ark_track">#E2E8F0</color>
+    <color name="ark_bar">#F1F5F9</color>
+</resources>

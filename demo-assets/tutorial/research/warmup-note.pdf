@@ -1,0 +1,73 @@
+%PDF-1.4
+%‚„œ”
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Contents 4 0 R /Resources << /Font << /F1 5 0 R /F2 6 0 R >> >> >>
+endobj
+4 0 obj
+<< /Length 2544 >>
+stream
+BT /F2 16 Tf 56 790 Td (Does learning-rate warm-up remove early loss spikes?) Tj ET
+BT /F1 9 Tf 56 772 Td (ARK Studio tutorial note  -  fictional data, for demonstration only) Tj ET
+BT /F2 12 Tf 56 744 Td (Question) Tj ET
+BT /F1 10 Tf 56 728 Td (Small transformers \(about 60M parameters\) sometimes show sharp loss spikes) Tj ET
+BT /F1 10 Tf 56 714 Td (early in training. Does a 500-step linear warm-up remove them without) Tj ET
+BT /F1 10 Tf 56 700 Td (hurting the final loss?) Tj ET
+BT /F2 12 Tf 56 676 Td (Setup) Tj ET
+BT /F1 10 Tf 56 660 Td (60M decoder, AdamW, peak learning rate 6e-4, cosine decay. Two arms:) Tj ET
+BT /F1 10 Tf 56 646 Td (no warm-up vs 500-step warm-up. 3 seeds per arm, 5,000 steps each.) Tj ET
+BT /F1 10 Tf 56 632 Td (Spike: loss above 1.5x its 50-step running mean.) Tj ET
+BT /F2 12 Tf 56 608 Td (Result) Tj ET
+BT /F1 10 Tf 56 592 Td (Warm-up: final loss 2.08, 0.0 spikes per run.) Tj ET
+BT /F1 10 Tf 56 578 Td (No warm-up: final loss 2.14, 3.0 spikes per run \(steps 750, 1500, 2250\).) Tj ET
+BT /F1 10 Tf 56 564 Td (Warm-up removed every early spike in all seeds \(Figure 1\).) Tj ET
+0.420 0.447 0.502 RG 0.6 w 80 330 m 520 330 l S
+80 330 m 80 520 l S
+0.761 0.408 0.247 RG 1.6 w 80.0 502.0 m 102.0 451.4 l 124.0 416.1 l 146.0 428.0 l 168.0 374.0 l 190.0 361.9 l 212.0 377.9 l 234.0 347.5 l 256.0 343.4 l 278.0 356.7 l 300.0 338.4 l 322.0 337.0 l 344.0 336.0 l 366.0 335.3 l 388.0 334.8 l 410.0 334.5 l 432.0 334.2 l 454.0 334.1 l 476.0 334.0 l 498.0 333.9 l 520.0 333.8 l S
+0.122 0.353 0.478 RG 1.6 w 80.0 500.3 m 102.0 453.1 l 124.0 419.2 l 146.0 394.8 l 168.0 377.2 l 190.0 364.5 l 212.0 355.4 l 234.0 348.9 l 256.0 344.1 l 278.0 340.7 l 300.0 338.3 l 322.0 336.5 l 344.0 335.3 l 366.0 334.4 l 388.0 333.7 l 410.0 333.3 l 432.0 332.9 l 454.0 332.7 l 476.0 332.5 l 498.0 332.4 l 520.0 332.3 l S
+0 0 0 rg
+BT /F1 8 Tf 80 316 Td (0) Tj ET
+BT /F1 8 Tf 500 316 Td (5,000 steps) Tj ET
+BT /F1 8 Tf 62 516 Td (9) Tj ET
+BT /F1 8 Tf 62 330 Td (2) Tj ET
+0.122 0.353 0.478 rg
+BT /F2 9 Tf 400 390 Td (500-step warm-up) Tj ET
+0.761 0.408 0.247 rg
+BT /F2 9 Tf 400 404 Td (no warm-up) Tj ET
+0 0 0 rg
+BT /F1 9 Tf 56 296 Td (Figure 1. Mean training loss over 5,000 steps, 3 seeds per arm.) Tj ET
+BT /F2 12 Tf 56 266 Td (Limits) Tj ET
+BT /F1 10 Tf 56 250 Td (Three seeds and one model size. The claim 'warm-up keeps the final) Tj ET
+BT /F1 10 Tf 56 236 Td (loss' stays open until the learning-rate sweep \(X-0002\) finishes.) Tj ET
+BT /F1 9 Tf 56 204 Td (References: Goyal et al. 2017; Liu et al. 2020 \(see references.bib\).) Tj ET
+endstream
+endobj
+5 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>
+endobj
+6 0 obj
+<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>
+endobj
+7 0 obj
+<< /Title (Warm-up tutorial note) /Producer (ARK Studio build_demo_assets.py) >>
+endobj
+xref
+0 8
+0000000000 65535 f 
+0000000015 00000 n 
+0000000064 00000 n 
+0000000121 00000 n 
+0000000257 00000 n 
+0000002853 00000 n 
+0000002923 00000 n 
+0000002998 00000 n 
+trailer
+<< /Size 8 /Root 1 0 R /Info 7 0 R >>
+startxref
+3094
+%%EOF

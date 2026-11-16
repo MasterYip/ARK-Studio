@@ -1,0 +1,42 @@
+/* Shared first-paint surface, independent of workbench styles and fonts. */
+html { font-size:calc(16px * var(--font-scale,1)); }
+html[data-contrast="high"] { --entry-mute:#454d5c; --entry-sub:#454d5c; --entry-line:#737d8d; }
+html[data-theme="dark"][data-contrast="high"] { --entry-mute:#c5cfde; --entry-sub:#c5cfde; --entry-line:#8492a5; }
+:root { --entry-bg:#f5f6f8; --entry-ink:#1a2231; --entry-sub:#5b6474; --entry-mute:#657083; --entry-line:#e1e5eb; --entry-surface:#fff; --entry-accent:#2563eb; --entry-grid:rgba(30,41,59,.055); }
+html[data-theme="dark"] { --entry-bg:#0f141c; --entry-ink:#e8eef6; --entry-sub:#93a2b6; --entry-mute:#a1a8b4; --entry-line:#273243; --entry-surface:#1d2532; --entry-accent:#3b82f6; --entry-grid:rgba(147,162,182,.08); }
+.entry-graph, #ark-startup { position:fixed; inset:0; }
+.entry-graph { overflow:hidden; pointer-events:none; background:var(--entry-bg); }
+.entry-graph::before { content:""; position:absolute; inset:0; background-image:linear-gradient(var(--entry-grid) 1px,transparent 1px),linear-gradient(90deg,var(--entry-grid) 1px,transparent 1px); background-size:36px 36px; }
+.entry-graph canvas { display:block; position:absolute; width:100%; height:100%; }
+#ark-startup { z-index:10000; color:var(--entry-ink); background:var(--entry-bg); font:0.875rem/1.5 system-ui,"Segoe UI","Microsoft YaHei",sans-serif; letter-spacing:0; isolation:isolate; }
+.ark-lockup { display:block; max-width:100%; height:auto; }
+.ark-lockup-dark { display:none; }
+html[data-theme="dark"] .ark-lockup-light { display:none; }
+html[data-theme="dark"] .ark-lockup-dark { display:block; }
+.entry-brand { position:fixed; top:32px; left:40px; width:227.1584px; max-width:calc(100% - 128px); z-index:1; }
+.entry-brand img { width:100%; aspect-ratio:227.1584/49; }
+.entry-themes { position:fixed; z-index:2; top:32px; right:40px; }
+.entry-themes button { display:grid; place-items:center; padding:0; width:38px; height:38px; border:1px solid var(--entry-line); border-radius:6px; color:var(--entry-mute); background:var(--entry-surface); cursor:pointer; }
+.entry-themes button:hover { color:var(--entry-accent); background:var(--entry-bg); }
+.entry-themes button:focus-visible { outline:2px solid var(--entry-accent); outline-offset:3px; }
+.entry-themes svg { width:18px; height:18px; }
+/* Match the native controls' center line, with an 8 px gap on their left. */
+body:has(#ark-desktop-controls) .entry-themes { top:var(--ark-desktop-controls-top,9px); right:104px; height:32px; display:grid; align-items:center; }
+body:has(#ark-desktop-controls) .entry-themes button { width:28px; height:28px; }
+body:has(#ark-desktop-controls) .entry-brand { max-width:calc(100% - 188px); }
+.entry-progress { position:absolute; z-index:1; left:40px; bottom:40px; width:min(320px,calc(100% - 80px)); }
+.entry-progress h1 { color:var(--entry-ink); margin:0 0 10px; font:600 1.125rem/1.4 system-ui,sans-serif; letter-spacing:0; }
+.entry-stage { display:block; color:var(--entry-mute); min-height:22px; }
+.entry-track { height:3px; background:var(--entry-line); margin-top:14px; overflow:hidden; }
+.entry-track i { display:block; height:100%; width:8%; background:var(--entry-accent); transition:width .25s; }
+.entry-retry { display:none; margin-top:14px; border:1px solid var(--entry-line); border-radius:5px; padding:8px 16px; background:var(--entry-surface); color:var(--entry-ink); font:inherit; cursor:pointer; }
+#ark-startup.has-error .entry-retry,#ark-startup.is-slow .entry-retry { display:inline-block; }
+.entry-slow-note { display:none; font-size:0.75rem; color:var(--entry-mute); margin-top:6px; }
+#ark-startup.is-slow:not(.has-error) .entry-slow-note { display:block; }
+#ark-startup.has-error .entry-stage { color:#ca414b; overflow-wrap:anywhere; max-height:30vh; overflow-y:auto; }
+@media (max-width:600px) {
+  .entry-brand { top:24px; left:24px; }
+  .entry-themes { top:22px; right:24px; }
+  .entry-progress { left:24px; bottom:max(28px,env(safe-area-inset-bottom)); width:calc(100% - 48px); }
+}
+@media (prefers-reduced-motion:reduce) { .entry-track i { transition:none; } }

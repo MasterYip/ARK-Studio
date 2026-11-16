@@ -1,0 +1,7 @@
+{"at": "2026-11-14T11:55:00+00:00", "event": "location", "host": "alice-pc"}
+
+garbage
+[1, 2]
+﻿{"host": "bob-box", "at": "2026-11-14T11:59:00"}
+{"host": "alice-old", "at": "2026-11-01T00:00:00Z"}
+{"host": "nas01", "at": 1794700000.5}

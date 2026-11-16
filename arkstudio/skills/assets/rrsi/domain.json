@@ -1,0 +1,19 @@
+{
+  "name": "ark-coding",
+  "harness_path": "arkstudio/skills",
+  "evolve": ["T-0001", "T-0002", "T-0003"],
+  "heldout": ["T-0004", "T-0005"],
+  "smoke": ["T-0001"],
+  "metric": "accepted task rate",
+  "guards": [
+    "unit tests must pass",
+    "no new runtime dependency",
+    "no task-specific IDs or hidden-test references"
+  ],
+  "component_signals": {
+    "skill": ["arkstudio/skills/", "SKILL\\.md"],
+    "client_tool": ["ToolRegistry", "register_tool"],
+    "memory": ["\\.remember\\(", "\\.recall\\("],
+    "subagent": ["sub_agent", "subagent"]
+  }
+}

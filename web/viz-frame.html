@@ -1,0 +1,67 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ARK visualisation sandbox</title><!-- i18n-ignore: hidden iframe title -->
+<!--
+  Host document for embedded HTML visualisations.  ARK loads it in
+  <iframe sandbox="allow-scripts"> (no allow-same-origin) and the server adds
+  a "sandbox allow-scripts" CSP with connect-src 'none', so the content runs
+  in an opaque origin: no access to ARK's DOM, cookies, storage, tokens or
+  API, and no network.  The parent posts one {type:"ark-viz-render"} message;
+  this page replaces itself with that HTML and then reports its height.
+-->
+<style>html,body{margin:0;background:transparent;font:13px system-ui,sans-serif}</style>
+</head>
+<body>
+<script>
+(function () {
+  var done = false;
+  window.addEventListener("message", function (event) {
+    if (done || event.source !== window.parent) return;
+    var data = event.data;
+    if (!data || data.type !== "ark-viz-render" || typeof data.html !== "string") return;
+    done = true;
+    var id = String(data.id);
+    var theme = data.theme === "dark" ? "dark" : "light";
+    // Content height = lowest bottom edge of the body's children (scrollHeight
+    // would never shrink below the frame's current height).
+    var last = -1;
+    var send = function () {
+      var body = document.body;
+      if (!body) return;
+      var bottom = 0;
+      var kids = body.children;
+      for (var i = 0; i < kids.length; i += 1) {
+        var rect = kids[i].getBoundingClientRect();
+        if (rect.width || rect.height) bottom = Math.max(bottom, rect.bottom + window.scrollY);
+      }
+      var style = getComputedStyle(body);
+      bottom += (parseFloat(style.marginBottom) || 0) + (parseFloat(style.paddingBottom) || 0);
+      var height = Math.ceil(bottom);
+      if (height === last) return;
+      last = height;
+      window.parent.postMessage({ type: "ark-viz-size", id: id, height: height }, "*");
+    };
+    var html = data.html;
+    // Standards mode unless the author chose otherwise.
+    if (!/^\s*<!doctype/i.test(html)) html = "<!doctype html>" + html;
+    document.open();
+    document.write(html);
+    document.close();
+    try { document.documentElement.setAttribute("data-theme", theme); } catch (e) { /* ignore */ }
+    try { document.documentElement.style.colorScheme = theme; } catch (e) { /* ignore */ }
+    if (typeof ResizeObserver === "function") {
+      var observer = new ResizeObserver(send);
+      observer.observe(document.documentElement);
+      if (document.body) observer.observe(document.body);
+    }
+    window.addEventListener("load", send);
+    var ticks = 0;
+    var timer = setInterval(function () { send(); ticks += 1; if (ticks > 20) clearInterval(timer); }, 250);
+    send();
+  });
+})();
+</script>
+</body>
+</html>

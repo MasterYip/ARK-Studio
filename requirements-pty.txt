@@ -1,0 +1,11 @@
+# Optional interactive PTY backend for the Tasks -> Files terminal drawer.
+#
+# POSIX (Linux/macOS): the Python standard-library `pty` module is used, so no
+# package is required. Windows needs pywinpty (ConPTY) for a real terminal.
+# Keeping it optional means CI, headless servers and older hosts still run with
+# the plain stdio fallback; `/api/workspace/info` reports pty_available=false
+# and the drawer explains how to enable it.
+#
+# Install with: pip install -r requirements-pty.txt
+# or the project extra: pip install "ark-studio[pty]"
+pywinpty>=2.0; sys_platform == "win32"

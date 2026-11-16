@@ -1,0 +1,346 @@
+# Builds ARK Studio for distribution.
+#
+# * Desktop app (Tauri 2) with the Go ark-server sidecar (macOS x64 is cross-built on arm64):
+#   Windows NSIS + MSI + portable zip, macOS .app/.dmg (arm64 and x64),
+#   Ubuntu .deb + AppImage.
+# * Standalone ark-server archives for linux amd64/arm64, darwin arm64/amd64,
+#   windows amd64, plus ark-server .deb packages (amd64, arm64).
+# * SHA256SUMS over everything.
+#
+# Every run uploads the files as workflow artifacts. A pushed tag v<VERSION>
+# additionally creates a *draft* GitHub release with all files (and the
+# updater's latest.json when the updater key is configured); publishing the
+# draft stays a manual step. Signing is optional: each signing block runs only
+# when its secrets exist. See docs/development/release.md.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  GO_VERSION_FILE: go/go.mod
+  NODE_VERSION: "22"
+
+jobs:
+  version:
+    name: Version check
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+      - id: v
+        run: |
+          node scripts/release/version.mjs --check
+          if [ "${GITHUB_REF_TYPE}" = tag ]; then node scripts/release/version.mjs --tag "${GITHUB_REF_NAME}"; fi
+          echo "version=$(node scripts/release/version.mjs)" >> "$GITHUB_OUTPUT"
+
+  server:
+    name: ark-server packages
+    needs: version
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: go/go.sum
+      - name: Vet and test the desktop gate
+        working-directory: go
+        run: |
+          go vet ./...
+          go test ./internal/desktopgate/ ./cmd/ark-server/
+      - name: Build standalone archives
+        run: bash scripts/release/build-server.sh --out dist/server
+      - name: Embedded agent docs are present and current
+        working-directory: go
+        env:
+          ARK_REQUIRE_EMBEDDED_DOCS: "1"
+        run: go test ./internal/agentdocs/
+      - name: No real server addresses (sources and binaries)
+        run: |
+          node scripts/release/check-hosts.mjs
+          node scripts/release/check-hosts.mjs dist/server/ark-server-*-linux-amd64 dist/server/ark-server-*-windows-amd64
+      - name: Build server .deb packages
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          bash scripts/release/build-server-deb.sh "dist/server/ark-server-$v-linux-amd64/ark-server" amd64 dist/server
+          bash scripts/release/build-server-deb.sh "dist/server/ark-server-$v-linux-arm64/ark-server" arm64 dist/server
+          dpkg-deb --info "dist/server/ark-server_${v}_amd64.deb"
+          dpkg-deb --contents "dist/server/ark-server_${v}_amd64.deb"
+      - name: Smoke test (linux amd64)
+        run: |
+          v="${{ needs.version.outputs.version }}"
+          bin="dist/server/ark-server-$v-linux-amd64/ark-server"
+          file "$bin"
+          "$bin" version | grep -F "$v"
+          "$bin" docs-check
+          "$bin" serve --root "$RUNNER_TEMP/ark" --port 18990 > "$RUNNER_TEMP/serve.log" 2>&1 &
+          for i in $(seq 1 50); do curl -fsS http://127.0.0.1:18990/api/health && break; sleep 0.2; done
+          token="$(cat "$RUNNER_TEMP/ark/.agent-token")"
+          curl -fsS -H "Authorization: Bearer $token" http://127.0.0.1:18990/api/agent/v1/docs | grep -F '"source": "embedded"'
+          curl -fsS -H "Authorization: Bearer $token" http://127.0.0.1:18990/api/agent/v1/docs/agents/agent-interface.md | head -1 | grep -F '# ARK Agent Interface'
+          kill %1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ark-server
+          path: |
+            dist/server/*.tar.gz
+            dist/server/*.zip
+            dist/server/*.deb
+          if-no-files-found: error
+
+  desktop:
+    name: Desktop ${{ matrix.name }}
+    needs: version
+    permissions:
+      contents: write # draft release on tags
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: windows-x64
+            os: windows-latest
+            target: x86_64-pc-windows-msvc
+            go: windows/amd64
+          - name: macos-arm64
+            os: macos-15
+            target: aarch64-apple-darwin
+            go: darwin/arm64
+          - name: macos-x64
+            os: macos-15
+            target: x86_64-apple-darwin
+            go: darwin/amd64
+          - name: linux-x64
+            os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+            go: linux/amd64
+    runs-on: ${{ matrix.os }}
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ env.GO_VERSION_FILE }}
+          cache-dependency-path: go/go.sum
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: desktop/src-tauri -> target
+          key: ${{ matrix.target }}
+
+      - name: Linux build dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev patchelf file
+
+      - name: Build the ark-server sidecar
+        shell: bash
+        run: bash scripts/release/build-server.sh --no-archive --out "$RUNNER_TEMP/sidecar" --sidecar desktop/src-tauri/binaries ${{ matrix.go }}
+
+      - name: Sidecar embeds the agent docs
+        if: matrix.name != 'macos-x64' # cross-built on arm64; build-server.sh checked the embedded set
+        shell: bash
+        run: |
+          exe=""; [ "$RUNNER_OS" = Windows ] && exe=".exe"
+          "desktop/src-tauri/binaries/ark-server-${{ matrix.target }}$exe" docs-check
+
+      - name: Desktop unit tests (data layout, settings)
+        if: runner.os == 'Linux'
+        working-directory: desktop/src-tauri
+        run: cargo test --lib --target ${{ matrix.target }}
+
+      - name: Install desktop tooling
+        working-directory: desktop
+        run: npm ci
+
+      # ---- optional signing; every block is a no-op without its secrets ----
+      - name: Signing environment
+        shell: bash
+        env:
+          UPDATER_PUBKEY: ${{ vars.ARK_UPDATER_PUBKEY }}
+          UPDATER_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          UPDATER_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_TS_ENDPOINT: ${{ vars.AZURE_TS_ENDPOINT }}
+          AZURE_TS_ACCOUNT: ${{ vars.AZURE_TS_ACCOUNT }}
+          AZURE_TS_PROFILE: ${{ vars.AZURE_TS_PROFILE }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+        run: |
+          put() { if [ -n "$2" ]; then { echo "$1<<__ARK_EOF__"; echo "$2"; echo "__ARK_EOF__"; } >> "$GITHUB_ENV"; fi; }
+          if [ -n "$UPDATER_PUBKEY" ] && [ -n "$UPDATER_KEY" ]; then
+            put ARK_UPDATER_PUBKEY "$UPDATER_PUBKEY"
+            put TAURI_SIGNING_PRIVATE_KEY "$UPDATER_KEY"
+            put TAURI_SIGNING_PRIVATE_KEY_PASSWORD "$UPDATER_KEY_PASSWORD"
+            echo "updater: signing update artifacts"
+          else
+            echo "updater: no key configured, the updater stays disabled"
+          fi
+          if [ "$RUNNER_OS" = macOS ] && [ -n "$APPLE_CERTIFICATE" ]; then
+            put APPLE_CERTIFICATE "$APPLE_CERTIFICATE"
+            put APPLE_CERTIFICATE_PASSWORD "$APPLE_CERTIFICATE_PASSWORD"
+            put APPLE_SIGNING_IDENTITY "$APPLE_SIGNING_IDENTITY"
+            if [ -n "$APPLE_ID" ]; then
+              put APPLE_ID "$APPLE_ID"; put APPLE_PASSWORD "$APPLE_PASSWORD"; put APPLE_TEAM_ID "$APPLE_TEAM_ID"
+              echo "macOS: Developer ID signing and notarization"
+            else
+              echo "macOS: Developer ID signing, no notarization (APPLE_ID missing)"
+            fi
+          elif [ "$RUNNER_OS" = macOS ]; then
+            echo "macOS: ad-hoc signature only (unsigned for Gatekeeper)"
+          fi
+          if [ "$RUNNER_OS" = Windows ] && [ -n "$AZURE_TS_ENDPOINT" ] && [ -n "$AZURE_CLIENT_SECRET" ]; then
+            put AZURE_TS_ENDPOINT "$AZURE_TS_ENDPOINT"; put AZURE_TS_ACCOUNT "$AZURE_TS_ACCOUNT"; put AZURE_TS_PROFILE "$AZURE_TS_PROFILE"
+            put AZURE_TENANT_ID "$AZURE_TENANT_ID"; put AZURE_CLIENT_ID "$AZURE_CLIENT_ID"; put AZURE_CLIENT_SECRET "$AZURE_CLIENT_SECRET"
+            echo "AZURE_TRUSTED_SIGNING=1" >> "$GITHUB_ENV"
+            echo "windows: Azure Trusted Signing"
+          fi
+
+      - name: Windows certificate (PFX)
+        if: runner.os == 'Windows' && env.AZURE_TRUSTED_SIGNING != '1'
+        shell: pwsh
+        env:
+          WINDOWS_CERTIFICATE: ${{ secrets.WINDOWS_CERTIFICATE }}
+          WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CERTIFICATE_PASSWORD }}
+        run: |
+          if (-not $env:WINDOWS_CERTIFICATE) { Write-Host "windows: unsigned (no certificate configured)"; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "codesign.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:WINDOWS_CERTIFICATE))
+          $pw = ConvertTo-SecureString $env:WINDOWS_CERTIFICATE_PASSWORD -AsPlainText -Force
+          $cert = Import-PfxCertificate -FilePath $pfx -CertStoreLocation Cert:\CurrentUser\My -Password $pw
+          Remove-Item $pfx
+          "WINDOWS_CERT_THUMBPRINT=$($cert.Thumbprint)" | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
+          Write-Host "windows: signing with certificate $($cert.Subject)"
+
+      - name: Azure Trusted Signing tool
+        if: runner.os == 'Windows' && env.AZURE_TRUSTED_SIGNING == '1'
+        run: cargo install trusted-signing-cli --locked
+
+      - name: Tauri config overlay
+        shell: bash
+        run: node scripts/release/ci-tauri-config.mjs "$RUNNER_TEMP/tauri.ci.json" ${{ matrix.target }}
+
+      - name: Build (workflow run)
+        if: github.ref_type != 'tag'
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0
+        with:
+          projectPath: desktop
+          args: --target ${{ matrix.target }} --config ${{ runner.temp }}/tauri.ci.json
+
+      - name: Build and attach to the draft release (tag)
+        if: github.ref_type == 'tag'
+        uses: tauri-apps/tauri-action@1deb371b0cd8bd54025b384f1cd735e725c4060f # v1.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: desktop
+          args: --target ${{ matrix.target }} --config ${{ runner.temp }}/tauri.ci.json
+          tagName: ${{ github.ref_name }}
+          releaseName: ARK Studio ${{ needs.version.outputs.version }}
+          releaseBody: See the assets below and docs/guide/install.md. Verify downloads with SHA256SUMS.txt.
+          releaseDraft: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          uploadUpdaterJson: true
+          updaterJsonPreferNsis: true
+
+      - name: No real server addresses in the app binary
+        shell: bash
+        run: |
+          rel="desktop/src-tauri/target/${{ matrix.target }}/release"
+          node scripts/release/check-hosts.mjs "$rel"/ark-studio "$rel"/ark-studio.exe "$rel"/ark-server "$rel"/ark-server.exe
+      - name: Windows portable zip
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $rel = "desktop/src-tauri/target/${{ matrix.target }}/release"
+          $name = "ARK-Studio_${env:VERSION}_x64-portable"
+          $stage = Join-Path $env:RUNNER_TEMP $name
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "$rel/ark-studio.exe", "$rel/ark-server.exe", "LICENSE" $stage
+          @"
+          ARK Studio $($env:VERSION), portable
+
+          Run ark-studio.exe. Keep ark-server.exe in the same folder.
+          Needs the Microsoft Edge WebView2 Runtime (preinstalled on Windows 10/11).
+          Data: next to ark-studio.exe in projects\ and data\ (keys, logs, settings),
+          or %LOCALAPPDATA%\ARK if this folder is not writable or that folder already holds ARK data.
+          The portable build does not update itself.
+          "@ | Out-File -Encoding utf8 (Join-Path $stage "README.txt")
+          Compress-Archive -Path $stage -DestinationPath "$rel/bundle/$name.zip" -Force
+
+      - name: Collect bundles
+        shell: bash
+        run: |
+          mkdir -p out
+          b="desktop/src-tauri/target/${{ matrix.target }}/release/bundle"
+          find "$b" -maxdepth 2 -type f \( -name '*.exe' -o -name '*.msi' -o -name '*.zip' -o -name '*.dmg' \
+            -o -name '*.deb' -o -name '*.AppImage' -o -name '*.sig' -o -name '*.app.tar.gz' \) -exec cp {} out/ \;
+          # Both macOS jobs name the app tarball "ARK Studio.app.tar.gz": make it unique per arch.
+          for f in out/*.app.tar.gz out/*.app.tar.gz.sig; do
+            [ -e "$f" ] || continue
+            mv "$f" "out/ARK Studio_${VERSION}_${{ matrix.name }}.app.${f#out/*.app.}"
+          done
+          ls -la out
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: desktop-${{ matrix.name }}
+          path: out/*
+          if-no-files-found: error
+
+  checksums:
+    name: Checksums and release assets
+    needs: [version, server, desktop]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: SHA256SUMS
+        working-directory: artifacts
+        run: |
+          find . -maxdepth 1 -type f ! -name '*.sig' -printf '%P\0' | sort -z | xargs -0 sha256sum > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: SHA256SUMS
+          path: artifacts/SHA256SUMS.txt
+      - name: Attach server packages, portable zip and checksums to the draft release
+        if: github.ref_type == 'tag'
+        working-directory: artifacts
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber \
+            ark-server-* ark-server_*.deb ARK-Studio_*-portable.zip SHA256SUMS.txt

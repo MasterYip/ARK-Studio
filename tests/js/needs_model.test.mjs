@@ -1,0 +1,88 @@
+// Run: node --experimental-vm-modules --test tests/js/needs_model.test.mjs
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { test } from "node:test";
+import vm from "node:vm";
+
+async function loadModel() {
+  const source = await readFile(new URL("../../web/js/needs-model.js", import.meta.url), "utf8");
+  const module = new vm.SourceTextModule(source, { identifier: "needs-model.js" });
+  await module.link(() => { throw new Error("needs-model must stay dependency-free"); });
+  await module.evaluate();
+  return module.namespace;
+}
+
+const m = await loadModel();
+
+test("needsCount and needsKind", () => {
+  assert.equal(m.needsCount(undefined), 0);
+  assert.equal(m.needsCount([{}, {}]), 2);
+  assert.equal(m.needsKind({ kind: "decision" }), "decision");
+  assert.equal(m.needsKind({ type: "decision" }), "decision");
+  assert.equal(m.needsKind({ type: "task", status: "review" }), "review");
+});
+
+test("borrowedSources lists linked units once, in order", () => {
+  const media = [
+    { id: 1, from: { uid: "E-0002", title: "Sweep" } },
+    { id: 2 },
+    { id: 3, from: { uid: "E-0001", title: "Old" } },
+    { id: 4, from: { uid: "E-0002", title: "Sweep" } },
+  ];
+  assert.deepEqual(m.borrowedSources(media).map((f) => f.uid), ["E-0002", "E-0001"]);
+  assert.deepEqual(m.borrowedSources([{ id: 1 }]), []);
+  assert.deepEqual(m.borrowedSources(undefined), []);
+});
+
+test("decisionOptions reads the Options section only", () => {
+  const body = [
+    "## Question", "Which LR?", "",
+    "## Options", "- A: 1e-3", "- B: 3e-4", "1. C: cosine", "",
+    "## Recommendation", "- B",
+  ].join("\n");
+  assert.deepEqual(m.decisionOptions(body), ["A: 1e-3", "B: 3e-4", "C: cosine"]);
+  assert.deepEqual(m.decisionOptions("**Options**\n* yes\n* no\n**Default**\n- yes"), ["yes", "no"]);
+  assert.deepEqual(m.decisionOptions("no options here\n- stray"), []);
+});
+
+test("previewKind prefers the server's preview_kind", () => {
+  assert.equal(m.previewKind({ preview_kind: "video", url: "x.png" }), "video");
+  assert.equal(m.previewKind({ url: "figs/a.PNG?x=1" }), "image");
+  assert.equal(m.previewKind({ url: "run.mp4" }), "video");
+  assert.equal(m.previewKind({ url: "notes.pdf" }), "");
+});
+
+test("needs: tag values, history tags and lifecycle sort", () => {
+  assert.deepEqual([...m.NEEDS_VALUES], ["review", "decision", "accepted", "sent-back", "decided", "dismissed"]);
+  assert.deepEqual([...m.needsHistoryTags()], m.NEEDS_VALUES.map((v) => `needs:${v}`));
+  const sorted = m.sortNeedsValues([{ value: "dismissed" }, { value: "accepted" }, { value: "zz" }, { value: "review" }]);
+  assert.deepEqual(sorted.map((v) => v.value), ["review", "accepted", "dismissed", "zz"]);
+});
+test("needs filters exclude values per group and keep new values visible", async () => {
+  const m = await loadModel();
+  const items = [
+    { uid: "F-1", type: "artifact", kind: "review", assignee_effective: "alice" },
+    { uid: "T-1", type: "task", kind: "review", assignee_effective: "" },
+    { uid: "D-1", type: "decision", assignee_effective: "alice" },
+    { uid: "F-2", type: "artifact", kind: "review", assignee_effective: "bob" },
+  ];
+  const facets = m.needsFacets(items);
+  assert.deepEqual(facets.type.map((f) => [f.value, f.n]), [["artifact", 2], ["decision", 1], ["task", 1]]);
+  assert.deepEqual(facets.kind.map((f) => f.value), ["review", "decision"]);
+  assert.deepEqual(facets.assignee.map((f) => f.value), ["alice", "bob", ""]); // unassigned last
+  let filter = m.normalizeNeedsFilter({});
+  assert.equal(m.needsFilterActive(filter), false);
+  assert.equal(m.filterNeeds(items, filter).length, 4);
+  filter = m.toggleNeedsValue(filter, "type", "task");
+  assert.deepEqual(m.filterNeeds(items, filter).map((i) => i.uid), ["F-1", "D-1", "F-2"]);
+  filter = m.toggleNeedsValue(filter, "assignee", "alice");
+  assert.deepEqual(m.filterNeeds(items, filter).map((i) => i.uid), ["F-2"]);
+  filter = m.setNeedsGroupAll(filter, "kind", false, ["review", "decision"]);
+  assert.deepEqual(m.filterNeeds(items, filter), []);
+  filter = m.setNeedsGroupAll(filter, "kind", true);
+  filter = m.toggleNeedsValue(filter, "assignee", "alice");
+  assert.deepEqual(m.filterNeeds(items, filter).map((i) => i.uid), ["F-1", "D-1", "F-2"]);
+  // A type that appears later is shown: only exclusions are stored.
+  assert.equal(m.filterNeeds([...items, { uid: "X-1", type: "experiment" }], filter).length, 4);
+  assert.deepEqual(m.normalizeNeedsFilter({ type: ["a", "a", 3], junk: [1] }), { type: ["a", "3"], kind: [], assignee: [] });
+});

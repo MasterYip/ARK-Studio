@@ -1,0 +1,2574 @@
+[
+ {
+  "input": {
+   "session_id": "s_20260102030405claude1",
+   "status": "running",
+   "prompt": "Fix the tests",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "{\"type\": \"system\", \"subtype\": \"init\", \"session_id\": \"claude-native-1234\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "{\"type\": \"assistant\", \"message\": {\"content\": [{\"type\": \"text\", \"text\": \"I will **read** files \\u4e2d\\u6587\"}, {\"type\": \"tool_use\", \"id\": \"toolu_1\", \"name\": \"Read\", \"input\": {\"file_path\": \"README.md\"}}, {\"type\": \"thinking\", \"thinking\": \"hmm\"}]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "{\"type\": \"user\", \"message\": {\"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_1\", \"content\": [{\"type\": \"text\", \"text\": \"readme body\"}], \"is_error\": false}]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "{\"type\": \"result\", \"result\": \"Done.\", \"usage\": {\"input_tokens\": 100, \"output_tokens\": 40, \"cache_read_input_tokens\": 7}}"
+    },
+    {
+     "t": "2026-01-02T03:04:04+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_request\", \"id\": \"req-1\", \"kind\": \"command\", \"tool\": \"bash\", \"command\": \"pytest -q\", \"input\": {\"command\": \"pytest -q\"}}"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_request\", \"request_id\": \"req-2\", \"tool\": \"write_file\", \"path\": \"src/x.py\", \"description\": \"edit\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:06+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_resolved\", \"request_id\": \"req-2\", \"message\": \"ok\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:07+00:00",
+     "line": "{\"type\": \"control_request\", \"request_id\": \"ctl-9\", \"request\": {\"subtype\": \"can_use_tool\", \"tool_name\": \"Edit\", \"input\": {\"file_path\": \"a.py\", \"old\": \"x\"}}}"
+    },
+    {
+     "t": "2026-01-02T03:04:08+00:00",
+     "line": "{\"type\": \"approval_request\", \"approvalId\": 5, \"action\": \"fetch\", \"target\": \"https://x\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:09+00:00",
+     "line": "[[ark-event]] {\"type\": \"reasoning\", \"text\": \"thinking aloud\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:10+00:00",
+     "line": "[[ark-event]] {\"type\": \"notice\", \"text\": \"heads up\", \"level\": \"warn\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:11+00:00",
+     "line": "[[ark-event]] {\"type\": \"error\", \"message\": \"tool failed\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:12+00:00",
+     "line": "[[ark-event]] {\"type\": \"usage\", \"prompt_tokens\": 3, \"completion_tokens\": \"4\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:13+00:00",
+     "line": "[[ark-event]] {\"type\": \"user\", \"text\": \"from user\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:14+00:00",
+     "line": "[[ark-event]] {\"role\": \"assistant\", \"text\": \"markdown **x**\", \"markdown\": false}"
+    },
+    {
+     "t": "2026-01-02T03:04:15+00:00",
+     "line": "[[ark-event]] {\"type\": \"weird\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:16+00:00",
+     "line": "[[ark-event]] not json"
+    },
+    {
+     "t": "2026-01-02T03:04:17+00:00",
+     "line": "[[ark-event]] "
+    },
+    {
+     "t": "2026-01-02T03:04:18+00:00",
+     "line": "{\"choices\": [{\"message\": {\"role\": \"assistant\", \"content\": \"chat answer\", \"tool_calls\": [{\"id\": \"c1\", \"function\": {\"name\": \"f\", \"arguments\": \"{}\"}}]}}], \"usage\": {\"total_tokens\": 9}}"
+    },
+    {
+     "t": "2026-01-02T03:04:19+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"command_execution\", \"id\": \"i1\", \"command\": \"ls\", \"aggregated_output\": \"x\", \"exit_code\": 1}}"
+    },
+    {
+     "t": "2026-01-02T03:04:20+00:00",
+     "line": "{\"type\": \"item.started\", \"item\": {\"type\": \"mcp_tool_call\", \"id\": \"i2\", \"server\": \"s\", \"tool\": \"t\", \"arguments\": {\"a\": 1}}}"
+    },
+    {
+     "t": "2026-01-02T03:04:21+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"file_change\", \"id\": \"i3\", \"changes\": [\"a\"]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:22+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"agent_message\", \"text\": \"codex says\"}}"
+    },
+    {
+     "t": "2026-01-02T03:04:23+00:00",
+     "line": "{\"type\": \"tool_result\", \"name\": \"Read\", \"output\": \"late\", \"status\": \"failed\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:24+00:00",
+     "line": "{\"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"typed\"}]}"
+    },
+    {
+     "t": "2026-01-02T03:04:25+00:00",
+     "line": "{\"tool_calls\": [{\"id\": \"z\", \"name\": \"g\", \"arguments\": {\"q\": 1}}]}"
+    },
+    {
+     "t": "2026-01-02T03:04:26+00:00",
+     "line": "{\"type\": \"message\", \"content\": \"plain message\", \"role\": \"assistant\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:27+00:00",
+     "line": "{\"type\": \"status\", \"subtype\": \"compacting\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:28+00:00",
+     "line": "\u001b[31mred text\u001b[0m line"
+    },
+    {
+     "t": "2026-01-02T03:04:29+00:00",
+     "line": "second plain line"
+    },
+    {
+     "t": "2026-01-02T03:04:30+00:00",
+     "line": "› typed input",
+     "kind": "input"
+    },
+    {
+     "t": "2026-01-02T03:04:31+00:00",
+     "line": "  "
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "stderr": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "Reasoning:"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "first thought"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "dsh: tool: run"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "warning: real stderr"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "same second stderr"
+    }
+   ],
+   "error": "",
+   "notice": "",
+   "platform": "claude"
+  },
+  "output": {
+   "session": "s_20260102030405claude1",
+   "status": "running",
+   "active": true,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "Fix the tests",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "n-2",
+     "type": "notice",
+     "level": "info",
+     "text": "init",
+     "at": "2026-01-02T03:04:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-3",
+     "type": "message",
+     "role": "assistant",
+     "text": "I will **read** files 中文",
+     "at": "2026-01-02T03:04:01+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "toolu_1",
+     "type": "tool",
+     "name": "Read",
+     "input": {
+      "file_path": "README.md"
+     },
+     "output": "readme body",
+     "status": "ok",
+     "at": "2026-01-02T03:04:01+00:00",
+     "completed_at": "2026-01-02T03:04:02+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-4",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "hmm",
+     "at": "2026-01-02T03:04:01+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "e-5",
+     "type": "error",
+     "text": "first thought",
+     "at": "2026-01-02T03:04:01+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-6",
+     "type": "error",
+     "text": "dsh: tool: run",
+     "at": "2026-01-02T03:04:02+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "m-7",
+     "type": "message",
+     "role": "assistant",
+     "text": "Done.",
+     "at": "2026-01-02T03:04:03+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "e-8",
+     "type": "error",
+     "text": "warning: real stderr",
+     "at": "2026-01-02T03:04:03+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "perm-req-1",
+     "type": "permission",
+     "request_id": "req-1",
+     "kind": "command",
+     "tool": "bash",
+     "command": "pytest -q",
+     "path": "",
+     "description": "",
+     "input": {
+      "command": "pytest -q"
+     },
+     "protocol": "ark-permission-v1",
+     "status": "pending",
+     "at": "2026-01-02T03:04:04+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "perm-req-2",
+     "type": "permission",
+     "request_id": "req-2",
+     "kind": "file_edit",
+     "tool": "write_file",
+     "command": "",
+     "path": "src/x.py",
+     "description": "edit",
+     "input": null,
+     "protocol": "ark-permission-v1",
+     "status": "resolved",
+     "at": "2026-01-02T03:04:05+00:00",
+     "source": "stdout",
+     "message": "ok",
+     "resolved_at": "2026-01-02T03:04:06+00:00"
+    },
+    {
+     "id": "m-9",
+     "type": "message",
+     "role": "assistant",
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "e-10",
+     "type": "error",
+     "text": "same second stderr",
+     "at": "2026-01-02T03:04:05+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "perm-ctl-9",
+     "type": "permission",
+     "request_id": "ctl-9",
+     "kind": "file_edit",
+     "tool": "Edit",
+     "command": "",
+     "path": "a.py",
+     "description": "",
+     "input": {
+      "file_path": "a.py",
+      "old": "x"
+     },
+     "protocol": "claude-control",
+     "status": "pending",
+     "at": "2026-01-02T03:04:07+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "perm-5",
+     "type": "permission",
+     "request_id": "5",
+     "kind": "network",
+     "tool": "",
+     "command": "",
+     "path": "https://x",
+     "description": "",
+     "input": null,
+     "protocol": "ark-permission-v1",
+     "status": "pending",
+     "at": "2026-01-02T03:04:08+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-11",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "thinking aloud",
+     "at": "2026-01-02T03:04:09+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-12",
+     "type": "notice",
+     "level": "warn",
+     "text": "heads up",
+     "at": "2026-01-02T03:04:10+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "e-13",
+     "type": "error",
+     "text": "tool failed",
+     "at": "2026-01-02T03:04:11+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-14",
+     "type": "message",
+     "role": "user",
+     "text": "from user",
+     "at": "2026-01-02T03:04:13+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "m-15",
+     "type": "message",
+     "role": "assistant",
+     "text": "markdown **x**\n[[ark-event]] {\"type\": \"weird\"}\n[[ark-event]] not json\n[[ark-event]]",
+     "at": "2026-01-02T03:04:17+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "i1",
+     "type": "tool",
+     "name": "command",
+     "input": "ls",
+     "output": "x",
+     "status": "error",
+     "at": "2026-01-02T03:04:19+00:00",
+     "completed_at": "2026-01-02T03:04:19+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "i2",
+     "type": "tool",
+     "name": "s.t",
+     "input": {
+      "a": 1
+     },
+     "output": null,
+     "status": "running",
+     "at": "2026-01-02T03:04:20+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "i3",
+     "type": "tool",
+     "name": "file_change",
+     "input": [
+      "a"
+     ],
+     "output": "file change recorded",
+     "status": "ok",
+     "at": "2026-01-02T03:04:21+00:00",
+     "completed_at": "2026-01-02T03:04:21+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-16",
+     "type": "message",
+     "role": "assistant",
+     "text": "codex says",
+     "at": "2026-01-02T03:04:22+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "t-17",
+     "type": "tool",
+     "name": "Read",
+     "input": null,
+     "output": "late",
+     "status": "error",
+     "at": "2026-01-02T03:04:23+00:00",
+     "completed_at": "2026-01-02T03:04:23+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-18",
+     "type": "message",
+     "role": "user",
+     "text": "typed",
+     "at": "2026-01-02T03:04:24+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "z",
+     "type": "tool",
+     "name": "g",
+     "input": {
+      "q": 1
+     },
+     "output": null,
+     "status": "running",
+     "at": "2026-01-02T03:04:25+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "m-19",
+     "type": "message",
+     "role": "assistant",
+     "text": "plain message",
+     "at": "2026-01-02T03:04:26+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "n-20",
+     "type": "notice",
+     "level": "info",
+     "text": "compacting",
+     "at": "2026-01-02T03:04:27+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-21",
+     "type": "message",
+     "role": "assistant",
+     "text": "red text line\nsecond plain line",
+     "at": "2026-01-02T03:04:29+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "m-22",
+     "type": "message",
+     "role": "user",
+     "text": "typed input",
+     "at": "2026-01-02T03:04:30+00:00",
+     "markdown": false,
+     "source": "stdin"
+    }
+   ],
+   "stats": {
+    "messages": 11,
+    "user_messages": 4,
+    "assistant_messages": 7,
+    "tools": 6,
+    "permissions": 4,
+    "pending_permissions": 3,
+    "errors": 5,
+    "tokens": 156
+   },
+   "usage": {
+    "source": "reported",
+    "estimated": false,
+    "reported_events": 3,
+    "reported": {
+     "input_tokens": 103,
+     "output_tokens": 44,
+     "cache_read_input_tokens": 7,
+     "total_tokens": 156
+    },
+    "estimated_usage": {
+     "input_tokens": 26,
+     "output_tokens": 63,
+     "total_tokens": 89
+    },
+    "input_chars": 103,
+    "output_chars": 252,
+    "input_tokens": 103,
+    "output_tokens": 44,
+    "total_tokens": 156,
+    "cache_read_input_tokens": 7
+   },
+   "signature": "s_20260102030405claude1|running|31|6|5|m-22|2026-01-02T03:04:30+00:00||typed input|156|req-1:pending,req-2:resolved,ctl-9:pending,5:pending"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405claude1",
+   "status": "stopped",
+   "prompt": "Fix the tests",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "{\"type\": \"system\", \"subtype\": \"init\", \"session_id\": \"claude-native-1234\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "{\"type\": \"assistant\", \"message\": {\"content\": [{\"type\": \"text\", \"text\": \"I will **read** files \\u4e2d\\u6587\"}, {\"type\": \"tool_use\", \"id\": \"toolu_1\", \"name\": \"Read\", \"input\": {\"file_path\": \"README.md\"}}, {\"type\": \"thinking\", \"thinking\": \"hmm\"}]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "{\"type\": \"user\", \"message\": {\"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_1\", \"content\": [{\"type\": \"text\", \"text\": \"readme body\"}], \"is_error\": false}]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "{\"type\": \"result\", \"result\": \"Done.\", \"usage\": {\"input_tokens\": 100, \"output_tokens\": 40, \"cache_read_input_tokens\": 7}}"
+    },
+    {
+     "t": "2026-01-02T03:04:04+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_request\", \"id\": \"req-1\", \"kind\": \"command\", \"tool\": \"bash\", \"command\": \"pytest -q\", \"input\": {\"command\": \"pytest -q\"}}"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_request\", \"request_id\": \"req-2\", \"tool\": \"write_file\", \"path\": \"src/x.py\", \"description\": \"edit\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:06+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_resolved\", \"request_id\": \"req-2\", \"message\": \"ok\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:07+00:00",
+     "line": "{\"type\": \"control_request\", \"request_id\": \"ctl-9\", \"request\": {\"subtype\": \"can_use_tool\", \"tool_name\": \"Edit\", \"input\": {\"file_path\": \"a.py\", \"old\": \"x\"}}}"
+    },
+    {
+     "t": "2026-01-02T03:04:08+00:00",
+     "line": "{\"type\": \"approval_request\", \"approvalId\": 5, \"action\": \"fetch\", \"target\": \"https://x\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:09+00:00",
+     "line": "[[ark-event]] {\"type\": \"reasoning\", \"text\": \"thinking aloud\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:10+00:00",
+     "line": "[[ark-event]] {\"type\": \"notice\", \"text\": \"heads up\", \"level\": \"warn\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:11+00:00",
+     "line": "[[ark-event]] {\"type\": \"error\", \"message\": \"tool failed\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:12+00:00",
+     "line": "[[ark-event]] {\"type\": \"usage\", \"prompt_tokens\": 3, \"completion_tokens\": \"4\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:13+00:00",
+     "line": "[[ark-event]] {\"type\": \"user\", \"text\": \"from user\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:14+00:00",
+     "line": "[[ark-event]] {\"role\": \"assistant\", \"text\": \"markdown **x**\", \"markdown\": false}"
+    },
+    {
+     "t": "2026-01-02T03:04:15+00:00",
+     "line": "[[ark-event]] {\"type\": \"weird\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:16+00:00",
+     "line": "[[ark-event]] not json"
+    },
+    {
+     "t": "2026-01-02T03:04:17+00:00",
+     "line": "[[ark-event]] "
+    },
+    {
+     "t": "2026-01-02T03:04:18+00:00",
+     "line": "{\"choices\": [{\"message\": {\"role\": \"assistant\", \"content\": \"chat answer\", \"tool_calls\": [{\"id\": \"c1\", \"function\": {\"name\": \"f\", \"arguments\": \"{}\"}}]}}], \"usage\": {\"total_tokens\": 9}}"
+    },
+    {
+     "t": "2026-01-02T03:04:19+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"command_execution\", \"id\": \"i1\", \"command\": \"ls\", \"aggregated_output\": \"x\", \"exit_code\": 1}}"
+    },
+    {
+     "t": "2026-01-02T03:04:20+00:00",
+     "line": "{\"type\": \"item.started\", \"item\": {\"type\": \"mcp_tool_call\", \"id\": \"i2\", \"server\": \"s\", \"tool\": \"t\", \"arguments\": {\"a\": 1}}}"
+    },
+    {
+     "t": "2026-01-02T03:04:21+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"file_change\", \"id\": \"i3\", \"changes\": [\"a\"]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:22+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"agent_message\", \"text\": \"codex says\"}}"
+    },
+    {
+     "t": "2026-01-02T03:04:23+00:00",
+     "line": "{\"type\": \"tool_result\", \"name\": \"Read\", \"output\": \"late\", \"status\": \"failed\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:24+00:00",
+     "line": "{\"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"typed\"}]}"
+    },
+    {
+     "t": "2026-01-02T03:04:25+00:00",
+     "line": "{\"tool_calls\": [{\"id\": \"z\", \"name\": \"g\", \"arguments\": {\"q\": 1}}]}"
+    },
+    {
+     "t": "2026-01-02T03:04:26+00:00",
+     "line": "{\"type\": \"message\", \"content\": \"plain message\", \"role\": \"assistant\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:27+00:00",
+     "line": "{\"type\": \"status\", \"subtype\": \"compacting\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:28+00:00",
+     "line": "\u001b[31mred text\u001b[0m line"
+    },
+    {
+     "t": "2026-01-02T03:04:29+00:00",
+     "line": "second plain line"
+    },
+    {
+     "t": "2026-01-02T03:04:30+00:00",
+     "line": "› typed input",
+     "kind": "input"
+    },
+    {
+     "t": "2026-01-02T03:04:31+00:00",
+     "line": "  "
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "stderr": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "Reasoning:"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "first thought"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "dsh: tool: run"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "warning: real stderr"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "same second stderr"
+    }
+   ],
+   "error": "",
+   "notice": "restarted",
+   "platform": "claude"
+  },
+  "output": {
+   "session": "s_20260102030405claude1",
+   "status": "stopped",
+   "active": false,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "Fix the tests",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "n-2",
+     "type": "notice",
+     "level": "info",
+     "text": "init",
+     "at": "2026-01-02T03:04:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-3",
+     "type": "message",
+     "role": "assistant",
+     "text": "I will **read** files 中文",
+     "at": "2026-01-02T03:04:01+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "toolu_1",
+     "type": "tool",
+     "name": "Read",
+     "input": {
+      "file_path": "README.md"
+     },
+     "output": "readme body",
+     "status": "ok",
+     "at": "2026-01-02T03:04:01+00:00",
+     "completed_at": "2026-01-02T03:04:02+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-4",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "hmm",
+     "at": "2026-01-02T03:04:01+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "e-5",
+     "type": "error",
+     "text": "first thought",
+     "at": "2026-01-02T03:04:01+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-6",
+     "type": "error",
+     "text": "dsh: tool: run",
+     "at": "2026-01-02T03:04:02+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "m-7",
+     "type": "message",
+     "role": "assistant",
+     "text": "Done.",
+     "at": "2026-01-02T03:04:03+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "e-8",
+     "type": "error",
+     "text": "warning: real stderr",
+     "at": "2026-01-02T03:04:03+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "perm-req-1",
+     "type": "permission",
+     "request_id": "req-1",
+     "kind": "command",
+     "tool": "bash",
+     "command": "pytest -q",
+     "path": "",
+     "description": "",
+     "input": {
+      "command": "pytest -q"
+     },
+     "protocol": "ark-permission-v1",
+     "status": "pending",
+     "at": "2026-01-02T03:04:04+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "perm-req-2",
+     "type": "permission",
+     "request_id": "req-2",
+     "kind": "file_edit",
+     "tool": "write_file",
+     "command": "",
+     "path": "src/x.py",
+     "description": "edit",
+     "input": null,
+     "protocol": "ark-permission-v1",
+     "status": "resolved",
+     "at": "2026-01-02T03:04:05+00:00",
+     "source": "stdout",
+     "message": "ok",
+     "resolved_at": "2026-01-02T03:04:06+00:00"
+    },
+    {
+     "id": "m-9",
+     "type": "message",
+     "role": "assistant",
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "e-10",
+     "type": "error",
+     "text": "same second stderr",
+     "at": "2026-01-02T03:04:05+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "perm-ctl-9",
+     "type": "permission",
+     "request_id": "ctl-9",
+     "kind": "file_edit",
+     "tool": "Edit",
+     "command": "",
+     "path": "a.py",
+     "description": "",
+     "input": {
+      "file_path": "a.py",
+      "old": "x"
+     },
+     "protocol": "claude-control",
+     "status": "pending",
+     "at": "2026-01-02T03:04:07+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "perm-5",
+     "type": "permission",
+     "request_id": "5",
+     "kind": "network",
+     "tool": "",
+     "command": "",
+     "path": "https://x",
+     "description": "",
+     "input": null,
+     "protocol": "ark-permission-v1",
+     "status": "pending",
+     "at": "2026-01-02T03:04:08+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-11",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "thinking aloud",
+     "at": "2026-01-02T03:04:09+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-12",
+     "type": "notice",
+     "level": "warn",
+     "text": "heads up",
+     "at": "2026-01-02T03:04:10+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "e-13",
+     "type": "error",
+     "text": "tool failed",
+     "at": "2026-01-02T03:04:11+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-14",
+     "type": "message",
+     "role": "user",
+     "text": "from user",
+     "at": "2026-01-02T03:04:13+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "m-15",
+     "type": "message",
+     "role": "assistant",
+     "text": "markdown **x**\n[[ark-event]] {\"type\": \"weird\"}\n[[ark-event]] not json\n[[ark-event]]",
+     "at": "2026-01-02T03:04:17+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "i1",
+     "type": "tool",
+     "name": "command",
+     "input": "ls",
+     "output": "x",
+     "status": "error",
+     "at": "2026-01-02T03:04:19+00:00",
+     "completed_at": "2026-01-02T03:04:19+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "i2",
+     "type": "tool",
+     "name": "s.t",
+     "input": {
+      "a": 1
+     },
+     "output": null,
+     "status": "running",
+     "at": "2026-01-02T03:04:20+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "i3",
+     "type": "tool",
+     "name": "file_change",
+     "input": [
+      "a"
+     ],
+     "output": "file change recorded",
+     "status": "ok",
+     "at": "2026-01-02T03:04:21+00:00",
+     "completed_at": "2026-01-02T03:04:21+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-16",
+     "type": "message",
+     "role": "assistant",
+     "text": "codex says",
+     "at": "2026-01-02T03:04:22+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "t-17",
+     "type": "tool",
+     "name": "Read",
+     "input": null,
+     "output": "late",
+     "status": "error",
+     "at": "2026-01-02T03:04:23+00:00",
+     "completed_at": "2026-01-02T03:04:23+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-18",
+     "type": "message",
+     "role": "user",
+     "text": "typed",
+     "at": "2026-01-02T03:04:24+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "z",
+     "type": "tool",
+     "name": "g",
+     "input": {
+      "q": 1
+     },
+     "output": null,
+     "status": "running",
+     "at": "2026-01-02T03:04:25+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "m-19",
+     "type": "message",
+     "role": "assistant",
+     "text": "plain message",
+     "at": "2026-01-02T03:04:26+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "n-20",
+     "type": "notice",
+     "level": "info",
+     "text": "compacting",
+     "at": "2026-01-02T03:04:27+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-21",
+     "type": "message",
+     "role": "assistant",
+     "text": "red text line\nsecond plain line",
+     "at": "2026-01-02T03:04:29+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "m-22",
+     "type": "message",
+     "role": "user",
+     "text": "typed input",
+     "at": "2026-01-02T03:04:30+00:00",
+     "markdown": false,
+     "source": "stdin"
+    },
+    {
+     "id": "n-23",
+     "type": "notice",
+     "level": "notice",
+     "text": "restarted",
+     "at": null,
+     "source": "meta"
+    }
+   ],
+   "stats": {
+    "messages": 11,
+    "user_messages": 4,
+    "assistant_messages": 7,
+    "tools": 6,
+    "permissions": 4,
+    "pending_permissions": 3,
+    "errors": 5,
+    "tokens": 156
+   },
+   "usage": {
+    "source": "reported",
+    "estimated": false,
+    "reported_events": 3,
+    "reported": {
+     "input_tokens": 103,
+     "output_tokens": 44,
+     "cache_read_input_tokens": 7,
+     "total_tokens": 156
+    },
+    "estimated_usage": {
+     "input_tokens": 26,
+     "output_tokens": 63,
+     "total_tokens": 89
+    },
+    "input_chars": 103,
+    "output_chars": 252,
+    "input_tokens": 103,
+    "output_tokens": 44,
+    "total_tokens": 156,
+    "cache_read_input_tokens": 7
+   },
+   "signature": "s_20260102030405claude1|stopped|32|6|5|n-23|||restarted|156|req-1:pending,req-2:resolved,ctl-9:pending,5:pending"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405claude1",
+   "status": "errored",
+   "prompt": "Fix the tests",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "{\"type\": \"system\", \"subtype\": \"init\", \"session_id\": \"claude-native-1234\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "{\"type\": \"assistant\", \"message\": {\"content\": [{\"type\": \"text\", \"text\": \"I will **read** files \\u4e2d\\u6587\"}, {\"type\": \"tool_use\", \"id\": \"toolu_1\", \"name\": \"Read\", \"input\": {\"file_path\": \"README.md\"}}, {\"type\": \"thinking\", \"thinking\": \"hmm\"}]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "{\"type\": \"user\", \"message\": {\"content\": [{\"type\": \"tool_result\", \"tool_use_id\": \"toolu_1\", \"content\": [{\"type\": \"text\", \"text\": \"readme body\"}], \"is_error\": false}]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "{\"type\": \"result\", \"result\": \"Done.\", \"usage\": {\"input_tokens\": 100, \"output_tokens\": 40, \"cache_read_input_tokens\": 7}}"
+    },
+    {
+     "t": "2026-01-02T03:04:04+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_request\", \"id\": \"req-1\", \"kind\": \"command\", \"tool\": \"bash\", \"command\": \"pytest -q\", \"input\": {\"command\": \"pytest -q\"}}"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_request\", \"request_id\": \"req-2\", \"tool\": \"write_file\", \"path\": \"src/x.py\", \"description\": \"edit\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:06+00:00",
+     "line": "[[ark-event]] {\"type\": \"permission_resolved\", \"request_id\": \"req-2\", \"message\": \"ok\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:07+00:00",
+     "line": "{\"type\": \"control_request\", \"request_id\": \"ctl-9\", \"request\": {\"subtype\": \"can_use_tool\", \"tool_name\": \"Edit\", \"input\": {\"file_path\": \"a.py\", \"old\": \"x\"}}}"
+    },
+    {
+     "t": "2026-01-02T03:04:08+00:00",
+     "line": "{\"type\": \"approval_request\", \"approvalId\": 5, \"action\": \"fetch\", \"target\": \"https://x\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:09+00:00",
+     "line": "[[ark-event]] {\"type\": \"reasoning\", \"text\": \"thinking aloud\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:10+00:00",
+     "line": "[[ark-event]] {\"type\": \"notice\", \"text\": \"heads up\", \"level\": \"warn\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:11+00:00",
+     "line": "[[ark-event]] {\"type\": \"error\", \"message\": \"tool failed\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:12+00:00",
+     "line": "[[ark-event]] {\"type\": \"usage\", \"prompt_tokens\": 3, \"completion_tokens\": \"4\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:13+00:00",
+     "line": "[[ark-event]] {\"type\": \"user\", \"text\": \"from user\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:14+00:00",
+     "line": "[[ark-event]] {\"role\": \"assistant\", \"text\": \"markdown **x**\", \"markdown\": false}"
+    },
+    {
+     "t": "2026-01-02T03:04:15+00:00",
+     "line": "[[ark-event]] {\"type\": \"weird\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:16+00:00",
+     "line": "[[ark-event]] not json"
+    },
+    {
+     "t": "2026-01-02T03:04:17+00:00",
+     "line": "[[ark-event]] "
+    },
+    {
+     "t": "2026-01-02T03:04:18+00:00",
+     "line": "{\"choices\": [{\"message\": {\"role\": \"assistant\", \"content\": \"chat answer\", \"tool_calls\": [{\"id\": \"c1\", \"function\": {\"name\": \"f\", \"arguments\": \"{}\"}}]}}], \"usage\": {\"total_tokens\": 9}}"
+    },
+    {
+     "t": "2026-01-02T03:04:19+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"command_execution\", \"id\": \"i1\", \"command\": \"ls\", \"aggregated_output\": \"x\", \"exit_code\": 1}}"
+    },
+    {
+     "t": "2026-01-02T03:04:20+00:00",
+     "line": "{\"type\": \"item.started\", \"item\": {\"type\": \"mcp_tool_call\", \"id\": \"i2\", \"server\": \"s\", \"tool\": \"t\", \"arguments\": {\"a\": 1}}}"
+    },
+    {
+     "t": "2026-01-02T03:04:21+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"file_change\", \"id\": \"i3\", \"changes\": [\"a\"]}}"
+    },
+    {
+     "t": "2026-01-02T03:04:22+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"agent_message\", \"text\": \"codex says\"}}"
+    },
+    {
+     "t": "2026-01-02T03:04:23+00:00",
+     "line": "{\"type\": \"tool_result\", \"name\": \"Read\", \"output\": \"late\", \"status\": \"failed\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:24+00:00",
+     "line": "{\"role\": \"user\", \"content\": [{\"type\": \"input_text\", \"text\": \"typed\"}]}"
+    },
+    {
+     "t": "2026-01-02T03:04:25+00:00",
+     "line": "{\"tool_calls\": [{\"id\": \"z\", \"name\": \"g\", \"arguments\": {\"q\": 1}}]}"
+    },
+    {
+     "t": "2026-01-02T03:04:26+00:00",
+     "line": "{\"type\": \"message\", \"content\": \"plain message\", \"role\": \"assistant\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:27+00:00",
+     "line": "{\"type\": \"status\", \"subtype\": \"compacting\"}"
+    },
+    {
+     "t": "2026-01-02T03:04:28+00:00",
+     "line": "\u001b[31mred text\u001b[0m line"
+    },
+    {
+     "t": "2026-01-02T03:04:29+00:00",
+     "line": "second plain line"
+    },
+    {
+     "t": "2026-01-02T03:04:30+00:00",
+     "line": "› typed input",
+     "kind": "input"
+    },
+    {
+     "t": "2026-01-02T03:04:31+00:00",
+     "line": "  "
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+   ],
+   "stderr": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "Reasoning:"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "first thought"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "dsh: tool: run"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "warning: real stderr"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "same second stderr"
+    }
+   ],
+   "error": "",
+   "notice": "",
+   "platform": "claude"
+  },
+  "output": {
+   "session": "s_20260102030405claude1",
+   "status": "errored",
+   "active": false,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "Fix the tests",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "n-2",
+     "type": "notice",
+     "level": "info",
+     "text": "init",
+     "at": "2026-01-02T03:04:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-3",
+     "type": "message",
+     "role": "assistant",
+     "text": "I will **read** files 中文",
+     "at": "2026-01-02T03:04:01+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "toolu_1",
+     "type": "tool",
+     "name": "Read",
+     "input": {
+      "file_path": "README.md"
+     },
+     "output": "readme body",
+     "status": "ok",
+     "at": "2026-01-02T03:04:01+00:00",
+     "completed_at": "2026-01-02T03:04:02+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-4",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "hmm",
+     "at": "2026-01-02T03:04:01+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "e-5",
+     "type": "error",
+     "text": "first thought",
+     "at": "2026-01-02T03:04:01+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-6",
+     "type": "error",
+     "text": "dsh: tool: run",
+     "at": "2026-01-02T03:04:02+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "m-7",
+     "type": "message",
+     "role": "assistant",
+     "text": "Done.",
+     "at": "2026-01-02T03:04:03+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "e-8",
+     "type": "error",
+     "text": "warning: real stderr",
+     "at": "2026-01-02T03:04:03+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "perm-req-1",
+     "type": "permission",
+     "request_id": "req-1",
+     "kind": "command",
+     "tool": "bash",
+     "command": "pytest -q",
+     "path": "",
+     "description": "",
+     "input": {
+      "command": "pytest -q"
+     },
+     "protocol": "ark-permission-v1",
+     "status": "pending",
+     "at": "2026-01-02T03:04:04+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "perm-req-2",
+     "type": "permission",
+     "request_id": "req-2",
+     "kind": "file_edit",
+     "tool": "write_file",
+     "command": "",
+     "path": "src/x.py",
+     "description": "edit",
+     "input": null,
+     "protocol": "ark-permission-v1",
+     "status": "resolved",
+     "at": "2026-01-02T03:04:05+00:00",
+     "source": "stdout",
+     "message": "ok",
+     "resolved_at": "2026-01-02T03:04:06+00:00"
+    },
+    {
+     "id": "m-9",
+     "type": "message",
+     "role": "assistant",
+     "text": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "e-10",
+     "type": "error",
+     "text": "same second stderr",
+     "at": "2026-01-02T03:04:05+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "perm-ctl-9",
+     "type": "permission",
+     "request_id": "ctl-9",
+     "kind": "file_edit",
+     "tool": "Edit",
+     "command": "",
+     "path": "a.py",
+     "description": "",
+     "input": {
+      "file_path": "a.py",
+      "old": "x"
+     },
+     "protocol": "claude-control",
+     "status": "pending",
+     "at": "2026-01-02T03:04:07+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "perm-5",
+     "type": "permission",
+     "request_id": "5",
+     "kind": "network",
+     "tool": "",
+     "command": "",
+     "path": "https://x",
+     "description": "",
+     "input": null,
+     "protocol": "ark-permission-v1",
+     "status": "pending",
+     "at": "2026-01-02T03:04:08+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-11",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "thinking aloud",
+     "at": "2026-01-02T03:04:09+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "n-12",
+     "type": "notice",
+     "level": "warn",
+     "text": "heads up",
+     "at": "2026-01-02T03:04:10+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "e-13",
+     "type": "error",
+     "text": "tool failed",
+     "at": "2026-01-02T03:04:11+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-14",
+     "type": "message",
+     "role": "user",
+     "text": "from user",
+     "at": "2026-01-02T03:04:13+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "m-15",
+     "type": "message",
+     "role": "assistant",
+     "text": "markdown **x**\n[[ark-event]] {\"type\": \"weird\"}\n[[ark-event]] not json\n[[ark-event]]",
+     "at": "2026-01-02T03:04:17+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "i1",
+     "type": "tool",
+     "name": "command",
+     "input": "ls",
+     "output": "x",
+     "status": "error",
+     "at": "2026-01-02T03:04:19+00:00",
+     "completed_at": "2026-01-02T03:04:19+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "i2",
+     "type": "tool",
+     "name": "s.t",
+     "input": {
+      "a": 1
+     },
+     "output": null,
+     "status": "running",
+     "at": "2026-01-02T03:04:20+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "i3",
+     "type": "tool",
+     "name": "file_change",
+     "input": [
+      "a"
+     ],
+     "output": "file change recorded",
+     "status": "ok",
+     "at": "2026-01-02T03:04:21+00:00",
+     "completed_at": "2026-01-02T03:04:21+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-16",
+     "type": "message",
+     "role": "assistant",
+     "text": "codex says",
+     "at": "2026-01-02T03:04:22+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "t-17",
+     "type": "tool",
+     "name": "Read",
+     "input": null,
+     "output": "late",
+     "status": "error",
+     "at": "2026-01-02T03:04:23+00:00",
+     "completed_at": "2026-01-02T03:04:23+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-18",
+     "type": "message",
+     "role": "user",
+     "text": "typed",
+     "at": "2026-01-02T03:04:24+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "z",
+     "type": "tool",
+     "name": "g",
+     "input": {
+      "q": 1
+     },
+     "output": null,
+     "status": "running",
+     "at": "2026-01-02T03:04:25+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "m-19",
+     "type": "message",
+     "role": "assistant",
+     "text": "plain message",
+     "at": "2026-01-02T03:04:26+00:00",
+     "markdown": false,
+     "source": "stdout"
+    },
+    {
+     "id": "n-20",
+     "type": "notice",
+     "level": "info",
+     "text": "compacting",
+     "at": "2026-01-02T03:04:27+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-21",
+     "type": "message",
+     "role": "assistant",
+     "text": "red text line\nsecond plain line",
+     "at": "2026-01-02T03:04:29+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "m-22",
+     "type": "message",
+     "role": "user",
+     "text": "typed input",
+     "at": "2026-01-02T03:04:30+00:00",
+     "markdown": false,
+     "source": "stdin"
+    }
+   ],
+   "stats": {
+    "messages": 11,
+    "user_messages": 4,
+    "assistant_messages": 7,
+    "tools": 6,
+    "permissions": 4,
+    "pending_permissions": 3,
+    "errors": 5,
+    "tokens": 156
+   },
+   "usage": {
+    "source": "reported",
+    "estimated": false,
+    "reported_events": 3,
+    "reported": {
+     "input_tokens": 103,
+     "output_tokens": 44,
+     "cache_read_input_tokens": 7,
+     "total_tokens": 156
+    },
+    "estimated_usage": {
+     "input_tokens": 26,
+     "output_tokens": 63,
+     "total_tokens": 89
+    },
+    "input_chars": 103,
+    "output_chars": 252,
+    "input_tokens": 103,
+    "output_tokens": 44,
+    "total_tokens": 156,
+    "cache_read_input_tokens": 7
+   },
+   "signature": "s_20260102030405claude1|errored|31|6|5|m-22|2026-01-02T03:04:30+00:00||typed input|156|req-1:pending,req-2:resolved,ctl-9:pending,5:pending"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405codex01",
+   "status": "running",
+   "prompt": "Review",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [],
+   "stderr": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "OpenAI Codex v0.1"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "--------"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "workdir: x"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "session id: 0199-codex-abcdef"
+    },
+    {
+     "t": "2026-01-02T03:04:04+00:00",
+     "line": "user"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "the prompt"
+    },
+    {
+     "t": "2026-01-02T03:04:06+00:00",
+     "line": "codex"
+    },
+    {
+     "t": "2026-01-02T03:04:07+00:00",
+     "line": "answer line 1"
+    },
+    {
+     "t": "2026-01-02T03:04:08+00:00",
+     "line": "answer line 2"
+    },
+    {
+     "t": "2026-01-02T03:04:09+00:00",
+     "line": "thinking: deep"
+    },
+    {
+     "t": "2026-01-02T03:04:10+00:00",
+     "line": "ERROR: boom"
+    },
+    {
+     "t": "2026-01-02T03:04:11+00:00",
+     "line": "tokens used"
+    },
+    {
+     "t": "2026-01-02T03:04:12+00:00",
+     "line": "1,234"
+    },
+    {
+     "t": "2026-01-02T03:04:13+00:00",
+     "line": "answer line 1 again"
+    }
+   ],
+   "error": "process exited with code 1",
+   "notice": "",
+   "platform": "codex"
+  },
+  "output": {
+   "session": "s_20260102030405codex01",
+   "status": "running",
+   "active": true,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "Review",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "m-2",
+     "type": "message",
+     "role": "assistant",
+     "text": "answer line 1\nanswer line 2",
+     "at": "2026-01-02T03:04:08+00:00",
+     "markdown": true,
+     "source": "stderr",
+     "streaming": true
+    },
+    {
+     "id": "n-3",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "thinking: deep",
+     "at": "2026-01-02T03:04:09+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-4",
+     "type": "error",
+     "text": "ERROR: boom",
+     "at": "2026-01-02T03:04:10+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-5",
+     "type": "error",
+     "text": "process exited with code 1",
+     "at": null,
+     "source": "meta"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 1,
+    "assistant_messages": 1,
+    "tools": 0,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 2,
+    "tokens": 9
+   },
+   "usage": {
+    "source": "estimated",
+    "estimated": true,
+    "reported_events": 0,
+    "reported": {},
+    "estimated_usage": {
+     "input_tokens": 2,
+     "output_tokens": 7,
+     "total_tokens": 9
+    },
+    "input_chars": 6,
+    "output_chars": 27,
+    "input_tokens": 2,
+    "output_tokens": 7,
+    "total_tokens": 9
+   },
+   "signature": "s_20260102030405codex01|running|5|0|2|e-5|||process exited with code 1|9|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405codex01",
+   "status": "stopped",
+   "prompt": "Review",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [],
+   "stderr": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "OpenAI Codex v0.1"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "--------"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "workdir: x"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "session id: 0199-codex-abcdef"
+    },
+    {
+     "t": "2026-01-02T03:04:04+00:00",
+     "line": "user"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "the prompt"
+    },
+    {
+     "t": "2026-01-02T03:04:06+00:00",
+     "line": "codex"
+    },
+    {
+     "t": "2026-01-02T03:04:07+00:00",
+     "line": "answer line 1"
+    },
+    {
+     "t": "2026-01-02T03:04:08+00:00",
+     "line": "answer line 2"
+    },
+    {
+     "t": "2026-01-02T03:04:09+00:00",
+     "line": "thinking: deep"
+    },
+    {
+     "t": "2026-01-02T03:04:10+00:00",
+     "line": "ERROR: boom"
+    },
+    {
+     "t": "2026-01-02T03:04:11+00:00",
+     "line": "tokens used"
+    },
+    {
+     "t": "2026-01-02T03:04:12+00:00",
+     "line": "1,234"
+    },
+    {
+     "t": "2026-01-02T03:04:13+00:00",
+     "line": "answer line 1 again"
+    }
+   ],
+   "error": "process exited with code 1",
+   "notice": "restarted",
+   "platform": "codex"
+  },
+  "output": {
+   "session": "s_20260102030405codex01",
+   "status": "stopped",
+   "active": false,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "Review",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "m-2",
+     "type": "message",
+     "role": "assistant",
+     "text": "answer line 1\nanswer line 2",
+     "at": "2026-01-02T03:04:08+00:00",
+     "markdown": true,
+     "source": "stderr"
+    },
+    {
+     "id": "n-3",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "thinking: deep",
+     "at": "2026-01-02T03:04:09+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-4",
+     "type": "error",
+     "text": "ERROR: boom",
+     "at": "2026-01-02T03:04:10+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-5",
+     "type": "error",
+     "text": "process exited with code 1",
+     "at": null,
+     "source": "meta"
+    },
+    {
+     "id": "n-6",
+     "type": "notice",
+     "level": "notice",
+     "text": "restarted",
+     "at": null,
+     "source": "meta"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 1,
+    "assistant_messages": 1,
+    "tools": 0,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 2,
+    "tokens": 9
+   },
+   "usage": {
+    "source": "estimated",
+    "estimated": true,
+    "reported_events": 0,
+    "reported": {},
+    "estimated_usage": {
+     "input_tokens": 2,
+     "output_tokens": 7,
+     "total_tokens": 9
+    },
+    "input_chars": 6,
+    "output_chars": 27,
+    "input_tokens": 2,
+    "output_tokens": 7,
+    "total_tokens": 9
+   },
+   "signature": "s_20260102030405codex01|stopped|6|0|2|n-6|||restarted|9|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405codex01",
+   "status": "errored",
+   "prompt": "Review",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [],
+   "stderr": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "OpenAI Codex v0.1"
+    },
+    {
+     "t": "2026-01-02T03:04:01+00:00",
+     "line": "--------"
+    },
+    {
+     "t": "2026-01-02T03:04:02+00:00",
+     "line": "workdir: x"
+    },
+    {
+     "t": "2026-01-02T03:04:03+00:00",
+     "line": "session id: 0199-codex-abcdef"
+    },
+    {
+     "t": "2026-01-02T03:04:04+00:00",
+     "line": "user"
+    },
+    {
+     "t": "2026-01-02T03:04:05+00:00",
+     "line": "the prompt"
+    },
+    {
+     "t": "2026-01-02T03:04:06+00:00",
+     "line": "codex"
+    },
+    {
+     "t": "2026-01-02T03:04:07+00:00",
+     "line": "answer line 1"
+    },
+    {
+     "t": "2026-01-02T03:04:08+00:00",
+     "line": "answer line 2"
+    },
+    {
+     "t": "2026-01-02T03:04:09+00:00",
+     "line": "thinking: deep"
+    },
+    {
+     "t": "2026-01-02T03:04:10+00:00",
+     "line": "ERROR: boom"
+    },
+    {
+     "t": "2026-01-02T03:04:11+00:00",
+     "line": "tokens used"
+    },
+    {
+     "t": "2026-01-02T03:04:12+00:00",
+     "line": "1,234"
+    },
+    {
+     "t": "2026-01-02T03:04:13+00:00",
+     "line": "answer line 1 again"
+    }
+   ],
+   "error": "process exited with code 1",
+   "notice": "",
+   "platform": "codex"
+  },
+  "output": {
+   "session": "s_20260102030405codex01",
+   "status": "errored",
+   "active": false,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "Review",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "m-2",
+     "type": "message",
+     "role": "assistant",
+     "text": "answer line 1\nanswer line 2",
+     "at": "2026-01-02T03:04:08+00:00",
+     "markdown": true,
+     "source": "stderr"
+    },
+    {
+     "id": "n-3",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "thinking: deep",
+     "at": "2026-01-02T03:04:09+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-4",
+     "type": "error",
+     "text": "ERROR: boom",
+     "at": "2026-01-02T03:04:10+00:00",
+     "source": "stderr"
+    },
+    {
+     "id": "e-5",
+     "type": "error",
+     "text": "process exited with code 1",
+     "at": null,
+     "source": "meta"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 1,
+    "assistant_messages": 1,
+    "tools": 0,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 2,
+    "tokens": 9
+   },
+   "usage": {
+    "source": "estimated",
+    "estimated": true,
+    "reported_events": 0,
+    "reported": {},
+    "estimated_usage": {
+     "input_tokens": 2,
+     "output_tokens": 7,
+     "total_tokens": 9
+    },
+    "input_chars": 6,
+    "output_chars": 27,
+    "input_tokens": 2,
+    "output_tokens": 7,
+    "total_tokens": 9
+   },
+   "signature": "s_20260102030405codex01|errored|5|0|2|e-5|||process exited with code 1|9|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405hidden1",
+   "status": "running",
+   "prompt": "secret",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "private"
+    }
+   ],
+   "stderr": [],
+   "error": "",
+   "notice": "",
+   "platform": "echo"
+  },
+  "output": {
+   "session": "s_20260102030405hidden1",
+   "status": "running",
+   "active": true,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "secret",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "m-2",
+     "type": "message",
+     "role": "assistant",
+     "text": "private",
+     "at": "2026-01-02T03:04:00+00:00",
+     "markdown": true,
+     "source": "stdout",
+     "streaming": true
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 1,
+    "assistant_messages": 1,
+    "tools": 0,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 0,
+    "tokens": 4
+   },
+   "usage": {
+    "source": "estimated",
+    "estimated": true,
+    "reported_events": 0,
+    "reported": {},
+    "estimated_usage": {
+     "input_tokens": 2,
+     "output_tokens": 2,
+     "total_tokens": 4
+    },
+    "input_chars": 6,
+    "output_chars": 7,
+    "input_tokens": 2,
+    "output_tokens": 2,
+    "total_tokens": 4
+   },
+   "signature": "s_20260102030405hidden1|running|2|0|0|m-2|2026-01-02T03:04:00+00:00||private|4|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405hidden1",
+   "status": "stopped",
+   "prompt": "secret",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "private"
+    }
+   ],
+   "stderr": [],
+   "error": "",
+   "notice": "restarted",
+   "platform": "echo"
+  },
+  "output": {
+   "session": "s_20260102030405hidden1",
+   "status": "stopped",
+   "active": false,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "secret",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "m-2",
+     "type": "message",
+     "role": "assistant",
+     "text": "private",
+     "at": "2026-01-02T03:04:00+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "n-3",
+     "type": "notice",
+     "level": "notice",
+     "text": "restarted",
+     "at": null,
+     "source": "meta"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 1,
+    "assistant_messages": 1,
+    "tools": 0,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 0,
+    "tokens": 4
+   },
+   "usage": {
+    "source": "estimated",
+    "estimated": true,
+    "reported_events": 0,
+    "reported": {},
+    "estimated_usage": {
+     "input_tokens": 2,
+     "output_tokens": 2,
+     "total_tokens": 4
+    },
+    "input_chars": 6,
+    "output_chars": 7,
+    "input_tokens": 2,
+    "output_tokens": 2,
+    "total_tokens": 4
+   },
+   "signature": "s_20260102030405hidden1|stopped|3|0|0|n-3|||restarted|4|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_20260102030405hidden1",
+   "status": "errored",
+   "prompt": "secret",
+   "prompt_at": "2026-01-02T03:04:05+00:00",
+   "stdout": [
+    {
+     "t": "2026-01-02T03:04:00+00:00",
+     "line": "private"
+    }
+   ],
+   "stderr": [],
+   "error": "",
+   "notice": "",
+   "platform": "echo"
+  },
+  "output": {
+   "session": "s_20260102030405hidden1",
+   "status": "errored",
+   "active": false,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "m-1",
+     "type": "message",
+     "role": "user",
+     "text": "secret",
+     "at": "2026-01-02T03:04:05+00:00",
+     "markdown": false,
+     "source": "prompt"
+    },
+    {
+     "id": "m-2",
+     "type": "message",
+     "role": "assistant",
+     "text": "private",
+     "at": "2026-01-02T03:04:00+00:00",
+     "markdown": true,
+     "source": "stdout"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 1,
+    "assistant_messages": 1,
+    "tools": 0,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 0,
+    "tokens": 4
+   },
+   "usage": {
+    "source": "estimated",
+    "estimated": true,
+    "reported_events": 0,
+    "reported": {},
+    "estimated_usage": {
+     "input_tokens": 2,
+     "output_tokens": 2,
+     "total_tokens": 4
+    },
+    "input_chars": 6,
+    "output_chars": 7,
+    "input_tokens": 2,
+    "output_tokens": 2,
+    "total_tokens": 4
+   },
+   "signature": "s_20260102030405hidden1|errored|2|0|0|m-2|2026-01-02T03:04:00+00:00||private|4|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_edge0000",
+   "status": "running",
+   "prompt": "",
+   "prompt_at": null,
+   "stdout": [
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "[[ark-event]] {\"type\": \"tool_call\", \"name\": {\"x\": 1}, \"input\": [1, 2.5, null, true]}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "[[ark-event]] {\"type\": \"tool_result\", \"name\": 7, \"output\": {\"k\": \"v\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"result\", \"usage\": {\"input_tokens\": \"9\", \"cached_tokens\": 3}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"usage\": {\"prompt_tokens\": -1, \"completion_tokens\": 2}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"assistant\", \"message\": {\"text\": \"only text\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"item.updated\", \"item\": {\"type\": \"reasoning\", \"text\": \"r\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"unknown\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"choices\": [5]}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "❯ not input"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "xxxxxxxxxx"
+    }
+   ],
+   "stderr": [
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "plain error"
+    }
+   ],
+   "error": "",
+   "notice": "",
+   "platform": ""
+  },
+  "output": {
+   "session": "s_edge0000",
+   "status": "running",
+   "active": true,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "t-1",
+     "type": "tool",
+     "name": "{'x': 1}",
+     "input": [
+      1,
+      2.5,
+      null,
+      true
+     ],
+     "output": null,
+     "status": "running",
+     "at": "2026-01-01T00:00:00+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "t-2",
+     "type": "tool",
+     "name": "7",
+     "input": null,
+     "output": {
+      "k": "v"
+     },
+     "status": "ok",
+     "at": "2026-01-01T00:00:00+00:00",
+     "completed_at": "2026-01-01T00:00:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-3",
+     "type": "message",
+     "role": "assistant",
+     "text": "only text",
+     "at": "2026-01-01T00:00:00+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "n-4",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "r",
+     "at": "2026-01-01T00:00:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-5",
+     "type": "message",
+     "role": "assistant",
+     "text": "{\"type\": \"item.completed\", \"item\": {\"type\": \"unknown\"}}\n{\"choices\": [5]}\n❯ not input\nxxxxxxxxxx",
+     "at": "2026-01-01T00:00:00+00:00",
+     "markdown": true,
+     "source": "stdout",
+     "streaming": true
+    },
+    {
+     "id": "e-6",
+     "type": "error",
+     "text": "plain error",
+     "at": "2026-01-01T00:00:00+00:00",
+     "source": "stderr"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 0,
+    "assistant_messages": 2,
+    "tools": 2,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 1,
+    "tokens": 11
+   },
+   "usage": {
+    "source": "reported",
+    "estimated": false,
+    "reported_events": 2,
+    "reported": {
+     "input_tokens": 9,
+     "cache_read_input_tokens": 3,
+     "total_tokens": 11,
+     "output_tokens": 2
+    },
+    "estimated_usage": {
+     "input_tokens": 8,
+     "output_tokens": 30,
+     "total_tokens": 38
+    },
+    "input_chars": 30,
+    "output_chars": 118,
+    "input_tokens": 9,
+    "output_tokens": 2,
+    "total_tokens": 11,
+    "cache_read_input_tokens": 3
+   },
+   "signature": "s_edge0000|running|6|2|1|e-6|2026-01-01T00:00:00+00:00||plain error|11|"
+  }
+ },
+ {
+  "input": {
+   "session_id": "s_edge0000",
+   "status": "idle",
+   "prompt": "",
+   "prompt_at": null,
+   "stdout": [
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "[[ark-event]] {\"type\": \"tool_call\", \"name\": {\"x\": 1}, \"input\": [1, 2.5, null, true]}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "[[ark-event]] {\"type\": \"tool_result\", \"name\": 7, \"output\": {\"k\": \"v\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"result\", \"usage\": {\"input_tokens\": \"9\", \"cached_tokens\": 3}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"usage\": {\"prompt_tokens\": -1, \"completion_tokens\": 2}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"assistant\", \"message\": {\"text\": \"only text\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"item.updated\", \"item\": {\"type\": \"reasoning\", \"text\": \"r\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"type\": \"item.completed\", \"item\": {\"type\": \"unknown\"}}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "{\"choices\": [5]}"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "❯ not input"
+    },
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "xxxxxxxxxx"
+    }
+   ],
+   "stderr": [
+    {
+     "t": "2026-01-01T00:00:00+00:00",
+     "line": "plain error"
+    }
+   ],
+   "error": "",
+   "notice": "",
+   "platform": ""
+  },
+  "output": {
+   "session": "s_edge0000",
+   "status": "idle",
+   "active": true,
+   "generated_at": "<GEN>",
+   "items": [
+    {
+     "id": "t-1",
+     "type": "tool",
+     "name": "{'x': 1}",
+     "input": [
+      1,
+      2.5,
+      null,
+      true
+     ],
+     "output": null,
+     "status": "running",
+     "at": "2026-01-01T00:00:00+00:00",
+     "completed_at": null,
+     "source": "stdout"
+    },
+    {
+     "id": "t-2",
+     "type": "tool",
+     "name": "7",
+     "input": null,
+     "output": {
+      "k": "v"
+     },
+     "status": "ok",
+     "at": "2026-01-01T00:00:00+00:00",
+     "completed_at": "2026-01-01T00:00:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-3",
+     "type": "message",
+     "role": "assistant",
+     "text": "only text",
+     "at": "2026-01-01T00:00:00+00:00",
+     "markdown": true,
+     "source": "stdout"
+    },
+    {
+     "id": "n-4",
+     "type": "notice",
+     "level": "reasoning",
+     "text": "r",
+     "at": "2026-01-01T00:00:00+00:00",
+     "source": "stdout"
+    },
+    {
+     "id": "m-5",
+     "type": "message",
+     "role": "assistant",
+     "text": "{\"type\": \"item.completed\", \"item\": {\"type\": \"unknown\"}}\n{\"choices\": [5]}\n❯ not input\nxxxxxxxxxx",
+     "at": "2026-01-01T00:00:00+00:00",
+     "markdown": true,
+     "source": "stdout",
+     "streaming": true
+    },
+    {
+     "id": "e-6",
+     "type": "error",
+     "text": "plain error",
+     "at": "2026-01-01T00:00:00+00:00",
+     "source": "stderr"
+    }
+   ],
+   "stats": {
+    "messages": 2,
+    "user_messages": 0,
+    "assistant_messages": 2,
+    "tools": 2,
+    "permissions": 0,
+    "pending_permissions": 0,
+    "errors": 1,
+    "tokens": 11
+   },
+   "usage": {
+    "source": "reported",
+    "estimated": false,
+    "reported_events": 2,
+    "reported": {
+     "input_tokens": 9,
+     "cache_read_input_tokens": 3,
+     "total_tokens": 11,
+     "output_tokens": 2
+    },
+    "estimated_usage": {
+     "input_tokens": 8,
+     "output_tokens": 30,
+     "total_tokens": 38
+    },
+    "input_chars": 30,
+    "output_chars": 118,
+    "input_tokens": 9,
+    "output_tokens": 2,
+    "total_tokens": 11,
+    "cache_read_input_tokens": 3
+   },
+   "signature": "s_edge0000|idle|6|2|1|e-6|2026-01-01T00:00:00+00:00||plain error|11|"
+  }
+ }
+]

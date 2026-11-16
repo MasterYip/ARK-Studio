@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-desktop-shell="bundled">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ARK Studio</title>
+  <link rel="stylesheet" href="chooser.css">
+  <script type="module" src="offline.js"></script>
+</head>
+<body>
+  <div class="frame">
+  <header class="titlebar" data-tauri-drag-region="deep"><span class="titlebar-name">ARK Studio</span></header>
+  <div class="content" data-tauri-drag-region="deep">
+  <main class="shell">
+    <header class="brand">
+      <picture>
+        <source media="(prefers-color-scheme: dark)" srcset="brand/ark-lockup-loading-dark.svg">
+        <img src="brand/ark-lockup-loading.svg" alt="ARK Studio" height="44">
+      </picture>
+    </header>
+    <section class="card">
+      <h1 id="title"></h1>
+      <p id="message" class="lead"></p>
+      <pre id="log" class="log hidden"></pre>
+      <div class="row end">
+        <button type="button" id="show-log" class="btn hidden" data-i18n="log.show">Show server log</button>
+        <button type="button" id="switch" class="btn" data-i18n="offline.switch">Choose another server</button>
+        <button type="button" id="retry" class="btn primary" data-i18n="offline.retry">Try again</button>
+      </div>
+    </section>
+  </main>
+  </div>
+  </div>
+</body>
+</html>

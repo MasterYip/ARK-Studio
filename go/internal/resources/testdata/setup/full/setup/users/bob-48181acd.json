@@ -1,0 +1,13 @@
+{
+  "owner": "Bob",
+  "hosts": [
+    {
+      "id": "bob-box",
+      "label": "Bob box"
+    }
+  ],
+  "verification": {
+    "host": "bob-box",
+    "at": "2026-11-14T11:59:30"
+  }
+}

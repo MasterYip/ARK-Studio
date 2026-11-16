@@ -1,0 +1,376 @@
+{
+ "float": [
+  {
+   "in": "1",
+   "out": "1.0"
+  },
+  {
+   "in": " 2.5 ",
+   "out": "2.5"
+  },
+  {
+   "in": "1_000",
+   "out": "1000.0"
+  },
+  {
+   "in": "1__0",
+   "err": "could not convert string to float: '1__0'"
+  },
+  {
+   "in": "_1",
+   "err": "could not convert string to float: '_1'"
+  },
+  {
+   "in": "1_",
+   "err": "could not convert string to float: '1_'"
+  },
+  {
+   "in": "1e3",
+   "out": "1000.0"
+  },
+  {
+   "in": "1E-2",
+   "out": "0.01"
+  },
+  {
+   "in": ".5",
+   "out": "0.5"
+  },
+  {
+   "in": "5.",
+   "out": "5.0"
+  },
+  {
+   "in": ".",
+   "err": "could not convert string to float: '.'"
+  },
+  {
+   "in": "e3",
+   "err": "could not convert string to float: 'e3'"
+  },
+  {
+   "in": "+-1",
+   "err": "could not convert string to float: '+-1'"
+  },
+  {
+   "in": "-inf",
+   "out": "-inf"
+  },
+  {
+   "in": "INFINITY",
+   "out": "inf"
+  },
+  {
+   "in": "nan",
+   "out": "nan"
+  },
+  {
+   "in": "-NaN",
+   "out": "nan"
+  },
+  {
+   "in": "１２",
+   "out": "12.0"
+  },
+  {
+   "in": "１.５",
+   "out": "1.5"
+  },
+  {
+   "in": "0x10",
+   "err": "could not convert string to float: '0x10'"
+  },
+  {
+   "in": "1e400",
+   "out": "inf"
+  },
+  {
+   "in": "-1e400",
+   "out": "-inf"
+  },
+  {
+   "in": "1e-400",
+   "out": "0.0"
+  },
+  {
+   "in": " 1 ",
+   "out": "1.0"
+  },
+  {
+   "in": "1 2",
+   "err": "could not convert string to float: '1 2'"
+  },
+  {
+   "in": "",
+   "err": "could not convert string to float: ''"
+  },
+  {
+   "in": "  ",
+   "err": "could not convert string to float: ''"
+  },
+  {
+   "in": "1.5e+3",
+   "out": "1500.0"
+  },
+  {
+   "in": "1_000.000_1",
+   "out": "1000.0001"
+  },
+  {
+   "in": "١٢٣",
+   "out": "123.0"
+  },
+  {
+   "in": "²",
+   "err": "could not convert string to float: '²'"
+  },
+  {
+   "in": "in f",
+   "err": "could not convert string to float: 'in f'"
+  },
+  {
+   "in": "+.5e-1",
+   "out": "0.05"
+  },
+  {
+   "in": "1e",
+   "err": "could not convert string to float: '1e'"
+  },
+  {
+   "in": "1e+",
+   "err": "could not convert string to float: '1e+'"
+  },
+  {
+   "in": "--1",
+   "err": "could not convert string to float: '--1'"
+  },
+  {
+   "in": "0",
+   "out": "0.0"
+  },
+  {
+   "in": "-0",
+   "out": "-0.0"
+  },
+  {
+   "in": "00012",
+   "out": "12.0"
+  },
+  {
+   "in": "1.0_0",
+   "out": "1.0"
+  }
+ ],
+ "round": [
+  {
+   "in": 0.05,
+   "out": "0.1"
+  },
+  {
+   "in": 0.15,
+   "out": "0.1"
+  },
+  {
+   "in": 0.25,
+   "out": "0.2"
+  },
+  {
+   "in": 0.35,
+   "out": "0.3"
+  },
+  {
+   "in": 2.675,
+   "out": "2.7"
+  },
+  {
+   "in": 1000.15,
+   "out": "1000.1"
+  },
+  {
+   "in": 70.25,
+   "out": "70.2"
+  },
+  {
+   "in": 61.125,
+   "out": "61.1"
+  },
+  {
+   "in": -0.05,
+   "out": "-0.1"
+  },
+  {
+   "in": 1e+16,
+   "out": "1e+16"
+  },
+  {
+   "in": 123456789.25,
+   "out": "123456789.2"
+  },
+  {
+   "in": 0.95,
+   "out": "0.9"
+  },
+  {
+   "in": 99.95,
+   "out": "100.0"
+  },
+  {
+   "in": 5e-324,
+   "out": "0.0"
+  }
+ ],
+ "since": [
+  {
+   "in": "2000-01-01T00:00:00Z",
+   "out": "2000-01-01T00:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00.5+00:00",
+   "out": "2000-01-01T00:00:00.500000+00:00"
+  },
+  {
+   "in": "2000-01-01T00:00:00.123+05:30",
+   "out": "1999-12-31T18:30:00.123000+00:00"
+  },
+  {
+   "in": "2000-01-01T24:00:00Z",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T12+00:00",
+   "out": "2000-01-01T12:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01T12:30x",
+   "out": null
+  },
+  {
+   "in": "2000-01-01 00:00:00-23:59",
+   "out": "2000-01-01T23:59:00+00:00"
+  },
+  {
+   "in": "2000-02-30T00:00:00Z",
+   "out": null
+  },
+  {
+   "in": "2000-02-29T23:59:59.999999-00:00:01",
+   "out": "2000-03-01T00:00:00.999999+00:00"
+  },
+  {
+   "in": "2001-02-29T00:00:00Z",
+   "out": null
+  },
+  {
+   "in": "0001-01-01T00:00:00+00:00",
+   "out": "0001-01-01T00:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01T00:00:00+24:00",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00+01:00",
+   "out": "1999-12-31T23:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01X00:00:00Z",
+   "out": "2000-01-01T00:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01é00:00:00Z",
+   "out": "2000-01-01T00:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01T00:00:00.1234567Z",
+   "out": null
+  },
+  {
+   "in": "2000-1-01T00:00:00Z",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00+0100",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00+01:00:30.5",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00.123456+01:00:30.000001",
+   "out": "1999-12-31T22:59:30.123455+00:00"
+  },
+  {
+   "in": "2000-01-01T00Z",
+   "out": "2000-01-01T00:00:00+00:00"
+  },
+  {
+   "in": "2000-01-01T",
+   "out": null
+  },
+  {
+   "in": "garbage",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00Z\n",
+   "out": null
+  },
+  {
+   "in": "2000-01-01T00:00:00.5Z\n",
+   "out": null
+  }
+ ],
+ "smi": [
+  {
+   "in": "0, A, 100, 50, 10, 1, 2, 3",
+   "out": "[[{\"index\": 0, \"name\": \"A\", \"memory_total_mb\": 100.0, \"memory_used_mb\": 50.0, \"free_memory_mb\": 50.0, \"utilization_pct\": 10.0, \"utilization_memory_pct\": 1.0, \"temperature_c\": 2.0, \"power_w\": 3.0, \"score\": 45.0, \"occupancy_pct\": 50.0}], []]"
+  },
+  {
+   "in": "index, name\nNo devices were found\n x , y, 1, 1, 1\n1.5, h, 1, 1, 1",
+   "out": "[[], [\"ignored line with a non-numeric GPU index: x , y, 1, 1, 1\", \"ignored line with a non-numeric GPU index: 1.5, h, 1, 1, 1\"]]"
+  },
+  {
+   "in": "3, n, [N/A], 1, 1\r\n4, m, 1e3, 2e3, -5\r5, , inf, 1, nan",
+   "out": "[[{\"index\": 3, \"name\": \"n\", \"memory_total_mb\": null, \"memory_used_mb\": 1.0, \"free_memory_mb\": null, \"utilization_pct\": 1.0, \"utilization_memory_pct\": null, \"temperature_c\": null, \"power_w\": null, \"score\": null, \"occupancy_pct\": 1.0}, {\"index\": 4, \"name\": \"m\", \"memory_total_mb\": 1000.0, \"memory_used_mb\": 2000.0, \"free_memory_mb\": 0.0, \"utilization_pct\": -5.0, \"utilization_memory_pct\": null, \"temperature_c\": null, \"power_w\": null, \"score\": 0.0, \"occupancy_pct\": 100.0}, {\"index\": 5, \"name\": \"GPU\", \"memory_total_mb\": Infinity, \"memory_used_mb\": 1.0, \"free_memory_mb\": Infinity, \"utilization_pct\": NaN, \"utilization_memory_pct\": null, \"temperature_c\": null, \"power_w\": null, \"score\": Infinity, \"occupancy_pct\": 100.0}], [\"GPU 3 did not report total memory\"]]"
+  },
+  {
+   "in": "bad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad\nbad",
+   "out": "[[], [\"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"ignored malformed nvidia-smi line: bad\", \"… 2 more warnings\"]]"
+  },
+  {
+   "in": "6, u, 1_0, ２, 0.15",
+   "out": "[[{\"index\": 6, \"name\": \"u\", \"memory_total_mb\": 10.0, \"memory_used_mb\": 2.0, \"free_memory_mb\": 8.0, \"utilization_pct\": 0.1, \"utilization_memory_pct\": null, \"temperature_c\": null, \"power_w\": null, \"score\": 8.0, \"occupancy_pct\": 20.0}], []]"
+  }
+ ],
+ "system": [
+  {
+   "in": "__ARK_LOAD__\n1 2 3\n__ARK_NPROC__\n4\n__ARK_CPU__\n%Cpu(s): 1.0 us, 90.5 id\n",
+   "out": "{\"load1\": 1.0, \"load5\": 2.0, \"load15\": 3.0, \"cores\": 4, \"cpu_load_pct\": 25.0, \"cpu_percent\": 9.5, \"memory_total_mb\": null, \"memory_used_mb\": null, \"memory_free_mb\": null, \"memory_available_mb\": null, \"processes\": [], \"process_util_available\": false, \"error\": null}"
+  },
+  {
+   "in": "__ARK_LOAD__\nx 2 3\n",
+   "out": "{\"load1\": null, \"load5\": null, \"load15\": null, \"cores\": null, \"cpu_load_pct\": null, \"cpu_percent\": null, \"memory_total_mb\": null, \"memory_used_mb\": null, \"memory_free_mb\": null, \"memory_available_mb\": null, \"processes\": [], \"process_util_available\": false, \"error\": \"could not parse system metrics: could not convert string to float: 'x'\"}"
+  },
+  {
+   "in": "__ARK_NPROC__\nabc\n",
+   "out": "{\"load1\": null, \"load5\": null, \"load15\": null, \"cores\": null, \"cpu_load_pct\": null, \"cpu_percent\": null, \"memory_total_mb\": null, \"memory_used_mb\": null, \"memory_free_mb\": null, \"memory_available_mb\": null, \"processes\": [], \"process_util_available\": false, \"error\": \"could not parse system metrics: invalid literal for int() with base 10: 'abc'\"}"
+  },
+  {
+   "in": "__ARK_MEM__\n1 x 3 4\n",
+   "out": "{\"load1\": null, \"load5\": null, \"load15\": null, \"cores\": null, \"cpu_load_pct\": null, \"cpu_percent\": null, \"memory_total_mb\": 1, \"memory_used_mb\": null, \"memory_free_mb\": null, \"memory_available_mb\": null, \"processes\": [], \"process_util_available\": false, \"error\": \"could not parse system metrics: invalid literal for int() with base 10: 'x'\"}"
+  },
+  {
+   "in": "__ARK_BUS__\n0, b0\n1, b1\nz, b2\n__ARK_PROC__\n9, b0, 100\n8, b1, [N/A]\n7, b9, 1\n__ARK_PMON__\n# x\n 0 9 C 50\n 1 8 C -\n__ARK_ENV__\n9 gpu_x\n",
+   "out": "{\"load1\": null, \"load5\": null, \"load15\": null, \"cores\": null, \"cpu_load_pct\": null, \"cpu_percent\": null, \"memory_total_mb\": null, \"memory_used_mb\": null, \"memory_free_mb\": null, \"memory_available_mb\": null, \"processes\": [{\"pid\": 9, \"memory_mb\": 100, \"gpu_index\": 0, \"job_id\": \"gpu_x\", \"sm_pct\": 50.0}, {\"pid\": 8, \"memory_mb\": null, \"gpu_index\": 1, \"job_id\": \"\", \"sm_pct\": 0.0}], \"process_util_available\": true, \"error\": null}"
+  }
+ ]
+}

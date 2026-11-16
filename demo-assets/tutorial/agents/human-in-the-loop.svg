@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Human-in-the-loop: where ARK asks you</title>
+<desc>A run timeline with three gates where a person must act: setup confirmation, approval before risky actions, and reviewer acceptance.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6B7280"/></marker><marker id="arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1F5A7A"/></marker></defs>
+<rect width="1200" height="520" fill="#F7F5EF"/>
+<text x="32" y="44" font-size="24" fill="#111827" font-weight="700" text-anchor="start">Where the agent stops and asks you</text>
+<text x="32" y="70" font-size="14" fill="#4B5563" font-weight="400" text-anchor="start">Agents do the work. Three decisions stay with a person.</text>
+<rect x="32" y="130" width="148" height="130" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="106" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Agent reads</text>
+<text x="106" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">GET /setup, /context,</text>
+<text x="106" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">/skills/agent-team</text>
+<line x1="182" y1="195" x2="194" y2="195" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="196" y="130" width="148" height="130" rx="8" fill="#FDF3E1" fill-opacity="1.0" stroke="#B7791F" stroke-width="2"/>
+<text x="270" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Setup</text>
+<text x="270" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">draft → proposed</text>
+<text x="270" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">→ YOU confirm</text>
+<text x="270" y="246" font-size="12" fill="#B7791F" font-weight="700" text-anchor="middle">● human</text>
+<line x1="346" y1="195" x2="358" y2="195" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="360" y="130" width="148" height="130" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="434" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Manifest</text>
+<text x="434" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">validate goal</text>
+<text x="434" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">manifest</text>
+<line x1="510" y1="195" x2="522" y2="195" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="524" y="130" width="148" height="130" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="598" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Work</text>
+<text x="598" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">worktree, gates</text>
+<text x="598" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">cheapest first</text>
+<line x1="674" y1="195" x2="686" y2="195" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="688" y="130" width="148" height="130" rx="8" fill="#FDF3E1" fill-opacity="1.0" stroke="#B7791F" stroke-width="2"/>
+<text x="762" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Risky step?</text>
+<text x="762" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">push, GPU, delete,</text>
+<text x="762" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">post → YOU approve</text>
+<text x="762" y="246" font-size="12" fill="#B7791F" font-weight="700" text-anchor="middle">● human</text>
+<line x1="838" y1="195" x2="850" y2="195" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="852" y="130" width="148" height="130" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="926" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Report</text>
+<text x="926" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">inspection report</text>
+<text x="926" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">+ evidence</text>
+<line x1="1002" y1="195" x2="1014" y2="195" stroke="#6B7280" stroke-width="1.5" stroke-linecap="round" marker-end="url(#arrow)"/>
+<rect x="1016" y="130" width="148" height="130" rx="8" fill="#FDF3E1" fill-opacity="1.0" stroke="#B7791F" stroke-width="2"/>
+<text x="1090" y="164" font-size="15" fill="#111827" font-weight="700" text-anchor="middle">Review</text>
+<text x="1090" y="196" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">YOU (or reviewer)</text>
+<text x="1090" y="216" font-size="12" fill="#4B5563" font-weight="400" text-anchor="middle">accept or return</text>
+<text x="1090" y="246" font-size="12" fill="#B7791F" font-weight="700" text-anchor="middle">● human</text>
+<text x="32" y="316" font-size="14" fill="#111827" font-weight="400" text-anchor="start">What the agent may do on its own comes from the confirmed setup profile (the authority section).</text>
+<text x="32" y="342" font-size="14" fill="#111827" font-weight="400" text-anchor="start">Anything listed in readiness.requires_human waits for you, even if the agent is sure.</text>
+<rect x="32" y="380" width="556" height="110" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="32" y="380" width="6" height="110" rx="3" fill="#B23A48" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="50" y="406" font-size="15" fill="#111827" font-weight="700" text-anchor="start">Agent token</text>
+<text x="50" y="428" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Assistant → Agent API → Reveal token.</text>
+<text x="50" y="446" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Send it as  Authorization: Bearer &lt;token&gt;.</text>
+<text x="50" y="464" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Never paste it into files, units or reports.</text>
+<rect x="612" y="380" width="556" height="110" rx="8" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="612" y="380" width="6" height="110" rx="3" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="630" y="406" font-size="15" fill="#111827" font-weight="700" text-anchor="start">Skills the agent reads</text>
+<text x="630" y="428" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">setup · agent-team · rrsi · design</text>
+<text x="630" y="446" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">GET /api/agent/v1/skills/&lt;name&gt;</text>
+<text x="630" y="464" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Settings → Skills shows the same catalogue.</text>
+</svg>

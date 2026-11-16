@@ -1,0 +1,10 @@
+{
+  "root": "~/ark/projects",
+  "private_dir": "~/ark/private",
+  "host": "127.0.0.1",
+  "port": 8890,
+  "auth_user": "admin",
+  "auth_password_file": "~/.config/arkstudio/admin.password",
+  "public_url": "https://ark.example.com",
+  "trust_proxy": true
+}

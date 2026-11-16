@@ -1,0 +1,53 @@
+__pycache__/
+/build/
+/dist/
+*.egg-info/
+*.py[cod]
+.pytest_cache/
+runtime/projects/
+runtime/agent-sessions/
+.demo/
+node_modules/
+.DS_Store
+
+# Private GPU server inventories never belong in the repository.
+# The committed example is vendor/gpu_server_probe/servers_rp.example.yaml.
+vendor/gpu_server_probe/servers_rp.yaml
+gpu_servers.yaml
+
+# Android APKs are release artifacts; publish them to the server, not git.
+dist/*.apk
+
+# Local server logs and the local organization database.
+runtime/*.log
+runtime/*.sqlite3
+runtime/*.sqlite3-*
+
+# Project snapshots are local recovery data.
+runtime/blackbox/
+
+# Complete instance state, bootstrap credentials, backups and downloaded proxies.
+/runtime/
+/cloudflared
+/cloudflared.log
+/server.log
+
+# Instance configuration and secrets, including accidental in-checkout setup.
+/.ark/
+/private/
+/output/
+server.json
+test-accounts.json
+test-fixtures.json
+.env
+.env.*
+!.env.example
+*.sqlite
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.pem
+*.key
+# Locally built Windows tray launcher (scripts/release/build-tray-launcher.ps1)
+ARK-Tray.exe

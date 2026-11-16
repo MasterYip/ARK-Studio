@@ -1,0 +1,1475 @@
+{
+ "prog": "arkstudio",
+ "usage": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\n",
+ "help": "usage: arkstudio [-h]\n                 {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n                 ...\n\nARK Studio research workbench\n\npositional arguments:\n  {server-init,serve,desktop,remote,mobile-tunnel,new,demo,export,agent,session-watch,skills}\n    server-init         initialize persistent server configuration and an\n                        owner account\n    serve               run the local workbench\n    desktop             run the frameless system-tray window\n    remote              open a remote ARK project through SSH\n    mobile-tunnel       publish a loopback ARK server to the LAN for phone\n                        pairing (SSH local forward)\n    new                 create a project folder\n    demo                create the PredActor demo project\n    export              export a project\n    agent               local agent context\n    session-watch       upload an external agent's session JSONL to ARK at an\n                        interval (opt-in)\n    skills              discover ARK skills and render/validate their\n                        templates\n\noptions:\n  -h, --help            show this help message and exit\n",
+ "actions": [
+  {
+   "kind": "help",
+   "dest": "help",
+   "option_strings": [
+    "-h",
+    "--help"
+   ],
+   "nargs": 0,
+   "required": false,
+   "type": null,
+   "metavar": null,
+   "choices": null
+  },
+  {
+   "kind": "parsers",
+   "dest": "command",
+   "option_strings": [],
+   "nargs": "A...",
+   "required": false,
+   "type": null,
+   "metavar": null,
+   "choices": [
+    "server-init",
+    "serve",
+    "desktop",
+    "remote",
+    "mobile-tunnel",
+    "new",
+    "demo",
+    "export",
+    "agent",
+    "session-watch",
+    "skills"
+   ],
+   "parsers": [
+    {
+     "prog": "arkstudio server-init",
+     "usage": "usage: arkstudio server-init [-h] --config CONFIG --data-dir DATA_DIR\n                             [--owner OWNER] [--password-file PASSWORD_FILE]\n                             [--port PORT] [--public-url PUBLIC_URL]\n",
+     "help": "usage: arkstudio server-init [-h] --config CONFIG --data-dir DATA_DIR\n                             [--owner OWNER] [--password-file PASSWORD_FILE]\n                             [--port PORT] [--public-url PUBLIC_URL]\n\noptions:\n  -h, --help            show this help message and exit\n  --config CONFIG\n  --data-dir DATA_DIR\n  --owner OWNER\n  --password-file PASSWORD_FILE\n                        initial password file for unattended setup; otherwise\n                        prompt securely\n  --port PORT\n  --public-url PUBLIC_URL\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "config",
+       "option_strings": [
+        "--config"
+       ],
+       "nargs": null,
+       "required": true,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "data_dir",
+       "option_strings": [
+        "--data-dir"
+       ],
+       "nargs": null,
+       "required": true,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "owner",
+       "option_strings": [
+        "--owner"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "password_file",
+       "option_strings": [
+        "--password-file"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "port",
+       "option_strings": [
+        "--port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "public_url",
+       "option_strings": [
+        "--public-url"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio serve",
+     "usage": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\n",
+     "help": "usage: arkstudio serve [-h] [--config CONFIG] [--require-auth] [--root ROOT]\n                       [--host HOST] [--port PORT] [--no-demo]\n                       [--media-root MEDIA_ROOT]\n                       [--sessions-root SESSIONS_ROOT]\n                       [--public-url PUBLIC_URL] [--expose]\n                       [--auth-user AUTH_USER] [--auth-password AUTH_PASSWORD]\n                       [--auth-password-file AUTH_PASSWORD_FILE]\n                       [--auth-password-hash AUTH_PASSWORD_HASH]\n                       [--auth-session-ttl AUTH_SESSION_TTL]\n                       [--public-ip PUBLIC_IP] [--detect-public-ip]\n                       [--trust-proxy]\n\noptions:\n  -h, --help            show this help message and exit\n  --config CONFIG       persistent server JSON configuration\n  --require-auth        refuse to start without account authentication\n  --root ROOT\n  --host HOST           bind address (default: 127.0.0.1; 0.0.0.0 with\n                        --expose or ARK_PUBLIC)\n  --port PORT\n  --no-demo             do not create the starter demo project\n  --media-root MEDIA_ROOT\n                        allow local media under this folder (repeatable)\n  --sessions-root SESSIONS_ROOT\n                        task-agent session logs (default: <root>/../agent-\n                        sessions)\n  --public-url PUBLIC_URL\n                        advertised base URL for phone pairing (or\n                        ARK_PUBLIC_URL)\n  --expose              bind 0.0.0.0 for phone/public access; requires account\n                        authentication (or ARK_PUBLIC=1)\n  --auth-user AUTH_USER\n                        sign-in username (or ARK_AUTH_USER)\n  --auth-password AUTH_PASSWORD\n                        sign-in password; visible in the process list, prefer\n                        ARK_AUTH_PASSWORD\n  --auth-password-file AUTH_PASSWORD_FILE\n                        read the sign-in password from a file (or\n                        ARK_AUTH_PASSWORD_FILE)\n  --auth-password-hash AUTH_PASSWORD_HASH\n                        PBKDF2 hash instead of a plaintext password (or\n                        ARK_AUTH_PASSWORD_HASH)\n  --auth-session-ttl AUTH_SESSION_TTL\n                        sign-in session seconds (default: 43200; or\n                        ARK_AUTH_SESSION_TTL)\n  --public-ip PUBLIC_IP\n                        explicit public IP for pairing URLs (or ARK_PUBLIC_IP)\n  --detect-public-ip    opt in to one short public-IP lookup for pairing (or\n                        ARK_DETECT_PUBLIC_IP=1)\n  --trust-proxy         trust X-Forwarded-For/Proto/Prefix from a reverse\n                        proxy (or ARK_TRUST_PROXY=1)\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "config",
+       "option_strings": [
+        "--config"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "require_auth",
+       "option_strings": [
+        "--require-auth"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "root",
+       "option_strings": [
+        "--root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "host",
+       "option_strings": [
+        "--host"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "port",
+       "option_strings": [
+        "--port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "no_demo",
+       "option_strings": [
+        "--no-demo"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "append",
+       "dest": "media_root",
+       "option_strings": [
+        "--media-root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "sessions_root",
+       "option_strings": [
+        "--sessions-root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "public_url",
+       "option_strings": [
+        "--public-url"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "expose",
+       "option_strings": [
+        "--expose"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "auth_user",
+       "option_strings": [
+        "--auth-user"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "auth_password",
+       "option_strings": [
+        "--auth-password"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "auth_password_file",
+       "option_strings": [
+        "--auth-password-file"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "auth_password_hash",
+       "option_strings": [
+        "--auth-password-hash"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "auth_session_ttl",
+       "option_strings": [
+        "--auth-session-ttl"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "public_ip",
+       "option_strings": [
+        "--public-ip"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "detect_public_ip",
+       "option_strings": [
+        "--detect-public-ip"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "trust_proxy",
+       "option_strings": [
+        "--trust-proxy"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio desktop",
+     "usage": "usage: arkstudio desktop [-h] [--root ROOT] [--host HOST] [--port PORT]\n                         [--no-server] [--remote-url REMOTE_URL] [--local]\n",
+     "help": "usage: arkstudio desktop [-h] [--root ROOT] [--host HOST] [--port PORT]\n                         [--no-server] [--remote-url REMOTE_URL] [--local]\n\noptions:\n  -h, --help            show this help message and exit\n  --root ROOT\n  --host HOST\n  --port PORT\n  --no-server           use an already running ARK server\n  --remote-url REMOTE_URL\n                        remote ARK URL to load in the desktop window\n  --local               ignore the saved remote URL and open local ARK\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "root",
+       "option_strings": [
+        "--root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "host",
+       "option_strings": [
+        "--host"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "port",
+       "option_strings": [
+        "--port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "no_server",
+       "option_strings": [
+        "--no-server"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "remote_url",
+       "option_strings": [
+        "--remote-url"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "local",
+       "option_strings": [
+        "--local"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio remote",
+     "usage": "usage: arkstudio remote [-h] --ssh SSH [--user USER] [--ssh-port SSH_PORT]\n                        [--remote-port REMOTE_PORT] [--local-port LOCAL_PORT]\n                        [--identity IDENTITY] [--remote-path REMOTE_PATH]\n                        [--mount MOUNT] [--no-open]\n",
+     "help": "usage: arkstudio remote [-h] --ssh SSH [--user USER] [--ssh-port SSH_PORT]\n                        [--remote-port REMOTE_PORT] [--local-port LOCAL_PORT]\n                        [--identity IDENTITY] [--remote-path REMOTE_PATH]\n                        [--mount MOUNT] [--no-open]\n\noptions:\n  -h, --help            show this help message and exit\n  --ssh SSH\n  --user USER\n  --ssh-port SSH_PORT\n  --remote-port REMOTE_PORT\n  --local-port LOCAL_PORT\n  --identity IDENTITY\n  --remote-path REMOTE_PATH\n  --mount MOUNT\n  --no-open\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "ssh",
+       "option_strings": [
+        "--ssh"
+       ],
+       "nargs": null,
+       "required": true,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "user",
+       "option_strings": [
+        "--user"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "ssh_port",
+       "option_strings": [
+        "--ssh-port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "remote_port",
+       "option_strings": [
+        "--remote-port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "local_port",
+       "option_strings": [
+        "--local-port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "identity",
+       "option_strings": [
+        "--identity"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "remote_path",
+       "option_strings": [
+        "--remote-path"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "mount",
+       "option_strings": [
+        "--mount"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "no_open",
+       "option_strings": [
+        "--no-open"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio mobile-tunnel",
+     "usage": "usage: arkstudio mobile-tunnel [-h] [--ssh SSH] [--ssh-port SSH_PORT]\n                               [--ark-port ARK_PORT] [--local-port LOCAL_PORT]\n                               [--bind BIND] [--identity IDENTITY]\n",
+     "help": "usage: arkstudio mobile-tunnel [-h] [--ssh SSH] [--ssh-port SSH_PORT]\n                               [--ark-port ARK_PORT] [--local-port LOCAL_PORT]\n                               [--bind BIND] [--identity IDENTITY]\n\noptions:\n  -h, --help            show this help message and exit\n  --ssh SSH             SSH target, e.g. user@gpu-server-1 (default:\n                        ARK_SSH_TARGET)\n  --ssh-port SSH_PORT\n  --ark-port ARK_PORT   ARK server port on the SSH server\n  --local-port LOCAL_PORT\n                        port this computer opens on its LAN interface\n  --bind BIND           local bind address (0.0.0.0 exposes the LAN)\n  --identity IDENTITY\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "ssh",
+       "option_strings": [
+        "--ssh"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "ssh_port",
+       "option_strings": [
+        "--ssh-port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "ark_port",
+       "option_strings": [
+        "--ark-port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "local_port",
+       "option_strings": [
+        "--local-port"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "bind",
+       "option_strings": [
+        "--bind"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "identity",
+       "option_strings": [
+        "--identity"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio new",
+     "usage": "usage: arkstudio new [-h] [--root ROOT] [--template {blank,paper,demo}]\n                     [--description DESCRIPTION]\n                     name\n",
+     "help": "usage: arkstudio new [-h] [--root ROOT] [--template {blank,paper,demo}]\n                     [--description DESCRIPTION]\n                     name\n\npositional arguments:\n  name\n\noptions:\n  -h, --help            show this help message and exit\n  --root ROOT\n  --template {blank,paper,demo}\n  --description DESCRIPTION\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "name",
+       "option_strings": [],
+       "nargs": null,
+       "required": true,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "root",
+       "option_strings": [
+        "--root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "template",
+       "option_strings": [
+        "--template"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": [
+        "blank",
+        "paper",
+        "demo"
+       ]
+      },
+      {
+       "kind": "store",
+       "dest": "description",
+       "option_strings": [
+        "--description"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio demo",
+     "usage": "usage: arkstudio demo [-h] [--root ROOT]\n",
+     "help": "usage: arkstudio demo [-h] [--root ROOT]\n\noptions:\n  -h, --help   show this help message and exit\n  --root ROOT\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "root",
+       "option_strings": [
+        "--root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio export",
+     "usage": "usage: arkstudio export [-h] --project PROJECT\n                        [--format {json,markdown,csv,svg,bundle}]\n                        [--units UNITS] [--depth DEPTH]\n                        [--media-root MEDIA_ROOT] [--out OUT]\n",
+     "help": "usage: arkstudio export [-h] --project PROJECT\n                        [--format {json,markdown,csv,svg,bundle}]\n                        [--units UNITS] [--depth DEPTH]\n                        [--media-root MEDIA_ROOT] [--out OUT]\n\noptions:\n  -h, --help            show this help message and exit\n  --project PROJECT     project folder\n  --format {json,markdown,csv,svg,bundle}\n                        bundle: ZIP of Markdown notes with media for --units\n  --units UNITS         bundle: comma-separated node UIDs\n  --depth DEPTH         bundle: levels of referenced nodes to include (0-3,\n                        default 1)\n  --media-root MEDIA_ROOT\n                        bundle: extra folder local media may be read from\n  --out OUT\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "project",
+       "option_strings": [
+        "--project"
+       ],
+       "nargs": null,
+       "required": true,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "format",
+       "option_strings": [
+        "--format"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": [
+        "json",
+        "markdown",
+        "csv",
+        "svg",
+        "bundle"
+       ]
+      },
+      {
+       "kind": "store",
+       "dest": "units",
+       "option_strings": [
+        "--units"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "depth",
+       "option_strings": [
+        "--depth"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "int",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "append",
+       "dest": "media_root",
+       "option_strings": [
+        "--media-root"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "out",
+       "option_strings": [
+        "--out"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio agent",
+     "usage": "usage: arkstudio agent [-h] {context} ...\n",
+     "help": "usage: arkstudio agent [-h] {context} ...\n\npositional arguments:\n  {context}\n    context   print compact project context\n\noptions:\n  -h, --help  show this help message and exit\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "parsers",
+       "dest": "agent_command",
+       "option_strings": [],
+       "nargs": "A...",
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": [
+        "context"
+       ],
+       "parsers": [
+        {
+         "prog": "arkstudio agent context",
+         "usage": "usage: arkstudio agent context [-h] [--project PROJECT] [--root ROOT]\n",
+         "help": "usage: arkstudio agent context [-h] [--project PROJECT] [--root ROOT]\n\noptions:\n  -h, --help         show this help message and exit\n  --project PROJECT  project folder (default: first project)\n  --root ROOT\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "project",
+           "option_strings": [
+            "--project"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "root",
+           "option_strings": [
+            "--root"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio session-watch",
+     "usage": "usage: arkstudio session-watch [-h] --id ID [--file FILE]\n                               [--agent {claude,codex,dsh,other}]\n                               [--server SERVER] [--project PROJECT]\n                               [--token-env TOKEN_ENV] [--interval INTERVAL]\n                               [--title TITLE] [--once]\n",
+     "help": "usage: arkstudio session-watch [-h] --id ID [--file FILE]\n                               [--agent {claude,codex,dsh,other}]\n                               [--server SERVER] [--project PROJECT]\n                               [--token-env TOKEN_ENV] [--interval INTERVAL]\n                               [--title TITLE] [--once]\n\noptions:\n  -h, --help            show this help message and exit\n  --id ID               ARK session id from the prompt (ark-ses-...)\n  --file FILE           session JSONL file (default: auto-detect by id)\n  --agent {claude,codex,dsh,other}\n                        agent that wrote the file (narrows auto-detection)\n  --server SERVER       ARK base URL (default $ARK_URL or\n                        http://127.0.0.1:8890)\n  --project PROJECT     ARK project id sent as X-ARK-Project (default\n                        $ARK_PROJECT)\n  --token-env TOKEN_ENV\n                        environment variable holding the agent token (default\n                        ARK_TOKEN)\n  --interval INTERVAL   seconds between uploads (min 10)\n  --title TITLE         title shown in ARK\n  --once                upload once and exit\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "id",
+       "option_strings": [
+        "--id"
+       ],
+       "nargs": null,
+       "required": true,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "file",
+       "option_strings": [
+        "--file"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "agent",
+       "option_strings": [
+        "--agent"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": [
+        "claude",
+        "codex",
+        "dsh",
+        "other"
+       ]
+      },
+      {
+       "kind": "store",
+       "dest": "server",
+       "option_strings": [
+        "--server"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "project",
+       "option_strings": [
+        "--project"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "token_env",
+       "option_strings": [
+        "--token-env"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "interval",
+       "option_strings": [
+        "--interval"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": "float",
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store",
+       "dest": "title",
+       "option_strings": [
+        "--title"
+       ],
+       "nargs": null,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "store_true",
+       "dest": "once",
+       "option_strings": [
+        "--once"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      }
+     ]
+    },
+    {
+     "prog": "arkstudio skills",
+     "usage": "usage: arkstudio skills [-h]\n                        {list,show,render,validate,interface,brief,setup} ...\n",
+     "help": "usage: arkstudio skills [-h]\n                        {list,show,render,validate,interface,brief,setup} ...\n\npositional arguments:\n  {list,show,render,validate,interface,brief,setup}\n    list                list available ARK skills\n    show                show one skill with its documents\n    render              render a skill template\n    validate            validate a skill payload\n    interface           print the agent interface descriptor (v2)\n    brief               validate a delegation brief\n    setup               environment setup:\n                        state|summary|questions|discover|draft|confirm|verify\n\noptions:\n  -h, --help            show this help message and exit\n",
+     "actions": [
+      {
+       "kind": "help",
+       "dest": "help",
+       "option_strings": [
+        "-h",
+        "--help"
+       ],
+       "nargs": 0,
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": null
+      },
+      {
+       "kind": "parsers",
+       "dest": "skills_command",
+       "option_strings": [],
+       "nargs": "A...",
+       "required": false,
+       "type": null,
+       "metavar": null,
+       "choices": [
+        "list",
+        "show",
+        "render",
+        "validate",
+        "interface",
+        "brief",
+        "setup"
+       ],
+       "parsers": [
+        {
+         "prog": "arkstudio skills list",
+         "usage": "usage: arkstudio skills list [-h]\n",
+         "help": "usage: arkstudio skills list [-h]\n\noptions:\n  -h, --help  show this help message and exit\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        },
+        {
+         "prog": "arkstudio skills show",
+         "usage": "usage: arkstudio skills show [-h] skill\n",
+         "help": "usage: arkstudio skills show [-h] skill\n\npositional arguments:\n  skill\n\noptions:\n  -h, --help  show this help message and exit\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "skill",
+           "option_strings": [],
+           "nargs": null,
+           "required": true,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        },
+        {
+         "prog": "arkstudio skills render",
+         "usage": "usage: arkstudio skills render [-h] [--context CONTEXT] [--out OUT]\n                               skill template\n",
+         "help": "usage: arkstudio skills render [-h] [--context CONTEXT] [--out OUT]\n                               skill template\n\npositional arguments:\n  skill\n  template\n\noptions:\n  -h, --help         show this help message and exit\n  --context CONTEXT  JSON file or inline JSON object\n  --out OUT\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "skill",
+           "option_strings": [],
+           "nargs": null,
+           "required": true,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "template",
+           "option_strings": [],
+           "nargs": null,
+           "required": true,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "context",
+           "option_strings": [
+            "--context"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "out",
+           "option_strings": [
+            "--out"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        },
+        {
+         "prog": "arkstudio skills validate",
+         "usage": "usage: arkstudio skills validate [-h] [--payload PAYLOAD]\n                                 [--project-root PROJECT_ROOT]\n                                 skill kind\n",
+         "help": "usage: arkstudio skills validate [-h] [--payload PAYLOAD]\n                                 [--project-root PROJECT_ROOT]\n                                 skill kind\n\npositional arguments:\n  skill\n  kind\n\noptions:\n  -h, --help            show this help message and exit\n  --payload PAYLOAD     JSON file or inline JSON object\n  --project-root PROJECT_ROOT\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "skill",
+           "option_strings": [],
+           "nargs": null,
+           "required": true,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "kind",
+           "option_strings": [],
+           "nargs": null,
+           "required": true,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "payload",
+           "option_strings": [
+            "--payload"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "project_root",
+           "option_strings": [
+            "--project-root"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        },
+        {
+         "prog": "arkstudio skills interface",
+         "usage": "usage: arkstudio skills interface [-h]\n",
+         "help": "usage: arkstudio skills interface [-h]\n\noptions:\n  -h, --help  show this help message and exit\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        },
+        {
+         "prog": "arkstudio skills brief",
+         "usage": "usage: arkstudio skills brief [-h] [--payload PAYLOAD]\n",
+         "help": "usage: arkstudio skills brief [-h] [--payload PAYLOAD]\n\noptions:\n  -h, --help         show this help message and exit\n  --payload PAYLOAD  JSON file or inline JSON object\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "payload",
+           "option_strings": [
+            "--payload"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        },
+        {
+         "prog": "arkstudio skills setup",
+         "usage": "usage: arkstudio skills setup [-h] [--project PROJECT] [--paths [PATHS ...]]\n                              [--payload PAYLOAD] [--propose]\n                              [--digest DIGEST] [--note NOTE]\n                              [{state,summary,questions,discover,draft,confirm,verify}]\n",
+         "help": "usage: arkstudio skills setup [-h] [--project PROJECT] [--paths [PATHS ...]]\n                              [--payload PAYLOAD] [--propose]\n                              [--digest DIGEST] [--note NOTE]\n                              [{state,summary,questions,discover,draft,confirm,verify}]\n\npositional arguments:\n  {state,summary,questions,discover,draft,confirm,verify}\n\noptions:\n  -h, --help            show this help message and exit\n  --project PROJECT     path to the .ark project folder\n  --paths [PATHS ...]   candidate repository / task-space folders to discover\n  --payload PAYLOAD     profile JSON file or inline JSON\n  --propose             mark the draft as proposed for human confirmation\n  --digest DIGEST       digest the human reviewed\n  --note NOTE\n",
+         "actions": [
+          {
+           "kind": "help",
+           "dest": "help",
+           "option_strings": [
+            "-h",
+            "--help"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "setup_action",
+           "option_strings": [],
+           "nargs": "?",
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": [
+            "state",
+            "summary",
+            "questions",
+            "discover",
+            "draft",
+            "confirm",
+            "verify"
+           ]
+          },
+          {
+           "kind": "store",
+           "dest": "project",
+           "option_strings": [
+            "--project"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "paths",
+           "option_strings": [
+            "--paths"
+           ],
+           "nargs": "*",
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "payload",
+           "option_strings": [
+            "--payload"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store_true",
+           "dest": "propose",
+           "option_strings": [
+            "--propose"
+           ],
+           "nargs": 0,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "digest",
+           "option_strings": [
+            "--digest"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          },
+          {
+           "kind": "store",
+           "dest": "note",
+           "option_strings": [
+            "--note"
+           ],
+           "nargs": null,
+           "required": false,
+           "type": null,
+           "metavar": null,
+           "choices": null
+          }
+         ]
+        }
+       ]
+      }
+     ]
+    }
+   ]
+  }
+ ]
+}

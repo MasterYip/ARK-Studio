@@ -1,0 +1,51 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="520" viewBox="0 0 1200 520" role="img" font-family="Inter, 'Segoe UI', 'Helvetica Neue', Arial, sans-serif">
+<title>Settings at a glance</title>
+<desc>Settings tabs grouped by scope: Project, Personal and Admin, plus the precedence rule.</desc>
+<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#6B7280"/></marker><marker id="arrow-focus" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="#1F5A7A"/></marker></defs>
+<rect width="1200" height="520" fill="#F7F5EF"/>
+<text x="32" y="44" font-size="24" fill="#111827" font-weight="700" text-anchor="start">Settings at a glance</text>
+<text x="32" y="70" font-size="14" fill="#4B5563" font-weight="400" text-anchor="start">Three scopes. A personal value always wins over a project value.</text>
+<rect x="32" y="100" width="360" height="300" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="32" y="100" width="360" height="8" rx="4" fill="#1F5A7A" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="52" y="140" font-size="18" fill="#111827" font-weight="700" text-anchor="start">Project</text>
+<text x="52" y="162" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">shared with the project's members</text>
+<text x="52" y="196" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Graph</text>
+<text x="52" y="226" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Project agents</text>
+<text x="52" y="256" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Project assistant</text>
+<text x="52" y="286" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Skills</text>
+<text x="52" y="316" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Providers</text>
+<text x="222" y="196" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Data</text>
+<text x="222" y="226" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Mobile</text>
+<text x="222" y="256" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Remote</text>
+<text x="222" y="286" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• GPU</text>
+<rect x="416" y="100" width="360" height="300" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="416" y="100" width="360" height="8" rx="4" fill="#C2683F" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="436" y="140" font-size="18" fill="#111827" font-weight="700" text-anchor="start">Personal</text>
+<text x="436" y="162" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">only you see these</text>
+<text x="436" y="196" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Assistant (your model + key)</text>
+<text x="436" y="226" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Agents (your commands)</text>
+<text x="436" y="256" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Account</text>
+<text x="436" y="286" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Linux account</text>
+<text x="436" y="316" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Shortcuts</text>
+<rect x="800" y="100" width="360" height="300" rx="8" fill="#FFFFFF" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<rect x="800" y="100" width="360" height="8" rx="4" fill="#7C5C9E" fill-opacity="1.0" stroke="none" stroke-width="1"/>
+<text x="820" y="140" font-size="18" fill="#111827" font-weight="700" text-anchor="start">Admin</text>
+<text x="820" y="162" font-size="12" fill="#4B5563" font-weight="400" text-anchor="start">organisation owners and admins</text>
+<text x="820" y="196" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Users</text>
+<text x="820" y="226" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Teams</text>
+<text x="820" y="256" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Project grants</text>
+<text x="820" y="286" font-size="13" fill="#111827" font-weight="400" text-anchor="start">• Linux identities</text>
+<text x="32" y="440" font-size="14" fill="#111827" font-weight="700" text-anchor="start">Precedence, field by field:</text>
+<rect x="240" y="420" width="150" height="30" rx="15" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="315" y="440" font-size="13" fill="#111827" font-weight="600" text-anchor="middle">personal</text>
+<text x="408" y="441" font-size="16" fill="#4B5563" font-weight="700" text-anchor="middle">&gt;</text>
+<rect x="426" y="420" width="150" height="30" rx="15" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="501" y="440" font-size="13" fill="#111827" font-weight="600" text-anchor="middle">project</text>
+<text x="594" y="441" font-size="16" fill="#4B5563" font-weight="700" text-anchor="middle">&gt;</text>
+<rect x="612" y="420" width="150" height="30" rx="15" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="687" y="440" font-size="13" fill="#111827" font-weight="600" text-anchor="middle">server / env</text>
+<text x="780" y="441" font-size="16" fill="#4B5563" font-weight="700" text-anchor="middle">&gt;</text>
+<rect x="798" y="420" width="150" height="30" rx="15" fill="#ECE8DE" fill-opacity="1.0" stroke="#6B7280" stroke-width="1"/>
+<text x="873" y="440" font-size="13" fill="#111827" font-weight="600" text-anchor="middle">built-in default</text>
+<text x="32" y="486" font-size="13" fill="#4B5563" font-weight="400" text-anchor="start">Mobile pairing defaults to full access and lasts until you revoke it in Settings → Mobile.</text>
+</svg>

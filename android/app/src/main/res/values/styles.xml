@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="Theme.ARK" parent="Theme.AppCompat.DayNight.NoActionBar">
+        <item name="colorPrimary">@color/ark_accent</item>
+        <item name="colorPrimaryDark">@color/ark_bar</item>
+        <item name="colorAccent">@color/ark_accent</item>
+        <item name="android:fontFamily">sans</item>
+        <item name="android:windowBackground">@color/ark_bg</item>
+        <item name="android:statusBarColor">@color/ark_bar</item>
+        <item name="android:navigationBarColor">@color/ark_bar</item>
+        <item name="android:windowLightStatusBar">@bool/ark_light_bars</item>
+    </style>
+</resources>

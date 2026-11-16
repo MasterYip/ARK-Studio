@@ -1,0 +1,33 @@
+# systemd user unit for ark-server (one instance per config file).
+#
+#   install -m 0755 ark-server ~/.local/bin/ark-server
+#   mkdir -p ~/.config/systemd/user ~/.config/arkstudio
+#   cp ark-server@.service ~/.config/systemd/user/
+#   cp server.example.json ~/.config/arkstudio/main.json   # then edit it
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now ark-server@main.service
+#   loginctl enable-linger "$USER"     # keep it running after you log out
+#
+# The .deb installs the binary as /usr/bin/ark-server and this unit to
+# /usr/lib/systemd/user/; there ExecStart points to /usr/bin/ark-server.
+# See docs/development/go-port/switch-over.md for moving a Python install.
+[Unit]
+Description=ARK Studio server (%i)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+Conflicts=arkstudio@%i.service
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+ExecStart=%h/.local/bin/ark-server serve --config %h/.config/arkstudio/%i.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+KillMode=control-group
+UMask=0077
+
+[Install]
+WantedBy=default.target

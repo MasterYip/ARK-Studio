@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">ARK Studio</string>
+
+    <!-- Servers and sign-in -->
+    <string name="servers_heading">Servers</string>
+    <string name="servers_subtitle">Sign in to an ARK server on your network or the internet.</string>
+    <string name="no_servers_title">No servers yet</string>
+    <string name="no_servers_body">Scan the pairing QR from ARK Settings → Mobile on your computer, or sign in with your ARK account.</string>
+    <string name="sign_in_scan">Scan pairing QR</string>
+    <string name="sign_in_account">Sign in with account</string>
+    <string name="pairing_tip">Desktop: Settings → Mobile shows the pairing QR. The password is only needed for account sign-in and is never stored on this phone.</string>
+    <string name="server_options">Server options</string>
+    <string name="server_active">ACTIVE</string>
+    <string name="server_unreachable">UNREACHABLE</string>
+    <string name="chip_unencrypted">UNENCRYPTED</string>
+    <string name="chip_http_lan">HTTP · LAN</string>
+    <string name="not_signed_in">Not signed in</string>
+    <string name="signed_in_as">%1$s · %2$s · %3$s</string>
+    <string name="via_password">account sign-in</string>
+    <string name="via_qr">QR pairing</string>
+    <string name="perm_full">Full access</string>
+    <string name="perm_read_only">Read-only</string>
+    <string name="open">Open</string>
+    <string name="delete">Delete</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="delete_server_title">Remove server?</string>
+    <string name="delete_server_message">Remove %1$s from this phone? Its device session is revoked when the server is reachable.</string>
+    <string name="server_url_label">Server URL</string>
+    <string name="url_hint">https://ark.example.net or http://192.168.1.20:8890</string>
+    <string name="username">Username</string>
+    <string name="password">Password</string>
+    <string name="read_only_device">Read-only on this phone</string>
+    <string name="password_never_stored">The password is sent once to get a device token and is never stored. Revoke the device any time in Settings → Mobile.</string>
+    <string name="sign_in">Sign in</string>
+    <string name="required">Required</string>
+    <string name="invalid_url">Enter a full http(s) URL, for example https://ark.example.net/</string>
+    <string name="cleartext_title">Unencrypted connection</string>
+    <string name="cleartext_message">%1$s uses plain http outside your local network. Your password and device token would travel unencrypted. Prefer an https URL.</string>
+    <string name="cleartext_continue">Sign in anyway</string>
+    <string name="signing_in">Signing in…</string>
+    <string name="sign_in_unreachable">Can\'t reach that server. Check the URL and that the phone is on the same network (or the public URL is up).</string>
+    <string name="sign_in_invalid">Wrong username or password.</string>
+    <string name="sign_in_rate_limited">Too many attempts. Try again in %1$d s.</string>
+    <string name="sign_in_no_accounts">This ARK server has no account sign-in. Pair with the QR from Settings → Mobile instead.</string>
+    <string name="sign_in_old_server">This ARK server is too old for account sign-in from the app. Update ARK or pair with the QR.</string>
+    <string name="sign_in_bad_response">The server did not return a device session.</string>
+    <string name="secure_store_failed">Could not store the session securely: %1$s</string>
+    <string name="signed_in_toast">Signed in as %1$s (%2$s)</string>
+    <string name="scan_prompt">Scan the ARK pairing QR</string>
+    <string name="scan_invalid">That QR code does not contain an ARK server URL.</string>
+    <string name="pairing">Pairing…</string>
+    <string name="pair_failed">Pairing failed</string>
+    <string name="pair_used">This QR was already used. Generate a new one in Settings → Mobile.</string>
+    <string name="pair_expired">This QR expired or is invalid. Generate a new one in Settings → Mobile.</string>
+    <string name="sign_out">Sign out</string>
+    <string name="sign_out_confirm">Sign out of %1$s? The device session is revoked on the server.</string>
+    <string name="signed_out">Signed out</string>
+    <string name="signed_out_offline">Signed out on this phone. The server was unreachable, so revoke the device in Settings → Mobile.</string>
+    <string name="signed_out_revoked">This device was signed out or revoked. Sign in again.</string>
+    <string name="switch_server">Switch server</string>
+    <string name="change_server">Servers</string>
+
+    <!-- Shell -->
+    <string name="nav_home">Home</string>
+    <string name="nav_tasks">Tasks</string>
+    <string name="nav_runs">Runs</string>
+    <string name="nav_gpu">GPU</string>
+    <string name="nav_more">More</string>
+    <string name="back">Back</string>
+    <string name="loading">Loading…</string>
+    <string name="reload">Reload</string>
+    <string name="state_offline">Server unreachable</string>
+    <string name="state_offline_detail">Can\'t reach %1$s. Check your connection, then retry.</string>
+    <string name="state_error">Something went wrong</string>
+    <string name="read_only_blocked">This phone has read-only access.</string>
+    <string name="read_only_hint">Read-only device: viewing only.</string>
+    <string name="link_failed">No app can open that link.</string>
+
+    <!-- Home -->
+    <string name="switch_project">Switch</string>
+    <string name="only_one_project">This account has one project.</string>
+    <string name="qr_pinned_project">A QR-paired phone stays on the project it was paired for. Sign in with your account to switch projects, or scan a QR from the other project.</string>
+    <string name="switched_project">Switched to %1$s</string>
+    <string name="setup_status">Project setup</string>
+    <string name="setup_hint">Finish setup in the web app (tap to open).</string>
+    <string name="count_units">Units</string>
+    <string name="count_open_tasks">Open tasks</string>
+    <string name="count_ideas">Ideas</string>
+    <string name="count_overdue">Overdue</string>
+    <string name="count_links">Links</string>
+    <string name="count_media">Media</string>
+    <string name="needs_attention">Needs attention</string>
+    <string name="nothing_needs_attention">Nothing needs attention.</string>
+    <string name="recent_activity">Recent activity</string>
+    <string name="no_activity">No activity yet.</string>
+
+    <!-- Tasks -->
+    <string name="status_inbox">Inbox</string>
+    <string name="status_open">Open</string>
+    <string name="status_active">Active</string>
+    <string name="status_review">Review</string>
+    <string name="status_blocked">Blocked</string>
+    <string name="status_done">Done</string>
+    <string name="status_archived">Archived</string>
+    <string name="column_empty">No tasks in %1$s.</string>
+    <string name="open_board_web">Open the full board in the web app</string>
+    <string name="task">Task</string>
+    <string name="change_status">Change status</string>
+    <string name="status_changed">Moved to %1$s</string>
+    <string name="add_note">Add note</string>
+    <string name="note_hint">Write a note or comment…</string>
+    <string name="note_added">Note added</string>
+    <string name="note_explainer">Notes are saved as a note unit linked to this task.</string>
+
+    <!-- Node -->
+    <string name="open_in_web">Editor</string>
+    <string name="body">Body</string>
+    <string name="empty_body">No body.</string>
+    <string name="rich_body">Diagrams, math or HTML</string>
+    <string name="rich_body_detail">Some blocks render only in the web editor. Tap to view there.</string>
+    <string name="media_count">Media (%1$d)</string>
+    <string name="links_count">Links (%1$d)</string>
+    <string name="image">Image</string>
+    <string name="video">Video</string>
+    <string name="media">Media</string>
+    <string name="starts">Starts %1$s</string>
+    <string name="due">Due %1$s</string>
+    <string name="updated">Updated %1$s</string>
+    <string name="open_externally">Open</string>
+    <string name="video_failed">This video can\'t be played here. Use Open to try another app.</string>
+
+    <!-- Runs -->
+    <string name="runs_summary">%1$d active · %2$d total</string>
+    <string name="no_runs">No agent runs yet.</string>
+    <string name="open_runs_web">Open Runs in the web app</string>
+    <string name="approvals_pending">%1$d approval(s) waiting — answer in the web app</string>
+    <string name="run_running">Running</string>
+    <string name="run_idle">Idle</string>
+    <string name="run_starting">Starting</string>
+    <string name="run_stopping">Stopping</string>
+    <string name="run_errored">Errored</string>
+    <string name="run_stopped">Stopped</string>
+    <string name="run_archived">Archived</string>
+    <string name="stop">Stop</string>
+    <string name="stop_run">Stop this run?</string>
+    <string name="stop_run_message">The agent process is stopped. You can continue it later.</string>
+    <string name="stopping">Stopping…</string>
+    <string name="web_short">Web</string>
+    <string name="composer_hint">Message the agent…</string>
+    <string name="composer_steer">Running — your message is delivered as a steer.</string>
+    <string name="composer_continue">Stopped — sending continues the run with one more turn.</string>
+    <string name="send">Send</string>
+    <string name="steer">Steer</string>
+    <string name="continue_run">Continue</string>
+    <string name="steer_status">Steer %1$s</string>
+    <string name="continued">Continued</string>
+    <string name="thread_empty">No transcript yet.</string>
+    <string name="reasoning">Reasoning</string>
+    <string name="permission_request">Permission request</string>
+    <string name="no_output">(no output)</string>
+    <string name="output_truncated">output truncated — open in the web app for all of it</string>
+
+    <!-- GPU -->
+    <string name="gpu_unavailable">GPU dashboard unavailable</string>
+    <string name="gpu_checked">Checked %1$s</string>
+    <string name="gpu_owned_legend">Blue = this project\'s running jobs</string>
+    <string name="gpu_no_servers">No GPU servers configured.</string>
+    <string name="gpu_queue">Queue</string>
+    <string name="gpu_queue_empty">The queue is empty.</string>
+    <string name="gpu_read_only_note">Read-only on phones: submit and cancel jobs from the desktop or a task agent.</string>
+    <string name="open_gpu_web">Open GPU in the web app</string>
+    <string name="gpu_online">ONLINE</string>
+    <string name="gpu_offline">OFFLINE</string>
+    <string name="gpu_yours">%1$d job(s)</string>
+    <string name="gpu_util">Util %1$s</string>
+    <string name="gpu_owned">ours %1$s</string>
+    <string name="gpu_owned_est">ours ≈%1$s</string>
+    <string name="gpu_mem">Memory %1$s / %2$s</string>
+
+    <!-- More -->
+    <string name="project_line">Project: %1$s</string>
+    <string name="web_workspaces">Open in web app</string>
+    <string name="web_map">Map graph</string>
+    <string name="web_editor">Editor</string>
+    <string name="web_ideas">Research · Ideas</string>
+    <string name="web_plan">Research · Plan</string>
+    <string name="web_output">Output</string>
+    <string name="web_assistant">Assistant</string>
+    <string name="web_files">Files</string>
+    <string name="web_settings">Settings</string>
+    <string name="web_title">ARK web</string>
+    <string name="notifications">Notifications</string>
+    <string name="notify_toggle">Activity notifications</string>
+    <string name="notify_detail">Checks the signed-in server about every 15 minutes (no push service) for finished runs, tasks moved to review and your finished GPU jobs.</string>
+    <string name="notify_on">Notifications on</string>
+    <string name="account">Account</string>
+    <string name="version_line">ARK Studio for Android %1$s (%2$d)</string>
+    <string name="notify_channel">ARK activity</string>
+    <string name="notify_channel_desc">Runs finished, tasks needing review and GPU jobs finished</string>
+    <string name="notify_run_finished">Run finished</string>
+    <string name="notify_run_failed">Run failed</string>
+    <string name="notify_task_review">Task needs review</string>
+    <string name="notify_gpu_finished">GPU job %1$s</string>
+
+    <!-- Web -->
+    <string name="choose_file">Choose a file</string>
+    <string name="download_started">Download started</string>
+    <string name="download_failed">Could not download: %1$s</string>
+    <string name="download_permission">Allow storage access to save this download.</string>
+    <string name="error_ssl_detail">The server certificate could not be verified.</string>
+
+    <!-- Share -->
+    <string name="share_label">Save to ARK</string>
+    <string name="share_title">Save to ARK</string>
+    <string name="share_read_only">This phone is signed in read-only, so it can\'t create units.</string>
+    <string name="type_idea">Idea</string>
+    <string name="type_note">Note</string>
+    <string name="share_title_label">Title</string>
+    <string name="share_body_label">Text or link</string>
+    <string name="share_save">Save</string>
+    <string name="share_where">Saves to %1$s on %2$s</string>
+    <string name="shared_image">Shared image</string>
+    <string name="share_saved">Saved %1$s</string>
+    <string name="share_image_unreadable">The shared image could not be read.</string>
+    <string name="share_image_too_large">Images over 12 MB can\'t be attached.</string>
+
+    <!-- Time -->
+    <string name="time_just_now">just now</string>
+    <string name="time_minutes">%1$dm ago</string>
+    <string name="time_hours">%1$dh ago</string>
+    <string name="time_days">%1$dd ago</string>
+</resources>

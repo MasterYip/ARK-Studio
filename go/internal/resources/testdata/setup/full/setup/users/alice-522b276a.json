@@ -1,0 +1,43 @@
+{
+  "owner": "alice",
+  "profile": {
+    "resources": [
+      {
+        "id": "nb",
+        "kind": "repository",
+        "name": "Notebooks",
+        "details": {
+          "role": "data"
+        }
+      },
+      {
+        "id": "laptop-gpu",
+        "kind": "compute",
+        "name": "Laptop GPU",
+        "details": {
+          "kind": "local",
+          "gpus": "1"
+        }
+      }
+    ]
+  },
+  "locations": [
+    {
+      "resource": "u:alice/nb",
+      "host_id": "alice-pc",
+      "path_or_ref": "C:/Users/alice/nb"
+    }
+  ],
+  "hosts": [
+    {
+      "id": "alice-pc",
+      "label": "Alice laptop"
+    },
+    {
+      "id": "alice-old"
+    },
+    {
+      "id": "!bad"
+    }
+  ]
+}

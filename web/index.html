@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <meta name="theme-color" content="#0f141c">
+  <meta name="application-name" content="ARK Studio">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ARK">
+  <title>ARK Studio</title>
+  <meta name="description" content="ARK Studio — a local-first, node-first research workbench."> <!-- i18n-ignore: page metadata, not shown in the UI -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="./brand/icon-180.png">
+  <link rel="stylesheet" href="./css/startup.css">
+  <link rel="preload" as="style" href="./vendor/katex/katex.min.css" data-ark-style>
+  <link rel="preload" as="style" href="./css/app.css" data-ark-style>
+  <link rel="preload" as="style" href="./css/mobile.css" data-ark-style>
+  <!-- ark:modulepreload -->
+</head>
+<body>
+  <section id="ark-startup" aria-label="ARK">
+    <div class="entry-graph" data-entry="boot" aria-hidden="true"><canvas></canvas></div>
+    <div class="entry-brand" aria-label="ARK Studio">
+      <img class="ark-lockup ark-lockup-light" src="./brand/ark-lockup-loading.svg" alt="" width="227.1584" height="49">
+      <img class="ark-lockup ark-lockup-dark" src="./brand/ark-lockup-loading-dark.svg" alt="" width="227.1584" height="49">
+    </div>
+    <div class="entry-progress">
+      <h1>ARK</h1>
+      <span class="entry-stage" role="status" aria-live="polite"></span>
+      <span class="entry-slow-note" role="status"></span>
+      <div class="entry-track" role="progressbar" aria-label="ARK" aria-valuemin="0" aria-valuemax="4"><i></i></div>
+      <button class="entry-retry" type="button"></button>
+    </div>
+  </section>
+  <header id="topbar" class="topbar" aria-label="Primary navigation"></header> <!-- i18n-ignore: app.js sets the translated label -->
+  <main id="app"></main>
+  <nav id="mobile-tabbar" class="mobile-tabbar" aria-label="Mobile navigation"></nav> <!-- i18n-ignore: app.js sets the translated label -->
+  <div id="overlay-root"></div>
+  <div id="toast-root" class="toast-wrap" aria-live="polite"></div>
+  <script src="./js/startup-graph.js"></script>
+  <script src="./js/boot.js"></script>
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>
