@@ -35,5 +35,7 @@ describes the repository layout, local setup and the full test commands.
 
 ## Licence
 
-By contributing you agree that your contribution is licensed under the
-[MIT License](LICENSE) that covers this project.
+ARK Studio is licensed under the [GNU AGPL v3.0](LICENSE) and is also offered
+under commercial licences. By contributing you agree that your contribution is
+licensed under the AGPL-3.0 and that Raymon Yip may also distribute it under
+those commercial licences.

@@ -53,4 +53,4 @@ ARK uses these when they are on `PATH` and degrades clearly when they are not:
 Compare the archive with the `SHA256SUMS` file published with the release:
 `sha256sum -c SHA256SUMS --ignore-missing` (macOS: `shasum -a 256 -c`).
 
-License: MIT (see `LICENSE`).
+License: AGPL-3.0 (see `LICENSE`). Commercial licences: raymon-yip@qq.com.

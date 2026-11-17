@@ -17,7 +17,7 @@
   <a href="docs/README.md"><img alt="Documentation" src="https://img.shields.io/badge/Documentation-2563EB?style=for-the-badge&amp;logo=readthedocs&amp;logoColor=white"></a>
   <a href="#getting-started"><img alt="Quick start" src="https://img.shields.io/badge/Quick_Start-16856B?style=for-the-badge"></a>
   <a href="docs/operations/cross-platform.md#requirements"><img alt="Go server" src="https://img.shields.io/badge/Server-Go-00ADD8?style=for-the-badge&amp;logo=go&amp;logoColor=white"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/License-MIT-ECECEA?style=for-the-badge&amp;labelColor=2F2F2D&amp;color=ECECEA"></a>
+  <a href="LICENSE"><img alt="AGPL-3.0 license" src="https://img.shields.io/badge/License-AGPL--3.0-ECECEA?style=for-the-badge&amp;labelColor=2F2F2D&amp;color=ECECEA"></a>
 </p>
 
 <p align="center">
@@ -257,8 +257,19 @@ Created and maintained by **[Raymon Yip (MasterYip)](https://github.com/MasterYi
 
 ## License
 
-ARK Studio is released under the **[MIT License](LICENSE)**.
-Copyright (c) 2026 Raymon Yip.
+ARK Studio is released under the **[GNU Affero General Public License v3.0](LICENSE)**
+(AGPL-3.0). Copyright (c) 2026 Raymon Yip.
+
+You may use, modify and redistribute ARK Studio, including commercially, as long
+as you publish the complete source of your version under the same licence. This
+also applies when you only run a modified version as a network service.
+
+Commercial licences for closed-source use or embedding are available. Contact
+Raymon Yip at raymon-yip@qq.com ([GitHub](https://github.com/MasterYip),
+[homepage](https://masteryip.github.io)).
+
+Releases up to v2.0.0 were published under the MIT License; those copies remain
+under it.
 
 Third-party components retain their respective licenses, including notices under
 `ark_studio/web/vendor/` and `ark_studio/server/internal/skillkit/LICENSES/`. See
