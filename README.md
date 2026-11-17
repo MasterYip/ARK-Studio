@@ -14,6 +14,7 @@
 </p>
 
 <p align="center">
+  <a href="https://masteryip.github.io/ark-studio-site/"><img alt="Official website" src="https://img.shields.io/badge/Website-ark--studio--site-111827?style=for-the-badge&amp;logo=googlechrome&amp;logoColor=white"></a>
   <a href="docs/README.md"><img alt="Documentation" src="https://img.shields.io/badge/Documentation-2563EB?style=for-the-badge&amp;logo=readthedocs&amp;logoColor=white"></a>
   <a href="#getting-started"><img alt="Quick start" src="https://img.shields.io/badge/Quick_Start-16856B?style=for-the-badge"></a>
   <a href="docs/operations/cross-platform.md#requirements"><img alt="Go server" src="https://img.shields.io/badge/Server-Go-00ADD8?style=for-the-badge&amp;logo=go&amp;logoColor=white"></a>
