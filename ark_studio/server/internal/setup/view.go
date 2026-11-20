@@ -64,6 +64,7 @@ func (e *Env) resolve(v *Viewer) (*view, error) {
 		return nil, err
 	}
 	hostLabel := hostLabelFor(mine, v.HostID)
+	al := e.aliases()
 
 	type source struct {
 		layer  string
@@ -96,7 +97,7 @@ func (e *Env) resolve(v *Viewer) (*view, error) {
 			})
 			var here *obj
 			for i := len(locations) - 1; i >= 0; i-- {
-				if locations[i].Value("host_id") == v.HostID {
+				if al.same(locations[i].Value("host_id"), v.HostID) {
 					here = locations[i]
 					break
 				}
@@ -251,6 +252,22 @@ func (vw *view) readiness(flat *obj) *obj {
 			}
 		}
 	}
+	// Files: the agent may change the file system only where this device
+	// has a path for the task spaces and repositories it would touch.
+	var noPath []string
+	for _, m := range missing {
+		k := str(m.Value("kind"))
+		if (k == "task_space" || k == "repository") && (m.Value("layer") == "project" ||
+			(vw.mine != nil && m.Value("owner") == vw.mine.Value("owner"))) {
+			noPath = append(noPath, str(m.Value("id")))
+		}
+	}
+	if len(noPath) > 0 {
+		blocked = append(blocked, pyjson.NewObject("capability", "files", "reason",
+			"this device ("+str(vw.host.Value("label"))+", "+str(vw.host.Value("id"))+") has no path for: "+
+				strings.Join(noPath, ", ")+"; ask the user for this device's paths and register them "+
+				"(POST /api/agent/v1/setup/location) before changing files"))
+	}
 	blocked = dedupeBlocked(blocked)
 	ids := map[string]bool{}
 	ba := make([]any, len(blocked))
@@ -260,7 +277,7 @@ func (vw *view) readiness(flat *obj) *obj {
 	}
 	ready.Set("blocked", ba)
 	allowed := []any{}
-	for _, c := range capabilities {
+	for _, c := range layeredCapabilities {
 		if !ids[c] {
 			allowed = append(allowed, c)
 		}
@@ -406,7 +423,7 @@ func (e *Env) PayloadLocked(v *Viewer) (*obj, error) {
 	for _, k := range []string{"state", "digest", "confirmation", "updated_at", "updated_by", "needs_reconfirmation", "valid"} {
 		pl.Set(k, public.Value(k))
 	}
-	pl.Set("can_edit", v.CanWrite).Set("can_confirm", v.Admin && !v.Legacy)
+	pl.Set("can_edit", v.CanWrite).Set("can_confirm", v.Admin && !v.Legacy).Set("changes", e.Changes(project))
 	var user any
 	if vw.mine != nil {
 		u := pyjson.NewObject()
@@ -414,12 +431,14 @@ func (e *Env) PayloadLocked(v *Viewer) (*obj, error) {
 			u.Set(k, vw.mine.Value(k))
 		}
 		can := v.CanWrite && v.User != "" && !v.Legacy
-		user = u.Set("can_edit", can).Set("can_confirm", can)
+		user = u.Set("can_edit", can).Set("can_confirm", can).Set("changes", e.Changes(vw.mine))
 	}
 	userSummary := ""
 	if vw.mine != nil {
 		userSummary = vw.userSummary()
 	}
+	devices := e.devices(vw, v, e.aliases())
+	e.decorateStats(vw.full, devices)
 	return pyjson.NewObject(
 		"format", LayerFormat, "setup_version", LayerVersion,
 		"state", project.Value("state"), "digest", project.Value("digest"),
@@ -430,7 +449,8 @@ func (e *Env) PayloadLocked(v *Viewer) (*obj, error) {
 		"resources", objs(vw.full), "accessible", objs(vw.accessible),
 		"known_but_inaccessible", objs(vw.inaccessible), "policies", vw.policies,
 		"layers", pyjson.NewObject("project", pl, "user", user),
-		"project_layer", public, "mine", ownLayerPublic(vw.mine), "user_summary_markdown", userSummary), nil
+		"project_layer", public, "mine", ownLayerPublic(vw.mine), "user_summary_markdown", userSummary,
+		"devices", devices), nil
 }
 
 // VerifyView is verify_view(project_path, viewer, actor=..., gpu_servers=...).
@@ -441,8 +461,9 @@ func (e *Env) VerifyView(v *Viewer, actor string, gpuServers *obj) (*obj, error)
 	}
 	flat, mapping, order := vw.flatView(nil)
 	fp := MachineFingerprint()
+	al := e.aliases()
 	var result *obj
-	if v.HostID != fp {
+	if !al.same(v.HostID, fp) {
 		result = pyjson.NewObject("ok", false, "checks", []any{pyjson.NewObject("id", "host", "status", "skip", "mandatory", false,
 			"detail", "locations on host '"+str(vw.host.Value("label"))+"' cannot be checked from the ARK server; verify them on that host")},
 			"machine", v.HostID, "verified_at", utcNow())
@@ -460,7 +481,7 @@ func (e *Env) VerifyView(v *Viewer, actor string, gpuServers *obj) (*obj, error)
 	stamped := map[string]bool{}
 	for _, flatID := range order {
 		loc := mapOf(mapping[flatID].Value("location"))
-		if passed[flatID] && loc != nil && loc.Value("host_id") == v.HostID {
+		if passed[flatID] && loc != nil && al.same(loc.Value("host_id"), v.HostID) {
 			stamped[locKey2(loc)] = true
 		}
 	}

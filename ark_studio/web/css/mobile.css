@@ -52,6 +52,30 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  .pull-to-sync:not([hidden]) {
+    position: fixed;
+    z-index: 41;
+    top: calc(var(--topbar) + var(--pull-offset, 8px));
+    left: 50%;
+    translate: -50% 0;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    background: var(--bg2);
+    color: var(--sub);
+    pointer-events: none;
+  }
+
+  .pull-to-sync span:empty { display: none; }
+  .pull-to-sync.armed, .pull-to-sync.syncing { color: var(--accent); }
+  @media (prefers-reduced-motion: no-preference) {
+    .pull-to-sync.syncing .icon { animation: spin .8s linear infinite; }
   }
 
   body {
@@ -104,6 +128,7 @@
   }
 
   .top-actions .assistant-top-btn,
+  .top-actions .settings-top-btn,
   .top-actions .theme-top-btn {
     display: none !important;
   }
@@ -118,7 +143,7 @@
     display: none !important;
   }
 
-  .top-actions .icon-btn {
+  .topbar .top-actions .top-ctl {
     width: 40px;
     height: 40px;
   }
@@ -2235,8 +2260,7 @@ html[data-theme="dark"] .btn.primary {
   .comment-resolve.btn.sm { height: 28px; padding: 0 10px; font-size: 0.71875rem; }
   .comment-body { font-size: 0.8125rem; }
   .comments-input { font-size: 0.875rem; }
-  .comments-add-row { flex-direction: column; align-items: stretch; }
-  .comments-add-row .btn { height: 34px; justify-content: center; }
+  .comments-actions .btn { height: 34px; justify-content: center; }
 }
 
 
@@ -2385,8 +2409,7 @@ html[data-theme="dark"] .btn.primary {
    strip), which is what pushed the page to ~500 px. */
 @media (max-width: 760px) {
   .needs-panel .panel-head { flex-wrap: wrap; row-gap: 4px; margin-bottom: 4px; }
-  /* The header link shares its class with the history list box in the modal. */
-  .needs-panel .panel-head .needs-history { display: inline-flex; align-items: center; margin: 0 0 0 auto; padding: 0 4px; border: 0; background: none; max-height: none; }
+  .needs-panel .panel-head .needs-head-actions { gap: 0; }
   .needs-row { flex-direction: column; align-items: stretch; gap: 6px; padding: 12px 2px; }
   .needs-chip { align-self: flex-start; font-size: 0.6875rem; padding: 3px 8px; }
   .needs-main { width: 100%; gap: 8px; }
@@ -2401,7 +2424,8 @@ html[data-theme="dark"] .btn.primary {
   .needs-age { margin-left: auto; }
   .needs-excerpt { font-size: 0.875rem; line-height: 1.5; overflow-wrap: anywhere; }
   .needs-foot { flex-direction: column; flex-wrap: nowrap; align-items: stretch; gap: 10px; }
-  .needs-media-col { width: 100%; max-width: 100%; }
+  /* Column foot: the desktop flex-basis (220px) would become a height here. */
+  .needs-media-col { width: 100%; max-width: 100%; flex: 0 0 auto; }
   .needs-media { max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; scroll-snap-type: x proximity; padding-bottom: 2px; }
   .needs-thumb { width: 120px; height: 76px; scroll-snap-align: start; }
   .needs-from { max-width: 120px; }

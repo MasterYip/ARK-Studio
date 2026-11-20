@@ -368,6 +368,44 @@ def agent_docs_auth(ctx):
        200, "personal agent token")
 
 
+# ------------------------------------------- Go-only: ARK Studio desktop link
+@case("goonly:exact:/api/desktop/link", "goonly:exact:/api/desktop/projects", "exact:/api/mobile/pair/claim",
+      mode="auth")
+def desktop_link_auth(ctx):
+    server, fixture = ctx["server"], ctx["fixture"]
+    api_error(Client(server).post("/api/desktop/link", {}), 401, "AUTH_REQUIRED")
+    browser = Client(server)
+    browser.login(fixture["users"][0], fixture["password"])
+    link = browser.post("/api/desktop/link", {"device": "harness"})
+    eq(link.status, 200, "link status")
+    data = link.json()
+    eq((data["expires_in"], data["claim_path"], data["pair"]["user"]),
+       (120, "/api/mobile/pair/claim", fixture["users"][0]), "link reply")
+    check(data["code"].startswith("arkp_"), "link code")
+    app = Client(server)  # the desktop app: no cookie, the code only
+    claim = app.post("/api/mobile/pair/claim", {"code": data["code"]}, same_origin=False)
+    eq(claim.status, 200, "claim status")
+    token = claim.json()["mobile_token"]
+    eq((claim.json()["permission"], claim.json()["permanent"]), ("read_only", True), "claim reply")
+    api_error(app.post("/api/mobile/pair/claim", {"code": data["code"]}, same_origin=False), 401, "PAIRING_USED")
+    dev = {"X-ARK-Mobile-Token": token}
+    listed = app.get("/api/desktop/projects", headers=dev)
+    eq(listed.status, 200, "list status")
+    body = listed.json()
+    eq((body["user"], body["can_create"]), (fixture["users"][0], True), "list reply")
+    check(any(p["id"] == fixture["project"] for p in body["projects"]), "fixture project listed")
+    base = {"id", "name", "description", "created", "updated", "permission", "created_by_me"}
+    people = {"creator", "last_actor"}  # only when known (project_people.go)
+    check(all(base <= set(p) <= base | people for p in body["projects"]), "row keys")
+    made = app.post("/api/desktop/projects", {"name": "Desktop made"}, headers=dev, same_origin=False)
+    eq((made.status, made.json()["project"]["name"]), (200, "Desktop made"), "create")
+    api_error(app.get("/api/units?limit=1", headers=dev), 403, "DESKTOP_LINK_SCOPE")
+    api_error(app.get("/api/projects", headers=dev), 403, "DESKTOP_LINK_SCOPE")
+    api_error(browser.get("/api/desktop/projects"), 401, "DESKTOP_LINK_REQUIRED")
+    eq(app.request("DELETE", "/api/mobile/session", headers=dev).status, 200, "unlink")
+    eq(app.get("/api/desktop/projects", headers=dev).status, 401, "after unlink")
+
+
 # ----------------------------------------------------------------- runner
 def go_ported(spec: str) -> set[str] | None:
     if spec == "python":

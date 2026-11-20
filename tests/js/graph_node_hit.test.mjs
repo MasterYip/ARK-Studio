@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
-import { loadGraphCore, loadNodeGraphLayout, loadNodeCard, loadGraphSprites, loadMindLayout } from "./load_graph_core.mjs";
+import { loadGraphCore, loadNodeGraphLayout, loadNodeCard, loadGraphSprites, loadMindLayout, loadGraphChange } from "./load_graph_core.mjs";
 
 async function load() {
   const stub = { addEventListener() {}, removeEventListener() {} };
@@ -23,18 +23,21 @@ async function load() {
     "./shortcuts.js": ["getTagShortcuts", "shortcutMatches"],
     "./markers.js": ["MARKERS", "markersFor", "markerArc"],
     "./context-menu.js": ["openContextMenu"],
+    "./image-copy.js": ["imageCopyMenuItems"],
     "./api.js": ["authenticatedUrl"],
     "./graph-force.js": ["applyRepulsion"],
     "./assign-menu.js": ["assignMenuItem"],
     "./export-menu.js": ["exportBundleMenuItem"],
     "./node-history.js": ["historyMenuItem"],
+    "./presence-ui.js": ["attachPresenceOverlay", "createPresenceChip"],
+    "./selection-model.js": ["siblingGroup", "groupDefaults"],
   };
   const nodeLayout = await loadNodeGraphLayout(context);
   const nodeCard = await loadNodeCard(context);
   const graphSprites = await loadGraphSprites(context);
   const mindLayout = await loadMindLayout(context, nodeCard);
   const modules = { "./graph-core.js": core, "./node-graph-layout.js": nodeLayout, "./node-card.js": nodeCard,
-    "./graph-sprites.js": graphSprites, "./mind-layout.js": mindLayout };
+    "./graph-sprites.js": graphSprites, "./mind-layout.js": mindLayout, "./graph-change.js": await loadGraphChange(context) };
   await graphModule.link((specifier) => modules[specifier] || new vm.SyntheticModule(imports[specifier], function () {
     for (const name of imports[specifier]) this.setExport(name, () => ({}));
   }, { context }));

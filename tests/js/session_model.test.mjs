@@ -319,3 +319,24 @@ test("legacy catalogs with only model ids still populate the picker", () => {
   assert.equal(info.kind, "cli");
   assert.equal(info.via, "codex debug models");
 });
+
+test("model option labels show config origin and effective rank; endpoint models group as available", () => {
+  const label = model.modelOptionLabel;
+  assert.equal(label({ id: "claude-sonnet-5-5", source: "detected", default: true, rank: "effective",
+    origin_key: "ANTHROPIC_MODEL", origin_file: "~/.claude/settings.json" }),
+  "claude-sonnet-5-5 (ANTHROPIC_MODEL in ~/.claude/settings.json · in effect) · default");
+  assert.equal(label({ id: "x", rank: "overridden", origin_key: "ANTHROPIC_MODEL", origin_file: "" }),
+    "x (ANTHROPIC_MODEL (environment) · overridden)");
+  assert.equal(label({ id: "h", rank: "alias_target", origin_key: "ANTHROPIC_DEFAULT_HAIKU_MODEL", origin_file: "~/.claude/settings.json" }),
+    "h (ANTHROPIC_DEFAULT_HAIKU_MODEL in ~/.claude/settings.json · alias mapping)");
+  assert.equal(label({ id: "claude-opus-5-5", label: "claude-opus-5-5", source: "builtin" }), "claude-opus-5-5");
+  assert.equal(label({ id: "gpt-5", label: "GPT 5" }), "gpt-5 — GPT 5");
+  const zh = (key, vars = {}) => ({ "tasks.models.rank.effective": "生效中", "tasks.models.default_tag": "默认",
+    "tasks.models.origin_file": `${vars.file} 中的 ${vars.key}` })[key] ?? key;
+  assert.equal(label({ id: "m", default: true, rank: "effective", origin_key: "model", origin_file: "~/.claude/settings.json" }, { t: zh }),
+    "m (~/.claude/settings.json 中的 model · 生效中) · 默认");
+  const picker = model.modelPickerGroups(model.modelOptions({}, { model_options: [
+    { id: "gemini-4-argon", source: "available" }, { id: "claude-opus-5-5", source: "detected", default: true },
+  ] }));
+  assert.deepEqual(picker.groups.map((group) => group.source), ["detected", "available"]);
+});

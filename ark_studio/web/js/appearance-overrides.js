@@ -10,13 +10,16 @@
 //   palette  {enabled, light, dark}  - project palette (saved themes stay project-wide)
 //   graph    {repulsion, distance, gravity, damping} - force-graph physics
 //   arrows   {style, relations, mind_tree}            - edge line ends (arrows.js)
+//   graph_display {tab: {key: value}}                 - graph display by graph type
 //
-// Mind-map and circular-marker settings are not project values (they are
-// already stored per browser), so they have no override layer.
+// graph_display is the exception to "the group wins": it is sparse and
+// resolved per setting (graph-display.js), so a person can change one Mind
+// option and keep following the project for every other one.
 
 import { normalizePersonalArrows } from "./arrows.js";
+import { normalizeGraphDisplay, resolveGraphDisplay } from "./graph-display.js";
 
-export const OVERRIDE_GROUPS = ["palette", "graph", "arrows"];
+export const OVERRIDE_GROUPS = ["palette", "graph", "arrows", "graph_display"];
 export const APPEARANCE_CHANGED = "ark:appearance-overrides";
 
 const STORAGE_KEY = "ark.appearanceOverrides";
@@ -51,7 +54,14 @@ function normalizeGraph(value) {
   return out;
 }
 
-const NORMALIZE = { palette: normalizePalette, graph: normalizeGraph, arrows: normalizePersonalArrows };
+function normalizeDisplayGroup(value) {
+  const clean = normalizeGraphDisplay(value);
+  return Object.keys(clean).length ? clean : null;
+}
+
+const NORMALIZE = {
+  palette: normalizePalette, graph: normalizeGraph, arrows: normalizePersonalArrows, graph_display: normalizeDisplayGroup,
+};
 
 /** Keep only well-formed groups; anything else counts as "not overridden". */
 export function normalizeOverrides(value) {
@@ -65,9 +75,11 @@ export function normalizeOverrides(value) {
 }
 
 /**
- * Effective appearance for one person: `{ palette, graph, arrows, source }` where
- * `source[group]` is "personal" when the override won and "project" when the
- * project value was inherited.  The project's saved-theme library is kept.
+ * Effective appearance for one person: `{ palette, graph, arrows, graph_display, source }`
+ * where `source[group]` is "personal" when the override won and "project" when the
+ * project value was inherited (graph_display: when any setting is the
+ * person's own; `graph_display.source` has the per-setting answer).  The
+ * project's saved-theme library is kept.
  */
 export function resolveAppearance(projectSettings, overrides) {
   const project = projectSettings && typeof projectSettings === "object" ? projectSettings : {};
@@ -78,7 +90,8 @@ export function resolveAppearance(projectSettings, overrides) {
     : project.palette;
   const graph = mine.graph ? { ...mine.graph } : project.graph;
   const arrows = mine.arrows ? JSON.parse(JSON.stringify(mine.arrows)) : project.arrows;
-  return { palette, graph, arrows, source };
+  const graphDisplay = resolveGraphDisplay(project.graph_display, mine.graph_display);
+  return { palette, graph, arrows, graph_display: graphDisplay, source };
 }
 
 /** Apply a `{group: value | null}` patch; `null` clears that group. */

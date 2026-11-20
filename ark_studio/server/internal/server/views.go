@@ -6,13 +6,17 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/org"
+	"arkstudio/go/internal/platform/clock"
 	"arkstudio/go/internal/project"
 	"arkstudio/go/internal/settings"
+	"arkstudio/go/internal/store"
 )
 
 const demoID = "ark-demo"
@@ -308,7 +312,7 @@ func (c *reqCtx) projectOverview(p *project.Project) (*pyjson.Object, error) {
 		names[i] = pyjson.Str(m.Value("username"))
 	}
 	mark("members")
-	data, err := p.Store.ProjectOverview(c.ctx, names)
+	data, err := p.Store.ProjectOverview(c.ctx, names, c.homeGraphFilter(p))
 	if err != nil {
 		return nil, err
 	}
@@ -325,6 +329,54 @@ func (c *reqCtx) projectOverview(p *project.Project) (*pyjson.Object, error) {
 	mark("gpu")
 	data.Set("me", c.actor()).Set("timing", timing).Set("generated_ms", msSince(started))
 	return data, nil
+}
+
+// homeGraphFilter is what the overview's graph shows: the signed-in
+// person's prefs.home_filter for this project (the default newest 500
+// nodes when none), with graph_limit / graph_types / graph_statuses /
+// graph_days query parameters taking precedence (a preview of a filter not
+// saved yet).
+func (c *reqCtx) homeGraphFilter(p *project.Project) store.GraphFilter {
+	f := settings.DefaultHomeFilter()
+	if user := c.actor(); user != "" && c.app.Org != nil {
+		if profile, err := c.app.Org.Profile(c.ctx, user); err == nil {
+			prefs, _ := profile.Value("prefs").(*pyjson.Object)
+			f = settings.HomeFilterFor(prefs, p.ID())
+		}
+	}
+	whole := func(name string, current, hi int64) int64 {
+		raw := strings.TrimSpace(c.query.First(name, ""))
+		if raw == "" {
+			return current
+		}
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil || n < 0 || n > hi {
+			return current
+		}
+		return n
+	}
+	list := func(name string, current []string) []string {
+		if !c.query.Has(name) {
+			return current
+		}
+		var out []string
+		for _, item := range strings.Split(c.query.First(name, ""), ",") {
+			if item = strings.TrimSpace(item); item != "" && len(out) < 40 {
+				out = append(out, item)
+			}
+		}
+		sort.Strings(out)
+		return out
+	}
+	f.Limit = whole("graph_limit", f.Limit, 1_000_000)
+	f.Days = whole("graph_days", f.Days, 3650)
+	f.Types = list("graph_types", f.Types)
+	f.Statuses = list("graph_statuses", f.Statuses)
+	since := ""
+	if f.Days > 0 {
+		since = clock.Now().UTC().AddDate(0, 0, -int(f.Days)).Format("2006-01-02")
+	}
+	return store.GraphFilter{Limit: f.Limit, Types: f.Types, Statuses: f.Statuses, Since: since, Filter: f.Object()}
 }
 
 // assignableUsers is App.assignable_users.

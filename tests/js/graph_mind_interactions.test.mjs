@@ -3,12 +3,12 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
-import { loadGraphCore, loadNodeGraphLayout, loadNodeCard, loadGraphSprites, loadMindLayout } from "./load_graph_core.mjs";
+import { loadGraphCore, loadNodeGraphLayout, loadNodeCard, loadGraphSprites, loadMindLayout, loadGraphChange } from "./load_graph_core.mjs";
 
 async function fixture(layout = "mind") {
   const calls = [];
   const settings = { mindMarkerScale: 0.7, showMindImages: false };
-  const context = vm.createContext({ window: {}, document: {} });
+  const context = vm.createContext({ window: {}, document: {}, setTimeout, clearTimeout });
   const core = await loadGraphCore(context);
   const graphModule = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8"), { context },
@@ -24,11 +24,13 @@ async function fixture(layout = "mind") {
     "./mind-settings.js": { getMindSettings: () => { calls.push(["settings"]); return settings; } },
     "./shortcuts.js": { getTagShortcuts: () => ({}), shortcutMatches() {} },
     "./context-menu.js": { openContextMenu() {} },
+    "./image-copy.js": { imageCopyMenuItems: () => [] },
     "./api.js": { authenticatedUrl() {} },
     "./graph-force.js": { applyRepulsion() {} },
     "./assign-menu.js": { assignMenuItem() {} },
     "./export-menu.js": { exportBundleMenuItem() {} },
     "./node-history.js": { historyMenuItem() {} },
+    "./presence-ui.js": { attachPresenceOverlay: () => null, createPresenceChip: () => ({ el: null, destroy() {} }) },
   };
   const i18n = new vm.SyntheticModule(Object.keys(imports["./i18n.js"]), function () {
     for (const [name, value] of Object.entries(imports["./i18n.js"])) this.setExport(name, value);
@@ -41,7 +43,12 @@ async function fixture(layout = "mind") {
   const nodeCard = await loadNodeCard(context);
   const graphSprites = await loadGraphSprites(context);
   const mindLayoutModule = await loadMindLayout(context, nodeCard);
-  await graphModule.link((specifier) => specifier === "./graph-core.js" ? core : specifier === "./node-graph-layout.js" ? nodeLayout : specifier === "./node-card.js" ? nodeCard : specifier === "./graph-sprites.js" ? graphSprites : specifier === "./mind-layout.js" ? mindLayoutModule : specifier === "./markers.js" ? markers
+  const graphChange = await loadGraphChange(context);
+  const selectionModel = new vm.SourceTextModule(
+    await readFile(new URL("../../ark_studio/web/js/selection-model.js", import.meta.url), "utf8"), { context },
+  );
+  await selectionModel.link(() => { throw new Error("selection-model.js has no imports"); });
+  await graphModule.link((specifier) => specifier === "./selection-model.js" ? selectionModel : specifier === "./graph-change.js" ? graphChange : specifier === "./graph-core.js" ? core : specifier === "./node-graph-layout.js" ? nodeLayout : specifier === "./node-card.js" ? nodeCard : specifier === "./graph-sprites.js" ? graphSprites : specifier === "./mind-layout.js" ? mindLayoutModule : specifier === "./markers.js" ? markers
     : specifier === "./i18n.js" ? i18n
       : new vm.SyntheticModule(Object.keys(imports[specifier]), function () {
         for (const [name, value] of Object.entries(imports[specifier])) this.setExport(name, value);
@@ -461,5 +468,140 @@ test("thumbnail hit test finds each image thumbnail; the preview opens the node'
     assert.equal(at(left + 20, 200 + 30), null, `${layout}: below the thumbnail strip`);
     graph._previewCardMedia(at(left + 48 + 20, 200));
     assert.deepEqual(previews.at(-1), { ids: [1, 2, 3, 4], index: 1, node: "n" }, "all the node's media, starting at the clicked one");
+  }
+});
+
+const plain = (value) => JSON.parse(JSON.stringify(value));
+
+function ctrlEnter(graph) {
+  const event = { key: "Enter", ctrlKey: true, preventDefault() { this.prevented = true; } };
+  graph._onKeyDown(event);
+  return event;
+}
+
+test("Ctrl+Enter on one node still inserts between it and its parent", async () => {
+  const { graph, load } = await fixture();
+  graph.mode = "edit";
+  load(["root", "a"].map((id) => ({ id, x: 0, y: 0 })), [["a", "root"]]);
+  let inserted = null;
+  graph.opts = { onInsertBetween: async (node) => { inserted = node.id; return null; }, onGroupNodes: async () => assert.fail("grouped") };
+  graph._setSelection([graph.byId.get("a")]);
+  assert.equal(ctrlEnter(graph).prevented, true);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(inserted, "a");
+});
+
+test("Ctrl+Enter on siblings groups them under one new parent; one undo restores the tree", async () => {
+  const { graph, load } = await fixture();
+  graph.mode = "edit";
+  graph.startEdit = (node) => { graph.editing = node.id; };
+  graph._closeEditor = () => {};
+  load([
+    { id: "root", x: 0, y: 0, type: "note" },
+    { id: "a", x: 200, y: -40, type: "task", tags: ["seq:2"] },
+    { id: "b", x: 200, y: 0, type: "task", tags: ["seq:1"] },
+    { id: "c", x: 200, y: 40, type: "task", tags: ["seq:3"] },
+    { id: "d", x: 200, y: 80, type: "task" },
+  ], [["a", "root"], ["b", "root"], ["c", "root"], ["d", "root"]]);
+  graph.edges.forEach((edge, i) => { edge.id = 10 + i; });
+  const calls = [];
+  graph.opts = {
+    onGroupNodes: async (nodes, parent, options) => {
+      calls.push(["group", nodes.map((n) => n.id).sort(), parent?.id, options]);
+      return {
+        unit: { id: "g", uid: "N-0100", title: "New node", type: options.type },
+        removed_links: [10, 11, 12],
+        links: [{ id: 20, source: "g", target: "root", relation: "part_of" },
+          { id: 21, source: "a", target: "g", relation: "part_of" },
+          { id: 22, source: "b", target: "g", relation: "part_of" },
+          { id: 23, source: "c", target: "g", relation: "part_of" }],
+      };
+    },
+    onUngroup: async (node, options) => {
+      calls.push(["ungroup", node.id, options.relation]);
+      return { links: [{ id: 30, source: "a", target: "root" }, { id: 31, source: "b", target: "root" },
+        { id: 32, source: "c", target: "root" }] };
+    },
+    onNotice: (message) => calls.push(["notice", message]),
+  };
+  graph._setSelection(["a", "b", "c"].map((id) => graph.byId.get(id)));
+  ctrlEnter(graph);
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.deepEqual(plain(calls[0]), ["group", ["a", "b", "c"], "root", { relation: "part_of", type: "task", tags: ["seq:1"] }]);
+  const parents = graph._mindTree().parentOf;
+  assert.deepEqual(["a", "b", "c", "d", "g"].map((id) => parents.get(id)), ["g", "g", "g", "root", "root"]);
+  assert.deepEqual([...graph.selectedNodes], ["g"]);
+  assert.equal(graph.editing, "g");
+  assert.equal(graph.history.length, 1);
+  await graph._undoLast();
+  assert.deepEqual(plain(calls.find(([name]) => name === "ungroup")), ["ungroup", "g", "part_of"]);
+  assert.equal(graph.byId.has("g"), false);
+  const after = graph._mindTree().parentOf;
+  assert.deepEqual(["a", "b", "c", "d"].map((id) => after.get(id)), ["root", "root", "root", "root"]);
+  assert.deepEqual([...graph.selectedNodes].sort(), ["a", "b", "c"]);
+});
+
+test("Ctrl+Enter on nodes with different parents only shows a hint", async () => {
+  const { graph, load } = await fixture();
+  graph.mode = "edit";
+  load(["root", "a", "b", "a1"].map((id) => ({ id, x: 0, y: 0 })), [["a", "root"], ["b", "root"], ["a1", "a"]]);
+  const notices = [];
+  graph.opts = { onGroupNodes: async () => assert.fail("grouped"), onNotice: (message) => notices.push(message) };
+  graph._setSelection([graph.byId.get("b"), graph.byId.get("a1")]);
+  ctrlEnter(graph);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.deepEqual(notices, ["graph.toast.group_not_siblings"]);
+  assert.equal(graph.history.length, 0);
+});
+
+test("a selection change reaches onSelectionChange once it settles", async () => {
+  const { graph, load } = await fixture();
+  load(["a", "b"].map((id) => ({ id, x: 0, y: 0 })));
+  const seen = [];
+  graph.onSelectionChange = (nodes) => seen.push(plain(nodes.map((n) => n.id)));
+  graph._noteSelection();
+  graph._setSelection([graph.byId.get("a"), graph.byId.get("b")]);
+  graph._noteSelection();
+  graph._noteSelection();
+  await new Promise((resolve) => setTimeout(resolve, 150));
+  assert.deepEqual(seen, [["a", "b"]]);
+});
+
+test("Delete on a selected link deletes that link, not the nodes; Ctrl+Z restores it", async () => {
+  for (const layout of ["force", "mind"]) {
+    const { graph, load } = await fixture(layout);
+    load([{ id: 1, x: 0, y: 0 }, { id: 2, x: 100, y: 0 }, { id: 3, x: 0, y: 100 }], [[2, 1], [3, 1]]);
+    graph.edges.forEach((edge, i) => { edge.id = 10 + i; });
+    const asked = [];
+    let allow = false;
+    graph.opts = {
+      onDelete: async () => { throw new Error("nodes must not be deleted"); },
+      onDeleteEdge: async (edge, source, target) => { asked.push([edge.id, source.id, target.id]); return allow; },
+      onRestoreLinks: async (edges) => edges.map((edge) => ({ ...edge, id: 99 })),
+    };
+    graph.mode = "edit";
+    // The most recent selection wins: a node, then the link.
+    graph._setSelection([graph.byId.get(3)], false);
+    graph._setSelection([], false);
+    graph.selectedEdge = graph.edges[0];
+    key(graph, "Delete");
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(asked, [[10, 2, 1]], layout);
+    assert.equal(graph.edges.length, 2, `${layout}: cancelled keeps the link`);
+    allow = true;
+    key(graph, "Backspace");
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(graph.edges.map((e) => e.id), [11], layout);
+    assert.equal(graph.selectedEdge, null);
+    assert.deepEqual([...graph.byId.keys()], [1, 2, 3], `${layout}: nodes stay`);
+    await graph._undoLast();
+    await new Promise((r) => setTimeout(r, 0));
+    assert.deepEqual(graph.edges.map((e) => e.id).sort(), [11, 99], `${layout}: undo recreates the link`);
+    // Typing in a field: the graph ignores the key.
+    graph.selectedEdge = graph.edges[0];
+    const event = { key: "Delete", target: { tagName: "INPUT" }, preventDefault() { this.prevented = true; } };
+    graph._onKeyDown(event);
+    assert.equal(event.prevented, undefined);
+    assert.equal(asked.length, 2);
   }
 });

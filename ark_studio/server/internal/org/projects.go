@@ -53,11 +53,50 @@ func (m *Manager) SetProjectGrant(ctx context.Context, projectID, userID, permis
 func (m *Manager) UnregisterProject(ctx context.Context, projectID string) error {
 	return m.DB.Write(ctx, func(q sqlitedb.Querier) error {
 		for _, sql := range []string{"DELETE FROM project_grants WHERE project_id=?",
-			"DELETE FROM team_grants WHERE project_id=?", "DELETE FROM projects WHERE id=?"} {
+			"DELETE FROM team_grants WHERE project_id=?", "DELETE FROM project_last_writer WHERE project_id=?",
+			"DELETE FROM project_invites WHERE project_id=?",
+			"DELETE FROM projects WHERE id=?"} {
 			if _, err := q.ExecContext(ctx, sql, projectID); err != nil {
 				return err
 			}
 		}
 		return nil
 	}, nil)
+}
+
+// ProjectOwner is the account that owns a project's pre-per-user data
+// (T-0028, store.AdoptLegacyChat): the enabled user who created the project
+// (projects.created_by), else the org's first enabled owner.  The loopback
+// "local" user does not count (a project created in local mode and served
+// with accounts later goes to the org owner).  "" when nobody qualifies.
+func (m *Manager) ProjectOwner(ctx context.Context, projectID string) (string, error) {
+	var name string
+	err := m.DB.Read(ctx, func(q sqlitedb.Querier) error {
+		r, ok, err := sqlitedb.QueryOne(ctx, q, `SELECT u.username FROM projects p JOIN users u ON u.id=p.created_by
+			WHERE p.id=? AND COALESCE(u.disabled,0)=0 AND lower(u.username)<>?`, projectID, LocalUsername)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			r, ok, err = sqlitedb.QueryOne(ctx, q, `SELECT u.username FROM memberships m JOIN users u ON u.id=m.user_id
+				WHERE m.org_id=? AND m.role='owner' AND COALESCE(u.disabled,0)=0 AND lower(u.username)<>?
+				ORDER BY m.created_at, u.username LIMIT 1`, m.orgIDq(ctx, q), LocalUsername)
+			if err != nil {
+				return err
+			}
+		}
+		if ok {
+			name = r.Str("username")
+		}
+		return nil
+	})
+	return name, err
+}
+
+// orgIDq is OrgID inside a read (the first org, else the default id).
+func (m *Manager) orgIDq(ctx context.Context, q sqlitedb.Querier) string {
+	if r, ok, _ := sqlitedb.QueryOne(ctx, q, "SELECT id FROM orgs ORDER BY created_at LIMIT 1"); ok {
+		return r.Str("id")
+	}
+	return DefaultOrgID
 }

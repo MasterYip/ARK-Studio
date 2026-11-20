@@ -19,19 +19,20 @@ export function announceUnitSaved(unit, origin) {
   catch { /* no window */ }
 }
 
-/** Patch cached list rows and every live graph node with the saved unit. */
+/**
+ * Patch cached list rows and every live graph node with the saved unit.
+ * Graph nodes change in place (GraphView.patchNode): an attribute-only
+ * change is not even redrawn, a drawn one (title, type, status, tags)
+ * redraws that node; nothing is relaid out, refit or reheated.
+ */
 export function syncUnitLocally(ctx, unit) {
   const local = (ctx?.S?.units || []).find((item) => item.id === unit.id);
   if (local) Object.assign(local, unit);
   if (ctx?.S?.detail?.id === unit.id) ctx.S.detail = unit;
+  // The filter index (Map) holds the snapshot rows the next filter pass reads.
+  ctx?.S?.graphIndex?.updateNode?.(unit);
   for (const graph of ctx?.graphs || []) {
-    const node = graph.byId?.get(unit.id);
-    if (!node) continue;
-    Object.assign(node, {
-      title: unit.title, type: unit.type, status: unit.status,
-      importance: unit.importance, tags: unit.tags, body: unit.body,
-    });
-    graph._draw?.();
+    if (graph.patchNode) graph.patchNode(unit);
   }
 }
 

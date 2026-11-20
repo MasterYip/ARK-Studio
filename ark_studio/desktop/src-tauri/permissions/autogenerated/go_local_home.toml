@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-go-local-home"
+description = "Enables the go_local_home command without any pre-configured scope."
+commands.allow = ["go_local_home"]
+
+[[permission]]
+identifier = "deny-go-local-home"
+description = "Denies the go_local_home command without any pre-configured scope."
+commands.deny = ["go_local_home"]

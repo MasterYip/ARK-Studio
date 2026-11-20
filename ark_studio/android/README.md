@@ -33,7 +33,12 @@ target changed; its `ServerStoreTest` still runs.
 | **Share to ARK**: text, link or image → idea or note with the image attached | |
 
 The UI has pull-to-refresh, offline / error states with Retry, and light and dark themes
-that follow the system. Strings are in English (`values/`) and Chinese (`values-zh/`).
+that follow the system. Strings are in English (`values/`) and Chinese (`values-zh/`) in
+both modules, and the app follows the system language. On Android 13+ the language can
+also be set per app (Settings → Apps → ARK Studio → Language, from `res/xml/locales_config.xml`).
+Server codes (unit types, statuses, relations, activity) are labelled in `ui/Labels.java`.
+The WebView follows the phone's language too until a language is picked in ARK
+(`web/js/startup-graph.js`, `ark.langAuto`).
 Bottom navigation: Home, Tasks, Runs, GPU, More.
 
 ## Sign-in and security
@@ -102,5 +107,7 @@ APKs are not tracked. Build both with
 | `app/build/outputs/apk/debug/app-debug.apk` | `dist/ARK-Studio-android.apk` | `/download/ARK-Studio-android.apk` (alias `/download/ark.apk`) |
 | `webapp/build/outputs/apk/debug/webapp-debug.apk` | `dist/ARK-Studio-webapp.apk` | `/download/ARK-Studio-webapp.apk` |
 
-Settings → Mobile lists both (`GET /api/mobile/apps` reports which are present, their size
-and date), and each file is re-read on every request, so replacing it publishes a new build.
+Each file is re-read on every request, so replacing it publishes a new build; without
+a local file these paths redirect (302) to the latest GitHub release. Settings → Mobile
+links to the APKs of the latest GitHub release (`GET /api/mobile/apps`, resolved by the
+server; see [the mobile guide](../../docs/guide/mobile.md#android-app)).

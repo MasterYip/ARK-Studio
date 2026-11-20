@@ -1,19 +1,26 @@
-import { h, clear, fmtDate, fmtDateTime, relativeTime, percent, typeColor } from "../dom.js";
+import { h, clear, fmtDate, fmtDateTime, relativeTime, percent } from "../dom.js";
 import { t, getLang, logLabel, statusLabel, typeLabel } from "../i18n.js";
 import { icon } from "../icons.js";
 import { actorLabel, openModal, toast } from "../components.js";
-import { api, mediaUrl } from "../api.js";
-import { openMediaLightbox } from "../image-viewer.js";
+import { api } from "../api.js";
 import {
-  borrowedSources, decisionOptions, filterNeeds, needsFacets, needsFilterActive, needsHistoryTags, needsKind,
-  needsLightboxItems, normalizeNeedsFilter, NEEDS_FILTER_GROUPS, previewKind, setNeedsGroupAll, toggleNeedsValue,
+  bulkAcceptable, filterNeeds, groupNeeds, needsFacets, needsFilterActive, needsKind, normalizeNeedsFilter, sortMineFirst,
 } from "../needs-model.js";
-import { authorName, threadComments } from "../comments-model.js";
+import {
+  NEEDS_CHANGED, bulkAcceptDialog, closeNeedsFilters, needsEntryCard, needsFilterBar, needsFilterFor, needsProjectKey, saveNeedsFilter,
+} from "../needs-ui.js";
 import { currentUsername, displayName, userAvatar } from "../users.js";
-import { startPanel } from "./onboarding.js";
-import { assigneeChip } from "../assignee.js";
+import { startPanel, setupNeedsRow } from "./onboarding.js";
+import { runningAgentRows } from "./agent-connect.js";
+import {
+  agentConnection, checklistCard, checklistItems, checklistRestorable, dismissChecklist, restoreChecklist, tutorialChapters, tutorialTopic,
+} from "../home-model.js";
 import { GraphView } from "../graph.js";
+import { fillProgressively } from "../progressive-list.js";
 import { backdropSample } from "../graph-core.js";
+import { heroBudget, heroGraphSample } from "../home-filter-model.js";
+import { homeFilterLine } from "../home-filter-ui.js";
+import { desktopUpdateBanner } from "../desktop-update.js";
 
 // Home is a dashboard over GET /api/project/overview (see
 // docs/guide/home-overview.md): one card per question, numbers first, and every
@@ -27,9 +34,16 @@ export function renderOverview(host, ctx) {
   const S = ctx.S;
   clear(host);
   const ov = S.overview || null;
-  host.appendChild(h("div", { class: "page home-page ov-page" },
+  const project = S.project || {};
+  const page = h("div", { class: "page home-page ov-page" });
+  // ARK Studio desktop app, local Home: a newer version (desktop-update.js).
+  page.appendChild(desktopUpdateBanner());
+  if (project.id === TUTORIAL_ID) page.appendChild(tutorialBanner(ctx));
+  page.append(...[
     h("div", { class: "ov-top" }, heroCard(ctx, ov), pulsePanel(ctx, ov)),
     startPanel(ctx),
+    // New projects: the getting-started steps, under Connect your agent.
+    checklistPanel(ctx, ov),
     h("div", { class: "ov-grid" },
       needsYouPanel(ctx, S.needsYou || []),
       h("div", { class: "ov-side" },
@@ -38,7 +52,131 @@ export function renderOverview(host, ctx) {
       duePanel(ctx, ov),
       researchPanel(ctx, ov),
       runsPanel(ctx, ov),
-      activityPanel(ctx, ov))));
+      activityPanel(ctx, ov)),
+  ].filter(Boolean));
+  host.appendChild(page);
+}
+
+const TUTORIAL_ID = "ark-demo";
+
+// The getting-started card's state for this person and project
+// (home-model.js checklistCard): started, completed, dismissed, expired.
+function checklistKey(ctx) {
+  return `ark.home.checklist:${ctx.S.session?.user || "local"}:${ctx.S.project?.id || ""}`;
+}
+
+function loadChecklistRecord(ctx) {
+  try { return JSON.parse(localStorage.getItem(checklistKey(ctx)) || "null"); } catch { return null; }
+}
+
+function saveChecklistRecord(ctx, record) {
+  try { localStorage.setItem(checklistKey(ctx), JSON.stringify(record)); } catch { /* storage unavailable */ }
+}
+
+function showChecklist(ctx) {
+  saveChecklistRecord(ctx, restoreChecklist(loadChecklistRecord(ctx)));
+  ctx.refresh();
+}
+
+// ------------------------------------------------------- getting started
+// The steps to the first accepted result, each ticked from data ARK already
+// has (home-model.js checklistItems).  Shown on new projects until closed, or
+// for three days once every step is done (checklistCard).
+function checklistPanel(ctx, ov) {
+  const connection = agentConnection({ agents: ov?.agents });
+  const items = checklistItems({ stats: ctx.S.stats, connection, team: !ctx.S.session?.local, members: ov?.members || [] });
+  const card = checklistCard({ project: ctx.S.project, stats: ctx.S.stats, items, record: loadChecklistRecord(ctx) });
+  // Without the overview the agent step is unknown: show, but store nothing.
+  if (card.record && ov) saveChecklistRecord(ctx, card.record);
+  if (!card.show) return null;
+  const required = items.filter((item) => !item.optional);
+  const done = required.filter((item) => item.done).length;
+  const focus = (selector) => {
+    const el = document.querySelector(selector);
+    if (!el) return;
+    el.classList.remove("collapsed");
+    el.scrollIntoView({ block: "start", behavior: "smooth" });
+    el.querySelector("button.primary")?.focus({ preventScroll: true });
+  };
+  const actions = {
+    question: () => h("button", { class: "btn sm", type: "button", onclick: () => ctx.openCreate({ type: "question" }) },
+      icon("plus", "sm"), t("home.start.question.action")),
+    agent: () => h("button", { class: "btn sm", type: "button", onclick: () => focus(".start-panel") },
+      icon("copy", "sm"), t("home.start.agent.action")),
+    accept: () => ((ctx.S.needsYou || []).length
+      ? h("button", { class: "btn sm", type: "button", onclick: () => focus(".needs-panel") }, t("home.start.accept.action"))
+      : null),
+    invite: () => h("button", { class: "btn sm ghost", type: "button", onclick: () => ctx.navigate("settings") },
+      t("home.start.invite.action")),
+  };
+  const next = items.find((item) => !item.done && !item.optional);
+  const panel = h("section", {
+    class: `panel ov-checklist ${card.done ? "all-done" : ""}`.trim(), "aria-label": t("home.start.title"),
+    dataset: { done: card.done ? "1" : "0" },
+  });
+  // Closing asks nothing but can be undone: an Undo toast, and Show getting
+  // started at the top of Home afterwards.
+  const close = h("button", {
+    class: "icon-btn ov-checklist-close", type: "button", title: t("home.start.hide"), "aria-label": t("home.start.hide"),
+    onclick: () => {
+      saveChecklistRecord(ctx, dismissChecklist(loadChecklistRecord(ctx)));
+      ctx.refresh();
+      ctx.toast(t("home.start.hidden_toast"), "", {
+        duration: 8000,
+        action: { label: t("home.start.undo"), onClick: () => showChecklist(ctx) },
+      });
+    },
+  }, icon("x", "sm"));
+  panel.append(
+    panelHead(t("home.start.title"),
+      h("span", { class: "ov-checklist-count", dataset: { done: String(done), total: String(required.length) } },
+        card.done ? t("home.start.all_done") : t("home.start.count", { done, total: required.length })),
+      close),
+    h("ol", { class: "ov-steps" }, items.map((item, index) => h("li", {
+      class: `ov-step ${item.done ? "done" : ""} ${item === next ? "next" : ""}`.trim(),
+      dataset: { step: item.id, done: item.done ? "1" : "0" },
+    },
+      h("span", { class: "ov-step-mark", "aria-hidden": "true" }, item.done ? icon("check", "sm") : String(index + 1)),
+      h("span", { class: "ov-step-text" },
+        h("b", null, t(`home.start.${item.id}.title`), item.optional ? h("small", null, ` · ${t("home.start.optional")}`) : null),
+        h("span", { class: "muted" }, t(`home.start.${item.id}.hint`))),
+      item.done ? h("span", { class: "ov-step-done" }, t("home.start.done")) : (actions[item.id]?.() || null)))));
+  return panel;
+}
+
+// ------------------------------------------------------- tutorial banner
+// ARK Studio Demo: the chapters (units tagged tutorial:chapter) one click
+// from Home instead of three levels down in Research > Topics > Story, in
+// the UI language (lang:zh chapters in 中文, the English ones otherwise).
+// A chapter opens in the Read view, where its links to other nodes work;
+// the tutorial topic (tutorial:topic) shows every chapter as one graph.
+function tutorialBanner(ctx) {
+  const chips = h("div", { class: "tutorial-chapters" });
+  const graphLink = h("button", { class: "btn sm ghost tutorial-graph-link", type: "button", hidden: true },
+    icon("graph", "sm"), t("home.tutorial.graph"));
+  const banner = h("section", { class: "panel tutorial-banner", "aria-label": t("home.tutorial.title") },
+    h("div", { class: "tutorial-head" },
+      h("span", { class: "tutorial-copy" },
+        h("b", null, t("home.tutorial.title")),
+        h("span", { class: "muted" }, t("home.tutorial.body"))),
+      graphLink),
+    chips);
+  api.units({ tags: "tutorial:chapter", limit: 40, slim: 1 }).then((data) => {
+    const chapters = tutorialChapters(data?.items || data?.units || [], getLang());
+    if (!chapters.length || !banner.isConnected) return;
+    chips.append(...chapters.map((unit, index) => h("button", {
+      class: "pill tutorial-chip", type: "button", dataset: { unitRef: unit.uid }, title: `${unit.uid} · ${unit.title}`,
+      onclick: () => ctx.openUnit(unit.uid, null, { readOnly: true, revealPane: true }),
+    }, h("b", null, String(index)), " ", String(unit.title || "").split(/[:：]/)[0])));
+  }).catch(() => { /* the banner still names the tutorial */ });
+  api.units({ tags: "tutorial:topic", limit: 10, slim: 1 }).then((data) => {
+    const topic = tutorialTopic(data?.items || data?.units || [], getLang());
+    if (!topic || !banner.isConnected) return;
+    graphLink.hidden = false;
+    graphLink.dataset.topicRef = topic.uid;
+    graphLink.onclick = () => ctx.openTopic(topic.uid);
+  }).catch(() => { /* chapters only */ });
+  return banner;
 }
 
 // Map with exactly these filters (everything else cleared).
@@ -81,7 +219,13 @@ function heroCard(ctx, ov) {
         h("span", { class: "pill" }, `${count(stats.by_type?.claim)} ${typeLabel("claim")}`),
         h("span", { class: "pill" }, `${count(stats.by_type?.task)} ${typeLabel("task")}`),
         h("span", { class: "dot-sep" }, "·"),
-        h("span", { class: "muted" }, `${t("overview.updated")} ${relativeTime(project.updated || new Date().toISOString())}`)),
+        h("span", { class: "muted" }, `${t("overview.updated")} ${relativeTime(project.updated || new Date().toISOString())}`),
+        ov?.graph ? h("span", { class: "dot-sep" }, "·") : null,
+        ov?.graph ? homeFilterLine(ctx, ov.graph) : null,
+        checklistRestorable({ project, record: loadChecklistRecord(ctx) })
+          ? h("button", { class: "link hero-start-link", type: "button", "data-show-checklist": "", onclick: () => showChecklist(ctx) },
+            t("home.start.show"))
+          : null),
       h("div", { class: "hero-actions ov-actions" },
         h("button", { class: "primary-btn", type: "button", onclick: () => ctx.navigate("map") },
           icon("map", "sm"), t("overview.open_map")),
@@ -89,21 +233,63 @@ function heroCard(ctx, ov) {
           icon("edit", "sm"), t("overview.edit")),
         h("button", { class: "ghost-btn hero-secondary", type: "button", onclick: () => ctx.openCreate({ type: "idea" }) },
           icon("bulb", "sm"), t("ideas.capture")),
+        // "New node" opens the full New dialog; Import stays a small icon.
         h("span", { class: "hero-more" },
-          h("button", { class: "icon-btn", type: "button", title: t("home.new"), "aria-label": t("home.new"),
-            onclick: () => ctx.openCreate({}) }, icon("plus", "sm")),
-          h("button", { class: "icon-btn", type: "button", title: t("home.import"), "aria-label": t("home.import"),
+          h("button", { class: "ghost-btn hero-secondary", type: "button", "data-home-new": "",
+            onclick: () => ctx.openCreate({}) }, icon("plus", "sm"), t("action.new_node")),
+          h("button", { class: "icon-btn", type: "button", "data-home-import": "", title: t("home.import"), "aria-label": t("home.import"),
             onclick: () => ctx.openImport() }, icon("upload", "sm"))))));
+}
+
+// The header graph is built once per project and kept across Home renders:
+// every live-sync change re-renders Home, and a new GraphView each time
+// restarted the force layout and its per-frame redraw behind the page (on a
+// machine without GPU compositing that alone held the main thread busy).
+// A re-render moves the same canvas into the new header and passes the new
+// data in place (setData remote: positions kept, only new nodes settle).
+// The view parks itself while a dialog is open, the tab is hidden or the
+// header is off the page (graph.js backdropParked).
+let hero = null; // { graph, stage, project, key }
+
+function dropHero() {
+  try { hero?.graph.destroy(); } catch { /* noop */ }
+  hero = null;
+}
+
+function heroKey(nodes, edges) {
+  const end = (value) => (value && typeof value === "object" ? value.id : value);
+  return `${nodes.map((n) => `${n.id}:${n.status || ""}`).join(",")}|${edges.map((e) => `${end(e.source)}>${end(e.target)}`).join(",")}`;
 }
 
 function heroGraph(ctx, data) {
   const host = h("div", { class: "hero-graph", "aria-hidden": "true", inert: true });
-  if (!data?.nodes?.length) return host;
-  const { nodes, edges } = backdropSample(data.nodes, data.edges || []);
+  const project = ctx.S.project?.id || "";
+  if (!data?.nodes?.length) { if (hero?.project === project) dropHero(); return host; }
+  // The server sends the nodes of the Home filter newest first
+  // (home-filter-model.js); the header simulates at most heroBudget of them.
+  // An older server sent every node: the best connected are kept.
+  const { nodes, edges } = data.filter
+    ? heroGraphSample(data.nodes, data.edges || [], heroBudget(data.filter))
+    : backdropSample(data.nodes, data.edges || []);
+  const key = heroKey(nodes, edges);
+  if (hero && hero.project === project) {
+    host.appendChild(hero.stage);
+    if (hero.key !== key) {
+      hero.key = key;
+      hero.graph.setData(nodes, edges, { remote: true });
+    }
+    // The new header is on the page after this render: continue then.
+    const graph = hero.graph;
+    requestAnimationFrame(() => graph.wakeBackdrop());
+    return host;
+  }
+  dropHero();
+  const stage = h("div", { class: "hero-graph-stage" });
+  host.appendChild(stage);
   // After the page's first paint: the header decoration never delays Home.
   requestAnimationFrame(() => setTimeout(() => {
-    if (!host.isConnected) return;
-    const graph = new GraphView(host, {
+    if (!stage.isConnected || hero) return;
+    const graph = new GraphView(stage, {
       compact: true, readOnly: true, persistLayout: false, backdrop: true,
     });
     graph.showLabels = false;
@@ -112,7 +298,7 @@ function heroGraph(ctx, data) {
       graph.running = false;
       cancelAnimationFrame(graph.frame);
     }
-    ctx.trackGraph(graph);
+    hero = { graph, stage, project, key };
   }));
   return host;
 }
@@ -166,9 +352,10 @@ function signed(n) {
   return `${n > 0 ? "+" : "−"}${Math.abs(n)}`;
 }
 
+// M7: everything on this card is the same 14 days: the bars, the two
+// totals and the Map filter it opens.
 function trend(ctx, ov) {
   const days = ov.days || [];
-  const k = ov.kpis || {};
   const max = Math.max(1, ...days.map((d) => Math.max(d.created, d.completed)));
   const totalCreated = days.reduce((s, d) => s + d.created, 0);
   const totalDone = days.reduce((s, d) => s + d.completed, 0);
@@ -185,16 +372,16 @@ function trend(ctx, ov) {
   const last = days[days.length - 1]?.date;
   return h("button", {
     class: "ov-trend", type: "button", dataset: { kpi: "trend" },
-    title: t("home.trend_title"),
-    onclick: () => mapWith(ctx, { timeMode: "recent", recentDays: 7 }),
+    title: t("home.trend_title_14"),
+    onclick: () => mapWith(ctx, { timeMode: "recent", recentDays: 14 }),
   },
     h("div", { class: "ov-trend-head" },
       h("span", { class: "ov-kpi-k" }, t("home.trend")),
       h("span", { class: "ov-legend" },
         h("span", { class: "ov-key created" }), t("home.created"),
-        h("b", null, count(k.created?.week)), h("small", null, t("home.prev_week", { n: k.created?.prev ?? 0 })),
+        h("b", { dataset: { total: "created" } }, count(totalCreated)),
         h("span", { class: "ov-key done" }), t("home.completed"),
-        h("b", null, count(k.completed?.week)), h("small", null, t("home.prev_week", { n: k.completed?.prev ?? 0 })))),
+        h("b", { dataset: { total: "done" } }, count(totalDone)))),
     bars,
     h("div", { class: "ov-axis" }, h("span", null, first ? fmtDate(first) : ""), h("span", null, t("home.today"))));
 }
@@ -305,12 +492,14 @@ function duePanel(ctx, ov) {
   const group = (key, label, n, items, detail) => (n ? h("div", { class: `ov-group ${key}`, dataset: { group: key } },
     h("div", { class: "ov-group-head" }, h("span", null, label), h("b", null, count(n))),
     items.map((u) => unitRow(ctx, u, detail(u)))) : null);
-  panel.append(
+  // A group with nothing in it is null; DOM append() would print "null".
+  panel.append(...[
     group("overdue", t("home.kpi.overdue"), due.overdue_total, (due.overdue || []).slice(0, 3),
       (u) => h("span", { class: "overdue" }, t("home.days_late", { n: daysBetween(u.end_at, today) }))),
     group("soon", t("home.next_7"), due.soon_total, (due.soon || []).slice(0, 3),
       (u) => (u.end_at === today ? t("home.due_today") : t("home.due_in", { n: daysBetween(today, u.end_at) }))),
-    group("blocked", t("home.kpi.blocked"), blocked.total, (blocked.items || []).slice(0, 3), blockerText));
+    group("blocked", t("home.kpi.blocked"), blocked.total, (blocked.items || []).slice(0, 3), blockerText),
+  ].filter(Boolean));
   return panel;
 }
 
@@ -409,7 +598,16 @@ function runsPanel(ctx, ov) {
         h("span", { class: "ov-row-title" }, run.title || run.id),
         h("span", { class: "ov-row-d" }, t(`tasks.status.${run.status}`) === `tasks.status.${run.status}`
           ? run.status : t(`tasks.status.${run.status}`), " · ", relativeTime(run.last_activity_at)))))
-    : h("div", { class: "ov-hint" }, icon("terminal", "sm"), t("home.runs_none"));
+    : null;
+  // Agents working through the agent API (Claude Code, Codex, ...) are not
+  // ARK sessions; show the ones that wrote in the last 30 minutes too (M5).
+  const agentRows = runningAgentRows(ctx, ov.agents);
+  const agentsBlock = agentRows.length
+    ? h("div", { class: "ov-group agents", dataset: { group: "agents" } },
+      h("div", { class: "ov-group-head" }, h("span", null, t("home.agents_writing")), h("b", null, count(agentRows.length))),
+      agentRows)
+    : null;
+  const idle = !runsBlock && !agentsBlock ? h("div", { class: "ov-hint" }, icon("terminal", "sm"), t("home.runs_none")) : null;
   const jobs = gpu.jobs || {};
   const running = (jobs.running || 0) + (jobs.starting || 0);
   const queued = (jobs.queued || 0) + (jobs.pending || 0);
@@ -421,7 +619,7 @@ function runsPanel(ctx, ov) {
       h("small", null, gpu.free_gpus == null ? t("home.gpu_not_probed")
         : t("home.gpu_free", { n: gpu.free_gpus, total: gpu.gpus ?? 0 })))
     : h("div", { class: "ov-hint", dataset: { gpu: "0" } }, icon("cpu", "sm"), t("home.gpu_off"));
-  panel.append(runsBlock, gpuLine);
+  panel.append(...[agentsBlock, runsBlock, idle, gpuLine].filter(Boolean));
   return panel;
 }
 
@@ -509,8 +707,9 @@ function editProject(ctx) {
 // ------------------------------------------------------------- needs you
 // Units waiting on the human (server: Store.needs_you): `review` = finished,
 // waiting to be accepted; open `decision` = a question only the user answers.
+// The row, filters and dialogs are shared with Research › Review (needs-ui.js).
 function needsYouPanel(ctx, all) {
-  const projectKey = String(ctx.S.project?.id || ctx.S.project?.name || "local");
+  const projectKey = needsProjectKey(ctx);
   const expandedByProject = ctx.S.homeNeedsExpanded ||= {};
   if (!(projectKey in expandedByProject)) {
     try { expandedByProject[projectKey] = localStorage.getItem(`ark.needsExpanded:${projectKey}`) === "1"; }
@@ -520,7 +719,7 @@ function needsYouPanel(ctx, all) {
   // Items assigned to me first; otherwise the server order (decisions, newest).
   const me = String(ctx.S.overview?.me || currentUsername() || "").toLowerCase();
   const mine = (item) => Boolean(me) && String(item.assignee_effective || "").toLowerCase() === me;
-  const sorted = [...all].sort((a, b) => mine(b) - mine(a));
+  const sorted = sortMineFirst(all, me);
   const filter = needsFilterFor(ctx, projectKey);
   const facets = needsFacets(sorted);
   const items = filterNeeds(sorted, filter);
@@ -536,6 +735,8 @@ function needsYouPanel(ctx, all) {
       t("home.needs_mine", { n: mineCount })) : null,
     oldest ? h("span", { class: "needs-sum age", title: fmtDateTime(oldest) },
       t("home.needs_oldest", { age: relativeTime(oldest) })) : null) : null;
+  const acceptable = bulkAcceptable(items);
+  // Header actions are plain links, like every other Home panel.
   const panel = h("section", { class: "panel needs-panel", "aria-label": t("needs.title") },
     h("div", { class: "panel-head" },
       h("h3", { title: t("needs.hint") }, t("needs.title"),
@@ -543,384 +744,131 @@ function needsYouPanel(ctx, all) {
           title: filtered ? t("needs.filter.shown", { n: items.length, total: sorted.length }) : undefined },
         filtered ? `${items.length}/${sorted.length}` : String(items.length))),
       summary,
-      // Every node that has ever needed you keeps a needs: tag (set by ARK).
-      h("button", {
-        class: "link needs-history", type: "button", title: t("needs.view_history_title"),
-        onclick: () => ctx.navigate("map", null, { tags: needsHistoryTags() }),
-      }, t("needs.view_history"))));
-  if (sorted.length) panel.appendChild(needsFilterBar(ctx, projectKey, all, facets, filter));
+      h("span", { class: "needs-head-actions" },
+        acceptable.length > 1 ? h("button", {
+          class: "link needs-bulk", type: "button", dataset: { n: String(acceptable.length) },
+          onclick: () => bulkAcceptDialog(ctx, acceptable),
+        }, t("needs.bulk_accept")) : null,
+        h("button", {
+          class: "link needs-view-all", type: "button", title: t("needs.view_all_title"),
+          onclick: () => ctx.navigateWorkspace("research", "review"),
+        }, t("needs.view_all")))));
+  // A setup layer waiting for this user's confirmation leads the list
+  // (filled in once the setup state arrives; not a unit, so not filtered).
+  panel.appendChild(setupNeedsRow({
+    onShown: () => {
+      const n = panel.querySelector(".needs-count");
+      if (n && !filtered) { n.textContent = String(items.length + 1); n.classList.remove("zero"); }
+      if (!sorted.length) panel.querySelector(":scope > .empty")?.remove();
+    },
+    onChange: () => ctx.refresh?.(),
+  }));
+  const setFilter = (next) => {
+    saveNeedsFilter(ctx, projectKey, next);
+    panel.replaceWith(needsYouPanel(ctx, all));
+  };
+  if (sorted.length) panel.appendChild(needsFilterBar(facets, filter, setFilter));
   if (!items.length) {
     panel.appendChild(h("div", { class: "empty sm" }, sorted.length ? t("needs.filter.empty") : t("needs.empty"),
       sorted.length ? h("button", { class: "link needs-filter-clear", type: "button",
-        onclick: () => updateNeedsFilter(ctx, projectKey, all, normalizeNeedsFilter({})) }, t("filters.clear")) : null));
+        onclick: () => { closeNeedsFilters(); setFilter(normalizeNeedsFilter({})); } }, t("filters.clear")) : null));
     return panel;
   }
-  const LIMIT = 4;
-  const list = h("div", { class: "needs-list" }, items.map((item, index) => {
-    const row = needsRow(ctx, item);
-    if (index >= LIMIT) showNeedsRow(row, expanded);
-    return row;
-  }));
+  const list = h("div", { class: "needs-list" });
   panel.appendChild(list);
-  if (items.length > LIMIT) {
+  // Rows are built when shown: the first NEEDS_LIMIT, and after "Show all"
+  // the rest as the list is scrolled (progressive-list.js).  A row whose
+  // item did not change is the same element as in the previous render (live
+  // sync re-renders Home on every change), so its thumbnails are not loaded
+  // again.
+  // One card per item, per delivery of several units, per review group.
+  const entries = groupNeeds(items);
+  const row = (entry) => homeNeedsRow(ctx, projectKey, entry);
+  list.append(...entries.slice(0, NEEDS_LIMIT).map(row));
+  const rest = entries.slice(NEEDS_LIMIT);
+  const shownRest = ctx.S.homeNeedsShown ||= {};
+  let stop = null;
+  const showRest = () => {
+    stop?.();
+    stop = fillProgressively(list, rest, row, {
+      initial: NEEDS_CHUNK, chunk: NEEDS_CHUNK, previous: shownRest[projectKey] || 0,
+      onCount: (n) => { shownRest[projectKey] = n; },
+    });
+  };
+  const hideRest = () => {
+    stop?.();
+    stop = null;
+    shownRest[projectKey] = 0;
+    while (list.children.length > NEEDS_LIMIT) list.lastElementChild.remove();
+  };
+  pruneNeedsRows(projectKey, entries);
+  if (rest.length) {
     const more = h("button", { class: "link needs-toggle", type: "button", "aria-expanded": String(expanded),
       dataset: { open: expanded ? "1" : "0" } }, expanded ? t("needs.show_less") : t("needs.show_all", { n: items.length }));
     more.onclick = () => {
       expanded = !expanded;
       expandedByProject[projectKey] = expanded;
       try { localStorage.setItem(`ark.needsExpanded:${projectKey}`, expanded ? "1" : "0"); } catch { /* storage unavailable */ }
-      list.querySelectorAll(".needs-row").forEach((row, index) => { if (index >= LIMIT) showNeedsRow(row, expanded); });
+      if (expanded) showRest(); else hideRest();
       more.dataset.open = expanded ? "1" : "0";
       more.setAttribute("aria-expanded", String(expanded));
       more.textContent = expanded ? t("needs.show_less") : t("needs.show_all", { n: items.length });
     };
     panel.appendChild(more);
+    if (expanded) showRest();
   }
   return panel;
 }
 
-// Collapsed rows keep their thumbnails unloaded: on a slow link the browser
-// may fetch every lazy image of a long hidden list at once.
-function showNeedsRow(row, visible) {
-  row.hidden = !visible;
-  for (const img of row.querySelectorAll("img")) {
-    if (!visible && img.getAttribute("src")) {
-      img.dataset.deferredSrc = img.getAttribute("src");
-      img.removeAttribute("src");
-    } else if (visible && img.dataset.deferredSrc) {
-      img.setAttribute("src", img.dataset.deferredSrc);
-      delete img.dataset.deferredSrc;
-    }
-  }
+// Rows shown before "Show all"; rows built at a time after it.
+const NEEDS_LIMIT = 4;
+const NEEDS_CHUNK = 20;
+// Needs-you rows kept across Home renders, by everything the row shows.
+const needsRowCache = new Map();
+
+function itemKey(item) {
+  return [item.uid, item.updated_at, item.status, item.type, item.title, item.kind,
+    item.excerpt_plain || item.excerpt || "", item.comments, item.comments_open, item.assignee_effective, item.own_media,
+    (item.media || []).map((m) => m.id), item.review_round, item.review_note, item.review_changes,
+    item.review_prev, item.review_focus, item.round, (item.members || []).map(itemKey)];
 }
 
-// Category filters (type / kind / assignee), remembered per project.  Each
-// group is a drop-down of capsule chips with an "All" switch, like the Map
-// filter rail.
-let needsOpenGroup = "";
-
-function needsFilterFor(ctx, projectKey) {
-  const byProject = ctx.S.homeNeedsFilter ||= {};
-  if (!(projectKey in byProject)) {
-    let raw = {};
-    try { raw = JSON.parse(localStorage.getItem(`ark.needsFilter:${projectKey}`) || "{}"); } catch { raw = {}; }
-    byProject[projectKey] = normalizeNeedsFilter(raw);
-  }
-  return byProject[projectKey];
+// An entry of needs-model.js groupNeeds: one item or a delivery group.
+function needsRowKey(projectKey, entry) {
+  return JSON.stringify([projectKey, entry.kind === "group" ? entry.members.map(itemKey) : itemKey(entry.item)]);
 }
 
-function updateNeedsFilter(ctx, projectKey, all, next) {
-  (ctx.S.homeNeedsFilter ||= {})[projectKey] = next;
-  try { localStorage.setItem(`ark.needsFilter:${projectKey}`, JSON.stringify(next)); } catch { /* storage unavailable */ }
+function homeNeedsRow(ctx, projectKey, entry) {
+  const key = needsRowKey(projectKey, entry);
+  let row = needsRowCache.get(key);
+  if (!row) {
+    row = needsEntryCard(ctx, entry);
+    needsRowCache.set(key, row);
+  }
+  return row;
+}
+
+// Forget rows of entries that left the list (or changed).
+function pruneNeedsRows(projectKey, entries) {
+  const live = new Set(entries.map((entry) => needsRowKey(projectKey, entry)));
+  for (const key of needsRowCache.keys()) if (!live.has(key)) needsRowCache.delete(key);
+}
+
+// After an accept / send back / comment: redraw only this panel, keeping the
+// row the user was looking at in place (no route change, no jump).
+document.addEventListener(NEEDS_CHANGED, (event) => {
   const panel = document.querySelector(".needs-panel");
-  if (panel) panel.replaceWith(needsYouPanel(ctx, all));
-}
-
-function needsValueLabel(group, value) {
-  if (group === "type") return typeLabel(value);
-  if (group === "kind") return t(`needs.kind.${value}`);
-  return value ? displayName(value) : t("assignee.none");
-}
-
-function needsFilterBar(ctx, projectKey, all, facets, filter) {
-  const groupLabel = { type: t("filters.types"), kind: t("needs.filter.kind"), assignee: t("needs.filter.assignee") };
-  const bar = h("div", { class: "needs-filters", role: "group", "aria-label": t("needs.filter.label") });
-  for (const group of NEEDS_FILTER_GROUPS) {
-    const values = facets[group] || [];
-    if (!values.length) continue;
-    const hidden = (filter[group] || []).filter((value) => values.some((item) => item.value === value));
-    const shown = values.length - hidden.length;
-    const apply = (next) => { needsOpenGroup = group; updateNeedsFilter(ctx, projectKey, all, next); };
-    const allToggle = h("input", {
-      type: "checkbox", checked: hidden.length === 0,
-      "aria-label": `${t("filters.all")} ${groupLabel[group]}`,
-      onchange: (event) => apply(setNeedsGroupAll(filter, group, event.target.checked, values.map((item) => item.value))),
-    });
-    allToggle.indeterminate = hidden.length > 0 && shown > 0;
-    const chips = h("div", { class: "type-filter" }, values.map(({ value, n }) => {
-      const on = !hidden.includes(value);
-      return h("button", {
-        type: "button", class: `type-chip ${on ? "on" : ""}`.trim(), "aria-pressed": String(on),
-        dataset: { group, value },
-        onclick: () => apply(toggleNeedsValue(filter, group, value)),
-      }, group === "type" ? h("i", { style: { "--dot": typeColor(value) } }) : null,
-      needsValueLabel(group, value), h("span", { class: "n" }, String(n)));
-    }));
-    const details = h("details", {
-      class: `needs-filter ${hidden.length ? "active" : ""}`.trim(), dataset: { group },
-      open: needsOpenGroup === group ? true : undefined,
-    },
-    h("summary", null, h("span", null, groupLabel[group]),
-      h("b", null, hidden.length ? `${shown}/${values.length}` : t("filters.all")), icon("chevron", "sm")),
-    h("div", { class: "needs-filter-pop" },
-      h("label", { class: "type-all-toggle" }, allToggle, t("filters.all")),
-      chips));
-    details.addEventListener("toggle", () => {
-      if (details.open) {
-        needsOpenGroup = group;
-        // Keep the drop-down on screen: open it leftwards near the right edge.
-        const pop = details.querySelector(".needs-filter-pop");
-        pop.classList.remove("align-end");
-        if (pop.getBoundingClientRect().right > document.documentElement.clientWidth - 8) pop.classList.add("align-end");
-        bar.querySelectorAll("details[open]").forEach((other) => { if (other !== details) other.open = false; });
-      } else if (needsOpenGroup === group) needsOpenGroup = "";
-    });
-    bar.appendChild(details);
+  const ctx = event.detail?.ctx;
+  if (!panel || !ctx) return;
+  const anchors = [...panel.querySelectorAll(".needs-row:not([hidden])")].map((row) => ({
+    ref: row.dataset.unitRef, top: row.getBoundingClientRect().top, bottom: row.getBoundingClientRect().bottom,
+  })).filter((row) => row.bottom > 58 && row.top < innerHeight);
+  const replacement = needsYouPanel(ctx, ctx.S.needsYou);
+  panel.replaceWith(replacement);
+  const rows = [...replacement.querySelectorAll(".needs-row:not([hidden])")];
+  const anchor = anchors.find((item) => rows.some((row) => row.dataset.unitRef === item.ref));
+  if (anchor) {
+    const row = rows.find((item) => item.dataset.unitRef === anchor.ref);
+    window.scrollBy({ top: row.getBoundingClientRect().top - anchor.top, behavior: "instant" });
   }
-  if (needsFilterActive(filter)) {
-    bar.appendChild(h("button", { class: "link needs-filter-clear", type: "button",
-      onclick: () => { needsOpenGroup = ""; updateNeedsFilter(ctx, projectKey, all, normalizeNeedsFilter({})); } },
-    t("filters.clear")));
-  }
-  return bar;
-}
-
-// Close an open filter drop-down on an outside click or Escape.
-document.addEventListener("pointerdown", (event) => {
-  const open = document.querySelector(".needs-filter[open]");
-  if (open && !open.contains(event.target)) { open.open = false; needsOpenGroup = ""; }
 });
-document.addEventListener("keydown", (event) => {
-  if (event.key !== "Escape") return;
-  const open = document.querySelector(".needs-filter[open]");
-  if (!open) return;
-  event.stopPropagation();
-  open.open = false; needsOpenGroup = ""; open.querySelector("summary")?.focus();
-}, true);
-
-// One compact row per item: kind + title + age, a two-line excerpt, small
-// media thumbnails, then actions.  "Comment" leaves a note the agent reads
-// without changing the status.
-function needsRow(ctx, item) {
-  const kind = needsKind(item);
-  const open = () => ctx.openUnit(item.uid);
-  const comment = h("button", { class: "btn sm ghost", type: "button", onclick: () => commentUnit(ctx, item) },
-    icon("message", "sm"), t("needs.comment"));
-  const actions = kind === "decision"
-    ? [
-      h("button", { class: "btn sm primary", type: "button", onclick: () => decideUnit(ctx, item) }, icon("check", "sm"), t("needs.decide")),
-      comment,
-      h("button", { class: "btn sm ghost", type: "button", onclick: open }, t("needs.open")),
-    ]
-    : [
-      h("button", { class: "btn sm primary", type: "button", onclick: () => acceptUnit(ctx, item) }, icon("check", "sm"), t("needs.accept")),
-      h("button", { class: "btn sm ghost", type: "button", onclick: () => sendBackUnit(ctx, item) }, icon("arrowLeft", "sm"), t("needs.send_back")),
-      comment,
-      h("button", { class: "btn sm ghost", type: "button", onclick: open }, t("needs.open")),
-    ];
-  const media = (item.media || []).filter((m) => previewKind(m));
-  // Unresolved user comments: what the agent still has to act on.
-  const notes = item.comments_open || 0;
-  // Previews from linked nodes are labelled; the node itself has none.
-  const borrowed = !item.own_media;
-  const noMedia = borrowed ? h("span", { class: "needs-no-media", title: t("needs.no_media_hint") },
-    icon("image", "sm"), t("needs.no_media"),
-    borrowedSources(media).length ? ` · ${t("needs.previews_from_links")}` : "") : null;
-  return h("article", { class: `needs-row kind-${kind}`, dataset: { unitRef: item.uid, needsKind: kind } },
-    h("span", { class: `needs-chip kind-${kind}` }, t(`needs.kind.${kind}`)),
-    h("div", { class: "needs-main" },
-      h("div", { class: "needs-line" },
-        h("button", { class: "needs-title", type: "button", onclick: open, title: `${item.uid} · ${item.title}` },
-          h("span", { class: "needs-uid" }, item.uid), " ", item.title),
-        assigneeChip(item),
-        notes ? h("span", { class: "needs-notes", title: t("needs.comments_open", { n: notes }), dataset: { open: notes } },
-          icon("message", "sm"), String(notes)) : null,
-        h("span", { class: "needs-age", title: fmtDateTime(item.updated_at) }, relativeTime(item.updated_at))),
-      item.excerpt ? h("div", { class: "needs-excerpt", onclick: open }, item.excerpt_plain || stripMd(item.excerpt)) : null,
-      h("div", { class: "needs-foot" },
-        media.length || noMedia ? h("div", { class: "needs-media-col" },
-          media.length ? needsStrip(ctx, item, media) : null,
-          noMedia) : null,
-        h("div", { class: "needs-actions" }, actions))));
-}
-
-function stripMd(text) {
-  return String(text || "")
-    .replace(/```[\s\S]*?```/g, " ")
-    .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/^\s{0,3}(#{1,6}\s+|>\s?|[-*+]\s+|\d+[.)]\s+)/gm, "")
-    .replace(/(\*\*|__|`|~~)/g, "")
-    .replace(/\s+/g, " ").trim();
-}
-
-// Every preview, newest first, in one horizontal strip.  The mouse wheel
-// scrolls it sideways; clicking a thumbnail opens the media lightbox the
-// graph uses for card thumbnails (zoomable images, video player, prev/next
-// across every preview of the card, borrowed ones included, in strip order).
-// Videos past the first few load only when scrolled into view.
-const NEEDS_EAGER_VIDEOS = 4;
-
-function needsStrip(ctx, item, media) {
-  const preview = (index) => openMediaLightbox({
-    items: needsLightboxItems(media, (uid) => t("needs.from", { uid })),
-    index, title: item.title || item.uid || "", srcOf: mediaUrl,
-  });
-  const strip = h("div", { class: "needs-media" }, media.map((m, index) => needsThumb(ctx, m, index, preview)));
-  strip.addEventListener("wheel", (event) => {
-    if (strip.scrollWidth <= strip.clientWidth + 1) return; // nothing to scroll: page scrolls
-    const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
-    if (!delta) return;
-    const max = strip.scrollWidth - strip.clientWidth;
-    // At either end, let the page scroll on instead of trapping the wheel.
-    if ((delta < 0 && strip.scrollLeft <= 0) || (delta > 0 && strip.scrollLeft >= max - 1)) return;
-    event.preventDefault();
-    strip.scrollLeft = Math.max(0, Math.min(max, strip.scrollLeft + delta));
-  }, { passive: false });
-  const lazy = [...strip.querySelectorAll("video[data-src]")];
-  if (lazy.length && "IntersectionObserver" in window) {
-    const observer = new IntersectionObserver((entries) => {
-      for (const entry of entries) {
-        if (!entry.isIntersecting) continue;
-        const video = entry.target;
-        video.src = video.dataset.src;
-        video.removeAttribute("data-src");
-        observer.unobserve(video);
-      }
-    }, { root: strip, rootMargin: "0px 160px" });
-    lazy.forEach((video) => observer.observe(video));
-  } else {
-    lazy.forEach((video) => { video.src = video.dataset.src; video.removeAttribute("data-src"); });
-  }
-  return strip;
-}
-
-function needsThumb(ctx, media, index, preview) {
-  const kind = previewKind(media);
-  const src = mediaUrl(media);
-  const label = media.caption || media.from?.title || media.kind || "";
-  const from = media.from ? t("needs.from", { uid: media.from.uid }) : "";
-  const title = [label, from].filter(Boolean).join(" · ");
-  const eager = index < NEEDS_EAGER_VIDEOS;
-  const stage = kind === "image"
-    ? h("img", { src, alt: label, loading: "lazy" })
-    : h("span", { class: "needs-video" },
-      h("video", {
-        src: eager ? `${src}#t=0.1` : undefined, "data-src": eager ? undefined : `${src}#t=0.1`,
-        muted: true, playsinline: true, preload: "metadata",
-      }),
-      h("span", { class: "needs-play", "aria-hidden": "true" }, icon("play", "sm")));
-  const thumb = h("button", {
-    class: `needs-thumb kind-${kind}`, type: "button", title,
-    "aria-label": kind === "video" ? `${t("needs.play_video")}: ${title}` : title,
-    onclick: () => preview(index),
-  }, stage, h("span", { class: "needs-thumb-cap" }, label || from));
-  if (!media.from) return thumb;
-  // Borrowed from a linked node: say which, and link to it.
-  return h("span", { class: "needs-thumb-wrap borrowed" }, thumb,
-    h("a", {
-      class: "needs-from", href: `?unit=${encodeURIComponent(media.from.uid)}#/home`,
-      title: t("needs.from_title", { uid: media.from.uid, title: media.from.title || "" }),
-      dataset: { unitRef: media.from.uid },
-      onclick: (event) => { event.preventDefault(); ctx.openUnit(media.from.uid); },
-    }, from));
-}
-
-async function refreshNeeds(ctx) {
-  try {
-    const data = await api.project();
-    ctx.S.needsYou = data.needs_you || [];
-    if (data.summary && ctx.S.project) ctx.S.project = { ...ctx.S.project, ...data.summary };
-    // Update only the Needs-you panel and the topbar badge.  Calling
-    // applyProject() re-routes the whole page, which loses the user's
-    // position and makes an accept feel like a browser refresh.
-    const panel = document.querySelector(".needs-panel");
-    if (panel) {
-      const anchors = [...panel.querySelectorAll('.needs-row:not([hidden])')].map((row) => ({
-        ref: row.dataset.unitRef, top: row.getBoundingClientRect().top, bottom: row.getBoundingClientRect().bottom,
-      })).filter((row) => row.bottom > 58 && row.top < innerHeight);
-      const replacement = needsYouPanel(ctx, ctx.S.needsYou);
-      panel.replaceWith(replacement);
-      const rows = [...replacement.querySelectorAll('.needs-row:not([hidden])')];
-      const anchor = anchors.find((item) => rows.some((row) => row.dataset.unitRef === item.ref));
-      if (anchor) {
-        const row = rows.find((item) => item.dataset.unitRef === anchor.ref);
-        window.scrollBy({ top: row.getBoundingClientRect().top - anchor.top, behavior: "instant" });
-      }
-    }
-    ctx.syncNeedsBadge?.();
-  } catch (err) { toast(err.message, "err"); }
-}
-
-// Each action writes one comment row on the unit (kind comment / sent_back /
-// decided / accepted) and, except a plain comment, then sets the status.
-// Comments are their own entries on the node, so agents rewriting the body
-// cannot lose them; agents read the unresolved ones before they resume.
-async function earlierComments(item) {
-  try { return (await api.unit(item.uid)).unit?.comments || []; } catch { return []; }
-}
-
-function noteDialog(ctx, item, {
-  title, action, label, kind, status, done, options = [], history = [], placeholder = "", optional = false,
-}) {
-  const input = h("textarea", { class: "textarea", style: { minHeight: "72px" }, placeholder: placeholder || label, "aria-label": label });
-  const threads = threadComments(history).slice(-5);
-  const line = (c) => h("div", { class: `needs-history-item kind-${c.kind}${c.resolved ? " resolved" : ""}` },
-    h("b", null, `${t(`comments.kind.${c.kind}`)} · ${displayName(authorName(c)) || t(`comments.author.${c.kind === "agent_reply" ? "agent" : "user"}`)} · ${fmtDate(c.created_at)}`),
-    " ", c.body);
-  const past = threads.length ? h("div", { class: "needs-history" },
-    h("div", { class: "muted" }, t("needs.previous_notes")),
-    threads.map((thread) => h("div", { class: "needs-history-thread" },
-      line(thread.comment),
-      thread.replies.map((reply) => h("div", { class: "needs-history-reply" }, line(reply)))))) : null;
-  const picks = options.length ? h("div", { class: "needs-options" }, options.map((option) => h("button", {
-    class: "btn sm ghost", type: "button",
-    onclick: () => { input.value = option; input.focus(); },
-  }, option))) : null;
-  openModal({
-    title,
-    body: h("div", null,
-      past,
-      h("div", { class: "field" }, h("label", null, label), picks, input)),
-    actions: [
-      { label: t("action.cancel"), ghost: true },
-      {
-        label: action, primary: true,
-        onClick: async () => {
-          const text = input.value.trim();
-          if (!text && !optional) { toast(t("needs.reason_required"), "err"); input.focus(); return false; }
-          try {
-            if (text) await api.addComment(item.uid, { body: text, kind });
-            if (status) await api.updateUnit(item.uid, { status });
-            toast(t(done, { uid: item.uid }), "ok");
-          } catch (err) { toast(err.message, "err"); return false; }
-          refreshNeeds(ctx);
-        },
-      },
-    ],
-  });
-}
-
-// Accept closes the node; the note is optional.
-async function acceptUnit(ctx, item) {
-  noteDialog(ctx, item, {
-    title: t("needs.accept_title", { uid: item.uid }), action: t("needs.accept"), label: t("needs.accept_note"),
-    kind: "accepted", status: "done", done: "needs.accepted", optional: true, history: await earlierComments(item),
-  });
-}
-
-async function sendBackUnit(ctx, item) {
-  noteDialog(ctx, item, {
-    title: t("needs.send_back_title", { uid: item.uid }), action: t("needs.send_back"), label: t("needs.send_back_reason"),
-    kind: "sent_back", status: "active", done: "needs.sent_back", history: await earlierComments(item),
-  });
-}
-
-async function decideUnit(ctx, item) {
-  let unit = null;
-  try { unit = (await api.unit(item.uid)).unit; } catch { /* quick picks are optional */ }
-  noteDialog(ctx, item, {
-    title: t("needs.decide_title", { uid: item.uid }), action: t("needs.decide"), label: t("needs.decide_answer"),
-    kind: "decided", status: "done", done: "needs.decided", options: decisionOptions(unit?.body),
-    history: unit?.comments || [],
-  });
-}
-
-// A comment keeps the status.
-async function commentUnit(ctx, item) {
-  noteDialog(ctx, item, {
-    title: t("needs.comment_title", { uid: item.uid }), action: t("needs.comment_save"), label: t("needs.comment_label"),
-    kind: "comment", status: null, done: "needs.commented", history: await earlierComments(item),
-    placeholder: t("needs.comment_placeholder"),
-  });
-}

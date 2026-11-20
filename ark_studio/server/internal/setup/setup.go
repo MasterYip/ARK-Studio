@@ -10,6 +10,7 @@
 package setup
 
 import (
+	"arkstudio/go/internal/hostid"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -276,8 +277,21 @@ func texts(v any, limit, n int) []any {
 	return head(out, n)
 }
 
-// MachineFingerprint is machine_fingerprint(): sha256(hostname|system|home)[:12].
+// MachineFingerprint is this server's device id, the same id an agent on
+// this machine sends as X-ARK-Host (internal/hostid: the hashed OS machine
+// id, or the primary adapter's MAC).  Falls back to the pre-2026-11-19
+// fingerprint when neither is available.
 func MachineFingerprint() string {
+	if id := hostid.Compute().ID; id != "" {
+		return id
+	}
+	return LegacyMachineFingerprint()
+}
+
+// LegacyMachineFingerprint is machine_fingerprint() before 2026-11-19:
+// sha256(hostname|system|home)[:12].  Kept as an alias of MachineFingerprint
+// so locations registered under it still match (devices.go).
+func LegacyMachineFingerprint() string {
 	host, _ := os.Hostname()
 	home, _ := os.UserHomeDir()
 	sum := sha256.Sum256([]byte(host + "|" + PlatformSystem() + "|" + home))
@@ -898,6 +912,10 @@ func anyField(items []any, field, value string) bool {
 }
 
 var capabilities = []string{"plan", "tasks", "implement", "gates", "gpu"}
+
+// layeredCapabilities adds "files" (this device has the paths it needs;
+// view.readiness) to the profile capabilities.
+var layeredCapabilities = []string{"plan", "tasks", "files", "implement", "gates", "gpu"}
 
 // Readiness is readiness(profile, state).
 func Readiness(profile *obj, state string) *obj {

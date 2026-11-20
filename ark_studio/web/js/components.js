@@ -1,12 +1,16 @@
-import { h, clear, typeColor, statusColor, impColor, fmtDate, fmtDateTime, relativeTime, dueState, typeBadge, statusPill, impDot, tagChip, avatarFor, copyText, linksLabel } from "./dom.js";
-import { t, typeLabel, statusLabel, impLabel, relLabel, nsLabel } from "./i18n.js";
+import { h, clear, typeColor, fmtDate, fmtDateTime, relativeTime, dueState, typeBadge, statusPill, impDot, tagChip, avatarFor, copyText, linksLabel } from "./dom.js";
+import { t, getLang, typeLabel, statusLabel, impLabel, relLabel, nsLabel } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api } from "./api.js";
 import { sortNeedsValues } from "./needs-model.js";
 import { S, baseTypes, selectedTypes, typeChips, selectedStatuses, selectedImportance, activeFilterCount, filterDiffFromDefault, hasFilterDefault } from "./state.js";
 import { openContextMenu } from "./context-menu.js";
 import { assigneeChip, assigneeFilterSection } from "./assignee.js";
+import { renderArkImportRail } from "./import-ark.js";
+import { isArkSource } from "./import-ark-model.js";
 import { displayName } from "./users.js";
+import { withDesktopGroups, newProjectLocation } from "./desktop-hub.js";
+import { liveProjectPicker } from "./project-picker.js";
 
 const KIND_COLORS = {topic: "#3b82f6", todo: "#ef4444", event: "#a855f7", decision: "#f59e0b",
   question: "#eab308", announcement: "#14b8a6", resource: "#10b981", digest: "#64748b", note: "#94a3b8"};
@@ -14,49 +18,25 @@ const KIND_COLORS = {topic: "#3b82f6", todo: "#ef4444", event: "#a855f7", decisi
 const OVERLAY = () => document.getElementById("overlay-root");
 const TOASTS = () => document.getElementById("toast-root");
 
-/**
- * T-0018: the GPU views' "not registered in this project" note.  The server
- * shows a project only the GPU servers its setup registers; `registration` is
- * the server's {registered, available, suggested, hint_code}.  One click
- * registers the suggested servers (those this project's queue jobs already
- * used), else every available one, in the viewer's own setup layer.
- * Returns null when the project registers a server.
- */
-export function gpuRegistrationNote(registration, onRegistered = null) {
-  if (!registration || registration.hint_code !== "not_registered") return null;
-  const names = (registration.suggested?.length ? registration.suggested : registration.available) || [];
-  let button = null;
-  if (names.length) {
-    button = h("button", {
-      class: "ghost-btn sm", type: "button",
-      onclick: async () => {
-        button.disabled = true;
-        try {
-          await api.gpuRegister(names);
-          toast(t("gpu.register.done", { n: names.length }), "ok");
-          onRegistered?.();
-        } catch (err) {
-          toast(err.message, "err");
-          button.disabled = false;
-        }
-      },
-    }, icon("plus", "sm"), t("gpu.register.action", { servers: names.join(", ") }));
-  }
-  return h("div", { class: "settings-note" }, icon("info", "sm"),
-    h("div", null, h("b", null, t("gpu.register.title")), " ", t("gpu.register.hint"),
-      button ? h("div", { class: "row tight", style: { marginTop: "6px" } }, button) : null));
-}
-
-export function toast(message, kind = "") {
+// `action` ({ label, onClick }) adds a button (e.g. Undo) that closes the
+// toast; `duration` (ms) keeps it longer than the default 3 s.
+export function toast(message, kind = "", { action = null, duration = 3000 } = {}) {
   const root = TOASTS();
   if (!root) return;
-  const el = h("div", { class: `toast ${kind}`.trim() }, message);
+  const el = h("div", { class: `toast ${kind} ${action ? "has-action" : ""}`.trim() }, h("span", null, message));
+  const remove = () => el.remove();
+  if (action) {
+    el.appendChild(h("button", {
+      class: "toast-action", type: "button",
+      onclick: () => { remove(); action.onClick?.(); },
+    }, action.label));
+  }
   root.appendChild(el);
-  setTimeout(() => { el.style.opacity = "0"; el.style.transform = "translateY(6px)"; }, 2600);
-  setTimeout(() => el.remove(), 3000);
+  setTimeout(() => { el.style.opacity = "0"; el.style.transform = "translateY(6px)"; }, Math.max(400, duration - 400));
+  setTimeout(remove, duration);
 }
 
-export function openModal({ title, body, actions = [], wide = false, onClose = null, dismissable = true, enterConfirm = false }) {
+export function openModal({ title, body, actions = [], wide = false, onClose = null, dismissable = true, enterConfirm = false, raised = false }) {
   // A modal can sit above an open inspector; only replace other modals.
   const root = OVERLAY();
   // A replaced modal also drops its keyboard handler (otherwise every
@@ -67,7 +47,9 @@ export function openModal({ title, body, actions = [], wide = false, onClose = n
     h("button", { class: "icon-btn", title: t("action.close"), onclick: () => close(true) }, icon("x")));
   const bodyEl = h("div", { class: "modal-body" }, body);
   const foot = h("div", { class: "modal-foot" });
-  const backdrop = h("div", { class: "modal-backdrop", onclick: () => { if (dismissable) close(false); } }, modal);
+  // raised: above the first-run Welcome and the guide (a prompt the
+  // desktop app asked for while the page was starting).
+  const backdrop = h("div", { class: raised ? "modal-backdrop raised" : "modal-backdrop", onclick: () => { if (dismissable) close(false); } }, modal);
   modal.append(head, bodyEl);
   if (actions.length) {
     for (const action of actions) {
@@ -120,6 +102,8 @@ export function openModal({ title, body, actions = [], wide = false, onClose = n
     closed = true;
     document.removeEventListener("keydown", key);
     backdrop.remove();
+    // Parked backdrop graphs (graph.js wakeBackdrop) continue.
+    window.dispatchEvent(new CustomEvent("ark:modal-close"));
     onClose?.(ok);
   }
   setTimeout(() => {
@@ -152,65 +136,15 @@ export function confirmDialog(message, { title = t("dialog.confirm_title"), dang
 }
 
 // ---------------------------------------------------------------- project UI
-// One row per project; used by the project modal and the brand project menu.
-// Rows are buttons so they work from the keyboard.
-export function projectRows(ctx, projects, { beforeOpen = null } = {}) {
-  return (projects || []).map((project) => {
-    const current = project.id === ctx.S.project?.id;
-    return h("button", {
-      class: `project-row ${current ? "current" : ""}`.trim(), type: "button",
-      "data-project-id": project.id, title: project.path || "",
-      "aria-current": current ? "true" : undefined,
-      onclick: async () => {
-        if (ctx.switchProject) { ctx.switchProject(project, { beforeOpen }); return; }
-        try {
-          const data = await api.openProject({ id: project.id });
-          beforeOpen?.(project);
-          ctx.applyBootstrap(data);
-          ctx.toast(t("project.toast.opened", { name: project.name }), "ok");
-        } catch (err) { ctx.toast(err.message, "err"); }
-      },
-    },
-      h("span", { class: "main" },
-        h("span", { class: "t" }, h("span", { class: "n" }, project.name),
-          project.demo ? h("span", { class: "demo-badge" }, t("common.demo")) : null,
-          current ? h("span", { class: "pill" }, t("project.current")) : null),
-        h("span", { class: "d" }, project.description || project.path || "")),
-      icon("chevronRight", "sm"));
-  });
-}
+// Projects are cards (project-picker.js), shared with the project menu.
 
-/**
- * A project list shown from memory is refreshed in the background.  The rows
- * already on screen keep their places (new projects go last, removed ones
- * drop out), so a click aimed at a row never lands on another project.
- * Returns null when nothing visible changed.
- */
-export function refreshedProjectRows(shown, fresh) {
-  const key = (items) => JSON.stringify((items || []).map((p) => [p.id, p.name, p.description, p.path, p.demo]));
-  const place = new Map((shown || []).map((p, index) => [p.id, index]));
-  const ordered = [...(fresh || [])].map((p, index) => ({ p, index }))
-    .sort((a, b) => (place.get(a.p.id) ?? Infinity) - (place.get(b.p.id) ?? Infinity) || a.index - b.index)
-    .map((item) => item.p);
-  return key(ordered) === key(shown) ? null : ordered;
-}
-
-export async function openProjectModal(ctx) {
-  // Open at once with the known list; refreshed in the background.
-  const list = h("div", { class: "project-list" });
-  const fill = (projects) => {
-    clear(list);
-    if (!projects.length) list.appendChild(h("div", { class: "empty sm" }, t("project.empty")));
-    list.append(...projectRows(ctx, projects, { beforeOpen: () => close() }));
-  };
-  const shown = ctx.S.projects || [];
-  fill(shown);
-  api.projects().then((data) => {
-    if (!list.isConnected || !Array.isArray(data?.projects)) return;
-    ctx.S.projects = data.projects;
-    const rows = refreshedProjectRows(shown, data.projects);
-    if (rows) fill(rows);
-  }).catch(() => { /* keep the cached list */ });
+// mode: "open" (switch to / open another project: the list and open by
+// path), "new" (create a project) or "all" (both, the older combined dialog).
+export async function openProjectModal(ctx, mode = "all") {
+  const showOpen = mode !== "new", showNew = mode !== "open";
+  // Open at once with the known list (as cards); refreshed in the
+  // background, cards keep their places.
+  const list = showOpen ? liveProjectPicker(ctx, { beforeOpen: () => close() }).el : null;
   const name = h("input", { class: "input", placeholder: t("project.name_placeholder"), id: "new-project-name" });
   const desc = h("textarea", { class: "textarea", style: { minHeight: "58px" }, placeholder: t("project.desc_placeholder") });
   const template = h("select", { class: "select" },
@@ -218,13 +152,20 @@ export async function openProjectModal(ctx) {
     h("option", { value: "paper" }, t("common.paper")),
     h("option", { value: "demo" }, `${t("common.demo")} · PredActor`)); // i18n-ignore: demo project name
   const openPath = h("input", { class: "input", placeholder: "…/MyResearch.ark" }); // i18n-ignore: example path
-  const body = h("div", null,
+  // ARK Studio desktop app: local and server groups, and where to create.
+  const where = newProjectLocation();
+  const openSection = showOpen ? [
     h("div", { class: "section-head", style: { marginTop: 0 } }, h("h2", null, t("project.recent"))),
-    list,
-    h("div", { class: "divider" }),
+    withDesktopGroups(list, { close: () => close(), toast: ctx.toast, modal: openModal }),
+  ] : [];
+  const newSection = showNew ? [
+    showOpen ? h("div", { class: "divider" }) : null,
     h("div", { class: "field" }, h("label", null, t("project.new")),
       h("div", { class: "stack", style: { gap: "7px" } }, name, desc, template)),
-    h("div", { class: "field" }, h("label", null, t("project.open_path")),
+    where?.el || null,
+  ] : [];
+  const body = h("div", null, ...openSection, ...newSection,
+    !showOpen ? null : h("div", { class: "field" }, h("label", null, t("project.open_path")),
       h("div", { class: "row", style: { flexWrap: "nowrap" } }, openPath,
         h("button", {
           class: "btn", onclick: async () => {
@@ -237,14 +178,21 @@ export async function openProjectModal(ctx) {
         }, t("action.open"))),
       h("div", { class: "muted", style: { fontSize: "10px", marginTop: "4px" } }, t("project.path_hint"))));
   const modal = openModal({
-    title: t("project.title"),
+    title: mode === "new" ? t("project.new") : mode === "open" ? t("project.open_other") : t("project.title"),
     body,
-    wide: true,
-    actions: [
+    wide: showOpen,
+    actions: !showNew ? [{ label: t("action.close"), ghost: true }] : [
       { label: t("action.cancel"), ghost: true },
       {
         label: t("project.create"), primary: true,
         onClick: async () => {
+          // On a server: created there by the app when it is linked, else
+          // the server's own new-project dialog opens in this window.
+          if (where && where.value() !== "local") {
+            const done = await where.createOnServer({ name: name.value, description: desc.value.trim(),
+              template: template.value, toast: ctx.toast, close });
+            return done ? undefined : false;
+          }
           const title = name.value.trim();
           if (!title) { ctx.toast(t("error.required"), "err"); return false; }
           try {
@@ -257,37 +205,66 @@ export async function openProjectModal(ctx) {
       },
     ],
   });
+  // Room for about three project cards per row.
+  if (showOpen) modal.modal.classList.add("project-open-dialog");
   function close() { modal.close(); }
+}
+
+// The types a beginner works with come first in the New dialog; the rest sit
+// under "More types".
+const COMMON_TYPES = ["idea", "question", "claim", "evidence", "task", "note"];
+
+// "New claim" / "新建论断": buttons and dialog titles name what they create.
+export function newTypeLabel(type) {
+  const label = typeLabel(type);
+  return t("create.new_type", { type: getLang() === "en" ? label.toLowerCase() : label });
 }
 
 export function openCreateUnit(ctx, defaults = {}) {
   const vocab = ctx.S.vocab;
   const type = defaults.type || defaultTypeForTab(ctx.S.tab, ctx.S.sub);
-  const title = h("input", { class: "input", placeholder: t("common.title"), id: "create-title" });
+  // Capture idea is a one-line form (Enter creates); "More fields" opens the rest.
+  const quick = defaults.quick ?? defaults.type === "idea";
+  const title = h("input", { class: "input", placeholder: quick ? t("create.quick_placeholder") : t("common.title"), id: "create-title" });
+  const typeIds = (vocab?.types || []).map((item) => item.id);
+  const option = (id) => h("option", { value: id, selected: id === type ? true : undefined }, typeLabel(id));
+  const common = COMMON_TYPES.filter((id) => typeIds.includes(id));
+  const rest = typeIds.filter((id) => !common.includes(id));
   const typeSel = h("select", { class: "select" },
-    (vocab?.types || []).map((item) => h("option", { value: item.id, selected: item.id === type ? true : undefined }, typeLabel(item.id))));
+    common.length && rest.length
+      ? [h("optgroup", { label: t("create.common_types") }, common.map(option)),
+        h("optgroup", { label: t("create.more_types") }, rest.map(option))]
+      : typeIds.map(option));
   typeSel.value = type;
   const statusSel = h("select", { class: "select" },
     (vocab?.statuses || []).map((item) => h("option", { value: item.id, selected: item.id === (defaults.status || "open") ? true : undefined }, statusLabel(item.id))));
   const impSel = h("select", { class: "select" },
     (vocab?.importance || []).map((item) => h("option", { value: item.id, selected: item.id === (defaults.importance || "p2") ? true : undefined }, impLabel(item.id))));
-  const body = h("textarea", { class: "textarea", style: { minHeight: "110px" }, placeholder: `${t("inspector.body")}…` });
+  const body = h("textarea", { class: "textarea", style: { minHeight: quick ? "64px" : "110px" }, placeholder: quick ? t("create.quick_body") : `${t("inspector.body")}…` });
   const tags = h("input", { class: "input", placeholder: "topic:control, stage:capture" }); // i18n-ignore: example tag values
   const start = h("input", { class: "input", type: "date", value: defaults.start_at || "" });
   const end = h("input", { class: "input", type: "date", value: defaults.end_at || "" });
-  const form = h("div", null,
-    h("div", { class: "field" }, h("label", null, t("inspector.title")), title),
-    h("div", { class: "field-row three" },
-      h("div", { class: "field" }, h("label", null, t("common.type")), typeSel),
-      h("div", { class: "field" }, h("label", null, t("common.status")), statusSel),
-      h("div", { class: "field" }, h("label", null, t("common.importance")), impSel)),
-    h("div", { class: "field" }, h("label", null, t("inspector.body")), body),
+  const typeRow = h("div", { class: "field-row three", hidden: quick },
+    h("div", { class: "field" }, h("label", null, t("common.type")), typeSel),
+    h("div", { class: "field" }, h("label", null, t("common.status")), statusSel),
+    h("div", { class: "field" }, h("label", null, t("common.importance")), impSel));
+  const extra = h("div", { hidden: quick },
     h("div", { class: "field" }, h("label", null, t("common.tags")), tags),
     h("div", { class: "field-row" },
       h("div", { class: "field" }, h("label", null, t("common.start")), start),
       h("div", { class: "field" }, h("label", null, t("common.end")), end)));
+  const more = quick ? h("button", {
+    class: "btn sm ghost", type: "button", "data-create-more": "1",
+    onclick: () => { typeRow.hidden = false; extra.hidden = false; more.remove(); title.focus(); },
+  }, icon("chevron", "sm"), t("create.more_fields")) : null;
+  const form = h("div", { "data-create-quick": quick ? "1" : undefined },
+    h("div", { class: "field" }, h("label", null, t("inspector.title")), title),
+    typeRow,
+    h("div", { class: "field" }, h("label", null, quick ? t("create.quick_body_label") : t("inspector.body")), body),
+    extra,
+    more);
   const modal = openModal({
-    title: t("action.new"),
+    title: newTypeLabel(type),
     body: form,
     wide: false,
     actions: [
@@ -311,6 +288,15 @@ export function openCreateUnit(ctx, defaults = {}) {
         },
       },
     ],
+  });
+  const heading = modal.modal.querySelector(".modal-head h3");
+  typeSel.addEventListener("change", () => { if (heading) heading.textContent = newTypeLabel(typeSel.value); });
+  // Enter in the title creates (Shift+Enter is not a newline in an input anyway).
+  title.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.isComposing) {
+      event.preventDefault();
+      modal.actions.find((action) => action.primary)?._btn?.click();
+    }
   });
   setTimeout(() => title.focus(), 40);
 }
@@ -376,7 +362,8 @@ export async function openLinkModal(ctx, sourceUnit, targetUnit = null) {
             await api.createLink({ source: sourceUnit.id, target: target.id, relation: relationSel.value });
             modal.close();
             ctx.toast(t("toast.linked"), "ok");
-            await ctx.refresh();
+            // A graph keeps camera and positions (only the new link appears).
+            await (ctx.refreshData ? ctx.refreshData() : ctx.refresh());
             if (ctx.S.drawerOpen && ctx.S.detail?.id) await ctx.reloadDetail();
           } catch (err) { ctx.toast(err.message, "err"); return false; }
         },
@@ -384,69 +371,6 @@ export async function openLinkModal(ctx, sourceUnit, targetUnit = null) {
     ],
   });
   setTimeout(() => search.focus(), 40);
-}
-
-export async function openBulkEdit(ctx, nodes) {
-  const picked = (nodes || []).filter((n) => n?.uid);
-  if (!picked.length) return;
-  const tagInput = h("input", { class: "input", placeholder: t("bulk.tags_placeholder") });
-  const statusSel = h("select", { class: "select" },
-    h("option", { value: "" }, t("bulk.keep")),
-    (ctx.S.vocab?.statuses || []).map((s) => h("option", { value: s.id }, statusLabel(s.id))));
-  const importanceSel = h("select", { class: "select" },
-    h("option", { value: "" }, t("bulk.keep")),
-    ["p0", "p1", "p2", "p3"].map((p) => h("option", { value: p }, impLabel(p))));
-  const chips = h("div", { class: "tag-list" },
-    ...picked.slice(0, 8).map((n) => h("span", { class: "pill" }, n.uid)),
-    picked.length > 8 ? h("span", { class: "pill" }, `+${picked.length - 8}`) : null);
-  const body = h("div", null,
-    h("div", { class: "notice" }, icon("layers", "sm"),
-      h("div", null, t("bulk.hint", { n: picked.length }))),
-    h("div", { class: "chips", style: { marginBottom: "10px" } }, chips),
-    h("div", { class: "field" },
-      h("label", null, t("bulk.add_tags")), tagInput,
-      h("div", { class: "muted", style: { fontSize: "10px", marginTop: "4px" } }, t("bulk.tags_hint"))),
-    h("div", { class: "field-row" },
-      h("div", { class: "field" }, h("label", null, t("common.status")), statusSel),
-      h("div", { class: "field" }, h("label", null, t("common.importance")), importanceSel)));
-  const modal = openModal({
-    title: t("bulk.title", { n: picked.length }),
-    body,
-    actions: [
-      { label: t("action.cancel"), ghost: true },
-      {
-        label: t("bulk.apply"), primary: true,
-        onClick: async () => {
-          const tags = [...new Set(tagInput.value.split(/[,，\n]/).map((x) => x.trim()).filter(Boolean))]
-            .filter((tag) => !/^(type|status|importance):/.test(tag));
-          const status = statusSel.value, importance = importanceSel.value;
-          if (!tags.length && !status && !importance) {
-            ctx.toast(t("bulk.nothing"), "err");
-            return false;
-          }
-          let changed = 0;
-          try {
-            for (const node of picked) {
-              const detail = (await api.unit(node.uid)).unit;
-              const merged = [...new Set([...(detail.tags || []), ...tags])];
-              const patch = { tags: merged };
-              if (status) patch.status = status;
-              if (importance) patch.importance = importance;
-              await api.updateUnit(node.uid, patch);
-              changed += 1;
-            }
-            modal.close();
-            ctx.toast(t("bulk.updated", { n: changed }), "ok");
-            await ctx.refresh();
-          } catch (err) {
-            ctx.toast(err.message, "err");
-            return false;
-          }
-        },
-      },
-    ],
-  });
-  setTimeout(() => tagInput.focus(), 40);
 }
 
 export async function openRelationModal(ctx, edge, source, target) {
@@ -481,6 +405,13 @@ export async function openRelationModal(ctx, edge, source, target) {
       },
     ],
   });
+}
+
+// "Run with agent" (dispatch) is offered only on tasks that still wait for
+// work: Inbox, Open and Blocked (not active, in review or done).
+const RUNNABLE_STATUSES = new Set(["inbox", "open", "blocked"]);
+export function canRunWithAgent(unit) {
+  return unit?.type === "task" && RUNNABLE_STATUSES.has(unit.status || "open");
 }
 
 export async function openDispatchModal(ctx, unit) {
@@ -639,13 +570,15 @@ export function openExtractModal(ctx) {
   setTimeout(() => text.focus(), 40);
 }
 
-// ------------------------------------------------------------------ assistant
+// ------------------------------------------------------------------ graph checks
+// The "Graph checks" drawer (deterministic local checks, no model); the chat
+// is the Assistant.  ctx.openAssistant keeps its name for older callers.
 export async function openAssistant(ctx) {
   closeOverlay();
   const root = OVERLAY();
   const body = h("div", { class: "drawer-body" });
   const head = h("div", { class: "drawer-head" },
-    h("span", { style: { width: "26px", height: "26px", borderRadius: "7px", display: "grid", placeItems: "center", background: "var(--accent-soft)", color: "var(--accent-2)" } }, icon("sparkles", "sm")),
+    h("span", { style: { width: "26px", height: "26px", borderRadius: "7px", display: "grid", placeItems: "center", background: "var(--accent-soft)", color: "var(--accent-2)" } }, icon("check", "sm")),
     h("div", null, h("div", { style: { fontSize: "13px", fontWeight: "700" } }, t("assistant.title")),
       h("div", { style: { fontSize: "10px", color: "var(--mute)" } }, t("assistant.local"))),
     h("div", { class: "spacer" }),
@@ -753,20 +686,23 @@ export async function openAssistant(ctx) {
 }
 
 // -------------------------------------------------------------------- rail
-export function renderFilterRail(host, ctx) {
+// embedded: the rail of another project's units (Ideas › Import from an ARK
+// project, import-ark.js): appended to host, without the tab's defaults.
+export function renderFilterRail(host, ctx, { embedded = false } = {}) {
   const { S: state } = ctx;
   const facets = state.facets || { types: {}, statuses: {}, importance: {}, namespaces: {} };
   const base = baseTypes(state.tab, state.sub);
-  clear(host);
-  if (state.tab === "ideas") {
+  if (!embedded) clear(host);
+  if (state.tab === "ideas" && !embedded) {
     host.appendChild(railTabs(state, ctx));
     if (state.filterTab === "infohub") {
-      renderInfoHubRail(host, ctx);
+      if (isArkSource(state.importSource)) renderArkImportRail(host, ctx);
+      else renderInfoHubRail(host, ctx);
       return;
     }
   }
-  const diff = filterDiffFromDefault(state.filters);
-  const savedDefault = hasFilterDefault();
+  const diff = embedded ? [] : filterDiffFromDefault(state.filters);
+  const savedDefault = !embedded && hasFilterDefault();
   const head = h("div", { class: "rail-head" },
     h("div", { class: "rail-title" }, t("action.filters"),
       diff.length ? h("span", {
@@ -779,6 +715,7 @@ export function renderFilterRail(host, ctx) {
       activeFilterCount(state.filters) ? h("button", { class: "rail-clear-btn", type: "button", title: t("filters.clear"), onclick: () => ctx.clearFilters() }, t("filters.clear")) : null,
       h("button", { class: "icon-btn", title: t("action.close"), style: { display: window.innerWidth <= 980 ? "grid" : "none" }, onclick: () => { state.railOpen = false; host.classList.remove("open"); ctx.closeFilters?.(); } }, icon("x"))));
   host.appendChild(head);
+  if (!embedded) {
   host.appendChild(h("div", { class: "rail-defaults" },
     h("button", {
       class: "rail-default-btn rail-reset", type: "button", disabled: !diff.length,
@@ -803,6 +740,7 @@ export function renderFilterRail(host, ctx) {
         });
       },
     }, icon("more", "sm"))));
+  }
 
   const search = h("input", {
     class: "filter-input", value: state.filters.q || "", placeholder: t("filters.keyword"),
@@ -842,7 +780,7 @@ export function renderFilterRail(host, ctx) {
     ], typeWrap));
   }
 
-  // Status & importance: same chip/OR behavior as types.  Each field has its
+  // Status & importance: same chip/OR behavior as types, without colour dots (only types are colour-coded).  Each field has its
   // own group; status and importance groups combine with AND in the backend.
   const statusBase = [...new Set([
     ...(ctx.S.vocab?.statuses || []).map((item) => item.id),
@@ -864,7 +802,7 @@ export function renderFilterRail(host, ctx) {
         type: "button", class: `type-chip ${on ? "on" : ""}`.trim(),
         "aria-pressed": String(on),
         onclick: () => ctx.toggleStatus(id, statusBase),
-      }, h("i", { style: { "--dot": statusColor(id) } }), statusLabel(id),
+      }, statusLabel(id),
         h("span", { class: "n" }, facets.statuses?.[id] ?? 0)));
     }
     host.appendChild(section([
@@ -893,7 +831,7 @@ export function renderFilterRail(host, ctx) {
         type: "button", class: `type-chip ${on ? "on" : ""}`.trim(),
         "aria-pressed": String(on),
         onclick: () => ctx.toggleImportance(id, importanceBase),
-      }, h("i", { style: { "--dot": impColor(id) } }), impLabel(id),
+      }, impLabel(id),
         h("span", { class: "n" }, facets.importance?.[id] ?? 0)));
     }
     host.appendChild(section([
@@ -994,7 +932,7 @@ function timeFilterControl(state, ctx, facets) {
   if (mode === "timeline") {
     body = timeRangeControl(state, ctx, facets);
   } else if (mode === "recent") {
-    const recent = [1, 3, 7, 30];
+    const recent = [1, 3, 7, 14, 30];
     body = h("div", { class: "recent-days" },
       h("span", { class: "recent-days-label" }, t("filters.recent_days")),
       recent.map((days) => h("button", {
@@ -1151,7 +1089,8 @@ function railTabs(state, ctx) {
     h("button", {
       class: `rail-tab ${state.filterTab === "infohub" ? "on" : ""}`.trim(),
       onclick: () => ctx.setFilterTab("infohub"),
-    }, "InfoHub", count != null ? h("span", { class: "n" }, count) : null)); // i18n-ignore: product name
+    }, isArkSource(state.importSource) ? (state.importSourceName || "ARK") : "InfoHub", // i18n-ignore: product names
+    !isArkSource(state.importSource) && count != null ? h("span", { class: "n" }, count) : null));
 }
 
 function renderInfoHubRail(host, ctx) {
@@ -1342,7 +1281,7 @@ function renderInfoHubRail(host, ctx) {
     h("div", { class: "rail-label" }, t("common.tags")), tagWrap));
   host.appendChild(h("div", { class: "rail-section" }, status));
   host.appendChild(h("div", { class: "rail-foot" },
-    h("button", { class: "btn ghost", onclick: () => ctx.openImport() }, t("ideas.import")),
+    h("button", { class: "btn ghost", onclick: () => ctx.openImport() }, t("import.title")),
     h("button", { class: "btn", onclick: refresh }, t("action.refresh"))));
   renderKinds(); renderTags();
   load();
@@ -1391,7 +1330,7 @@ export function unitCard(unit, ctx, { selected = false, onTag = null, showAction
     showActions ? h("div", { class: "card-actions" },
       h("button", { class: "btn sm", onclick: (e) => { e.stopPropagation(); ctx.openUnit(unit.uid || unit.id); } }, t("action.open")),
       h("button", { class: "btn sm ghost", onclick: (e) => { e.stopPropagation(); ctx.openLink(unit); } }, icon("link", "sm"), t("action.connect")),
-      unit.type === "task" ? h("button", { class: "btn sm ghost", onclick: (e) => { e.stopPropagation(); (ctx.dispatchTaskSession ? ctx.dispatchTaskSession(unit) : openDispatchModal(ctx, unit)); } }, t("tasks.dispatch")) : null) : null);
+      canRunWithAgent(unit) ? h("button", { class: "btn sm ghost", onclick: (e) => { e.stopPropagation(); (ctx.dispatchTaskSession ? ctx.dispatchTaskSession(unit) : openDispatchModal(ctx, unit)); } }, t("tasks.dispatch")) : null) : null);
   return card;
 }
 
@@ -1414,6 +1353,8 @@ export function typeLegend(units) {
 export function actorLabel(actor = "") {
   if (actor.startsWith("agent:")) return actor.slice(6);
   if (actor === "human:ui") return t("common.you");
+  // A user view plugin acting with the user's session (plugin-host.js).
+  if (actor.startsWith("human:plugin:")) return t("plugins.actor", { id: actor.slice(13) });
   if (actor === "system" || actor.startsWith("system:")) return "ARK";
   if (actor.startsWith("import:")) return actor.slice(7);
   return displayName(actor);

@@ -3,6 +3,9 @@ package server
 import (
 	"regexp"
 	"strings"
+
+	chatapi "arkstudio/go/internal/api/chat"
+	"arkstudio/go/internal/mobile"
 )
 
 // The router replaces the hand-written dispatch cascades of do_GET, do_POST,
@@ -131,6 +134,15 @@ func init() {
 		PortedRoute{"exact:/api/me/password", "POST"})
 
 	getRoutes = []route{
+		// Go only (routes_desktop.go; ids in GoOnlyRoutes).
+		exact(mobile.DesktopProjectsPath, (*reqCtx).desktopProjectsGet),
+		// Go only (routes_presence.go, T-0043 agent presence).
+		exact(presencePath, (*reqCtx).presenceGet),
+		// Go only (media_thumb.go: list thumbnails of images and videos).
+		match(reMediaThumb, func(c *reqCtx, m []string) error { return c.mediaThumb(m[1]) }),
+		// Go only (routes_invites.go: project invite links).
+		match(reProjectInvites, (*reqCtx).projectInvitesGet),
+		exact(inviteSettingsPath, (*reqCtx).inviteSettingsGet),
 		sub(func(c *reqCtx, _ string) (bool, error) {
 			ok, err := c.apiGetViews()
 			return ok || err != nil, err
@@ -153,6 +165,12 @@ func init() {
 		exact("/api/graph", (*reqCtx).getGraph, PortedRoute{"exact:/api/graph", "GET,HEAD"}),
 		exact("/api/timeline", (*reqCtx).getTimeline, PortedRoute{"exact:/api/timeline", "GET,HEAD"}),
 		exact("/api/blackbox", (*reqCtx).blackboxGet, PortedRoute{"exact:/api/blackbox", "GET,HEAD"}),
+		// Go only (routes_trash.go; ids in GoOnlyRoutes).
+		exact(trashPath, (*reqCtx).trashGet),
+		// Go only (routes_importark.go, T-0070: import from another ARK project).
+		when(isImportArkPath, (*reqCtx).importArkGet),
+		// Go only (routes_reviews.go; ids in GoOnlyRoutes).
+		when(reviewsGetPath, (*reqCtx).reviewsGet),
 		exact("/api/remote/info", (*reqCtx).remoteInfo, PortedRoute{"exact:/api/remote/info", "GET,HEAD"}),
 		when(isMobileGetPath, func(c *reqCtx, path string) error { _, err := c.mobileGet(path); return err },
 			PortedRoute{"exact:/api/mobile/apps", "GET,HEAD"},
@@ -162,6 +180,10 @@ func init() {
 			PortedRoute{"exact:/api/mobile/session", "GET,HEAD"}),
 		exact("/api/personal/agent-tokens", (*reqCtx).personalTokensGet, PortedRoute{"exact:/api/personal/agent-tokens", "GET,HEAD"}),
 		exact("/api/activity", (*reqCtx).getActivity, PortedRoute{"exact:/api/activity", "GET,HEAD"}),
+		// Go only (routes_agentwatch.go; ids in GoOnlyRoutes).
+		exact(humanMessagesPath, (*reqCtx).humanMessages),
+		// Go only (routes_agentrules.go, T-0053).
+		exact(agentRulesPath, (*reqCtx).agentRules),
 		sub((*reqCtx).providersGet,
 			PortedRoute{"exact:/api/providers", "GET,HEAD"},
 			PortedRoute{"exact:/api/worktrees", "GET,HEAD"}),
@@ -170,6 +192,8 @@ func init() {
 		when(isWorkspacePath, (*reqCtx).workspaceGet, workspacePorted...),
 		match(reHistoryFull, func(c *reqCtx, m []string) error { return c.nodeHistoryGet(m[1], m[2]) },
 			PortedRoute{`fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?`, "GET,HEAD"}),
+		// Go only (routes_batch.go; ids in GoOnlyRoutes): before the unit route.
+		exact(unitsBatchPath, (*reqCtx).unitsBatchGet),
 		match(reUnit, (*reqCtx).getUnit, PortedRoute{`regex:^/api/units/([^/]+)$`, "GET,HEAD"}),
 		match(reComments, (*reqCtx).getComments, PortedRoute{`regex:^/api/units/([^/]+)/comments$`, "GET,HEAD"}),
 	}
@@ -180,6 +204,23 @@ func init() {
 		exact("/api/chat/stream", (*reqCtx).chatStream),
 	}
 	postRoutes = []route{
+		// Go only (routes_desktop.go; ids in GoOnlyRoutes).
+		exact(desktopLinkPath, func(c *reqCtx) error { return c.desktopLink(c.body) }),
+		exact(mobile.DesktopProjectsPath, func(c *reqCtx) error { return c.desktopProjectsPost(c.body) }),
+		// Go only (routes_chat.go, D-0003: the ai:chat permission of view plugins).
+		exact(chatapi.PluginChatPath, func(c *reqCtx) error { return c.chatHandlers().PluginChat(c, c.body, c.writer) }),
+		// Go only (routes_presence.go, T-0043: an agent announces what it works on).
+		exact(presenceAnnouncePath, func(c *reqCtx) error { return c.presenceAnnounce(c.body) }),
+		// Go only (routes_agentwatch.go, T-0044 experimental messages).
+		exact(humanMessagesPath, (*reqCtx).humanMessages),
+		// Go only (routes_agentrules.go, T-0053).
+		exact(agentRulesPath, (*reqCtx).agentRules),
+		// Go only (routes_importark.go, T-0070).
+		when(isImportArkPath, (*reqCtx).importArkPost),
+		// Go only (routes_invites.go: project invite links).
+		match(reProjectInvites, (*reqCtx).projectInvitesPost),
+		match(reInviteRevoke, (*reqCtx).projectInviteRevoke),
+		exact(inviteSettingsPath, func(c *reqCtx) error { return c.inviteSettingsPost() }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.orgPost(path, c.body) }, orgPorted...),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.personalSettingsPost(path, c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.mobilePost(path, c.body) }, mobilePorted...),
@@ -205,6 +246,10 @@ func init() {
 			PortedRoute{`regex:^/api/blackbox/([^/]+)/restore$`, "POST"}),
 		match(reHistoryRaw, func(c *reqCtx, m []string) error { return c.nodeHistoryWrite(m[1], m[2], c.body, c.writer) },
 			PortedRoute{`fullmatch:/api/units/([^/]+)/history(?:/([^/]+))?`, "POST"}),
+		// Go only (routes_reviews.go; ids in GoOnlyRoutes).
+		when(isReviewsPostPath, (*reqCtx).reviewsPost),
+		// Go only (routes_batch.go; ids in GoOnlyRoutes).
+		when(isBatchPostPath, (*reqCtx).batchPost),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.storePost(path, c.body, c.writer) }, storePorted...),
 		match(reComments, (*reqCtx).postComment, PortedRoute{`regex:^/api/units/([^/]+)/comments$`, "POST"}),
 		match(reResolve, (*reqCtx).postResolve, PortedRoute{`regex:^/api/units/([^/]+)/comments/(\d+)/resolve$`, "POST"}),
@@ -227,6 +272,8 @@ func init() {
 			PortedRoute{"fullmatch:/api/session-contexts/([^/]+)", "PATCH"}),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.sessionsPatch(path, c.body) },
 			PortedRoute{`regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$`, "PATCH"}),
+		// Go only (routes_agentlinks.go; ids in GoOnlyRoutes).
+		when(isAgentLinkWritePath, (*reqCtx).agentLinkWrite),
 		sub(func(c *reqCtx, path string) (bool, error) {
 			return c.storePatch(c.routeProject, path, c.body, c.writer)
 		}),
@@ -253,6 +300,11 @@ func init() {
 			PortedRoute{`regex:^/api/agent-sessions/([^/]+)$`, "DELETE"},
 			PortedRoute{`regex:^/api/agent-sessions/([^/]+)/steer/([^/]+)$`, "DELETE"}),
 		sub((*reqCtx).sessionContextsDelete, PortedRoute{"fullmatch:/api/session-contexts/([^/]+)", "DELETE"}),
+		// Go only (routes_trash.go; ids in GoOnlyRoutes).
+		exact(trashPath, (*reqCtx).trashEmpty),
+		match(reTrashUnit, (*reqCtx).trashPurge),
+		// Go only (routes_agentlinks.go; ids in GoOnlyRoutes).
+		when(isAgentLinkWritePath, (*reqCtx).agentLinkWrite),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.storeDelete(c.routeProject, path, c.writer) }),
 	}
 

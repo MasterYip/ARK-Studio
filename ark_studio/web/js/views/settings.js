@@ -6,7 +6,8 @@ const gpuText = (text) => localizeServer(text, "server.gpu.");
 const gpuKind = (kind) => (kind && hasKey(`server.gpu.kind.${kind}`) ? t(`server.gpu.kind.${kind}`) : kind);
 import { icon } from "../icons.js";
 import { api, exportUrl } from "../api.js";
-import { openModal, gpuRegistrationNote } from "../components.js";
+import { openModal, confirmDialog } from "../components.js";
+import { gpuRegistrationNote, openSetupResources } from "../gpu-note.js";
 import { formatRemaining } from "../mobile-core.js";
 import { pwaSnapshot, pwaStatusRow, promptInstall } from "../mobile-ui.js";
 import { GraphView, arrowGlyph } from "../graph.js";
@@ -23,21 +24,34 @@ import {
   shortcutFromEvent, shortcutIsUsable, SHORTCUT_ACTIONS, getTagShortcuts,
   setTagShortcut, removeTagShortcut,
 } from "../shortcuts.js";
-import { getMindSettings, setMindSettings } from "../mind-settings.js";
+import {
+  normalizeGraphDisplay, resolveGraphDisplay, setGraphDisplayValue, clearGraphDisplayTab,
+} from "../graph-display.js";
+import { GRAPH_SETTING_TABS, graphTabStrip, graphDisplayRows, graphDisplayPanel } from "../graph-display-panel.js";
 import { foldSection } from "../fold-section.js";
 import { renderSkillsPanel } from "../skills-panel.js";
 import { renderProvidersPanel, renderWorktreesPanel } from "../providers-panel.js";
 import { renderAdminPanel } from "../admin-panel.js";
+import { renderMembersPanel, renderInviteSignupSetting } from "../invites.js";
+import { canManageInvites } from "../invites-model.js";
 import { agentTokensPanel, legacyServerTokenPanel } from "./agent-tokens.js";
+import { trashPanel } from "./trash-panel.js";
+import { agentRulesPanel } from "./agent-rules-panel.js";
 import { setupResourcesPanels } from "./setup-resources.js";
 import { renderProfilePanels, saveAppearanceOverride } from "../profile.js";
 import { appearanceOverrides, APPEARANCE_CHANGED } from "../appearance-overrides.js";
+import { homeFilterPanel } from "../home-filter-ui.js";
 import { SETTINGS_TABS, DEFAULT_SETTINGS_TAB, GRAPH_SECTION, resolveSettingsTab } from "../settings-tabs.js";
 import { appearancePanel } from "../appearance-panel.js";
 import { paletteMode } from "../appearance.js";
-import { setTheme } from "../state.js";
+import { applyAppearance } from "../appearance.js";
+import { advancedEnabled, setAdvancedEnabled } from "../advanced.js";
+import { agentMessagesEnabled, setAgentMessagesEnabled } from "../agent-messages.js";
+import { getLang } from "../i18n.js";
+import { themePref } from "../profile.js";
 import { userBadge } from "../users.js";
 import { cachePanel } from "../cache-panel.js";
+import { pluginsPanel } from "../plugins-panel.js";
 
 const FIELDS = [
   {
@@ -543,7 +557,7 @@ export function renderSettings(host, ctx) {
       t("settings.infohub.lead")),
     h("div", { class: "field" }, h("label", null, t("settings.infohub.db_path")), hubPathInput),
     h("div", { class: "assistant-api-actions" }, hubPathClear));
-  registerSave("infohub", { section: "data", label: t("settings.infohub.title"), save: saveHubPath,
+  registerSave("infohub", { section: "infohubSource", label: t("settings.infohub.title"), save: saveHubPath,
     discard: () => { hubPathInput.value = ctx.S.infoHubPath || ""; }, root: hubPathInput });
 
   // ------------------------------------------------------------ remote project
@@ -645,16 +659,21 @@ export function renderSettings(host, ctx) {
   const sessionUploadsAdmin = ctx.S.session?.project_permission === "admin" || !ctx.S.session?.project_permission;
   const sessionUploadsBox = h("input", { type: "checkbox", "data-session-uploads": "",
     checked: sessionUploadsSaved(), disabled: !sessionUploadsAdmin });
+  // Remind idle ARK-launched agents of people's replies (absent = on; T-0053).
+  const nudgeSaved = () => ctx.S.project?.settings?.sessions?.nudge_idle !== false;
+  const nudgeBox = h("input", { type: "checkbox", "data-session-nudge": "", checked: nudgeSaved(), disabled: !sessionUploadsAdmin });
   const sessionUploadsPanel = h("section", { class: "panel settings-panel", "data-session-uploads-panel": "" },
     h("div", { class: "panel-head" }, h("h3", null, t("settings.session_uploads.title"))),
     h("p", { class: "settings-lead" }, t("settings.session_uploads.lead")),
     h("label", { class: "row tight settings-session-uploads" }, sessionUploadsBox, h("span", null, t("ctx.consent"))),
+    h("label", { class: "row tight settings-session-nudge", title: t("settings.session_nudge.hint") }, nudgeBox,
+      h("span", null, t("settings.session_nudge.label"))),
     sessionUploadsAdmin ? null : h("p", { class: "muted" }, t("settings.session_uploads.admin_only")));
   registerSave("sessionUploads", {
     section: "sessionUploads", label: t("settings.session_uploads.title"), root: sessionUploadsPanel,
     save: async () => {
       try {
-        const result = await api.updateSettings({ sessions: { accept_uploads: sessionUploadsBox.checked } });
+        const result = await api.updateSettings({ sessions: { accept_uploads: sessionUploadsBox.checked, nudge_idle: nudgeBox.checked } });
         if (ctx.S.project) ctx.S.project.settings = result.settings || ctx.S.project.settings;
         ctx.toast(t(sessionUploadsBox.checked ? "ctx.consent_on" : "ctx.consent_off"), "ok");
         return true;
@@ -663,7 +682,7 @@ export function renderSettings(host, ctx) {
         return false;
       }
     },
-    discard: () => { sessionUploadsBox.checked = sessionUploadsSaved(); },
+    discard: () => { sessionUploadsBox.checked = sessionUploadsSaved(); nudgeBox.checked = nudgeSaved(); },
   });
 
   // ------------------------------------------------------ mobile / pair phone
@@ -909,7 +928,8 @@ export function renderSettings(host, ctx) {
         class: "project-row", style: { alignItems: "center", gap: "8px" },
       },
         h("div", { class: "main" },
-          h("div", { class: "t" }, `${t(pair.permission === "full" ? "settings.mobile.full_access" : "settings.mobile.permission_read_only")} · ${pair.state}`),
+          h("div", { class: "t" }, `${t(pair.source === "desktop" ? "settings.mobile.desktop_link"
+            : pair.permission === "full" ? "settings.mobile.full_access" : "settings.mobile.permission_read_only")} · ${pair.state}`),
           h("div", { class: "d" },
             (pair.claimed_at
               ? (pair.session_permanent ? t("settings.mobile.pair_until_revoked") : t("settings.mobile.pair_session_hours", { n: Math.round((pair.session_ttl || 0) / 3600) }))
@@ -1041,7 +1061,9 @@ export function renderSettings(host, ctx) {
       body: [mobileFacts, mobileConnectionNote, mobileTunnelBox] }),
     pairs: foldSection({ id: "mobile-pairs", title: t("settings.mobile.active_pairs"), body: mobilePairsHost }),
     apps: foldSection({ id: "mobile-apps", title: t("settings.mobile.apps_title"), summary: mobilePwaRow,
-      body: [h("p", { class: "settings-lead" }, t("settings.mobile.apps_lead")),
+      body: [h("p", { class: "settings-lead" }, ...tNodes("settings.mobile.apps_lead", {
+        release: h("a", { href: RELEASE_PAGE, target: "_blank", rel: "noopener noreferrer" }, t("settings.mobile.apps_release")),
+      })),
         androidAppsBox((apps) => {
           const ready = ["native", "webapp"].filter((key) => apps?.[key]?.available).length;
           mobileFolds.apps.setSummary([mobilePwaRow, h("span", null, t("settings.fold.apps", { n: ready }))]);
@@ -1208,132 +1230,57 @@ export function renderSettings(host, ctx) {
         h("div", { class: "row tight" }, tagCaptureBtn, tagAddBtn))),
     tagList);
 
-  // ------------------------------------------------------------ mind graph
-  const mindState = getMindSettings();
-  const transitionsChk = h("input", {
-    type: "checkbox", name: "nodeTransitions", checked: mindState.nodeTransitions ? true : undefined,
-    style: { width: "16px", height: "16px", accentColor: "var(--accent)" },
-  });
-  transitionsChk.addEventListener("change", () => {
-    setMindSettings({ nodeTransitions: transitionsChk.checked });
-    ctx.toast(t("settings.pref_saved"), "ok");
-  });
-  physicsPanel.appendChild(h("label", { class: "shortcut-row" },
-    h("span", { class: "physics-name" }, t("settings.node_transitions")), transitionsChk));
-  const alignSel = h("select", { class: "select" },
-    h("option", { value: "left", selected: mindState.align === "left" ? true : undefined }, t("settings.align_left")),
-    h("option", { value: "center", selected: mindState.align === "center" ? true : undefined }, t("settings.align_center")));
-  const autoChk = h("input", {
-    type: "checkbox", checked: mindState.autoLayout ? true : undefined,
-    style: { width: "16px", height: "16px", accentColor: "var(--accent)" },
-  });
-  const showImagesChk = h("input", {
-    type: "checkbox", checked: mindState.showMindImages ? true : undefined,
-    style: { width: "16px", height: "16px", accentColor: "var(--accent)" },
-  });
-  alignSel.addEventListener("change", () => {
-    setMindSettings({ align: alignSel.value });
-    ctx.toast(t("settings.pref_saved"), "ok");
-  });
-  autoChk.addEventListener("change", () => {
-    setMindSettings({ autoLayout: autoChk.checked });
-    ctx.toast(t("settings.pref_saved"), "ok");
-  });
-  showImagesChk.addEventListener("change", () => {
-    setMindSettings({ showMindImages: showImagesChk.checked });
-    for (const graph of ctx.graphs || []) {
-      if (graph.layout === "mind") graph._applyLayout?.(false);
-      else graph._draw?.();
-    }
-    preview?._draw?.();
-  });
-  const markerScale = h("input", {
-    type: "range", min: "50", max: "250", step: "5", class: "physics-range",
-    value: String(Math.round(mindState.markerScale * 100)),
-  });
-  const markerScaleValue = h("span", { class: "physics-raw" }, `${Math.round(mindState.markerScale * 100)}%`);
-  const markerGap = h("input", {
-    type: "range", min: "0", max: "200", step: "5", class: "physics-range",
-    value: String(Math.round(mindState.markerGap * 100)),
-  });
-  const markerGapValue = h("span", { class: "physics-raw" }, `${mindState.markerGap.toFixed(2)}×`);
-  const markerArc = h("input", {
-    type: "range", min: "10", max: "100", step: "1", class: "physics-range",
-    value: String(Math.round(mindState.markerArc * 100)),
-  });
-  const markerArcValue = h("span", { class: "physics-raw" }, `${mindState.markerArc.toFixed(2)} rad`); // i18n-ignore: unit
-  const mindMarkerScale = h("input", {
-    type: "range", min: "30", max: "200", step: "5", class: "physics-range",
-    value: String(Math.round(mindState.mindMarkerScale * 100)),
-  });
-  const mindMarkerScaleValue = h("span", { class: "physics-raw" }, `${Math.round(mindState.mindMarkerScale * 100)}%`);
-  const refreshMarkerPreview = () => {
-    for (const graph of ctx.graphs || []) graph._draw?.();
-    preview?._draw?.();
+  // ------------------------------------------------- graph display (project)
+  // Settings › Appearance › Graphs: one small tab per graph type (General,
+  // Force & node, Mind, Local graph).  These are the project defaults, saved
+  // for everyone through the Save bar; a person's own value (Personal ›
+  // Appearance & input › My graphs) wins for them, setting by setting.
+  const savedProjectDisplay = () => normalizeGraphDisplay(ctx.S.project?.settings?.graph_display);
+  let projectDisplayDraft = savedProjectDisplay();
+  const projectDisplayRows = {};
+  const projectDisplayPanels = {};
+  const syncProjectDisplay = () => {
+    syncing.active = true;
+    for (const rows of Object.values(projectDisplayRows)) rows.sync();
+    syncing.active = false;
   };
-  markerScale.addEventListener("input", () => {
-    const value = Number(markerScale.value) / 100;
-    setMindSettings({ markerScale: value });
-    markerScaleValue.textContent = `${Math.round(value * 100)}%`;
-    refreshMarkerPreview();
-  });
-  markerGap.addEventListener("input", () => {
-    const value = Number(markerGap.value) / 100;
-    setMindSettings({ markerGap: value });
-    markerGapValue.textContent = `${value.toFixed(2)}×`;
-    refreshMarkerPreview();
-  });
-  markerArc.addEventListener("input", () => {
-    const value = Number(markerArc.value) / 100;
-    setMindSettings({ markerArc: value });
-    markerArcValue.textContent = `${value.toFixed(2)} rad`; // i18n-ignore: unit
-    refreshMarkerPreview();
-  });
-  mindMarkerScale.addEventListener("input", () => {
-    const value = Number(mindMarkerScale.value) / 100;
-    setMindSettings({ mindMarkerScale: value });
-    mindMarkerScaleValue.textContent = `${Math.round(value * 100)}%`;
-    refreshMarkerPreview();
-  });
-  const circularMarkerPanel = h("section", { class: "panel settings-panel" },
-    h("div", { class: "panel-head" },
-      h("h3", null, t("settings.markers.title")),
-      browserBadge()),
-    h("p", { class: "settings-lead" },
-      t("settings.markers.lead")),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.markers.size")),
-        h("div", { class: "physics-hint" }, t("settings.markers.size_hint"))),
-      h("div", { class: "row tight" }, markerScale, markerScaleValue)),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.markers.distance")),
-        h("div", { class: "physics-hint" }, t("settings.markers.distance_hint"))),
-      h("div", { class: "row tight" }, markerGap, markerGapValue)),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.markers.arc")),
-        h("div", { class: "physics-hint" }, t("settings.markers.arc_hint"))),
-      h("div", { class: "row tight" }, markerArc, markerArcValue)));
-
-  const mindPanel = h("section", { class: "panel settings-panel" },
-    h("div", { class: "panel-head" },
-      h("h3", null, t("settings.mind")),
-      browserBadge()),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.align")),
-        h("div", { class: "physics-hint" }, t("settings.mind_align_hint"))),
-      alignSel),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.auto_layout")),
-        h("div", { class: "physics-hint" }, t("settings.auto_layout_hint"))),
-      h("label", { class: "row", style: { gap: "6px", fontSize: "11px", textTransform: "none", letterSpacing: "0", fontWeight: "400" } }, autoChk)),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.mind_marker_size")),
-        h("div", { class: "physics-hint" }, t("settings.mind_marker_size_hint"))),
-      h("div", { class: "row tight" }, mindMarkerScale, mindMarkerScaleValue)),
-    h("div", { class: "shortcut-row" },
-      h("div", null, h("div", { class: "physics-name" }, t("settings.mind_show_images")),
-        h("div", { class: "physics-hint" }, t("settings.mind_show_images_hint"))),
-      h("label", { class: "row", style: { gap: "6px", fontSize: "11px", textTransform: "none", letterSpacing: "0", fontWeight: "400" } }, showImagesChk)));
+  for (const tab of GRAPH_SETTING_TABS) {
+    projectDisplayRows[tab] = graphDisplayRows({
+      tab,
+      value: (key) => resolveGraphDisplay(projectDisplayDraft, {}).values[tab][key],
+      onChange: (key, value) => {
+        projectDisplayDraft = setGraphDisplayValue(projectDisplayDraft, tab, key, value);
+        setDirty("graph-display");
+      },
+    });
+    const reset = h("button", {
+      class: "ghost-btn sm", type: "button", "data-graph-tab-reset": tab, title: t("settings.graphs.reset_tab_defaults_hint"),
+      onclick: () => {
+        projectDisplayDraft = clearGraphDisplayTab(projectDisplayDraft, tab);
+        syncProjectDisplay();
+        setDirty("graph-display");
+      },
+    }, icon("refresh", "sm"), t("settings.reset"));
+    projectDisplayPanels[tab] = graphDisplayPanel({ tab, rows: projectDisplayRows[tab], actions: reset });
+  }
+  async function saveProjectDisplay() {
+    try {
+      const data = await api.updateSettings({ graph_display: projectDisplayDraft });
+      ctx.applySettings(data);
+      projectDisplayDraft = savedProjectDisplay();
+      syncProjectDisplay();
+      ctx.toast(t("settings.saved"), "ok");
+      return true;
+    } catch (err) {
+      ctx.toast(err.message, "err");
+      return false;
+    }
+  }
+  registerSave("graph-display", { section: GRAPH_SECTION, label: t("settings.graphs.display_label"),
+    save: saveProjectDisplay,
+    discard: () => { projectDisplayDraft = savedProjectDisplay(); syncProjectDisplay(); } });
+  syncProjectDisplay();
+  const projectDisplayNote = h("div", { class: "settings-note hidden", "data-override-note": "graph_display" });
 
   const shortcutGuideRow = (keys, text) => h("div", { class: "shortcut-guide-row" },
     h("kbd", null, keys), h("span", null, text));
@@ -1630,7 +1577,7 @@ export function renderSettings(host, ctx) {
       return;
     }
     if (!servers.length) {
-      gpuServerList.append(gpuRegistrationNote(gpuState.registration, loadGpu)
+      gpuServerList.append(gpuRegistrationNote(gpuState.registration, () => openSetupResources(ctx))
         || h("div", { class: "settings-note" }, icon("info", "sm"), h("div", null, t("settings.gpu.no_servers"))));
       return;
     }
@@ -1957,7 +1904,12 @@ export function renderSettings(host, ctx) {
           h("label", null, item.name), item.input)));
       const resetBtn = h("button", {
         class: "ghost-btn sm", type: "button", disabled: demoProject,
+        title: t("settings.agent_override.clear_hint"),
         onclick: async () => {
+          // Saved immediately (unlike Graph physics' draft reset), so confirm first.
+          const ok = await confirmDialog(t("settings.agent_override.clear_confirm", { name: meta.label || id }),
+            { title: t("settings.agent_override.clear"), confirmLabel: t("settings.agent_override.clear") });
+          if (!ok) return;
           try {
             await api.savePersonalSettings("agents", {
               providers: { [id]: { command: "", clear_env: envNames } },
@@ -1966,7 +1918,7 @@ export function renderSettings(host, ctx) {
             await loadEffective();
           } catch (err) { ctx.toast(err.message, "err"); }
         },
-      }, icon("refresh", "sm"), t("settings.reset"));
+      }, icon("refresh", "sm"), t("settings.agent_override.clear"));
       personalAgentsList.appendChild(h("section", { class: "panel settings-panel" },
         h("div", { class: "panel-head" },
           h("h3", null, meta.label || id), h("div", { class: "row tight" },
@@ -2418,6 +2370,23 @@ export function renderSettings(host, ctx) {
     }
     return out;
   };
+  // Preview a light/dark palette on this page only; S.theme (your theme) stays.
+  let themePreviewWatch = null;
+  function previewThemeMode(mode) {
+    document.documentElement.dataset.theme = mode;
+    applyAppearance();
+    if (themePreviewWatch) return;
+    // In-app navigation uses pushState (no event), so check for the page
+    // leaving the DOM instead.
+    themePreviewWatch = setInterval(() => {
+      if (page.isConnected) return;
+      clearInterval(themePreviewWatch);
+      themePreviewWatch = null;
+      document.documentElement.dataset.theme = ctx.S.theme;
+      ctx.applyAppearance ? ctx.applyAppearance() : applyAppearance();
+      for (const graph of ctx.graphs || []) graph._draw?.();
+    }, 400);
+  }
   function buildPaletteEditor({ value, personal = false, onSave, title, pill, lead, enabledLabel, before = null }) {
     let paletteDraft = draftFromPalette(value);
     let locked = false;
@@ -2482,14 +2451,15 @@ export function renderSettings(host, ctx) {
       }
     };
     for (const mode of ["light", "dark"]) {
-      const button = h("button", { type: "button", onclick: () => {
+      // Picks which colour set you edit.  The page previews that set without
+      // changing your own theme (restored when you leave Settings).
+      const button = h("button", { type: "button", "data-palette-mode": mode, onclick: () => {
         paletteEditMode = mode;
-        setTheme(mode);
-        ctx.renderTopbar?.();
+        previewThemeMode(mode);
         syncPaletteMode();
         preview();
         for (const graph of ctx.graphs || []) graph._draw?.();
-      } }, icon(mode === "dark" ? "moon" : "sun", "sm"), t(`profile.theme_${mode}`));
+      } }, icon(mode === "dark" ? "moon" : "sun", "sm"), t(`settings.palette.edit_${mode}`));
       paletteModeButtons.set(mode, button);
       modeTabs.appendChild(button);
     }
@@ -2636,6 +2606,7 @@ export function renderSettings(host, ctx) {
       build ? [h("dt", null, t("about.build")), h("dd", null, h("code", null, build))] : null),
     h("div", { class: "settings-about-links" },
       aboutLink(t("about.repository"), "/ARK-Studio", "git"),
+      aboutLink(t("about.latest_release"), "/ARK-Studio/releases/latest", "download"),
       aboutLink(t("about.documentation"), "/ARK-Studio/blob/main/docs/README.md", "book"),
       aboutLink(t("about.issues"), "/ARK-Studio/issues", "message"),
       aboutLink(t("about.attribution"), "/ARK-Studio/blob/main/docs/agents/skills-attribution.md", "info")));
@@ -2784,6 +2755,66 @@ export function renderSettings(host, ctx) {
     },
   };
   const overrideSourceId = (group) => `override-${group}`;
+
+  // Graph display overrides are per setting (graph-display.js): a changed
+  // control becomes this person's value, the others keep following the
+  // project.  Each row and each tab can go back to the project default.
+  const savedDisplayOverride = () => normalizeGraphDisplay(appearanceOverrides().graph_display);
+  let personalDisplayDraft = savedDisplayOverride();
+  const personalDisplay = () => resolveGraphDisplay(projectAppearance().graph_display, personalDisplayDraft);
+  const personalDisplayRows = {};
+  const personalDisplayPanels = {};
+  const displaySourceId = overrideSourceId("graph_display");
+  const syncPersonalDisplay = () => {
+    syncing.active = true;
+    for (const rows of Object.values(personalDisplayRows)) rows.sync();
+    syncing.active = false;
+  };
+  const sameAsSaved = () => JSON.stringify(personalDisplayDraft) === JSON.stringify(savedDisplayOverride());
+  const setPersonalDisplay = (tab, key, value) => {
+    personalDisplayDraft = setGraphDisplayValue(personalDisplayDraft, tab, key, value);
+    personalDisplayRows[tab].sync();
+    setDirty(displaySourceId, !sameAsSaved());
+  };
+  async function resetPersonalDisplayTab(tab) {
+    const saved = savedDisplayOverride();
+    personalDisplayDraft = clearGraphDisplayTab(personalDisplayDraft, tab);
+    if (saved[tab]) {
+      try {
+        await saveAppearanceOverride({ graph_display: clearGraphDisplayTab(saved, tab) });
+        ctx.toast(t("settings.override.cleared"), "ok");
+      } catch (err) { ctx.toast(err.message, "err"); return; }
+    }
+    syncPersonalDisplay();
+    setDirty(displaySourceId, !sameAsSaved());
+  }
+  for (const tab of GRAPH_SETTING_TABS) {
+    personalDisplayRows[tab] = graphDisplayRows({
+      tab,
+      value: (key) => personalDisplay().values[tab][key],
+      source: (key) => personalDisplay().source[tab][key],
+      onChange: (key, value) => setPersonalDisplay(tab, key, value),
+      onReset: (key) => setPersonalDisplay(tab, key, null),
+    });
+    const resetTab = h("button", {
+      class: "ghost-btn sm", type: "button", "data-graph-tab-reset": tab, title: t("settings.graphs.reset_tab_hint"),
+      onclick: () => resetPersonalDisplayTab(tab),
+    }, icon("refresh", "sm"), t("settings.override.reset"));
+    personalDisplayPanels[tab] = graphDisplayPanel({ tab, rows: personalDisplayRows[tab], actions: resetTab });
+  }
+  async function savePersonalDisplay() {
+    try {
+      await saveAppearanceOverride({ graph_display: Object.keys(personalDisplayDraft).length ? personalDisplayDraft : null });
+      personalDisplayDraft = savedDisplayOverride();
+      syncPersonalDisplay();
+      ctx.toast(t("settings.override.saved"), "ok");
+      return true;
+    } catch (err) { ctx.toast(err.message, "err"); return false; }
+  }
+  registerSave(displaySourceId, { section: "graphOverride", label: t("settings.graphs.my_title"),
+    save: savePersonalDisplay,
+    discard: () => { personalDisplayDraft = savedDisplayOverride(); syncPersonalDisplay(); } });
+  syncPersonalDisplay();
   function startOverride(group) {
     overrideModes[group] = "personal";
     overrideEditors[group].lock(false);
@@ -2816,12 +2847,12 @@ export function renderSettings(host, ctx) {
     editor.bar.sync();
     ctx.applyAppearance?.();
   }
-  for (const [group, label, save, root] of [
-    ["palette", t("settings.override.palette_title"), personalPaletteEditor.save, personalPaletteEditor.panel],
-    ["graph", t("settings.override.graph_title"), savePersonalGraph, personalGraphPanel],
-    ["arrows", t("settings.override.arrows_title"), savePersonalArrows, personalArrowsPanel],
+  for (const [group, label, save, root, section] of [
+    ["palette", t("settings.override.palette_title"), personalPaletteEditor.save, personalPaletteEditor.panel, "appearanceOverride"],
+    ["graph", t("settings.override.graph_title"), savePersonalGraph, personalGraphPanel, "graphOverride"],
+    ["arrows", t("settings.override.arrows_title"), savePersonalArrows, personalArrowsPanel, "graphOverride"],
   ]) {
-    registerSave(overrideSourceId(group), { section: "appearanceOverride", label, save, root,
+    registerSave(overrideSourceId(group), { section, label, save, root,
       discard: () => discardOverride(group) });
   }
   overrideEditors.graph.load(personalGraphDraft);
@@ -2831,20 +2862,23 @@ export function renderSettings(host, ctx) {
   }
 
   // The project editors say when this person's own view is overridden.
-  const openPersonalOverride = () => {
+  const openPersonalOverride = (group) => {
     selectScope("personal");
-    selectTab("display", "appearanceOverride");
+    selectTab("display", group === "palette" ? "appearanceOverride" : "graphOverride");
+    if (group === "graph") personalGraphTabs.select("force");
+    else if (group === "arrows") personalGraphTabs.select("general");
   };
   const syncProjectOverrideNotes = () => {
     for (const [group, note, key] of [["palette", projectPaletteNote, "settings.override.project_note_palette"],
       ["graph", projectPhysicsNote, "settings.override.project_note_graph"],
-      ["arrows", projectArrowsNote, "settings.override.project_note_arrows"]]) {
+      ["arrows", projectArrowsNote, "settings.override.project_note_arrows"],
+      ["graph_display", projectDisplayNote, "settings.override.project_note_graph_display"]]) {
       const active = Boolean(savedOverride(group));
       note.classList.toggle("hidden", !active);
       clear(note);
       if (active) {
         note.append(icon("user", "sm"), h("div", null, t(key), " ",
-          h("button", { class: "btn sm ghost", type: "button", "data-open-override": group, onclick: openPersonalOverride },
+          h("button", { class: "btn sm ghost", type: "button", "data-open-override": group, onclick: () => openPersonalOverride(group) },
             t("settings.override.open_mine"))));
       }
     }
@@ -2854,22 +2888,65 @@ export function renderSettings(host, ctx) {
     if (!page.isConnected) { window.removeEventListener(APPEARANCE_CHANGED, onOverridesChanged); return; }
     syncProjectOverrideNotes();
     for (const editor of Object.values(overrideEditors)) editor.bar.sync();
+    if (!saveSources.get(displaySourceId)?.dirty) personalDisplayDraft = savedDisplayOverride();
+    syncPersonalDisplay();
     preview?.setPhysics(draft);
   };
   window.addEventListener(APPEARANCE_CHANGED, onOverridesChanged);
-  const appearanceOverridePanels = [personalPaletteEditor.panel, personalGraphPanel, personalArrowsPanel];
+  const appearanceOverridePanels = [personalPaletteEditor.panel];
+  // Personal › Appearance & input › My graphs: the same tabs as the project's.
+  const personalGraphPanes = {
+    general: h("div", { class: "stack" }, personalArrowsPanel, personalDisplayPanels.general),
+    force: h("div", { class: "stack" }, personalGraphPanel, personalDisplayPanels.force),
+    mind: h("div", { class: "stack" }, personalDisplayPanels.mind),
+    local: h("div", { class: "stack" }, personalDisplayPanels.local),
+  };
+  const personalGraphTabs = graphTabStrip({ panes: personalGraphPanes, idPrefix: "my-graphs" });
+  const graphOverridePanels = [
+    h("section", { class: "panel settings-panel settings-graphs-head", "data-graphs": "personal" },
+      h("div", { class: "panel-head" }, h("h3", null, t("settings.graphs.my_title"))),
+      h("p", { class: "settings-lead" }, t("settings.graphs.my_lead")),
+      personalGraphTabs.el),
+    ...Object.values(personalGraphPanes),
+  ];
 
   const guidancePanel = h("section", { class: "panel settings-panel", "data-guidance-settings": "" },
     h("div", { class: "panel-head" }, h("h3", null, t("tour.title"))),
-    h("p", { class: "settings-lead" }, t("tour.settings_hint")),
+    h("p", { class: "settings-lead" }, t("tour.loop.settings_hint")),
     h("div", { class: "head-actions" },
       h("button", { class: "btn primary", type: "button", "data-restart-guidance": "",
         onclick: () => ctx.guidance?.start({ restart: true }) }, icon("refresh", "sm"), t("tour.restart")),
       h("button", { class: "btn", type: "button", "data-resume-guidance": "",
         onclick: () => ctx.guidance?.start() }, icon("play", "sm"), t("tour.resume"))));
-  const graphLayout = h("div", { class: "settings-graph-layout" },
-    h("div", { class: "stack settings-graph-controls" }, physicsPanel, arrowsPanel, mindPanel, circularMarkerPanel),
-    h("div", { class: "stack settings-graph-preview" }, previewPanel));
+  // Project › Appearance › Graphs: the tab strip, the tab's panels and the
+  // live preview beside them.
+  const projectGraphPanes = {
+    general: h("div", { class: "stack" }, arrowsPanel, projectDisplayPanels.general),
+    force: h("div", { class: "stack" }, physicsPanel, projectDisplayPanels.force),
+    mind: h("div", { class: "stack" }, projectDisplayPanels.mind),
+    local: h("div", { class: "stack" }, projectDisplayPanels.local),
+  };
+  const projectGraphTabs = graphTabStrip({ panes: projectGraphPanes, idPrefix: "project-graphs" });
+  const graphLayout = h("div", { class: "stack settings-graphs" },
+    h("section", { class: "panel settings-panel settings-graphs-head", "data-graphs": "project" },
+      h("div", { class: "panel-head" }, h("h3", null, t("settings.graphs.title"))),
+      h("p", { class: "settings-lead" }, t("settings.graphs.lead")),
+      projectDisplayNote,
+      projectGraphTabs.el),
+    h("div", { class: "settings-graph-layout" },
+      h("div", { class: "stack settings-graph-controls" }, ...Object.values(projectGraphPanes)),
+      h("div", { class: "stack settings-graph-preview" }, previewPanel)));
+  // Open a graph tab from elsewhere (the old location's pointer).
+  function openGraphs(scope, tab) {
+    selectScope(scope);
+    if (scope === "project") {
+      selectTab("appearance", GRAPH_SECTION);
+      projectGraphTabs.select(tab);
+    } else {
+      selectTab("display", "graphOverride");
+      personalGraphTabs.select(tab);
+    }
+  }
   // Section ids are the tab ids used before the regrouping; settings-tabs.js
   // maps them onto the tabs below so old deep links still land on the panel.
   // The profile card keeps its own save logic; Settings drives it from the bar.
@@ -2883,10 +2960,60 @@ export function renderSettings(host, ctx) {
       if (event.target.closest(".profile-swatches button, button")) setDirty("profile");
     });
   }
+  // ------------------------------------------------------------ advanced switch
+  const advancedBox = h("input", { type: "checkbox", checked: advancedEnabled(),
+    "data-advanced-toggle": "1", onchange: () => setAdvancedEnabled(advancedBox.checked) });
+  const advancedPanel = h("section", { class: "panel settings-panel", "data-advanced-settings": "" },
+    h("div", { class: "panel-head" }, h("h3", null, t("settings.advanced.title")), browserBadge()),
+    h("p", { class: "settings-lead" }, t("settings.advanced.lead")),
+    h("label", { class: "display-toggle" }, advancedBox, h("span", null, t("settings.advanced.toggle"))),
+    // Experimental (T-0044): Message agent on Home and in the node menu; off by default.
+    h("label", { class: "display-toggle" },
+      h("input", { type: "checkbox", checked: agentMessagesEnabled(), "data-agent-messages-toggle": "1",
+        onchange: (event) => setAgentMessagesEnabled(event.target.checked) }),
+      h("span", null, t("settings.advanced.messages"))),
+    h("p", { class: "muted small" }, t("settings.advanced.messages_hint")));
+
+  // ------------------------------------------------------------ overview
+  // First screen: where each kind of setting lives, and shortcuts to the
+  // few that people look for first.  Each shortcut opens its own section.
+  const jump = (id) => {
+    const resolved = resolveSettingsTab(id);
+    if (!resolved) return;
+    selectScope(tabs.find((tab) => tab.id === resolved.tab)?.scope || "personal", "");
+    selectTab(resolved.tab, resolved.section || id);
+  };
+  const themeName = () => t(`profile.theme_${themePref()}`);
+  const overviewShortcut = (id, iconName, label, value) => h("button", {
+    class: "settings-overview-link", type: "button", "data-settings-jump": id, onclick: () => jump(id),
+  }, icon(iconName, "sm"), h("span", null, h("b", null, label), value ? h("small", null, value) : null), icon("chevronRight", "sm"));
+  const scopeCard = (iconName, title, body, example) => h("div", { class: "settings-overview-scope" },
+    h("div", { class: "settings-overview-scope-head" }, icon(iconName, "sm"), h("b", null, title)),
+    h("p", null, body), h("small", null, example));
+  const overviewPanel = h("section", { class: "panel settings-panel settings-overview", "data-settings-overview": "" },
+    h("div", { class: "panel-head" }, h("h3", null, t("settings.overview.title"))),
+    h("p", { class: "settings-lead" }, t("settings.overview.lead")),
+    h("div", { class: "settings-overview-scopes" },
+      scopeCard("folder", t("settings.scope_project"), t("settings.overview.project"), t("settings.overview.project_eg")),
+      scopeCard("user", t("settings.scope_personal"), t("settings.overview.personal"), t("settings.overview.personal_eg")),
+      scopeCard("monitor", t("settings.browser_scope"), t("settings.overview.browser"), t("settings.overview.browser_eg"))),
+    h("div", { class: "settings-sub" }, t("settings.overview.shortcuts")),
+    h("div", { class: "settings-overview-links" },
+      overviewShortcut("agentAccess", "key", t("settings.overview.agent_access"), t("settings.overview.agent_access_hint")),
+      overviewShortcut("display", "globe", t("settings.overview.language_theme"),
+        `${getLang() === "zh" ? "中文" : "English"} · ${themeName()}`), // i18n-ignore: language names shown in their own language
+      overviewShortcut("graph", "graph", t("settings.graphs.title"), t("settings.overview.graphs_hint")),
+      overviewShortcut("advanced", "layers", t("settings.advanced.toggle"),
+        t(advancedEnabled() ? "settings.overview.on" : "settings.overview.off")),
+      overviewShortcut("plugins", "puzzle", t("plugins.title"), t("plugins.hint")),
+      overviewShortcut("trash", "trash", t("trash.title"), t("trash.hint")),
+      overviewShortcut("guidance", "play", t("tour.title"), t("settings.overview.guide_hint"))));
+
   const sectionPanels = {
     appearance: [palettePanel],
     graph: [graphLayout],
     projectAgents: [projectAgentsPanel],
+    agentRules: [agentRulesPanel(ctx, "project")],
     projectAssistant: [projectAssistantPanel],
     providers: [providersPanel, worktreesPanel],
     skills: [skillsPanel],
@@ -2895,31 +3022,45 @@ export function renderSettings(host, ctx) {
     remote: [remotePanel],
     mobile: [mobilePanel],
     sessionUploads: [sessionUploadsPanel],
-    data: [exportPanel, hubPanel, infoPanel],
+    data: [exportPanel, infoPanel],
     blackbox: [blackboxPanel],
+    trash: [trashPanel(ctx)],
     deleteProject: !demoProject && ctx.S.session?.project_permission === "admin" ? [deleteProjectPanel] : [],
     profile: profilePanels,
     account: [accountPanel, cachePanel()],
     environment: [linuxPanel],
-    display: [appearancePanel()],
+    display: [appearancePanel(), ...(ctx.S.project?.id ? [homeFilterPanel(ctx)] : [])],
+    advanced: [advancedPanel],
+    overview: [overviewPanel],
+    infohubSource: [hubPanel],
     appearanceOverride: appearanceOverridePanels,
+    graphOverride: graphOverridePanels,
     shortcuts: [shortcutPanel, shortcutGuidePanel, tagShortcutPanel],
     guidance: [guidancePanel],
     assistant: [assistantPanel],
     personalAgents: [personalAgentsPanel],
+    personalAgentRules: [agentRulesPanel(ctx, "personal")],
     agentAccess: [agentTokensPanel(ctx)],
+    plugins: [pluginsPanel(ctx)],
     about: [aboutPanel],
-    admin: isOrgAdmin ? [adminPanel, legacyServerTokenPanel()] : [],
+    admin: isOrgAdmin ? [adminPanel, ...(ctx.S.session?.local ? [] : [renderInviteSignupSetting(ctx)]), legacyServerTokenPanel()] : [],
+    // Invite links need accounts: project admins on a server with sign-in.
+    members: canManageInvites(ctx.S.session, ctx.S.project) ? [renderMembersPanel(ctx)] : [],
   };
   const tabMeta = {
+    overview: { label: t("settings.tab.overview"), icon: "info", hint: t("settings.tab.overview_hint") },
+    browser: { label: t("settings.browser_scope"), icon: "monitor", hint: t("settings.tab.browser_hint") },
     appearance: { label: t("settings.tab.appearance"), icon: "palette", hint: t("settings.tab.appearance_hint") },
     agents: { label: t("settings.tab.agents"), icon: "cpu", hint: t("settings.tab.agents_hint") },
     resources: { label: t("settings.tab.resources"), icon: "settings", hint: t("settings.tab.resources_hint") },
     access: { label: t("settings.tab.access"), icon: "smartphone", hint: t("settings.tab.access_hint") },
     data: { label: t("settings.tab.data"), icon: "database", hint: t("settings.tab.data_group_hint") },
+    trash: { label: t("trash.title"), icon: "trash", hint: t("trash.hint") },
+    members: { label: t("settings.tab.members"), icon: "user", hint: t("settings.tab.members_hint") },
     profile: { label: t("settings.tab.profile"), icon: "user", hint: t("settings.tab.profile_hint") },
     display: { label: t("settings.tab.display"), icon: "sun", hint: t("settings.tab.display_hint") },
     personalAI: { label: t("settings.tab.personal_ai"), icon: "sparkles", hint: t("settings.tab.personal_ai_hint") },
+    plugins: { label: t("plugins.title"), icon: "puzzle", hint: t("plugins.hint") },
     about: { label: t("about.title"), icon: "info", hint: t("about.hint") },
     admin: { label: t("settings.scope_admin"), icon: "shield", hint: t("settings.scope_admin_hint") },
   };
@@ -2929,19 +3070,21 @@ export function renderSettings(host, ctx) {
   const graphTab = tabs.find((tab) => tab.sections.includes(GRAPH_SECTION))?.id;
   // Top-level scope: shared project settings vs this person's own settings vs
   // organization administration (visible to owner/admin only).
-  const scopes = isOrgAdmin ? ["project", "personal", "admin"]
-    : ["project", "personal"];
+  const scopes = isOrgAdmin ? ["overview", "project", "personal", "admin"]
+    : ["overview", "project", "personal"];
   const scopeLabels = {
+    overview: t("settings.tab.overview"),
     project: t("settings.scope_project"),
     personal: t("settings.scope_personal"),
     admin: t("settings.scope_admin"),
   };
   const scopeNotes = {
+    overview: t("settings.tab.overview_hint"),
     project: t("settings.scope_project_hint"),
     personal: t("settings.scope_personal_hint"),
     admin: t("settings.scope_admin_hint"),
   };
-  let activeScope = "project";
+  let activeScope = "overview";
   let requestedScope = "";
   try {
     const savedScope = localStorage.getItem("ark.settingsScope");
@@ -2962,7 +3105,7 @@ export function renderSettings(host, ctx) {
       "data-settings-scope": scope,
       onclick: () => selectScope(scope),
       title: scopeNotes[scope] || "",
-    }, icon(scope === "project" ? "folder" : scope === "admin" ? "shield" : "user", "sm"),
+    }, icon(scope === "project" ? "folder" : scope === "admin" ? "shield" : scope === "overview" ? "info" : "user", "sm"),
       h("span", null, scopeLabels[scope]));
     scopeButtons.set(scope, button);
     scopeBar.appendChild(button);
@@ -3004,7 +3147,14 @@ export function renderSettings(host, ctx) {
   }
   const panes = new Map();
   const sectionEls = new Map();
+  const navGroups = [];
   for (const tab of tabs) {
+    // Advanced tabs sit under one heading per scope, after the everyday ones.
+    if (tab.advanced && !navGroups.some((group) => group.dataset.settingsScope === tab.scope)) {
+      const group = h("div", { class: "settings-nav-group", "data-settings-scope": tab.scope }, t("settings.advanced_group"));
+      navGroups.push(group);
+      nav.appendChild(group);
+    }
     const button = h("button", {
       class: "settings-nav-item", type: "button", "data-settings-tab": tab.id,
       "data-settings-scope": tab.scope,
@@ -3082,7 +3232,7 @@ export function renderSettings(host, ctx) {
     if (reveal && panes.get(activeTab)?.contains(sectionEls.get(reveal))) revealSection(reveal);
   }
   function selectScope(scope, reveal = "") {
-    activeScope = scopes.includes(scope) ? scope : "project";
+    activeScope = scopes.includes(scope) ? scope : "overview";
     pageEyebrow.textContent = `${t("nav.settings")} · ${scopeLabels[activeScope]}`;
     for (const [key, button] of scopeButtons) {
       const active = key === activeScope;
@@ -3092,6 +3242,7 @@ export function renderSettings(host, ctx) {
     for (const [key, button] of tabButtons) {
       button.classList.toggle("hidden", tabs.find((tab) => tab.id === key)?.scope !== activeScope);
     }
+    for (const group of navGroups) group.classList.toggle("hidden", group.dataset.settingsScope !== activeScope);
     clear(scopeNote);
     if (activeScope === "project"
         && !ctx.S.session?.local
@@ -3160,7 +3311,12 @@ function formatPhysicsInput(key, value) {
   return String(Math.round(value));
 }
 
-// Settings -> Mobile: the native app and the web-app shell, both served from dist/.
+// Settings -> Mobile: the native app and the web-app shell.  The server
+// resolves the APKs of the latest GitHub release (never the browser: GitHub
+// rate-limits shared IPs) and sends their URLs and QR codes; without an
+// absolute URL (an older server, a failed request) the release page is used.
+const RELEASE_PAGE = "https://github.com/MasterYip/ARK-Studio/releases/latest";
+
 function androidAppsBox(onLoad = null) {
   const box = h("div", { class: "android-apps" });
   // Labels are keys so they resolve on every render (language switch re-renders).
@@ -3172,22 +3328,28 @@ function androidAppsBox(onLoad = null) {
     clear(box);
     for (const [key, titleKey, descKey] of cards) {
       const app = apps?.[key] || {};
-      const size = app.size ? `${(app.size / 1048576).toFixed(1)} MB` : "";
-      const meta = app.available
-        ? [size, app.updated ? t("settings.android.updated", { date: fmtDate(app.updated) }) : ""].filter(Boolean).join(" · ")
-        : t("settings.android.not_built");
+      const url = /^https:\/\//.test(app.url || "") ? app.url : RELEASE_PAGE;
+      const direct = Boolean(app.direct) && url === app.url;
+      const qr = app.qr_svg && url === app.url ? h("div", { class: "android-app-qr" }) : null;
+      // The SVG is generated by the server's QR encoder from the URL above.
+      if (qr) qr.innerHTML = app.qr_svg;
       box.appendChild(h("div", { class: "android-app-card" },
         h("div", { class: "android-app-head" }, icon("smartphone", "sm"), h("b", null, t(titleKey))),
         h("p", { class: "android-app-desc" }, t(descKey)),
+        qr ? h("details", { class: "android-app-qr-fold" },
+          h("summary", null, icon("qr", "sm"), t("settings.android.scan_qr")), qr) : null,
         h("div", { class: "android-app-foot" },
-          h("span", { class: "muted" }, meta),
-          app.available
-            ? h("a", { class: "btn sm", href: app.url, download: app.file, title: t("settings.android.download_file", { file: app.file }) },
-              icon("download", "sm"), t("settings.android.download_apk"))
-            : h("button", { class: "btn sm", type: "button", disabled: true }, icon("download", "sm"), t("settings.gpu.unavailable")))));
+          h("span", { class: "muted" }, app.version
+            ? t("settings.android.from_release_version", { version: app.version })
+            : t("settings.android.from_release")),
+          h("a", { class: "btn sm", href: url, target: "_blank", rel: "noopener noreferrer",
+            title: direct ? t("settings.android.download_file", { file: app.file || url.split("/").pop() }) : url },
+          icon(direct ? "download" : "external", "sm"),
+          t(direct ? "settings.android.download_apk" : "settings.android.open_release")))));
     }
   };
   render(null);
-  api.mobileApps().then((data) => { render(data.apps); onLoad?.(data.apps); }).catch(() => render(null));
+  const all = { native: { available: true }, webapp: { available: true } };
+  api.mobileApps().then((data) => { render(data.apps); onLoad?.(all); }).catch(() => { render(null); onLoad?.(all); });
   return box;
 }

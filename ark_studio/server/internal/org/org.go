@@ -159,6 +159,12 @@ func Open(path string, readers int) (*Manager, error) {
 	if err == nil {
 		err = db.Exec(store.AgentTokenSchema)
 	}
+	if err == nil {
+		err = db.Exec(lastWriterSchema) // Go only (people.go)
+	}
+	if err == nil {
+		err = db.Exec(inviteSchema) // Go only (invites.go)
+	}
 	if err != nil {
 		db.Close()
 		return nil, err

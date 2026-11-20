@@ -17,7 +17,10 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    # Release builds for minor versions only (v2.1.0, v2.2.0, and their
+    # pre-releases like v2.1.0-rc.1). Patch versions (v2.0.1) don't build;
+    # run this workflow by hand if one ever needs packages.
+    tags: ["v*.*.0", "v*.*.0-*"]
   workflow_dispatch:
 
 permissions:
@@ -270,8 +273,8 @@ jobs:
           releaseBody: See the assets below and docs/guide/install.md. Verify downloads with SHA256SUMS.txt.
           releaseDraft: true
           prerelease: ${{ contains(github.ref_name, '-') }}
-          uploadUpdaterJson: true
-          updaterJsonPreferNsis: true
+          # latest.json is written once from every job's signatures (checksums job).
+          uploadUpdaterJson: false
 
       - name: No real server addresses in the app binary
         shell: bash
@@ -294,7 +297,9 @@ jobs:
           Needs the Microsoft Edge WebView2 Runtime (preinstalled on Windows 10/11).
           Data: next to ark-studio.exe in projects\ and data\ (keys, logs, settings),
           or %LOCALAPPDATA%\ARK if this folder is not writable or that folder already holds ARK data.
-          The portable build does not update itself.
+          The portable build does not update itself. To update: quit ARK Studio, then copy
+          projects\ and data\ from this folder into the new version's folder (or copy the
+          new version's files into this folder, replacing the old ones).
           "@ | Out-File -Encoding utf8 (Join-Path $stage "README.txt")
           Compress-Archive -Path $stage -DestinationPath "$rel/bundle/$name.zip" -Force
 
@@ -353,6 +358,9 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/release
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           path: artifacts
@@ -374,3 +382,19 @@ jobs:
         run: |
           gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber \
             ark-server-* ark-server_*.deb ARK-Studio_*-portable.zip ARK-Studio-*-android*.apk SHA256SUMS.txt
+      # The updater manifest for every platform (Windows NSIS/MSI, macOS arm64/x64,
+      # Linux AppImage/.deb), from the .sig files of the desktop jobs and the
+      # bundles tauri-action attached. Skipped when no updater key is configured.
+      # Publishing the draft runs updater-manifest.yml, which copies this
+      # latest.json to the fixed `updater` release (the updater's second endpoint).
+      - name: Updater manifest (latest.json)
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --json assets > "$RUNNER_TEMP/assets.json"
+          node scripts/release/updater-json.mjs artifacts "${{ needs.version.outputs.version }}" "${GITHUB_REF_NAME}"             "${GITHUB_REPOSITORY}" "$RUNNER_TEMP/assets.json" "$RUNNER_TEMP/latest.json"
+          if [ -f "$RUNNER_TEMP/latest.json" ]; then
+            cat "$RUNNER_TEMP/latest.json"
+            gh release upload "${GITHUB_REF_NAME}" --repo "${GITHUB_REPOSITORY}" --clobber "$RUNNER_TEMP/latest.json"
+          fi

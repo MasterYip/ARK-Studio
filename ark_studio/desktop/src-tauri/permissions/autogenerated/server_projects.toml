@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-server-projects"
+description = "Enables the server_projects command without any pre-configured scope."
+commands.allow = ["server_projects"]
+
+[[permission]]
+identifier = "deny-server-projects"
+description = "Denies the server_projects command without any pre-configured scope."
+commands.deny = ["server_projects"]

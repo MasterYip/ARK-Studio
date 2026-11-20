@@ -92,6 +92,16 @@ func orgErr(err error) error {
 	return err
 }
 
+// blankTemplate reports a project created from the blank template.  Its
+// topic list starts empty: GET /api/topics does not create the built-in
+// topics there (Go-only; Python's ensure_default_topics runs for every
+// project).  Paper, demo and tutorial projects, and projects whose manifest
+// names no template, keep the lazy built-in topics; topics a project
+// already has are never removed.
+func blankTemplate(p *project.Project) bool {
+	return p.Manifest.Get("template") == "blank" && !pyjson.Truthy(p.Manifest.Get("demo"))
+}
+
 // apiGetViews handles the ported read-only views; ok=false falls through.
 func (c *reqCtx) apiGetViews() (bool, error) {
 	path := c.path
@@ -127,6 +137,9 @@ func (c *reqCtx) apiGetViews() (bool, error) {
 			}
 			projects = kept
 		}
+		// Go-only: the person's own activity per project (project_activity.go).
+		c.withMyActivity(projects)
+		c.withProjectPeople(projects) // project_people.go
 		session, err := c.sessionPayload()
 		if err == nil {
 			c.ok(pyjson.NewObject("projects", projects, "session", session))
@@ -210,7 +223,7 @@ func (c *reqCtx) apiGetViews() (bool, error) {
 		}
 		if perm, err := c.projectPermission(); err != nil {
 			return true, err
-		} else if perm == "write" || perm == "admin" {
+		} else if (perm == "write" || perm == "admin") && !blankTemplate(p) {
 			if _, err := p.Store.EnsureDefaultTopics(c.ctx, c.who(p)); err != nil {
 				return true, err
 			}
@@ -512,6 +525,15 @@ func (c *reqCtx) agentGet() (bool, error) {
 	if handled, err := c.agentSessionsGet(path); handled {
 		return true, err
 	}
+	if handled, err := c.agentWatchGet(path, p); handled { // Go only (routes_agentwatch.go)
+		return true, err
+	}
+	if path == agentRulesAgentPath { // Go only (routes_agentrules.go)
+		return true, c.agentRulesGet(p)
+	}
+	if handled, err := c.agentReviewsGet(p, path); handled { // Go only (routes_reviews.go)
+		return true, err
+	}
 	switch path {
 	case "/api/agent/v1/export":
 		return true, c.export()
@@ -552,6 +574,9 @@ func (c *reqCtx) agentGet() (bool, error) {
 	}
 	if m := reAgentUnit.FindStringSubmatch(path); m != nil {
 		unit, err := st.GetUnit(c.ctx, m[1])
+		if err == nil {
+			c.presenceRead(p, unit, nil) // routes_presence.go (Go only)
+		}
 		return okObj(pyjson.NewObject("unit", unit), err)
 	}
 	if m := reAgentComments.FindStringSubmatch(path); m != nil {
@@ -563,6 +588,9 @@ func (c *reqCtx) agentGet() (bool, error) {
 	}
 	if m := reAgentMembers.FindStringSubmatch(path); m != nil {
 		return okObj(st.Topic(c.ctx, m[1], false))
+	}
+	if m := reAgentUnitLinks.FindStringSubmatch(path); m != nil { // Go only (routes_agentlinks.go)
+		return true, c.agentUnitLinks(st, m[1])
 	}
 	if strings.HasPrefix(path, "/api/agent/v1/skills/") {
 		id := path[strings.LastIndex(path, "/")+1:]
@@ -698,6 +726,9 @@ func (c *reqCtx) taskAgentGet(s *sessions.Session) (bool, error) {
 	}
 	if m := reTaskUnit.FindStringSubmatch(path); m != nil {
 		unit, err := st.GetUnit(c.ctx, m[1])
+		if err == nil {
+			c.presenceRead(p, unit, s) // routes_presence.go (Go only)
+		}
 		return okObj(pyjson.NewObject("unit", unit, "read_only", true), err)
 	}
 	if m := reTaskComments.FindStringSubmatch(path); m != nil {

@@ -55,11 +55,17 @@ func (c *reqCtx) agentWrite(path string, body *pyjson.Object, actor string) erro
 	if handled, err := c.agentSessionUpload(path, body, actor); handled {
 		return err
 	}
+	if handled, err := c.agentMessagesPost(path, body, actor); handled { // Go only (routes_agentwatch.go)
+		return err
+	}
 	p, err := c.require("read")
 	if err != nil {
 		return err
 	}
 	s := p.Store
+	if handled, err := c.agentReviewsPost(p, path, body, actor); handled { // Go only (routes_reviews.go)
+		return err
+	}
 	if m := reAgentHistoryRaw.FindStringSubmatch(path); m != nil {
 		return c.nodeHistoryWrite(m[1], m[2], body, actor)
 	}
@@ -104,7 +110,9 @@ func (c *reqCtx) agentWrite(path string, body *pyjson.Object, actor string) erro
 		if err != nil {
 			return err
 		}
-		c.ok(pyjson.NewObject("unit", unit))
+		out := pyjson.NewObject("unit", unit)
+		c.withReviewWarnings(s, pyjson.Str(unit.Value("uid")), body, out) // Go only (routes_reviews.go)
+		c.ok(out)
 		return nil
 	case "/api/agent/v1/links":
 		return reply(s.CreateLink(c.ctx, body.Value("source"), body.Value("target"),
@@ -154,7 +162,9 @@ func (c *reqCtx) agentWrite(path string, body *pyjson.Object, actor string) erro
 		if err != nil {
 			return err
 		}
-		c.ok(pyjson.NewObject("unit", unit))
+		out := pyjson.NewObject("unit", unit)
+		c.withReviewWarnings(s, m[1], body, out) // Go only (routes_reviews.go)
+		c.ok(out)
 		return nil
 	}
 	return apiErr(404, "Unknown agent endpoint: "+path, "")

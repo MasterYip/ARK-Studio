@@ -18,6 +18,7 @@ func TestIncluded(t *testing.T) {
 		"operations/gpu.md":                     true,
 		"development/design.md":                 true,
 		"development/development.md":            true,
+		"development/agent-messaging.md":        true,
 		"development/release.md":                false,
 		"development/performance.md":            false,
 		"development/archive/implementation.md": false,

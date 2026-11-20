@@ -80,8 +80,9 @@ export function assigneeChip(unit) {
 /**
  * Assignee picker: the project's users plus "Unassigned".  Saves on change
  * with a single-field PATCH (not through the text-draft autosave), then calls
- * onSaved(unit); by default it syncs caches and refreshes the route, because
- * reassigning a branch root changes what its descendants inherit.
+ * onSaved(unit); by default it syncs caches and refreshes the data in place
+ * (ctx.unitsChanged: lists re-render, a graph is patched, never rebuilt),
+ * because reassigning a branch root changes what its descendants inherit.
  */
 export function assigneePicker(ctx, unit, { readOnly = false, onSaved = null } = {}) {
   const projectId = ctx?.S?.project?.id || "";
@@ -133,7 +134,10 @@ export function assigneePicker(ctx, unit, { readOnly = false, onSaved = null } =
       });
       paint(cachedAssignees(projectId));
       if (onSaved) onSaved(data.unit);
-      else {
+      else if (ctx?.unitsChanged) {
+        // In place: a graph is patched, not rebuilt (app.js refreshData).
+        ctx.unitsChanged([{ ...(ctx.S?.detail?.id === unit.id ? ctx.S.detail : {}), ...data.unit }]);
+      } else {
         const local = (ctx?.S?.units || []).find((item) => item.id === unit.id);
         if (local) Object.assign(local, data.unit);
         if (ctx?.S?.detail?.id === unit.id) ctx.S.detail = { ...ctx.S.detail, ...data.unit };

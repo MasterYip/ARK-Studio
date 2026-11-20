@@ -39,18 +39,71 @@ project layer or in any member's own layer (any state). Registering one in your
 own layer makes it visible to every member of the project, so a member with
 write access can opt the project in; the server's address, user and config
 path stay visible only to organization owners/admins (and in local mode).
-Without a registration the GPU views show a hint and a one-click **Use … in
-this project** button. Details and the migration steps for existing projects:
+Without a registration the GPU views show a hint and an **Open Setup** button
+that leads here (they do not list the server names; setup discovery offers
+them). Details and the migration steps for existing projects:
 [gpu.md](gpu.md#project-scope-and-who-sees-what).
 
 ## Device names
 
-Use a stable device name for `X-ARK-Host`, and a readable device label such as
-the machine's hostname (`laptop`, `gpu-node-01`).  The host ID is the join key
+Use the device id for `X-ARK-Host`: sha256 of `ark|` + the OS machine id,
+first 12 hex (`ark-server agent host-id`; per-OS commands in
+[External agents](../agents/external-agent.md#device-id)), and a readable
+device label such as the machine's hostname (`laptop`, `gpu-node-01`).
+The ARK server uses the same id for itself; its older fingerprint
+(hostname, system and home folder) is an alias of it.  The host ID is the join key
 for locations; the label is what the UI shows.  Do not reuse a host ID on a
 second machine.  Another computer should send its own `X-ARK-Host` and add its
 locations with the same resource keys, rather than overwriting the first
 machine's paths.
+
+Setup is repeatable per person and per device.  A location is not part of a
+layer's confirmed profile: adding one (for a new person, or a person's new
+device) changes no confirmation and does not move an unset layer to draft.
+Settings > Resources lists *My devices*: each device with its last-seen time
+and its path for every resource, and adds or edits a device's path.
+`POST /api/agent/v1/setup/alias {from}` folds an old host id into the
+caller's current one (its own devices, or any for a project admin).
+
+### Location sizes
+
+The Resources graph and Settings > Resources show how much each location
+holds on its device: `2.3 GB · 12,340 files · 5 min ago`, for a git
+checkout also `working tree 1.1 GB / .git 1.2 GB`, marked as old after a
+day and `not measured` until a size arrives.  Each device measures its own
+paths, so sizes are listed per device and never added up:
+
+- **The ARK server** measures the locations on its own host in the
+  background: after the setup or the graph is read, at most every ten
+  minutes per project, for sizes missing or older than 12 hours (3 days for
+  trees that hit a cap).  One path at a time, on a background-priority
+  thread, at most 20 s and two million entries per path (the size is then
+  shown as `≥`); links are counted but not followed, other file systems
+  mounted inside and network paths are not measured, unreadable folders are
+  skipped.  `ARK_LOCATION_SIZES=off` turns this off.
+- **The ARK desktop app** measures this computer's paths when Settings >
+  Resources is open (sizes missing or older than a day) and reports them.
+- **An agent** may report the sizes of its own device's locations, for
+  example when it registers or verifies a path.
+
+The ↻ button measures one location again (`POST /api/skills/setup/measure
+{resource, path_or_ref}`, once a minute per location); for a path on another
+device it answers `409 SETUP_SIZE_ON_DEVICE`.  Sizes are kept in
+`setup/location-stats.json`, outside the layers: they change no digest and
+no confirmation.
+
+```text
+POST /api/agent/v1/setup/location-stats   (X-ARK-Host: <this device>)
+{items: [{resource: "project/code", path_or_ref: "/home/ana/code",
+          bytes: 2300000000, files: 12340, git_bytes: 1200000000,
+          capped: false, measured_at: "2026-11-20T08:00:00Z"}]}
+```
+
+`resource` must have a location registered on the calling device
+(`path_or_ref` is needed only when it has several there); a report for
+another device's path is refused.  `kind` may be `dir` (default), `file`,
+`missing`, `network` or `error`.  It needs write access.  Example on Linux:
+`du -sb <path>` for bytes and `find <path> -type f | wc -l` for files.
 
 ## Agents
 
@@ -105,12 +158,33 @@ POST /api/agent/v1/setup/resource  {resource: {id, kind, name, purpose, details,
 POST /api/agent/v1/setup/location  {resource: "u:alice/code", path_or_ref, host_label}
 POST /api/agent/v1/setup/remove    {id}
 POST /api/agent/v1/setup/host      {label}
+POST /api/agent/v1/setup/propose   {}
 POST /api/agent/v1/setup/verify
+POST /api/agent/v1/setup/location-stats  {items: [{resource, path_or_ref, bytes, files}]}
 ```
 
-Human confirmation remains in the UI. Personal tokens identify the contributor
+`propose: true` on a write, or `propose {}` without a layer, sends every layer
+with changes since its last confirmation (the project layer and the caller's
+own) in one call; the reply lists them in `pending` with their digests.
+`{layer}` still proposes one layer.
+
+Human confirmation remains in the UI. The review lists what changed in each
+layer since its last confirmation (added, changed with the old value struck
+through, removed) and one Confirm covers every pending layer the person may
+confirm: `POST /api/skills/setup/confirm {layers: [{layer, digest}]}` checks
+all of them before writing any. The project layer needs a project admin; a
+member confirms their own layer and the project change waits for an admin.
+`GET /api/skills/setup/state` gives each layer's `changes` under
+`layers.<layer>.changes`. Personal tokens identify the contributor
 and retain their user's project permissions. The legacy server token can read
 the complete register and writes project records as before.
+
+## Assistant chat
+
+The Assistant chat is per person and project (see
+[Assistant history](../guide/workbench.md#assistant-history)): members never
+see each other's conversations, and a project ZIP carries everyone's only
+when a project admin downloads it from the browser.
 
 ## Compatibility
 

@@ -9,12 +9,14 @@ overview. The guides below cover configuration, integrations and development.
 | --- | --- |
 | [Cross-platform operation](operations/cross-platform.md) | Windows, Linux and macOS setup, processes and external applications |
 | [Install ARK Studio](guide/install.md) | Desktop app downloads per OS, first run, unsigned-build warnings, data folders, uninstall; ark-server packages |
-| [Desktop app](guide/desktop.md) | Borderless windows, tray, local and remote mode |
+| [Desktop app](guide/desktop.md) | One window for this computer and your servers, tray, settings, desktop bridge |
+| [Desktop links](guide/desktop-link.md) | A server's projects in ARK Studio: Link this desktop, token scope, revoking |
 | [Mobile and remote access](guide/mobile.md) | Android builds, APKs, PWA, pairing, HTTPS and tunnels |
 | [Accounts and access](operations/accounts-and-access.md) | Organization roles, project permissions and personal configuration |
 | [Server operations](operations/server-operations.md) | Native persistent configuration, systemd, restart, backup and restore |
 | [Shared project setup](operations/multi-user-setup.md) | Register repositories, environments, servers and storage locations |
 | [Home workspace](guide/home-overview.md) | Research pipeline, activity and decision workflow |
+| [View plugins](guide/plugins.md) | Built-in views as plugins; import, permissions and the sandbox of user plugins |
 | [Appearance and text](guide/appearance.md) | Paired light/dark palettes, high contrast and text scaling |
 | [Topics](guide/topics.md) | Nodes that hold a curated subgraph: rules, narrative order, chosen links and API |
 | [Markdown bundles](guide/markdown-bundles.md) | Export selected nodes with media as linked Markdown for VS Code and Obsidian |
@@ -46,4 +48,6 @@ overview. The guides below cover configuration, integrations and development.
 - [Releasing](development/release.md): versioning, the release workflow, signing and the updater key.
 - [Development guide](development/development.md): building and testing ark-server, adding a route, the backend gate (`scripts/dev/check-backend.*`), contributions.
 - [Design notes](development/design.md): data and UI architecture.
+- [Plugin API](development/plugin-api.md): view plugin manifest, lifecycle, the sandbox bridge and its security model.
 - [Client project cache](development/client-cache.md): offline cache, deltas, push sync and its server contract.
+- [Agent messaging](development/agent-messaging.md): the update feed agents watch, experimental messages to agents, and the options for agents ARK did not start.

@@ -78,3 +78,36 @@ func tomlModelKeys(text string) (*pyjson.Object, *pyjson.Object) {
 	}
 	return top, profiles
 }
+
+// tomlStrings returns every string-valued key of a TOML text grouped by
+// table ("" for the top level). Table names keep their dotted form with
+// quotes removed, e.g. "model_providers.azure".
+func tomlStrings(text string) map[string]map[string]string {
+	out := map[string]map[string]string{}
+	table := ""
+	for _, raw := range pytext.SplitLines(text, false) {
+		line := pytext.Strip(raw)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if header := reMatch(tomlTable, line, 2); header != nil {
+			table = strings.NewReplacer("\"", "", "'", "").Replace(pytext.Strip(*header[1]))
+			continue
+		}
+		m := reMatch(tomlString, line, 4)
+		if m == nil {
+			continue
+		}
+		value := ""
+		if m[2] != nil {
+			value = *m[2]
+		} else if m[3] != nil {
+			value = *m[3]
+		}
+		if out[table] == nil {
+			out[table] = map[string]string{}
+		}
+		out[table][*m[1]] = value
+	}
+	return out
+}

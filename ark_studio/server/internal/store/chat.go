@@ -9,12 +9,16 @@ import (
 	"arkstudio/go/internal/platform/pyerr"
 
 	"arkstudio/go/internal/compat/pyjson"
+	"arkstudio/go/internal/compat/pytext"
 	"arkstudio/go/internal/sqlitedb"
 )
 
-// Assistant chat history is per user and project (schema v10): a user's
-// thread is their own rows plus shared rows ('' user, written before v10)
-// newer than their meta key chat_cleared:<user>.
+// Assistant chat history is per user and project (schema v10, strict since
+// T-0028): a user's thread is their own rows newer than their meta key
+// chat_cleared:<user>.  Rows with an empty user were written before v10;
+// in an account (auth) server AdoptLegacyChat gives them to the project
+// owner once, and in local single-user mode (legacy=true) they stay the
+// local user's.  No other member sees them.
 
 func chatClearedKey(user string) string { return "chat_cleared:" + user }
 
@@ -30,9 +34,24 @@ func metaInt(ctx context.Context, q sqlitedb.Querier, key string) (int64, error)
 	return n, nil
 }
 
+// LegacyChatOwner is the meta key recording that the pre-v10 rows (empty
+// user) were given to this account (AdoptLegacyChat).
+const LegacyChatOwner = "migration.chat_legacy_owner"
+
+// chatScope is the WHERE clause of one user's thread: their own rows, and
+// in local mode also the pre-v10 rows with an empty user.  Outside local
+// mode an empty user name owns nothing (the pre-v10 rows belong to no account).
+func chatScope(legacy bool) string {
+	if legacy {
+		return "(user=? OR user='')"
+	}
+	return "(user=? AND user<>'')"
+}
+
 // ClearChat is Store.clear_chat(user): deletes the user's own rows, hides
-// the older shared rows for them, and returns how many left the view.
-func (s *Store) ClearChat(ctx context.Context, user string) (int64, error) {
+// the older rows still in their view (local mode: the pre-v10 rows) and
+// returns how many left the view.  Other users' threads are untouched.
+func (s *Store) ClearChat(ctx context.Context, user string, legacy bool) (int64, error) {
 	var n int64
 	err := s.write(ctx, func(w *wtx) error {
 		w.noTouch = true
@@ -40,7 +59,7 @@ func (s *Store) ClearChat(ctx context.Context, user string) (int64, error) {
 		if err != nil {
 			return err
 		}
-		if err := w.q.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_messages WHERE (user=? OR user='') AND id>?",
+		if err := w.q.QueryRowContext(ctx, "SELECT COUNT(*) FROM chat_messages WHERE "+chatScope(legacy)+" AND id>?",
 			user, cleared).Scan(&n); err != nil {
 			return err
 		}
@@ -48,7 +67,7 @@ func (s *Store) ClearChat(ctx context.Context, user string) (int64, error) {
 		if err := w.q.QueryRowContext(ctx, "SELECT COALESCE(MAX(id), 0) FROM chat_messages").Scan(&last); err != nil {
 			return err
 		}
-		if _, err := w.q.ExecContext(ctx, "DELETE FROM chat_messages WHERE user=?", user); err != nil {
+		if _, err := w.q.ExecContext(ctx, "DELETE FROM chat_messages WHERE user=? AND user<>''", user); err != nil {
 			return err
 		}
 		return MetaSet(ctx, w.q, chatClearedKey(user), strconv.FormatInt(last, 10))
@@ -84,7 +103,8 @@ func chatRow(r sqlitedb.Row) *pyjson.Object {
 }
 
 // ChatHistory is Store.chat_history(limit, user); user nil is every message.
-func (s *Store) ChatHistory(ctx context.Context, limit int64, user *string) ([]*pyjson.Object, error) {
+// legacy adds the pre-v10 rows (empty user): local single-user mode only.
+func (s *Store) ChatHistory(ctx context.Context, limit int64, user *string, legacy bool) ([]*pyjson.Object, error) {
 	limit = max(1, min(limit, 400))
 	var out []*pyjson.Object
 	err := s.read(ctx, func(q sqlitedb.Querier) error {
@@ -97,7 +117,7 @@ func (s *Store) ChatHistory(ctx context.Context, limit int64, user *string) ([]*
 			if cleared, err = metaInt(ctx, q, chatClearedKey(*user)); err != nil {
 				return err
 			}
-			rows, err = sqlitedb.Query(ctx, q, "SELECT * FROM (SELECT * FROM chat_messages WHERE (user=? OR user='') AND id>? "+
+			rows, err = sqlitedb.Query(ctx, q, "SELECT * FROM (SELECT * FROM chat_messages WHERE "+chatScope(legacy)+" AND id>? "+
 				"ORDER BY id DESC LIMIT ?) ORDER BY id ASC", *user, cleared, limit)
 		}
 		if err != nil {
@@ -140,6 +160,63 @@ func (s *Store) AddChat(ctx context.Context, role, content string, tools []any, 
 		return nil
 	})
 	return out, err
+}
+
+// AdoptLegacyChat gives the pre-v10 Assistant rows (empty user) to the
+// project owner, once: the meta key LegacyChatOwner records the account and
+// later calls do nothing.  owner is asked lazily and only while the key is
+// unset; "" (no owner known) leaves the rows and the key alone, so the next
+// server start can still adopt them (one owner lookup per store and
+// process).  Returns how many rows changed.
+func (s *Store) AdoptLegacyChat(ctx context.Context, owner func() (string, error)) (int64, error) {
+	if s.chatAdopted.Load() {
+		return 0, nil
+	}
+	s.backfillMu.Lock()
+	defer s.backfillMu.Unlock()
+	if s.chatAdopted.Load() {
+		return 0, nil
+	}
+	var done bool
+	if err := s.DB.Read(ctx, func(q sqlitedb.Querier) error {
+		v, ok, err := MetaGet(ctx, q, LegacyChatOwner)
+		done = ok && v != ""
+		return err
+	}); err != nil {
+		return 0, err
+	}
+	if done {
+		s.chatAdopted.Store(true)
+		return 0, nil
+	}
+	name, err := owner()
+	if err != nil {
+		return 0, err
+	}
+	name = pytext.Strip(name)
+	if name == "" {
+		s.chatAdopted.Store(true)
+		return 0, nil
+	}
+	var n int64
+	err = s.write(ctx, func(w *wtx) error {
+		w.noTouch = true
+		if v, ok, err := MetaGet(ctx, w.q, LegacyChatOwner); err != nil || (ok && v != "") {
+			return err
+		}
+		res, err := w.q.ExecContext(ctx, "UPDATE chat_messages SET user=? WHERE user=''", name)
+		if err != nil {
+			return err
+		}
+		if n, err = res.RowsAffected(); err != nil {
+			return err
+		}
+		return MetaSet(ctx, w.q, LegacyChatOwner, name)
+	})
+	if err == nil {
+		s.chatAdopted.Store(true)
+	}
+	return n, err
 }
 
 // NextActions is Store.next_actions().

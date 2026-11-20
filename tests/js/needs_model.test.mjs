@@ -104,8 +104,9 @@ test("needsLightboxItems feeds the shared media lightbox in strip order", () => 
 });
 
 test("Needs-you thumbnails open the graph's media lightbox, not a second viewer", async () => {
-  const source = await readFile(new URL("../../ark_studio/web/js/views/overview.js", import.meta.url), "utf8");
-  assert.match(source, /import \{ openMediaLightbox \} from "\.\.\/image-viewer\.js";/);
+  // The row (thumbnails included) is shared by Home and Research › Review.
+  const source = await readFile(new URL("../../ark_studio/web/js/needs-ui.js", import.meta.url), "utf8");
+  assert.match(source, /import \{ openMediaLightbox \} from "\.\/image-viewer\.js";/);
   assert.match(source, /openMediaLightbox\(\{\s*items: needsLightboxItems\(media/);
   assert.doesNotMatch(source, /openImageLightbox|function openVideo/);
   const graph = await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8");

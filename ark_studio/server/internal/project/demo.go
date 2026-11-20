@@ -73,10 +73,34 @@ func demoManifest() *pyjson.Object {
 		"accent", "#2563eb", "demo", true, "demo_version", int64(DemoVersion))
 }
 
+// templateBuiltToday reports a tutorial template seeded today (Go-only):
+// its dates are relative to the day it was built (seedAnchors), so a
+// template from an earlier day is rebuilt and the tutorial never shows a
+// stale deadline.  With the recorded dates (SeedDatesFixed) any day will do.
+func templateBuiltToday(path string) bool {
+	if SeedDatesFixed.Load() {
+		return true
+	}
+	raw, err := os.ReadFile(filepath.Join(path, "project.json"))
+	if err != nil {
+		return false
+	}
+	v, err := pyjson.Loads(strings.ReplaceAll(string(raw), "\r\n", "\n"))
+	if err != nil {
+		return false
+	}
+	o, ok := v.(*pyjson.Object)
+	if !ok {
+		return false
+	}
+	created, _ := o.Value("created").(string)
+	return len(created) >= 10 && created[:10] == clock.Now().UTC().Format("2006-01-02")
+}
+
 // buildDemoTemplate is demo._build_template.
 func buildDemoTemplate(ctx context.Context, root string) (string, error) {
 	template := DemoTemplatePath(root)
-	if demoIsCurrent(template) {
+	if demoIsCurrent(template) && templateBuiltToday(template) {
 		return template, nil
 	}
 	root = Resolve(root)

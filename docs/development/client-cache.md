@@ -215,6 +215,16 @@ server and refreshes the view. Going offline also tints the status bar and
 shows one toast. Below 980 px (no status bar) the floating "Syncing…" chip
 and the read-only banner are used instead.
 
+**Sync now** (top bar, every width; Alt+R; the status-bar item does the
+same, `sync-now.js`): checks the server, reopens the event stream if it is
+down, sets `syncState.syncRequestedAt` so every entry validated before the
+click is read from the server once (`servePolicy` returns "network" for up
+to 30 s), and repaints the current page through the same in-place path as a
+change from elsewhere (`refreshFromRemote`), so camera, selection and scroll
+stay. The icon spins while it runs and shows a check for 1.5 s; a failure
+is an error toast. A dot on the icon means updates are not arriving live:
+grey while the stream reconnects, amber while polling, red when offline.
+
 Execute sub-tab switches (2k nodes, fast3g, first visit / after reload, ms
 until the view's data is painted; before = 88db2cc):
 

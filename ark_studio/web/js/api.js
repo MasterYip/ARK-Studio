@@ -4,6 +4,7 @@ import {
 } from "./mobile-core.js";
 import { t, serverErrorText } from "./i18n.js";
 import { clientCache } from "./client-cache.js";
+import { clearStarterTokens } from "./starter-token-store.js";
 import { createConnectivity, isProxyFailure } from "./connectivity.js";
 import {
   cacheRoute, mergeBodiesDelta, mergeSnapshotDelta, servePolicy, staleAfterDelta,
@@ -117,9 +118,10 @@ export function perfMark(name) {
 // ------------------------------------------------------------- sync state
 // live: the revision stream is connected, so cached entries validated since
 // liveSince are current unless a delta marked them stale.  ownWriteAt: this
-// tab's last write.  offline: the server is unreachable; cached data is shown
-// read-only.
-export const syncState = { live: false, liveSince: 0, ownWriteAt: 0, offline: false, syncing: 0, connectivity: "online" };
+// tab's last write.  syncRequestedAt: the last "Sync now" (entries checked
+// before it are read from the server).  offline: the server is unreachable;
+// cached data is shown read-only.
+export const syncState = { live: false, liveSince: 0, ownWriteAt: 0, syncRequestedAt: 0, offline: false, syncing: 0, connectivity: "online" };
 if (typeof window !== "undefined") window.__ARK_SYNC__ = syncState; // diagnostics and smoke tests
 
 // Server reachability (connectivity.js).  Every response clears it; a
@@ -620,6 +622,14 @@ export function qs(params = {}) {
   return text ? `?${text}` : "";
 }
 
+// A request a user view plugin made through its bridge (plugin-host.js): the
+// signed-in user's own session and permissions, labelled with the plugin id
+// so the server logs the write as "human:plugin:<id>" (activity, node
+// history).  Never cached.
+export function pluginRequest(pluginId, path, { method = "GET", body } = {}) {
+  return request(path, { method, ...(body === undefined ? {} : { body }), headers: { "X-ARK-Plugin": String(pluginId) }, noCache: true });
+}
+
 export const api = {
   bootstrap: (options = {}) => request("/api/bootstrap", options),
   authSession: () => request("/api/auth/session"),
@@ -629,6 +639,8 @@ export const api = {
     return request("/api/auth/logout", { method: "POST", body: {} });
   },
   revision: () => request("/api/revision"),
+  // Live agent presence (T-0043, presence.js); never cached.
+  presence: () => request("/api/presence", { noCache: true }),
   changes: (since, { lite = true } = {}) => request(`/api/changes${qs({ since, bodies: lite ? 0 : 1 })}`),
   remoteInfo: () => request("/api/remote/info"),
   mobileSession: () => request("/api/mobile/session"),
@@ -638,10 +650,14 @@ export const api = {
   claimPairing: (token) => request("/api/mobile/pair/claim", { method: "POST", body: { token } }),
   pairings: () => request("/api/mobile/pairs"),
   revokePairing: (id) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/revoke`, { method: "POST", body: {} }),
+  // ARK Studio desktop link code (Go-only route; desktop-hub.js).
+  linkDesktop: ({ signal, ...body } = {}) => request("/api/desktop/link", { method: "POST", body, signal }),
   logoutMobile: () => request("/api/mobile/session", { method: "DELETE" }),
   project: (options = {}) => request("/api/project", options),
   assignees: () => request("/api/project/assignees"),
-  overview: (options = {}) => request("/api/project/overview", options),
+  // `query`: graph_limit/graph_types/graph_statuses/graph_days when the
+  // Home filter is not on the account (home-filter-model.js).
+  overview: (options = {}, query = {}) => request(`/api/project/overview${qs(query)}`, options),
   projects: () => request("/api/projects"),
   createProject: (body) => request("/api/projects", { method: "POST", body }),
   openProject: (body) => request("/api/projects/open", { method: "POST", body, write: false }),
@@ -653,7 +669,7 @@ export const api = {
   savePersonalSettings: (scope, body) => request(
     `/api/personal/settings${qs({ scope })}`, { method: "POST", body }),
   changePassword: (body) => request("/api/org/password", { method: "POST", body }),
-  me: () => request("/api/me"),
+  me: (options = {}) => request("/api/me", options),
   updateMe: (body) => request("/api/me", { method: "PATCH", body }),
   uploadAvatar: (body) => request("/api/me/avatar", { method: "POST", body }),
   removeAvatar: () => request("/api/me/avatar", { method: "DELETE" }),
@@ -698,6 +714,17 @@ export const api = {
   revokeProjectGrant: (projectId, body) => request(
     `/api/org/projects/${encodeURIComponent(projectId)}/grants/revoke`,
     { method: "POST", body }),
+  // Project invite links (Go only, routes_invites.go).
+  projectInvites: (projectId) => request(`/api/org/projects/${encodeURIComponent(projectId)}/invites`),
+  createProjectInvite: (projectId, body) => request(
+    `/api/org/projects/${encodeURIComponent(projectId)}/invites`, { method: "POST", body }),
+  revokeProjectInvite: (projectId, inviteId) => request(
+    `/api/org/projects/${encodeURIComponent(projectId)}/invites/${encodeURIComponent(inviteId)}/revoke`,
+    { method: "POST", body: {} }),
+  inviteSettings: () => request("/api/org/invite-settings"),
+  saveInviteSettings: (body) => request("/api/org/invite-settings", { method: "POST", body }),
+  invitePreview: (token) => request("/api/auth/invite/preview", { method: "POST", body: { token }, write: false }),
+  acceptInvite: (token) => request("/api/auth/invite/accept", { method: "POST", body: { token } }),
 
   skills: () => request("/api/skills"),
   setupState: () => request("/api/skills/setup/state"),
@@ -729,9 +756,27 @@ export const api = {
     { method: "POST", body, headers: project ? { "X-ARK-Project": project } : {} }),
   saveNodeVersion: (id, expected_hash, project) => request(`/api/units/${encodeURIComponent(id)}/history/checkpoint`,
     { method: "POST", body: { expected_hash }, headers: project ? { "X-ARK-Project": project } : {} }),
+  // Review requests and review groups (server routes_reviews.go).
+  unitReview: (id) => request(`/api/units/${encodeURIComponent(id)}/review`),
+  reviewGroups: (params = {}) => request(`/api/reviews${qs(params)}`),
+  reviewGroup: (id) => request(`/api/reviews/${encodeURIComponent(id)}`),
+  createReviewGroup: (body) => request("/api/reviews", { method: "POST", body }),
+  updateReviewGroup: (id, body) => request(`/api/reviews/${encodeURIComponent(id)}`, { method: "POST", body }),
+  decideReviewGroup: (id, body) => request(`/api/reviews/${encodeURIComponent(id)}/decide`, { method: "POST", body }),
+  reviewGroupComment: (id, body) => request(`/api/reviews/${encodeURIComponent(id)}/comments`, { method: "POST", body }),
   archiveUnit: (id) => request(`/api/units/${encodeURIComponent(id)}/archive`, { method: "POST", body: {} }),
   restoreUnit: (id) => request(`/api/units/${encodeURIComponent(id)}/restore`, { method: "POST", body: {} }),
+  // Recycle bin: deleted nodes (archiveUnit puts them there).
+  trash: () => request("/api/trash"),
+  purgeUnit: (id) => request(`/api/trash/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  emptyTrash: () => request("/api/trash", { method: "DELETE" }),
   insertBetween: (id, body = {}) => request(`/api/units/${encodeURIComponent(id)}/insert-between`, { method: "POST", body }),
+  // Multi-selection (Go only): shared-attribute read, one edit for many
+  // units in one transaction, and grouping siblings under a new parent.
+  unitsBatch: (ids = []) => request(`/api/units/batch${qs({ units: ids.join(",") })}`, { noCache: true }),
+  batchUpdate: (body) => request("/api/units/batch", { method: "POST", body }),
+  groupUnits: (body) => request("/api/units/group", { method: "POST", body }),
+  ungroupUnit: (id, body = {}) => request(`/api/units/${encodeURIComponent(id)}/ungroup`, { method: "POST", body }),
   comments: (id) => request(`/api/units/${encodeURIComponent(id)}/comments`),
   addComment: (id, body) => request(`/api/units/${encodeURIComponent(id)}/comments`, { method: "POST", body }),
   resolveComment: (id, commentId, resolved = true) => request(
@@ -819,8 +864,21 @@ export const api = {
   infoHubGraph: (params = {}) => request(`/api/infohub/graph${qs(params)}`),
   infoHubUnit: (params = {}) => request(`/api/infohub/unit${qs(params)}`),
   infoHubImport: (body) => request("/api/infohub/import", { method: "POST", body }),
+  // Go only (routes_importark.go): import from another ARK project.  Not
+  // cached: the reply is about another project.
+  importArkGraph: (params = {}) => request(`/api/import-ark/graph${qs(params)}`, { noCache: true }),
+  importArkUnit: (project, uid) => request(`/api/import-ark/unit${qs({ project, uid })}`, { noCache: true }),
+  importArkPreview: (body) => request("/api/import-ark/preview", { method: "POST", body, write: false }),
+  importArkApply: (body) => request("/api/import-ark/apply", { method: "POST", body }),
   agentToken: () => request("/api/agent/token"),
   agentTokens: () => request("/api/personal/agent-tokens"),
+  // Agent rules (Settings > Agents and Personal AI; the Home starter prompts).
+  agentRules: () => request("/api/agent-rules"),
+  saveAgentRules: (scope, settings) => request("/api/agent-rules", { method: "POST", body: { scope, settings } }),
+  previewAgentRules: (scope, settings) => request("/api/agent-rules", { method: "POST", body: { scope, settings, dry_run: true }, write: false }),
+  // Experimental agent messages (agent-messages.js; docs/development/agent-messaging.md).
+  agentMessages: (unit = "") => request(`/api/agent-messages${unit ? `?unit=${encodeURIComponent(unit)}` : ""}`),
+  sendAgentMessage: (body) => request("/api/agent-messages", { method: "POST", body }),
   createAgentToken: (body) => request("/api/personal/agent-tokens", { method: "POST", body }),
   revokeAgentToken: (id) => request(`/api/personal/agent-tokens/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
@@ -843,16 +901,6 @@ export const api = {
   gpuSubmit: (body) => request("/api/gpu/jobs", { method: "POST", body }),
   gpuCancel: (id) => request(`/api/gpu/jobs/${encodeURIComponent(id)}/cancel`, { method: "POST", body: {} }),
   gpuJobLogs: (id) => request(`/api/gpu/jobs/${encodeURIComponent(id)}/logs`),
-  // T-0018: GPU servers are scoped to the projects that register them in setup.
-  // Register servers in this project: compute resources (kind ssh, gpu_server)
-  // in the caller's own setup layer (docs/operations/gpu.md "Project scope").
-  gpuRegister: (names) => request("/api/skills/setup/draft", { method: "POST", body: {
-    layer: "user",
-    resources: names.map((name) => ({
-      id: `gpu-${String(name).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").slice(0, 44)}`,
-      kind: "compute", name: String(name), details: { kind: "ssh", gpu_server: String(name), use: "ask" },
-    })),
-  } }),
 
   // Session context (docs/agents/session-context.md): internal + uploaded sessions.
   sessionContexts: (options = {}) => request("/api/session-contexts", options),
@@ -874,8 +922,8 @@ export const api = {
   createSession: (body) => request("/api/agent-sessions", { method: "POST", body }),
   sessionInput: (id, text, context = null) => request(`/api/agent-sessions/${encodeURIComponent(id)}/input`,
     { method: "POST", body: context ? { text, context } : { text } }),
-  sessionSteer: (id, text, context = null) => request(`/api/agent-sessions/${encodeURIComponent(id)}/steer`,
-    { method: "POST", body: context ? { text, context } : { text } }),
+  sessionSteer: (id, text, context = null, now = false) => request(`/api/agent-sessions/${encodeURIComponent(id)}/steer`,
+    { method: "POST", body: { text, ...(context ? { context } : {}), ...(now ? { now: true } : {}) } }),
   sessionRemoveSteer: (id, steerId) => request(
     `/api/agent-sessions/${encodeURIComponent(id)}/steer/${encodeURIComponent(steerId)}`,
     { method: "DELETE" }),
@@ -904,10 +952,18 @@ export const api = {
   relaunchSession: (id) => request(`/api/agent-sessions/${encodeURIComponent(id)}/relaunch`,
     { method: "POST", body: {} }),
   deleteSession: (id) => request(`/api/agent-sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  renameSession: (id, title) => request(`/api/agent-sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: { title } }),
   sessionLogs: (id, stream = "stdout", offset = 0, limit = 300) => request(
     `/api/agent-sessions/${encodeURIComponent(id)}/logs${qs({ stream, offset, limit })}`),
-  sessionTranscript: (id, options = {}) => request(
-    `/api/agent-sessions/${encodeURIComponent(id)}/transcript`, options),
+  // query: { tail, known, agent, item } (a page of items, an unchanged marker,
+  // one sub-agent's transcript, one tool item).
+  sessionTranscript: (id, options = {}) => {
+    const { query = null, ...rest } = options;
+    return request(`/api/agent-sessions/${encodeURIComponent(id)}/transcript${qs(query || {})}`, rest);
+  },
+  sessionSteerNow: (id, steerId) => request(
+    `/api/agent-sessions/${encodeURIComponent(id)}/steer/${encodeURIComponent(steerId)}`,
+    { method: "POST", body: { action: "send_now" } }),
   sessionMedia: (id) => request(
     `/api/agent-sessions/${encodeURIComponent(id)}/media`),
   sessionArtifacts: (id, path = "") => request(
@@ -1071,6 +1127,8 @@ export async function clearClientData({ signOut = true } = {}) {
     try {
       localStorage.removeItem("ark.cache.identity");
       localStorage.removeItem("ark.cache.lastProject");
+      // Home starter tokens kept for Copy prompt (starter-token-store.js).
+      clearStarterTokens(localStorage);
     } catch { /* storage disabled */ }
   }
   try {

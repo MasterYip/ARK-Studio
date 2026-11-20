@@ -78,7 +78,7 @@ test('Home start panel: one preview dialog, one token flow, responsive', { skip:
         await context.addInitScript((lang) => {
           localStorage.setItem('ark.prefsV2', '1');
           localStorage.setItem('ark.lang', lang);
-          localStorage.setItem('ark.onboarding.hidden', '0');
+          localStorage.setItem('ark.onboarding.hidden:prj_test', '0');
           window.__long = [];
           new PerformanceObserver((list) => { for (const e of list.getEntries()) window.__long.push(Math.round(e.duration)); })
             .observe({ type: 'longtask', buffered: true });

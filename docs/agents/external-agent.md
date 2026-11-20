@@ -37,12 +37,53 @@ ask only about missing, conflicting or changed details, stage by stage.
 Discovery checks the ARK server, so verify this device's paths locally and
 label observations by their source machine. Reconcile returned questions
 with facts already known, then
-`POST /api/agent/v1/setup/draft` with `propose: true`. Show the user
-`summary_markdown` and the digest, and let them confirm it themselves (ARK UI
-or `ark-server skills setup confirm`). Then
+`POST /api/agent/v1/setup/draft` with `propose: true`, which sends every
+changed layer for confirmation in one call. Show the user `summary_markdown`
+and the digests in `pending`, and let them confirm it themselves (ARK UI or
+`ark-server skills setup confirm`). Then
 `POST /api/agent/v1/setup/verify`. After that, treat
 `readiness.requires_human` (policies set to `ask`) as actions that need
 explicit user approval every time.
+
+## Device id
+
+Setup is kept per person and per device: each computer has its own paths
+for the same resources.  Send this device's id as `X-ARK-Host` with every
+call.  The id is the first 12 hex characters of sha256 of `ark|` followed by
+the operating system's machine id, so every agent on one computer sends the
+same id:
+
+- Any system with ARK installed: `ark-server agent host-id`
+- Linux:
+
+  ```bash
+  printf 'ark|%s' "$(cat /etc/machine-id)" | sha256sum | cut -c1-12
+  ```
+
+- macOS:
+
+  ```bash
+  printf 'ark|%s' "$(ioreg -rd1 -c IOPlatformExpertDevice | awk -F'"' '/IOPlatformUUID/{print $4}')" | shasum -a 256 | cut -c1-12
+  ```
+
+- Windows (PowerShell):
+
+  ```powershell
+  $g=(Get-ItemProperty HKLM:\SOFTWARE\Microsoft\Cryptography).MachineGuid; -join (([Security.Cryptography.SHA256]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes("ark|$g")) | % { $_.ToString('x2') })[0..5])
+  ```
+
+When there is no machine id, `ark-server agent host-id` falls back to the MAC
+address of the primary physical network adapter (`ark|mac|<mac>`).
+
+Before changing files, read `GET /api/agent/v1/setup` with that header.
+`readiness.needs_location` lists the resources this device has no path for,
+and the capability `files` is blocked while a task space or repository the
+work needs has none.  Ask the user for the path on this device, then
+`POST /api/agent/v1/setup/location {resource, path_or_ref, host_label}`;
+this adds the device's path and keeps every confirmation.  Never guess a
+path.  If you used another id for this device before (for example a
+hand-made name), `POST /api/agent/v1/setup/alias {from: "<old id>"}` makes
+it an alias of the current one, so its paths keep matching.
 
 ## Read the interface first
 
@@ -170,6 +211,24 @@ returns counts and bytes instead of the ZIP. See
 [Markdown bundles](../guide/markdown-bundles.md#downloading-with-an-agent-token) for
 download commands and media access rules.
 
+## Watch for replies
+
+The user answers in ARK: comments, Send back or Accept on review nodes,
+decisions, assignments. Check for them between steps, at least every 10
+minutes during long jobs and before reporting done:
+
+```bash
+export ARK_URL=https://ark.example.org ARK_PROJECT=prj_... ARK_TOKEN=arka_...
+ark-server agent watch --once          # what is new since the last check
+ark-server agent watch &               # or keep it running: long-polls and prints updates
+```
+
+or call `GET /api/agent/v1/updates?since=<cursor>&wait=50` yourself. Treat new
+comments, Send back and decisions as instructions and reply in ARK
+(`POST /api/agent/v1/units/{uid}/comments` with `reply_to`). The kinds, the
+item format and what to do with each are in
+[Watch for replies](working-mode.md#watch-for-replies).
+
 ## Write tasks and links
 
 ```http
@@ -177,6 +236,10 @@ POST /api/agent/v1/units
 POST /api/agent/v1/units/{uid}
 POST /api/agent/v1/links
 POST /api/agent/v1/media
+GET /api/agent/v1/units/{uid}/links
+DELETE /api/agent/v1/links          {source, target, relation?}
+DELETE /api/agent/v1/links/{id}
+PATCH /api/agent/v1/links/{id}      {relation}
 ```
 
 Example:

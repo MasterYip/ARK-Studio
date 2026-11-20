@@ -2,11 +2,18 @@ import { h, clear } from "./dom.js";
 import { icon } from "./icons.js";
 
 let active = null;
+let returnTo = null;
+let openedAt = 0;
 
 export function closeContextMenu() {
   if (!active) return;
+  // A menu that had the keyboard focus gives it back to what opened it.
+  const back = returnTo;
+  returnTo = null;
+  const hadFocus = active.contains(document.activeElement);
   active.remove();
   active = null;
+  if (hadFocus && back?.isConnected) back.focus();
   document.removeEventListener("pointerdown", onOutside, true);
   document.removeEventListener("keydown", onKey, true);
   window.removeEventListener("resize", closeContextMenu);
@@ -20,14 +27,34 @@ function onOutside(event) {
 // Scrolling the page closes the menu; scrolling inside a long menu does not.
 function onScroll(event) {
   if (active && event.target instanceof Node && active.contains(event.target)) return;
+  // The right-click focused the item under the pointer, which may scroll it
+  // into view a moment later: that is not the user scrolling away.
+  if (performance.now() - openedAt < 200) return;
   closeContextMenu();
+}
+
+/** True while a context menu is open (dialogs leave its keys to it). */
+export function contextMenuOpen() {
+  return Boolean(active?.isConnected);
 }
 
 function onKey(event) {
   if (event.key === "Escape") {
     event.preventDefault();
+    // Only the menu closes, not the dialog it was opened from.
+    event.stopPropagation();
     closeContextMenu();
+    return;
   }
+  // Arrow keys walk the menu's own items (keyboard-opened menus).
+  if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key) || !active?.contains(document.activeElement)) return;
+  const items = [...active.querySelectorAll(":scope > button:not([disabled])")];
+  if (!items.length) return;
+  event.preventDefault();
+  const index = items.indexOf(document.activeElement);
+  const next = event.key === "Home" ? 0 : event.key === "End" ? items.length - 1
+    : (index + (event.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+  items[next].focus();
 }
 
 function itemButton(item, close) {
@@ -83,8 +110,10 @@ function buildMenu(items, onDone) {
   return menu;
 }
 
-export function openContextMenu({ x, y, items, className = "" }) {
+export function openContextMenu({ x, y, items, className = "", returnFocus = null }) {
   closeContextMenu();
+  returnTo = returnFocus;
+  openedAt = performance.now();
   const menu = buildMenu(items, closeContextMenu);
   if (className) menu.classList.add(...className.split(/\s+/).filter(Boolean));
   menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - 250))}px`;

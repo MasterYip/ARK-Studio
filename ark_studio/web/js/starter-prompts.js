@@ -5,11 +5,12 @@
 // (set up the environment; the human confirms in ARK; then how to use ARK)
 // and "team" (a new session loads the research context, summarises it and
 // coordinates the chosen work).  Both point the agent at ARK's documentation
-// (GET /api/agent/v1/docs) and carry standing rules for recording work in
-// ARK near the top, and the session block last.  Every line is one {en, zh}
-// pair (a plain string is the same in both languages), so both versions keep
-// the same steps and rules; tests/js/starter_prompts.test.mjs checks that
-// every API path, header, JSON field and {{placeholder}} of the English line
+// (GET /api/agent/v1/docs) and carry the core rules for recording work in
+// ARK (C1-C10 and a self-check) near the top, and the session block last.
+// Every line is one {en, zh} pair (a plain string is the same in both
+// languages), so both versions keep the same steps and rules;
+// tests/js/starter_prompts.test.mjs checks that every API path, header,
+// JSON field and {{placeholder}} of the English line
 // appears verbatim in the Chinese one.  {{name}} is filled at render time.
 // No DOM: onboarding.js renders, this module only builds text.
 import { sessionPromptBlock } from "./session-context-model.js";
@@ -65,46 +66,77 @@ export const START_SHARED = {
       zh: "文档：本提示词有意保持简短。先 GET {{url}}/api/agent/v1/docs（使用相同的 Authorization 和 X-ARK-Project 请求头）：它列出 ARK 的全部文档，并给出“从这里开始”的阅读顺序。需要时再用 GET /api/agent/v1/docs/<path> 读取相关文档（加上 ?section=<heading-slug> 只读一节）；文档比本提示词更详细的地方，以文档为准。如果 /api/agent/v1/docs 返回 404（旧版 ARK），改用 GET /api/agent/v1/interface 和 GET /api/agent/v1/skills。",
     },
   ],
+  // ARK defaults as composed by the server (internal/agentrules, rules r-5377d0b9).
+  // Used when the server cannot compose them (older ARK); agentrules_test.go
+  // checks that these lines are the catalog's default composition.
   rules: [
     {
-      en: "STANDING RULES: they hold for this whole session, for every task, without me reminding you. ARK is the record: work that is not in ARK did not happen. The working mode behind them, with examples: GET /api/agent/v1/docs/agents/working-mode.md.",
-      zh: "长期规则：它们在本次会话的全程、对每个任务都有效，不需要我提醒。ARK 就是记录：没有写进 ARK 的工作等于没有发生。这些规则背后的工作方式及示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
+      en: "CORE RULES (rules r-5377d0b9): they hold for this whole conversation, for every task. ARK is the record: work that is not in ARK did not happen. GET /api/agent/v1/rules returns the current rules; when you check updates and its version is not r-5377d0b9, follow the new rules. Details and examples: GET /api/agent/v1/docs/agents/working-mode.md.",
+      zh: "核心规则（规则 r-5377d0b9）：在整段对话中、对每个任务都有效。ARK 就是记录：没有写进 ARK 的工作等于没有发生。GET /api/agent/v1/rules 返回当前规则；查看 updates 时如果它的版本不是 r-5377d0b9，按新规则执行。细节和示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
     },
     {
-      en: "R1. Before starting work, GET /api/agent/v1/context and read the units the work concerns (GET /api/agent/v1/units/<ID>).",
-      zh: "R1. 开始工作之前，先 GET /api/agent/v1/context，并阅读与这项工作相关的节点（GET /api/agent/v1/units/<ID>）。",
+      en: "C1. Read before your first write: GET /api/agent/v1/context, GET /api/agent/v1/setup and the whole of working-mode.md (about 27 KB: read all of it, in parts if you must; do not cut it off with head or a byte limit).",
+      zh: "C1. 第一次写入之前先读：GET /api/agent/v1/context、GET /api/agent/v1/setup，以及完整的 working-mode.md（约 27 KB：全部读完，必要时分段读；不要用 head 或字节上限截断）。",
     },
     {
-      en: "R2. After every meaningful step (a decision, a result, a finished or blocked piece of work), write it to ARK straight away, without being asked. Do not save it all for the end.",
-      zh: "R2. 每完成一个有意义的步骤（一个决定、一个结果、一项完成或受阻的工作），立即写入 ARK，不要等我要求，也不要攒到最后再写。",
+      en: "C2. One request is one task unit (POST /api/agent/v1/units, type: \"task\") with the plan in its body (goal, my request verbatim, steps, evaluation protocol, decision gates, timeline), linked derived_from the question or parent task it comes from (POST /api/agent/v1/links). Status: open → active → review or blocked → done.",
+      zh: "C2. 一个请求就是一个任务节点（POST /api/agent/v1/units，type: \"task\"），计划写在正文里（目标、我的原话请求、步骤、评估协议、决策关卡、时间线），以 derived_from 关联到它所来自的问题或上级任务（POST /api/agent/v1/links）。状态：open → active → review 或 blocked → done。",
     },
     {
-      en: "R3. Plan in a node first: before work that takes more than a few steps, create (or update) its task unit (POST /api/agent/v1/units with type: \"task\") with the plan in its body: goal, my request verbatim, steps, evaluation protocol, decision gates, timeline. Link it to exactly one derived_from parent, the problem or parent task it comes from (POST /api/agent/v1/links). Keep its status honest (POST /api/agent/v1/units/<ID>: open → active → review or blocked → done); never leave finished work active.",
-      zh: "R3. 先在节点里做计划：凡是超过几步的工作，开始之前先创建（或更新）它的任务节点（POST /api/agent/v1/units，type: \"task\"），把计划写进正文：目标、我的原话请求、步骤、评估协议、决策关卡、时间线。把它关联到恰好一个 derived_from 父节点，即它所来自的问题或上级任务（POST /api/agent/v1/links）。如实更新它的状态（POST /api/agent/v1/units/<ID>：open → active → review 或 blocked → done）；已完成的工作不要停留在 active。",
+      en: "C3. Progress is a dated line in the task body (\"YYYY-MM-DD HH:MM UTC · what ran, problems, next step\"); re-read the body just before each write. Never post progress, plans or answers as comments.",
+      zh: "C3. 进展是任务正文里的一行带日期的记录（\"YYYY-MM-DD HH:MM UTC · 运行了什么、问题、下一步\"）；每次写入前重新读取正文。绝不要把进展、计划或答案发成评论。",
     },
     {
-      en: "R4. Progress: add a dated line to the task body for each step (\"YYYY-MM-DD HH:MM UTC · what ran, job IDs, problems, next step\"); re-read the body just before you write it, so you never overwrite someone else's edit. Keep resource paths (data, checkpoints, outputs) in a \"Resource paths\" section of the task and in the setup register (POST /api/agent/v1/setup/location; a new resource via POST /api/agent/v1/setup/resource needs my re-confirmation).",
-      zh: "R4. 进展：每一步都在任务正文里加一行带日期的记录（\"YYYY-MM-DD HH:MM UTC · 运行了什么、作业 ID、问题、下一步\"）；写入前重新读取正文，以免覆盖别人的修改。把资源路径（数据、检查点、输出）写在任务的 \"Resource paths\" 一节中，并登记到配置资源清单（POST /api/agent/v1/setup/location；通过 POST /api/agent/v1/setup/resource 新增的资源需要我重新确认）。",
+      en: "C4. Each result is its own unit (type \"experiment\" for a measurement or analysis, \"artifact\" for a document or audit), part_of and derived_from the task; attach its files to it (POST /api/agent/v1/media/upload for images, POST /api/agent/v1/assets/upload for other files, JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}) and embed figures as ![caption](media:<id>). A claim unit only for a statement results support or contradict. No other unit types, sub-tasks or relates_to links unless I ask.",
+      zh: "C4. 每个结果单独成一个节点（测量或分析用 type \"experiment\"，文档或审查用 \"artifact\"），part_of 并 derived_from 该任务；把文件附到它上面（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}），图以 ![caption](media:<id>) 嵌入。只有被结果支持或反驳的陈述才建论断节点。除非我要求，不要使用其他节点类型、子任务或 relates_to 关联。",
     },
     {
-      en: "R5. Results: publish each result (experiment, figure set, audit, progress check) as its own unit with status review, part_of and derived_from its task, so it shows in Needs you. Attach its figures and files to that unit itself (POST /api/agent/v1/media/upload for images, POST /api/agent/v1/assets/upload for other files, POST /api/agent/v1/media for links) and embed each figure beside the table row or claim it supports, as ![caption](media:<id>) with a plain caption.",
-      zh: "R5. 结果：每个结果（实验、一组图、审查、进度检查）都单独发布为一个状态为 review 的节点，以 part_of 和 derived_from 关联到它的任务，这样它会出现在“待你处理”中。把图表和文件附到这个节点本身（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，链接用 POST /api/agent/v1/media），并把每张图以 ![caption](media:<id>) 嵌在它所支撑的表格行或论断旁边，配上通俗的图注。",
+      en: "C5. Needs you: whenever you hand me something (a result, a plan to approve, versions to choose from), set that unit's status to review so it appears in Needs you; a question for me is a decision unit left open. Never leave it only in chat, a comment or a body, and never set a review unit to done yourself: I Accept or Send back in ARK.",
+      zh: "C5. 待你处理：每当你交给我东西（结果、待批准的计划、待选择的版本），把那个节点的状态设为 review，让它出现在“待你处理”中；需要我回答的问题是一个保持未完成的决定节点。不要只写在对话、评论或正文里，也绝不要自己把 review 节点设为 done：由我在 ARK 中接受或退回。",
     },
     {
-      en: "R6. Decisions: record every decision I make, in chat, in a comment or in an answer, as a decision unit (type: \"decision\", status: \"done\") part_of and derived_from its task, and link every other new unit to the plan or task it belongs to (POST /api/agent/v1/links). My comments on units are instructions: act on them, reply (POST /api/agent/v1/units/<ID>/comments with {\"body\": \"...\", \"reply_to\": <comment id>}) and resolve them.",
-      zh: "R6. 决定：我做出的每个决定（在对话中、评论里或回答问题时）都记录为一个决定节点（type: \"decision\", status: \"done\"），以 part_of 和 derived_from 关联到它的任务；其他每个新节点也要关联到它所属的计划或任务（POST /api/agent/v1/links）。我在节点上的评论就是指示：照做，回复（POST /api/agent/v1/units/<ID>/comments，请求体为 {\"body\": \"...\", \"reply_to\": <comment id>}），并将其标记为已解决。",
+      en: "C6. Every decision I make (approving a plan, choosing an option, setting a scope), in chat, a comment or an answer, is one decision unit (type: \"decision\", status: \"done\") part_of and derived_from the task.",
+      zh: "C6. 我做出的每个决定（批准计划、选择选项、确定范围），无论在对话、评论还是回答中，都是一个决定节点（type: \"decision\", status: \"done\"），part_of 并 derived_from 该任务。",
     },
     {
-      en: "R7. At the end of each work session, or when I stop you, post a short summary comment on the main task: done, open, blocked, next.",
-      zh: "R7. 每次工作结束时，或者我叫停你时，在主任务上发一条简短的总结评论：已完成、未完成、受阻、下一步。",
+      en: "C7. Between steps and before every reply to me, GET /api/agent/v1/updates (or `ark-server agent watch --once`): my comments, Send back and decisions are instructions. Act, reply (POST /api/agent/v1/units/<ID>/comments with {\"body\": \"...\", \"reply_to\": <comment id>}) and resolve them.",
+      zh: "C7. 在步骤之间以及每次回复我之前，GET /api/agent/v1/updates（或 `ark-server agent watch --once`）：我的评论、退回和决定都是指示。照做，回复（POST /api/agent/v1/units/<ID>/comments，请求体为 {\"body\": \"...\", \"reply_to\": <comment id>}）并标记为已解决。",
     },
     {
-      en: "R8. If ARK is unreachable or a write fails, tell me, keep a local note (ark-sync-notes.md in your working directory) of everything still to record, and write it to ARK as soon as ARK is reachable again.",
-      zh: "R8. 如果无法连接 ARK 或写入失败，告诉我，把所有待记录的内容写进本地笔记（工作目录中的 ark-sync-notes.md），ARK 恢复可用后立即写入 ARK。",
+      en: "C8. First thing after setup, start the ARK watcher in the background so that my replies in ARK wake you even while you are idle. Once, save the token in ~/.ark/tokens/<project id> (Windows: %USERPROFILE%\\.ark\\tokens\\<project id>) with your file-writing tool, not a shell command, readable only by you (chmod 600); never put the token on the watcher's command line. Claude Code: Bash with run_in_background and timeout 7200000: `curl -fsS <ARK URL>/api/agent/v1/watcher.sh | ARK_URL=<ARK URL> ARK_PROJECT=<project id> ARK_AGENT_LABEL=<your name> sh`; it exits when there is news, which wakes you: act on what it printed and start it again. Codex: the same command with ARK_WAKE=codex ARK_CODEX_THREAD=\"$CODEX_THREAD_ID\" also set for sh; it checks that it runs under your own Codex session, keeps running in the background and wakes you with `codex queue`. Windows: watcher.ps1 the same way. Never use a thread id or token you did not get from your own session. Details: GET /api/agent/v1/docs/agents/working-mode.md?section=start-a-watcher-that-wakes-you",
+      zh: "C8. 配置之后第一件事：在后台启动 ARK 监听，这样即使你处于空闲，我在 ARK 中的回复也会提醒你。先做一次：用你的文件写入工具（不要用 shell 命令）把令牌保存到 ~/.ark/tokens/<project id>（Windows：%USERPROFILE%\\.ark\\tokens\\<project id>；<project id> 是项目 id），只有你能读（chmod 600）；绝不要把令牌放进监听的命令行。Claude Code：用 Bash 的 run_in_background，timeout 设为 7200000，运行 `curl -fsS <ARK URL>/api/agent/v1/watcher.sh | ARK_URL=<ARK URL> ARK_PROJECT=<project id> ARK_AGENT_LABEL=<your name> sh`（<ARK URL> 是 ARK 地址，<your name> 是你的名字）；有新动态时它会结束，从而唤醒你：处理它打印的内容，然后再次启动它。Codex：同一条命令，给 sh 另外设置 ARK_WAKE=codex ARK_CODEX_THREAD=\"$CODEX_THREAD_ID\"；它会检查自己运行在你自己的 Codex 会话之下，在后台持续运行，并通过 `codex queue` 唤醒你。Windows 同样使用 watcher.ps1。绝不要使用不是从你自己的会话得到的线程 id 或令牌。细节见 GET /api/agent/v1/docs/agents/working-mode.md?section=start-a-watcher-that-wakes-you",
     },
     {
-      en: "R9. Store secrets only as references (env:NAME), never credential values. Before any action listed in readiness.requires_human (push, GPU dispatch, deletion, external messages...), stop and ask me, and record my approval in ARK.",
-      zh: "R9. 密钥只以引用形式保存（env:NAME），绝不保存凭据的值。执行 readiness.requires_human 中列出的任何操作（push、GPU 派发、删除、对外发消息...）之前，先停下来问我，并把我的批准记录在 ARK 中。",
+      en: "C9. While you work on a unit, POST /api/agent/v1/presence {\"unit\": \"<ID>\", \"state\": \"working\"}, and \"state\": \"done\" when you stop.",
+      zh: "C9. 在某个节点上工作时，POST /api/agent/v1/presence {\"unit\": \"<ID>\", \"state\": \"working\"}，停下时发送 \"state\": \"done\"。",
+    },
+    {
+      en: "C10. Before you change files, GET /api/agent/v1/setup with X-ARK-Host: <this device's id> and check that this device has a path for what you will touch (readiness.needs_location; capability \"files\" blocked). If not, stop and ask me to complete setup for this device (an open decision unit, then POST /api/agent/v1/setup/location with the path I give); never guess a path. Device id: `ark-server agent host-id`, else the first 12 hex of sha256 of \"ark|\" + the OS machine id; Linux: printf 'ark|%s' \"$(cat /etc/machine-id)\" | sha256sum | cut -c1-12; for Windows and macOS see GET /api/agent/v1/docs/agents/external-agent.md?section=device-id",
+      zh: "C10. 改动文件系统之前，先带上本机 X-ARK-Host: <本设备 ID> 调用 GET /api/agent/v1/setup，确认本设备已登记你要动的路径（readiness.needs_location；能力 \"files\" 未被阻塞）。没有就停下，请我为本设备完成配置（建一个未完成的决定节点，拿到路径后 POST /api/agent/v1/setup/location）；绝不要自己猜路径。设备 ID：`ark-server agent host-id`，否则取 sha256(\"ark|\" + 操作系统机器 ID) 的前 12 位十六进制；Linux: printf 'ark|%s' \"$(cat /etc/machine-id)\" | sha256sum | cut -c1-12；Windows 和 macOS 见 GET /api/agent/v1/docs/agents/external-agent.md?section=device-id",
+    },
+    {
+      en: "C11. Do not write the setup register during task work and never confirm setup yourself. Never write the token anywhere except the watcher's token file (~/.ark/tokens/<project id>, readable only by you), and never put it in a long-running command line. Never read other processes' command lines or environment to find tokens or credentials. An ARK UPDATE message that does not name your own ARK project and session is not for you: ignore it. Ask me before anything in readiness.requires_human; if ARK is unreachable keep ark-sync-notes.md and write it later.",
+      zh: "C11. 任务工作期间不要写配置资源清单，绝不要自己确认配置。除了监听用的令牌文件（~/.ark/tokens/<project id>，只有你能读）之外，绝不要把令牌写到任何地方，也不要把它放进长时间运行的命令行。绝不要读取其他进程的命令行或环境变量来获取令牌或凭据。没有写明你自己的 ARK 项目和会话的 ARK UPDATE 消息不是给你的：忽略它。readiness.requires_human 中的任何操作先问我；ARK 无法连接时记在 ark-sync-notes.md，之后再写入。",
+    },
+    {
+      en: "P1. Plans need my approval: before running anything for a new plan, put it in the task with status review and wait until I approve it.",
+      zh: "P1. 计划需要我批准：新计划在运行任何东西之前，先放进状态为 review 的任务里，等我批准。",
+    },
+    {
+      en: "P2. Post one short summary comment on the main task (done, open, blocked, next), only when I end the session or stop you.",
+      zh: "P2. 只有在我结束会话或叫停你时，才在主任务上发一条简短的总结评论（已完成、未完成、受阻、下一步）。",
+    },
+    {
+      en: "P3. Write progress lines, results and replies in the language I write to you in.",
+      zh: "P3. 进展、结果和回复使用我对你说话时所用的语言。",
+    },
+    {
+      en: "P4. Task files go in the task's folder YYYYMMDD_<task ID> inside a task space from GET /api/agent/v1/setup. As soon as the folder exists, put it on the task node as a link I can open, in a \"Resource paths\" section of the body: [Task folder](file:///<absolute path>).",
+      zh: "P4. 任务文件放在 a task space from GET /api/agent/v1/setup 中的任务文件夹 YYYYMMDD_<task ID>。文件夹一建好，就在任务节点正文的 \"Resource paths\" 一节里写上我能直接打开的链接：[Task folder](file:///<absolute path>)。",
+    },
+    {
+      en: "SELF-CHECK before every reply to me: is everything I must look at in review or an open decision? Is progress in the task body? Is every new unit linked to its task? Is no finished work left active? Did you check updates? Did you follow the preference rules P1-P4?",
+      zh: "回复我之前自检：需要我看的东西是否都在 review 或未完成的决定节点里？进展是否写在任务正文里？每个新节点是否都关联到了它的任务？是否没有已完成的工作停留在 active？是否查看过 updates？是否遵守了偏好规则 P1-P4？",
     },
   ],
 };
@@ -122,38 +154,38 @@ export const STARTER_PROMPTS = [
           zh: "第一步：用 ARK 的 setup 技能（GET /api/agent/v1/skills/setup）完成本 ARK 项目的配置。可能有多位成员运行配置；把我的资源和机器路径加入共享资源清单，并保留其他人登记的内容。",
         },
         {
-          en: "1. GET /api/agent/v1/setup (send \"X-ARK-Host: <stable id of this machine>\" if you are not on the ARK server). Read resources, policies.effective and readiness.needs_location. If the project layer and my layer are already confirmed and nothing changed, report that and go to NEXT. A recorded path is not proof of access: verify it before use. For resources in known_but_inaccessible, ask their contributor instead of recreating them.",
-          zh: "1. GET /api/agent/v1/setup（如果你不在 ARK 服务器上，发送 \"X-ARK-Host: <本机的稳定标识>\"）。读取 resources、policies.effective 和 readiness.needs_location。如果项目层和我的个人层都已确认且没有变化，告诉我这一点，然后进入“接下来”。已登记的路径不代表你能访问：使用前先验证。known_but_inaccessible 中的资源，去问登记它的成员，不要重新创建。",
+          en: "1. GET /api/agent/v1/setup (send \"X-ARK-Host: <this device's id>\", see the device id in the core rules). Read resources, policies.effective and readiness.needs_location. Setup is per person and per device: if the project layer and my layer are already confirmed and nothing changed, only register this device: for each key in readiness.needs_location ask me for its path on this device and add it with POST /api/agent/v1/setup/location (this keeps every confirmation), then report and go to NEXT. A recorded path is not proof of access: verify it before use. For resources in known_but_inaccessible, ask their contributor instead of recreating them.",
+          zh: "1. GET /api/agent/v1/setup（发送 \"X-ARK-Host: <本设备 ID>\"，设备 ID 的算法见核心规则）。读取 resources、policies.effective 和 readiness.needs_location。配置按人、按设备进行：如果项目层和我的个人层都已确认且没有变化，只需登记本设备：readiness.needs_location 中的每一项，问我它在本设备上的路径，用 POST /api/agent/v1/setup/location 添加（不会影响任何确认），然后告诉我并进入“接下来”。已登记的路径不代表你能访问：使用前先验证。known_but_inaccessible 中的资源，去问登记它的成员，不要重新创建。",
         },
         {
           en: "2. Before asking me anything, POST /api/agent/v1/setup/discover with the paths I gave (or paths: [] if none). Then ask only about missing, conflicting or changed details, one question at a time, in the areas scope, code, team, compute, commands and authority. I may answer, point you at a file or folder, say \"don't know\" (record an unknown and what it blocks) or say \"skip\" (add the area to profile.skipped). Do not crawl my disk; use only the paths I give you.",
           zh: "2. 向我提问之前，先用我给出的路径调用 POST /api/agent/v1/setup/discover（如果没有，用 paths: []）。然后只就 scope、code、team、compute、commands、authority 这几个方面中缺失、冲突或有变化的细节提问，每次只问一个。我可以直接回答、给你指一个文件或文件夹、说“不知道”（记为未知项，并注明它阻塞了什么），或说“跳过”（把该方面加入 profile.skipped）。不要遍历我的磁盘；只使用我给你的路径。",
         },
         {
-          en: "3. POST /api/agent/v1/setup/draft with {resources: [...], propose: true} for my layer; drafts merge by ID. Project-wide objective and policies use {layer: \"project\", profile: {...}, propose: true}. Add this machine's location to an existing resource with POST /api/agent/v1/setup/location. Never delete another member's records.",
-          zh: "3. 对我的个人层，POST /api/agent/v1/setup/draft，请求体为 {resources: [...], propose: true}；草稿按 ID 合并。项目级的目标和策略使用 {layer: \"project\", profile: {...}, propose: true}。给已有资源添加本机位置用 POST /api/agent/v1/setup/location。绝不要删除其他成员的记录。",
+          en: "3. POST /api/agent/v1/setup/draft with {resources: [...], propose: true} for my layer; drafts merge by ID. Project-wide objective and policies use {layer: \"project\", profile: {...}, propose: true}. Add this machine's location to an existing resource with POST /api/agent/v1/setup/location. propose: true sends every changed layer in one call; do not propose layer by layer. Never delete another member's records.",
+          zh: "3. 对我的个人层，POST /api/agent/v1/setup/draft，请求体为 {resources: [...], propose: true}；草稿按 ID 合并。项目级的目标和策略使用 {layer: \"project\", profile: {...}, propose: true}。给已有资源添加本机位置用 POST /api/agent/v1/setup/location。propose: true 会在一次调用中提交所有有改动的层；不要逐层提交。绝不要删除其他成员的记录。",
         },
         {
-          en: "4. Show me the summaries and digests, then wait while I confirm them in ARK (Home → Review & confirm: project layer, then my layer). Only a human confirms: never confirm yourself and do not continue until I have confirmed. A project admin confirms the project layer.",
-          zh: "4. 向我展示摘要和 digest，然后等待我在 ARK 中确认（首页 → 查看并确认：先项目层，再我的个人层）。只有人能确认：绝不要自己确认，在我确认之前不要继续。项目层由项目管理员确认。",
+          en: "4. Show me the summaries and the digests listed in pending, then wait while I confirm them in ARK (Home → Review changes; one Confirm covers the project layer and my layer). Only a human confirms: never confirm yourself and do not continue until I have confirmed. A project admin confirms the project layer.",
+          zh: "4. 向我展示摘要和 pending 中列出的 digest，然后等待我在 ARK 中确认（首页 → 查看更改；一次确认同时覆盖项目层和我的个人层）。只有人能确认：绝不要自己确认，在我确认之前不要继续。项目层由项目管理员确认。",
         },
         {
           en: "5. After I confirm, POST /api/agent/v1/setup/verify, then tell me what failed and how to fix it, what is now allowed or blocked, and which resources still need a location on this machine.",
           zh: "5. 我确认之后，POST /api/agent/v1/setup/verify，然后告诉我哪些检查失败、如何修复，现在哪些操作被允许或被阻止，以及哪些资源仍需要登记本机位置。",
         },
         {
-          en: "During setup, do not probe GPU servers, run project commands or change repositories.",
-          zh: "配置期间不要探测 GPU 服务器、不要运行项目命令，也不要修改仓库。",
+          en: "During setup, do not probe GPU servers, run project commands or change repositories. Setup is recorded in the setup register only: create no units (no task, decision or result) during setup; the core rules apply from the first task after setup.",
+          zh: "配置期间不要探测 GPU 服务器、不要运行项目命令，也不要修改仓库。配置只记录在配置资源清单中：配置期间不要创建任何节点（任务、决定或结果都不要）；核心规则从配置之后的第一个任务开始适用。",
         },
       ],
       next: [
         {
-          en: "NEXT: in a few lines, explain to me how to use ARK for developing and managing this project: ARK keeps the plan, tasks, evidence and decisions (Home, Research, Map, Execute); you do the work and record it under the standing rules; in a new session, the Home prompt \"Start / continue research team\" loads this context again. Then offer me these options, each with the example request I can say, and wait for my choice:",
-          zh: "接下来：用几句话向我说明如何用 ARK 开发和管理这个项目：ARK 保存计划、任务、证据和决定（首页、研究、地图、执行）；你负责干活，并按长期规则记录；在新会话中，首页的“启动 / 继续研究团队”提示词会重新加载这些上下文。然后把下面这些选项连同我可以说的示例请求一起给我，等我选择：",
+          en: "NEXT: in a few lines, explain to me how to use ARK for developing and managing this project: ARK keeps the plan, tasks, evidence and decisions (Home, Research, Map, Execute); you do the work and record it under the core rules; in a new session, the Home prompt \"Start / continue research team\" loads this context again. Then offer me these options, each with the example request I can say, and wait for my choice:",
+          zh: "接下来：用几句话向我说明如何用 ARK 开发和管理这个项目：ARK 保存计划、任务、证据和决定（首页、研究、地图、执行）；你负责干活，并按核心规则记录；在新会话中，首页的“启动 / 继续研究团队”提示词会重新加载这些上下文。然后把下面这些选项连同我可以说的示例请求一起给我，等我选择：",
         },
         {
-          en: "- \"Plan this idea: <idea, paper or link>\": research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 tasks each with one measurable outcome; show me the plan before creating units and ask before creating more than 10.",
-          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、2–3 个可检验的假设、需要证据的论断以及什么证据能判定它们、最初的 3–5 个任务（每个有一个可衡量的结果）；创建节点前先把计划给我看，要创建超过 10 个节点时先问我。",
+          en: "- \"Plan this idea: <idea, paper or link>\": research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 tasks, written into one task unit.",
+          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、2–3 个可检验的假设、需要证据的论断以及什么证据能判定它们、最初的 3–5 个任务，写进一个任务节点。",
         },
         {
           en: "- \"Start a research team on <objective>\": follow the agent-team skill (GET /api/agent/v1/skills/agent-team): bounded tasks with an owner, an independent reviewer and a measurable outcome, work in .worktrees/<TASK-ID>, gates cheapest-first.",
@@ -188,8 +220,8 @@ export const STARTER_PROMPTS = [
           zh: "1. GET /api/agent/v1/context：研究目标、未完成和受阻的任务、最近的动态和决定。",
         },
         {
-          en: "2. GET /api/agent/v1/setup: the confirmed setup profile (repositories, commands, policies.effective, readiness). If setup is not confirmed (readiness.ready is false), tell me what is missing and suggest the Home prompt \"Set up this environment\"; do not start task work.",
-          zh: "2. GET /api/agent/v1/setup：已确认的配置档案（仓库、命令、policies.effective、readiness）。如果配置尚未确认（readiness.ready 为 false），告诉我缺什么，并建议我使用首页的“配置当前环境”提示词；不要开始任务工作。",
+          en: "2. GET /api/agent/v1/setup with X-ARK-Host: <this device's id> (see the core rules): the confirmed setup profile (repositories, commands, policies.effective, readiness). If setup is not confirmed (readiness.ready is false), tell me what is missing and suggest the Home prompt \"Set up this environment\"; do not start task work.",
+          zh: "2. 带上 X-ARK-Host: <本设备 ID>（见核心规则）调用 GET /api/agent/v1/setup：已确认的配置档案（仓库、命令、policies.effective、readiness）。如果配置尚未确认（readiness.ready 为 false），告诉我缺什么，并建议我使用首页的“配置当前环境”提示词；不要开始任务工作。",
         },
         {
           en: "3. Read the active, open and blocked tasks and the units they link to (GET /api/agent/v1/units/<ID>), with their latest comments (GET /api/agent/v1/units/<ID>/comments).",
@@ -218,8 +250,8 @@ export const STARTER_PROMPTS = [
           zh: "- “继续 <任务 ID>”：阅读该任务、它的评论和证据，然后从最后记录的下一步继续。",
         },
         {
-          en: "- \"Plan this idea: <idea, paper or link>\": research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 tasks; show me the plan before creating units.",
-          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、2–3 个可检验的假设、需要证据的论断以及什么证据能判定它们、最初的 3–5 个任务；创建节点前先把计划给我看。",
+          en: "- \"Plan this idea: <idea, paper or link>\": research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 tasks, written into one task unit.",
+          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、2–3 个可检验的假设、需要证据的论断以及什么证据能判定它们、最初的 3–5 个任务，写进一个任务节点。",
         },
         {
           en: "- \"Give me a status check\": refresh the summary above; change nothing.",
@@ -230,8 +262,8 @@ export const STARTER_PROMPTS = [
           zh: "- “评审 <任务 ID> 的结果”：以独立评审者的身份，对照可衡量的结果检查它的证据，并把结论记录为评论。",
         },
         {
-          en: "On my choice, act as the coordinator and follow the agent-team skill. If team execution is unavailable here, say so instead of pretending workers are running.",
-          zh: "我选择后，由你担任协调者，按 agent-team 技能执行。如果这里无法以团队方式执行，直接说明，不要假装 worker 正在运行。",
+          en: "If I choose \"Start a research team\", act as the coordinator and follow the agent-team skill; if team execution is unavailable here, say so instead of pretending workers are running. For the other options, do the work yourself under the core rules, without agent-team manifests or briefs.",
+          zh: "如果我选择“启动研究团队”，由你担任协调者，按 agent-team 技能执行；如果这里无法以团队方式执行，直接说明，不要假装 worker 正在运行。其他选项由你按核心规则亲自完成，不使用 agent-team 任务清单或 brief。",
         },
       ],
     },
@@ -248,17 +280,26 @@ export function starterPromptVars(project, { url = "", token = "" } = {}) {
   };
 }
 
-/** One Home starter prompt; the standing rules come first, the session block last. */
-export function starterPromptText(id, project, { url = "", token = "", sessionId = "", lang = "en" } = {}) {
+/** The rule lines for one language: the server's composition of this
+ * project's and person's rule settings (GET /api/agent-rules `effective`)
+ * when given, else ARK's defaults. */
+export function ruleLines(rules, lang) {
+  const composed = rules?.lines?.[lang];
+  if (Array.isArray(composed) && composed.length) return composed.map(String);
+  return START_SHARED.rules.map((line) => pickLine(line, lang));
+}
+
+/** One Home starter prompt; the core rules come first, the session block last. */
+export function starterPromptText(id, project, { url = "", token = "", sessionId = "", lang = "en", rules = null } = {}) {
   const item = STARTER_PROMPTS.find((p) => p.id === id);
   if (!item) return "";
   const S = START_SHARED;
   const vars = starterPromptVars(project, { url, token });
   const blocks = [
-    [...S.intro, ...(token ? S.token : S.noToken), ...S.docs],
-    S.rules,
-    ...Object.values(item.sections),
-  ].map((lines) => renderLines(lines, lang, vars));
+    renderLines([...S.intro, ...(token ? S.token : S.noToken), ...S.docs], lang, vars),
+    ruleLines(rules, lang).join("\n"),
+    ...Object.values(item.sections).map((lines) => renderLines(lines, lang, vars)),
+  ];
   if (sessionId) {
     blocks.push(sessionPromptBlock({
       sessionId, url, projectId: project?.id || "", lang,

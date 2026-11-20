@@ -114,6 +114,10 @@ func (c *reqCtx) guardProjectScope() error {
 	if globalAPIPaths[path] {
 		return nil
 	}
+	// Go-only desktop-link routes check their own access (routes_desktop.go).
+	if path == desktopLinkPath || path == mobile.DesktopProjectsPath {
+		return nil
+	}
 	for _, p := range globalAPIPrefixes {
 		if strings.HasPrefix(path, p) {
 			return nil
@@ -334,6 +338,9 @@ func (c *reqCtx) require(level string) (*project.Project, error) {
 	}
 	if p != nil {
 		if err := p.Store.BackfillCreatorAssignees(c.ctx, c.accountName); err != nil {
+			return nil, err
+		}
+		if err := c.app.adoptLegacyChat(c.ctx, p); err != nil {
 			return nil, err
 		}
 	}

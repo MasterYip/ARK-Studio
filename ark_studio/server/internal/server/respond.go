@@ -25,6 +25,15 @@ const (
 		"img-src data: blob:; media-src data: blob:; font-src data:; " +
 		"connect-src 'none'; form-action 'none'; base-uri 'none'; " +
 		"frame-ancestors 'self'"
+	// PluginCSP is the Go-only header of web/plugin-frame.html, the host page
+	// of user view plugins (T-0025, docs/development/plugin-api.md): an
+	// opaque origin even when opened top-level, inline scripts only (no eval,
+	// no external script), no network, no forms, no nested frames or workers.
+	PluginCSP = "sandbox allow-scripts; default-src 'none'; " +
+		"script-src 'unsafe-inline'; style-src 'unsafe-inline'; " +
+		"img-src data: blob:; media-src data: blob:; font-src data:; " +
+		"connect-src 'none'; frame-src 'none'; worker-src 'none'; " +
+		"form-action 'none'; base-uri 'none'; frame-ancestors 'self'"
 	jsonType = api.JSONType
 	// ServerHeader replaces "ARKStudio/2.0 Python/3.x" (not compared).
 	ServerHeader = "ARKStudio/2.0 Go"

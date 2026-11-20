@@ -241,7 +241,8 @@ function row(ctx, item, reload) {
       more));
 }
 
-export function sessionLibraryPanel(ctx) {
+// `skip(item)`: rows already shown elsewhere (an ARK session in the list).
+export function sessionLibraryPanel(ctx, { skip = null } = {}) {
   let data = null;
   let source = "all";
   let query = "";
@@ -299,7 +300,7 @@ export function sessionLibraryPanel(ctx) {
 
   function paint() {
     clear(list);
-    const items = filterContexts(data?.sessions || [], { source, query });
+    const items = filterContexts(data?.sessions || [], { source, query }).filter((item) => !skip?.(item));
     count.textContent = String((data?.sessions || []).length);
     if (!data) { list.appendChild(h("p", { class: "muted" }, t("ctx.loading"))); return; }
     if (!items.length) {

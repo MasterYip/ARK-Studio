@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,9 +64,191 @@ func statusChange(detail *pyjson.Object) (any, any) {
 
 func isoDay(t time.Time) string { return t.Format("2006-01-02") }
 
-// ProjectOverview is overview.project_overview.  storeMS is the elapsed
+// GraphFilter selects the nodes of the overview's graph (Home's header
+// graph): the Limit most recently updated live units (0 = all) of the given
+// types and statuses (empty = any), updated on or after Since (an ISO date,
+// "" = any time).  Filter is reported back as graph.filter.
+type GraphFilter struct {
+	Limit    int64
+	Types    []string
+	Statuses []string
+	Since    string
+	Filter   *pyjson.Object
+}
+
+func (f GraphFilter) keeps(r sqlitedb.Row) bool {
+	if len(f.Types) > 0 && !containsString(f.Types, r.Str("type")) {
+		return false
+	}
+	if len(f.Statuses) > 0 && !containsString(f.Statuses, r.Str("status")) {
+		return false
+	}
+	return f.Since == "" || r.Str("updated_at") >= f.Since
+}
+
+// linksFetch returns the link rows touching the given unit ids (every link
+// when ids is nil).
+type linksFetch func(ids []int64) ([]sqlitedb.Row, error)
+
+// overviewLinkScan is how many nodes the graph may hold before reading every
+// link is cheaper than looking up the links of each.
+const overviewLinkScan = 4000
+
+// overviewGraph is the graph member of the overview: the filtered nodes,
+// newest first, and the links among them.  degree counts every live link.
+// A limited graph reads only the links of its nodes: a 30k-node project
+// no longer scans every link for a 500-node header.
+func overviewGraph(live []sqlitedb.Row, fetch linksFetch, filter GraphFilter) (*pyjson.Object, error) {
+	liveIDs := make(map[int64]bool, len(live))
+	for _, r := range live {
+		liveIDs[r.Int("id")] = true
+	}
+	picked := make([]sqlitedb.Row, 0, len(live))
+	for _, r := range live {
+		if filter.keeps(r) {
+			picked = append(picked, r)
+		}
+	}
+	sort.SliceStable(picked, func(i, j int) bool {
+		a, b := picked[i].Str("updated_at"), picked[j].Str("updated_at")
+		if a != b {
+			return a > b
+		}
+		return picked[i].Int("id") > picked[j].Int("id")
+	})
+	matched := int64(len(picked))
+	if filter.Limit > 0 && int64(len(picked)) > filter.Limit {
+		picked = picked[:filter.Limit]
+	}
+	shown := make(map[int64]bool, len(picked))
+	ids := make([]int64, len(picked))
+	for i, r := range picked {
+		shown[r.Int("id")] = true
+		ids[i] = r.Int("id")
+	}
+	var links []sqlitedb.Row
+	var err error
+	if len(picked) > overviewLinkScan {
+		links, err = fetch(nil)
+	} else {
+		links, err = fetch(ids)
+	}
+	if err != nil {
+		return nil, err
+	}
+	degree := map[int64]int64{}
+	edges := []any{}
+	seen := map[int64]bool{}
+	for _, l := range links {
+		if id, ok := l.Get("id").(int64); ok {
+			if seen[id] {
+				continue
+			}
+			seen[id] = true
+		}
+		a, b := l.Int("source_id"), l.Int("target_id")
+		if !liveIDs[a] || !liveIDs[b] {
+			continue
+		}
+		degree[a]++
+		degree[b]++
+		if shown[a] && shown[b] {
+			edges = append(edges, pyjson.NewObject("source", a, "target", b, "relation", l.Get("relation")))
+		}
+	}
+	nodes := make([]any, len(picked))
+	for i, r := range picked {
+		nodes[i] = pyjson.NewObject("id", r.Get("id"), "type", r.Get("type"), "status", r.Get("status"),
+			"degree", degree[r.Int("id")])
+	}
+	filterObj := filter.Filter
+	if filterObj == nil {
+		filterObj = pyjson.NewObject()
+	}
+	return pyjson.NewObject("nodes", nodes, "edges", edges, "total", int64(len(live)), "matched", matched,
+		"limit", filter.Limit, "filter", filterObj), nil
+}
+
+// overviewLinks reads link rows for overviewGraph, in id order.
+func overviewLinks(ctx context.Context, q sqlitedb.Querier) linksFetch {
+	return func(ids []int64) ([]sqlitedb.Row, error) {
+		if ids == nil {
+			return sqlitedb.Query(ctx, q, "SELECT id, source_id, target_id, relation FROM unit_links ORDER BY id")
+		}
+		var out []sqlitedb.Row
+		for off := 0; off < len(ids); off += 400 {
+			batch := sqlitedb.Args(ids[off:min(off+400, len(ids))])
+			marks := sqlitedb.Marks(len(batch))
+			rows, err := sqlitedb.Query(ctx, q, "SELECT id, source_id, target_id, relation FROM unit_links WHERE source_id IN ("+marks+
+				") UNION SELECT id, source_id, target_id, relation FROM unit_links WHERE target_id IN ("+marks+")",
+				append(append([]any{}, batch...), batch...)...)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, rows...)
+		}
+		sort.SliceStable(out, func(i, j int) bool { return out[i].Int("id") < out[j].Int("id") })
+		return out, nil
+	}
+}
+
+// Overview cache: the overview of the same project revision, day, members
+// and graph filter is served again (Home is opened, revisited and
+// prefetched far more often than the project changes).
+const overviewCacheSize = 4
+
+type overviewEntry struct {
+	key  string
+	data *pyjson.Object
+}
+
+func (s *Store) cachedOverview(key string) *pyjson.Object {
+	s.ovMu.Lock()
+	defer s.ovMu.Unlock()
+	for _, e := range s.ovCache {
+		if e.key == key {
+			return e.data
+		}
+	}
+	return nil
+}
+
+func (s *Store) keepOverview(key string, data *pyjson.Object) {
+	s.ovMu.Lock()
+	defer s.ovMu.Unlock()
+	s.ovCache = append([]overviewEntry{{key, data}}, s.ovCache...)
+	if len(s.ovCache) > overviewCacheSize {
+		s.ovCache = s.ovCache[:overviewCacheSize]
+	}
+}
+
+func (f GraphFilter) key() string {
+	return strings.Join([]string{strconv.FormatInt(f.Limit, 10), strings.Join(f.Types, ","), strings.Join(f.Statuses, ","), f.Since}, "|")
+}
+
+// ProjectOverview is the overview (projectOverview), from the cache when
+// nothing it reads changed.  The reply is a copy the caller may extend.
+func (s *Store) ProjectOverview(ctx context.Context, members []string, graph GraphFilter) (*pyjson.Object, error) {
+	started := time.Now()
+	rev, err := s.Revision(ctx)
+	if err != nil {
+		return nil, err
+	}
+	key := strings.Join([]string{rev, clock.Today(), strings.Join(members, ","), graph.key()}, "|")
+	if data := s.cachedOverview(key); data != nil {
+		return data.Copy().Set("store_ms", math.Round(float64(time.Since(started).Microseconds())/10)/100), nil
+	}
+	data, err := s.projectOverview(ctx, members, graph)
+	if err != nil {
+		return nil, err
+	}
+	s.keepOverview(key, data)
+	return data.Copy(), nil
+}
+
+// projectOverview is overview.project_overview.  storeMS is the elapsed
 // time (reported, never compared).
-func (s *Store) ProjectOverview(ctx context.Context, members []string) (*pyjson.Object, error) {
+func (s *Store) projectOverview(ctx context.Context, members []string, graph GraphFilter) (*pyjson.Object, error) {
 	started := time.Now()
 	now := clock.Now().UTC()
 	todayD := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
@@ -80,32 +263,13 @@ func (s *Store) ProjectOverview(ctx context.Context, members []string) (*pyjson.
 		if err != nil {
 			return err
 		}
-		live, err := sqlitedb.Query(ctx, q, "SELECT id, type, status, end_at, assignee FROM units WHERE archived=0")
+		live, err := sqlitedb.Query(ctx, q, "SELECT id, type, status, end_at, assignee, updated_at FROM units WHERE archived=0")
 		if err != nil {
 			return err
 		}
-		liveIDs := map[int64]bool{}
-		for _, r := range live {
-			liveIDs[r.Int("id")] = true
-		}
-		links, err := sqlitedb.Query(ctx, q, "SELECT source_id, target_id, relation FROM unit_links")
+		graphData, err := overviewGraph(live, overviewLinks(ctx, q), graph)
 		if err != nil {
 			return err
-		}
-		degree := map[int64]int64{}
-		edges := []any{}
-		for _, l := range links {
-			a, b := l.Int("source_id"), l.Int("target_id")
-			if liveIDs[a] && liveIDs[b] {
-				edges = append(edges, pyjson.NewObject("source", a, "target", b, "relation", l.Get("relation")))
-				degree[a]++
-				degree[b]++
-			}
-		}
-		nodes := make([]any, len(live))
-		for i, r := range live {
-			nodes[i] = pyjson.NewObject("id", r.Get("id"), "type", r.Get("type"), "status", r.Get("status"),
-				"degree", degree[r.Int("id")])
 		}
 		tagRows, err := sqlitedb.Query(ctx, q, "SELECT unit_id FROM unit_tags WHERE tag='status:blocked'")
 		if err != nil {
@@ -289,6 +453,10 @@ func (s *Store) ProjectOverview(ctx context.Context, members []string) (*pyjson.
 		if err != nil {
 			return err
 		}
+		agents, err := agentWriters(ctx, q, isoDay(todayD.AddDate(0, 0, -ovAgentDays)))
+		if err != nil {
+			return err
+		}
 
 		isBlocked := func(uid int64, status string) bool {
 			return status == "blocked" || (blockedTag[uid] && !isClosed(status))
@@ -335,6 +503,11 @@ func (s *Store) ProjectOverview(ctx context.Context, members []string) (*pyjson.
 		}
 		for _, r := range live {
 			uid, typeName, status := r.Int("id"), r.Str("type"), r.Str("status")
+			if typeName == "topic" {
+				// Go-only: topics are containers, not work.  The built-in
+				// ones (status active) made an empty project read "Active 4".
+				continue
+			}
 			endAt := r.Str("end_at")
 			open := !isClosed(status)
 			overdue := open && endAt != "" && endAt < today
@@ -398,7 +571,7 @@ func (s *Store) ProjectOverview(ctx context.Context, members []string) (*pyjson.
 		}
 		for _, uid := range sortedKeys(archivedThen) {
 			row, ok := archivedRows[uid]
-			if ok && !archivedThen[uid] {
+			if ok && !archivedThen[uid] && row.Str("type") != "topic" {
 				if p, has := prior[uid]; has {
 					bumpPrev(uid, p, row.Get("end_at"), true)
 				} else {
@@ -536,18 +709,44 @@ func (s *Store) ProjectOverview(ctx context.Context, members []string) (*pyjson.
 			}
 			blockedItems = append(blockedItems, b.Set("blockers", list))
 		}
-		out = pyjson.NewObject("today", today, "graph", pyjson.NewObject("nodes", nodes, "edges", edges),
+		out = pyjson.NewObject("today", today, "graph", graphData,
 			"kpis", kpis, "days", days, "stages", stageList, "members", memberRows,
 			"unassigned", pyjson.NewObject("open", unassigned.open, "active", unassigned.active,
 				"review", unassigned.review, "blocked", unassigned.blocked, "overdue", unassigned.overdue),
 			"due", pyjson.NewObject("overdue", briefs(overdueRows), "overdue_total", overdueTotal,
 				"soon", briefs(soonRows), "soon_total", soonTotal),
 			"blocked", pyjson.NewObject("total", blockedTotal, "items", blockedItems),
-			"research", research, "activity", activity,
+			"research", research, "activity", activity, "agents", agents,
 			"store_ms", math.Round(float64(time.Since(started).Microseconds())/10)/100)
 		return nil
 	})
 	return out, err
+}
+
+// ovAgentDays is how far back "agents" counts writes per agent.
+const ovAgentDays = 30
+
+// agentWriters is the Go-only "agents" member of the overview: which agents
+// (activity actors "agent:...", i.e. agent API tokens and agent sessions)
+// wrote to this project.  "first_at" is the first agent write ever (null
+// before any); "recent" lists the agents that wrote since `since`, latest
+// first, with their number of writes in that window.  Home shows it as the
+// agent connection state and in the Running card.
+func agentWriters(ctx context.Context, q sqlitedb.Querier, since string) (*pyjson.Object, error) {
+	first, _, err := sqlitedb.QueryOne(ctx, q, "SELECT at FROM activity WHERE actor LIKE 'agent:%' ORDER BY id LIMIT 1")
+	if err != nil {
+		return nil, err
+	}
+	rows, err := sqlitedb.Query(ctx, q, "SELECT actor, COUNT(*) n, MAX(at) last FROM activity "+
+		"WHERE actor LIKE 'agent:%' AND at >= ? GROUP BY actor ORDER BY last DESC, actor LIMIT 8", since)
+	if err != nil {
+		return nil, err
+	}
+	recent := []any{}
+	for _, r := range rows {
+		recent = append(recent, pyjson.NewObject("actor", r.Get("actor"), "writes", r.Get("n"), "last_at", r.Get("last")))
+	}
+	return pyjson.NewObject("first_at", first.Get("at"), "recent", recent, "days", int64(ovAgentDays)), nil
 }
 
 func b2i(b bool) int64 {

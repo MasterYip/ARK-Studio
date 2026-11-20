@@ -2,7 +2,7 @@ import { h, clear, emptyState, typeColor, statusColor } from "../dom.js";
 import { t, typeLabel, statusLabel, impLabel, locale } from "../i18n.js";
 import { icon } from "../icons.js";
 import { GanttView } from "../gantt.js";
-import { attachGraphHeight, unitCard, viewToggle } from "../components.js";
+import { attachGraphHeight, newTypeLabel, unitCard, viewToggle } from "../components.js";
 import { displayName } from "../users.js";
 import {
   MAP_LIST_SORTS, MAP_LIST_GROUPS, normalizeMapListPrefs, defaultMapListDirection,
@@ -16,23 +16,19 @@ export function renderMap(host, ctx) {
   const page = h("div", { class: "page" },
     h("div", { class: "page-head" },
       h("div", null,
-        h("div", { class: "eyebrow" }, `${t("nav.map")} · ${t("stage.evidence")}`),
         h("h1", { class: "page-title" }, t("map.title")),
         h("p", { class: "page-sub" }, t("map.subtitle"))),
       h("div", { class: "head-actions" },
-        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("sparkles", "sm"), t("assistant.title")),
-        h("button", { class: "primary-btn", onclick: () => ctx.openCreate({ type: "claim" }) }, icon("plus", "sm"), t("action.new")))),
+        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")),
+        h("button", { class: "primary-btn", onclick: () => ctx.openCreate({ type: "claim" }) }, icon("plus", "sm"), newTypeLabel("claim")))),
     h("div", { class: "toolbar" },
       viewToggle(S.view, [["graph", t("view.graph"), "graph"], ["list", t("view.list"), "list"], ["gantt", t("view.gantt"), "gantt"]], (v) => {
         if (v === "gantt") ctx.setView("gantt"); else ctx.setView(v);
       }),
       h("span", { class: "count" }, `${S.total ?? S.units.length} ${t("overview.stats.total")}`),
       h("div", { class: "spacer" }),
-      h("label", { class: "row", style: { fontSize: "11px", color: "var(--sub)", gap: "5px" } },
-        h("input", {
-          type: "checkbox", checked: S.filters.context ? true : undefined,
-          onchange: (e) => ctx.setFilter("context", e.target.checked),
-        }), t("map.context")),
+      // "Show linked context" lives in Filters › Graph; the toolbar only says it is on.
+      S.filters.context ? h("span", { class: "pill", title: t("map.context") }, t("map.context_on")) : null,
       h("span", { class: "muted", style: { fontSize: "10px" } }, t("map.trace_hint"))),
     S.view === "graph" ? graphBody(ctx, S) :
       S.view === "gantt" ? ganttBody(ctx, S) : listBody(ctx, S));

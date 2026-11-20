@@ -13,6 +13,9 @@ export const DEFAULT_CAP_BYTES = 200 * 1024 * 1024;
 export const AGGREGATE_FRESH_MS = 60_000;
 // Reads this soon after the tab's own write wait for the server.
 export const OWN_WRITE_WAIT_MS = 10_000;
+// "Sync now": entries checked before the click are read from the server
+// (a conditional request) during this window instead of from the cache.
+export const SYNC_NOW_WAIT_MS = 30_000;
 
 // Cacheable GET routes.  Everything else (chat, files, terminals output,
 // org, auth, assistant config, search) always goes to the network.
@@ -105,12 +108,14 @@ export function unitRef(route) {
 /**
  * How to serve a cached entry: "fresh" (no request), "swr" (render it, then
  * revalidate in the background) or "network" (wait for a conditional request).
- * ``state``: { live, liveSince, ownWriteAt, now }.
+ * ``state``: { live, liveSince, ownWriteAt, syncRequestedAt, now }.
  */
 export function servePolicy(entry, rule, state = {}, { fresh = false } = {}) {
   if (!entry) return "network";
   if (fresh) return "network";
   const now = state.now ?? Date.now();
+  const requested = state.syncRequestedAt || 0;
+  if (requested > (entry.validatedAt || 0) && now - requested < SYNC_NOW_WAIT_MS) return "network";
   // This tab wrote since the entry was checked: a read right after the write
   // shows its effect (wait for the server); later reads render the cache.
   if ((state.ownWriteAt || 0) > (entry.validatedAt || 0)) {

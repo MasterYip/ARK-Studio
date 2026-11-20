@@ -53,7 +53,9 @@ type Env struct {
 	AgentToken  string
 	BaseURL     string
 	HistoryUser *string
-	Who         store.Who
+	// HistoryLegacy adds the pre-v10 rows (empty user): local mode only.
+	HistoryLegacy bool
+	Who           store.Who
 }
 
 var typeWords = map[string]string{

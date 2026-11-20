@@ -45,6 +45,16 @@ html[data-theme="dark"] .login-card { box-shadow: 0 12px 48px #0003; }
 .login-error strong { display: block; }
 .login-pairing { color: var(--entry-accent); }
 .login-pairing.is-ok { color: #51a38e; }
+/* Invite links (#/join/<token>): who invited you, then sign in or create an account. */
+.login-invite { border: 1px solid var(--entry-line); border-radius: 5px; margin: 0 0 18px; padding: 12px; font-size: 0.8125rem; overflow-wrap: anywhere; }
+.login-invite.is-error { color: #d04e59; background: color-mix(in srgb,#d04e59 7%,transparent); }
+.login-invite-title { font-weight: 650; margin: 0 0 4px; }
+.login-invite-meta { color: var(--entry-mute); font-size: 0.75rem; }
+.login-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 3px; margin: 0 0 18px; border: 1px solid var(--entry-line); border-radius: 6px; }
+.login-switch button { height: 32px; border: 0; border-radius: 4px; background: transparent; color: var(--entry-mute); font: 600 0.8125rem system-ui,sans-serif; cursor: pointer; }
+.login-switch button[aria-pressed="true"] { background: var(--entry-bg); color: var(--entry-ink); box-shadow: 0 1px 3px #0000001a; }
+.login-hint { color: var(--entry-mute); font-size: 0.6875rem; font-weight: 400; }
+.login-signup[hidden], .login-form[hidden] { display: none; }
 @media (max-width: 600px) {
   .login-body { padding: 100px 20px 30px; }
   .login-card { padding: 26px 22px; }

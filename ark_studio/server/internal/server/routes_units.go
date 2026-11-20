@@ -210,6 +210,7 @@ func (c *reqCtx) storePatch(p *project.Project, path string, body *pyjson.Object
 			return true, err
 		}
 		out = pyjson.NewObject("unit", unit)
+		c.withReviewWarnings(s, reUnit.FindStringSubmatch(path)[1], body, out) // Go only (routes_reviews.go)
 	default:
 		return false, nil
 	}

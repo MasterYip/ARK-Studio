@@ -163,6 +163,7 @@ async function loadScopes() {
     const data = await api.agentSessions();
     session.sessions = (data.sessions || []).map((item) => ({ id: item.id, title: item.title || item.id, status: item.status || "" }));
   } catch { session.sessions = []; }
+  explorerSide()?.querySelector(".ed-scope-row")?.replaceWith(scopePicker());
   paintSide();
 }
 
@@ -1940,7 +1941,10 @@ function scopePicker() {
     onchange: (event) => switchScope(event.target.value),
   }, options);
   select.value = session.scope;
-  return h("label", { class: "ed-scope-row" }, icon(session.scope ? "play" : "folder", "sm"), select);
+  // With no agent sessions there is nothing to choose: keep the row (paintSide
+  // looks for it) but hide it.
+  return h("label", { class: "ed-scope-row", hidden: !sessions.length && !session.scope },
+    icon(session.scope ? "play" : "folder", "sm"), select);
 }
 
 export function focusQuickOpen() {

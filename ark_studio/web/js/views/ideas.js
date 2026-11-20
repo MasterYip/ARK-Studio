@@ -6,6 +6,8 @@ import { GraphView } from "../graph.js";
 import { mindGraphOptions, preferredGraphLayout } from "../mind.js";
 import { attachGraphHeight, unitCard, viewToggle } from "../components.js";
 import { openInfoHubPreview, closeInfoHubPreview } from "../infohub-panel.js";
+import { syncImportSource, importSourceSelect, arkImportPane } from "../import-ark.js";
+import { isArkSource } from "../import-ark-model.js";
 
 const KIND_COLORS = {topic: "#3b82f6", todo: "#ef4444", event: "#a855f7", decision: "#f59e0b",
   question: "#eab308", announcement: "#14b8a6", resource: "#10b981", digest: "#64748b", note: "#94a3b8"};
@@ -17,20 +19,22 @@ export function renderIdeas(host, ctx) {
   clear(host);
   const ideas = S.units || [];
   const imported = ideas.filter((u) => u.origin === "infohub").length;
+  // Import sources: InfoHub (advanced) and the person's other projects.
+  const sources = syncImportSource(S);
   const page = h("div", { class: "page" },
     h("div", { class: "page-head" },
       h("div", null,
-        h("div", { class: "eyebrow" }, `${t("nav.ideas")} · ${t("stage.capture")}`),
+        h("div", { class: "eyebrow" }, t("nav.research")),
         h("h1", { class: "page-title" }, t("ideas.title")),
         h("p", { class: "page-sub" }, t("ideas.subtitle"))),
       h("div", { class: "head-actions" },
         h("button", { class: "ghost-btn", onclick: () => ctx.openExtract() }, icon("list", "sm"), t("ideas.extract")),
-        h("button", {
+        !sources.length && !S.infoHubGraphVisible ? null : h("button", {
           class: `ghost-btn info-toggle ${S.infoHubGraphVisible ? "on" : ""}`.trim(),
           "aria-pressed": S.infoHubGraphVisible ? "true" : "false",
-          title: t("ideas.infohub_toggle_title"),
+          title: t("ideas.import_toggle_title"), "data-ideas-import": "",
           onclick: () => ctx.toggleInfoHubGraph(),
-        }, icon("database", "sm"), t("ideas.import")),
+        }, icon("download", "sm"), t("ideas.import")),
         h("button", { class: "primary-btn", onclick: () => ctx.openCreate({ type: "idea" }) }, icon("plus", "sm"), t("ideas.capture")))),
     toolbar(ctx, S, ideas.length, imported),
     S.view === "graph" ? ideasGraphSplit(ctx, S) : listPanel(ctx, S, ideas));
@@ -57,7 +61,7 @@ function toolbar(ctx, S, count, imported = 0) {
     S.graph?.context_count ? h("span", { class: "muted", style: { fontSize: "10px" } }, t("graph.context_nodes", { n: S.graph.context_count })) : null,
     h("div", { class: "spacer" }),
     S.view === "list" ? sort : null,
-    h("button", { class: "btn sm ghost", onclick: () => ctx.openAssistant() }, icon("sparkles", "sm"), t("assistant.title")));
+    h("button", { class: "btn sm ghost", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")));
 }
 
 function graphPanel(ctx, S, onReady = null) {
@@ -125,7 +129,9 @@ function ideasGraphSplit(ctx, S) {
     return attachGraphHeight(h("div", { class: "ideas-graph-wrap" },
       h("div", { class: "ideas-split solo" }, rightPane)), ctx, ".ideas-split");
   }
-  const leftPane = ideasInfoHubPane(ctx, S, () => rightGraph);
+  const leftPane = isArkSource(S.importSource)
+    ? arkImportPane(ctx, S, () => rightGraph)
+    : ideasInfoHubPane(ctx, S, () => rightGraph);
   const split = h("div", { class: "ideas-split" }, leftPane, rightPane);
   return attachGraphHeight(h("div", { class: "ideas-graph-wrap" }, split), ctx, ".ideas-split");
 }
@@ -141,7 +147,10 @@ function ideasArkPane(ctx, S, onReady) {
   panel.dataset.infohubDrop = "1";
   panel.classList.add("ark-drop-zone");
   return h("section", { class: "ideas-pane ark-pane" },
-    paneHead(t("ideas.pane.ark_title"), t("ideas.pane.ark_note"), `${S.total ?? S.units.length}`),
+    // Beside an import source, name this project so the two panes cannot be
+    // mistaken for each other.
+    paneHead(S.infoHubGraphVisible && S.project?.name ? t("ideas.pane.this_project", { name: S.project.name }) : t("ideas.pane.ark_title"),
+      t("ideas.pane.ark_note"), `${S.total ?? S.units.length}`),
     panel);
 }
 
@@ -149,9 +158,10 @@ function ideasInfoHubPane(ctx, S, getRightGraph) {
   const host = h("div", { class: "graph-host ideas-graph" });
   const status = h("span", { class: "ih-graph-status" }, "—");
   const legend = h("div", { class: "ih-graph-legend" });
-  const pane = h("section", { class: "ideas-pane infohub-pane" },
-    paneHead(t("ideas.pane.infohub_title"), t("ideas.pane.infohub_note"), status),
-    host);
+  const head = paneHead(t("ideas.pane.infohub_title"), t("ideas.pane.infohub_note"), status);
+  // More than one source: the title becomes the source picker.
+  if ((S.importSources || []).length > 1) head.querySelector(".ideas-pane-title")?.replaceChildren(importSourceSelect(ctx));
+  const pane = h("section", { class: "ideas-pane infohub-pane" }, head, host);
   const graph = new GraphView(host, {
     cameraKey: "infohub:graph",
     persistLayout: false,
@@ -159,6 +169,7 @@ function ideasInfoHubPane(ctx, S, getRightGraph) {
     externalDrag: true,
     readOnly: true,
     clipboardSource: "infohub",
+    foreign: true,
     onSelect: (node, dbl, event) => {
       if (node) openInfoHubPreview(node, event ? { x: event.clientX, y: event.clientY } : null, S.infoHubPath);
     },

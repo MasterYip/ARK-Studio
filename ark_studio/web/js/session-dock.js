@@ -101,13 +101,13 @@ function mount(ctx) {
   const composer = composerUI.input;
   const head = h("div", { class: "assistant-head" },
     h("span", { style: { color: "var(--accent-2)" } }, icon("sparkles", "sm")),
-    h("div", null, h("div", { class: "assistant-title" }, t("assistant.title")),
+    h("div", null, h("div", { class: "assistant-title" }, t("nav.assistant")),
       h("div", { class: "assistant-sub" }, t("session.dock.subtitle"))),
     h("div", { class: "spacer" }),
     h("button", { class: "btn sm ghost", onclick: () => { toggleSessionDock(ctx, false); ctx.navigate("chat"); } }, t("session.dock.full_chat")),
     h("button", { class: "icon-btn", title: t("action.close"), onclick: () => toggleSessionDock(ctx, false) }, icon("x")));
   const resizer = h("div", { class: "assistant-resizer" });
-  dock = h("aside", { class: "assistant-dock", "aria-label": t("assistant.title") },
+  dock = h("aside", { class: "assistant-dock", "aria-label": t("nav.assistant") },
     resizer, head, thread,
     h("div", { class: "assistant-composer" }, composerUI.el));
   ((shellActive() && viewHost("assistant")) || document.body).appendChild(dock);

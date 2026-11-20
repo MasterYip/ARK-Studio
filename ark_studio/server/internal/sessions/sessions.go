@@ -31,6 +31,7 @@ import (
 
 const (
 	maxLogLine         = 8000
+	maxJSONLogLine     = 64000
 	maxLogLimit        = 500
 	maxPrompt          = 12000
 	maxInput           = 8000
@@ -87,9 +88,14 @@ type Session struct {
 	m             *Manager
 	proc          *process
 	stopRequested bool
-	lastSave      time.Time
-	logMu         sync.Mutex
-	stdinMu       sync.Mutex
+	// Context entries (pasted images) for the first message of the next spawn.
+	pendingEntries []*pyjson.Object
+	lastSave       time.Time
+	logMu          sync.Mutex
+	stdinMu        sync.Mutex
+	// The run's agent token (Hooks.AgentToken), kept in memory only so
+	// output lines that echo it are redacted before they are written.
+	agentSecret string
 }
 
 // Workspace is ManagedSession.workspace.
@@ -107,10 +113,15 @@ type Hooks struct {
 	AgentConfig  func(actor string) (*pyjson.Object, error)
 	AssistantKey func(actor string) (string, error)
 	LinuxAccount func(actor string) string
+	// AgentToken issues the agent token for one session run (T-0053): the
+	// secret for ARK_AGENT_TOKEN and its id for revocation; "" = none.
+	AgentToken func(actor, sessionID, access string) (secret, id string, err error)
 }
 
 // Manager is SessionManager.
 type Manager struct {
+	tcache    transcriptCaches
+	stream    streamState
 	Root      string
 	IdleAfter time.Duration
 	// Set by the server after Open.
@@ -306,7 +317,9 @@ func (m *Manager) displayStatus(meta *pyjson.Object) (string, string) {
 	raw := pyjson.Str(or(meta.Value("status"), "stopped"))
 	status := raw
 	if raw == "running" {
-		if last, ok := parseISO(meta.Value("last_activity_at")); ok && clock.Now().Sub(last) >= m.IdleAfter {
+		if pyjson.Truthy(meta.Value("stream_input")) && meta.Value("turn_state") == "waiting" {
+			status = "idle" // a long-lived Claude Code process waits for the next message
+		} else if last, ok := parseISO(meta.Value("last_activity_at")); ok && clock.Now().Sub(last) >= m.IdleAfter {
 			status = "idle"
 		}
 	}
@@ -570,5 +583,27 @@ func (m *Manager) AccessibleIDs(projectID, user string, admin bool) map[string]b
 			out[id] = true
 		}
 	}
+	return out
+}
+
+// TakeAgentTokenIDs returns the ids of the agent tokens issued for the
+// session's runs (Hooks.AgentToken) and forgets them: the caller revokes
+// them when the run ends.
+func (m *Manager) TakeAgentTokenIDs(s *Session) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []string
+	if ids, ok := s.Meta.Value("agent_token_ids").([]any); ok {
+		for _, id := range ids {
+			if v := strOr(id); v != "" {
+				out = append(out, v)
+			}
+		}
+	}
+	if len(out) > 0 {
+		s.Meta.Delete("agent_token_ids")
+		m.saveLocked(s)
+	}
+	s.agentSecret = ""
 	return out
 }

@@ -31,6 +31,9 @@ type Handlers struct {
 	EffectivePublic func(c api.Ctx) (*pyjson.Object, error)
 	// AgentToken is the server's agent API token (chat tools call back).
 	AgentToken func() string
+	// LocalMode is a server without accounts: the local user's thread also
+	// holds the pre-v10 rows with an empty user (store.ChatHistory legacy).
+	LocalMode bool
 }
 
 // orDefault is `value or default`.
@@ -75,7 +78,7 @@ func (h *Handlers) chatGet(c api.Ctx, path string) error {
 		return err
 	}
 	who := c.Actor()
-	messages, err := p.Store.ChatHistory(c.Context(), limit, &who)
+	messages, err := p.Store.ChatHistory(c.Context(), limit, &who, h.LocalMode)
 	if err != nil {
 		return err
 	}
@@ -128,7 +131,7 @@ func (h *Handlers) chatEnv(c api.Ctx, p *project.Project, body *pyjson.Object, c
 		hub = o
 	}
 	return &chat.Env{Ctx: c.RequestContext(), Store: p.Store, ProjectName: p.Name(), ProjectPath: p.Path, Config: config,
-		Infohub: hub, AgentToken: h.AgentToken(), BaseURL: baseURL, HistoryUser: &who, Who: c.Who(p)}
+		Infohub: hub, AgentToken: h.AgentToken(), BaseURL: baseURL, HistoryUser: &who, HistoryLegacy: h.LocalMode, Who: c.Who(p)}
 }
 
 // assistantMeta is the meta of the stored assistant reply.

@@ -21,9 +21,11 @@ import (
 	"arkstudio/go/internal/compat/pytext"
 	"arkstudio/go/internal/org"
 	"arkstudio/go/internal/platform/procx"
+	"arkstudio/go/internal/presence"
 	"arkstudio/go/internal/project"
 	"arkstudio/go/internal/providers"
 	"arkstudio/go/internal/sessions"
+	"arkstudio/go/internal/store"
 	"arkstudio/go/internal/stream"
 	"arkstudio/go/internal/webui"
 	"arkstudio/go/internal/workspace"
@@ -73,7 +75,8 @@ type App struct {
 	sessionProjects map[string]string // auth mode: sid hash -> project path
 	Blackbox        *blackbox.BlackBox
 	Mobile          *mobile.Manager
-	restoreMu       sync.Mutex // App.lock around blackbox restore
+	appRelease      releaseResolver // Go-only: latest GitHub release of the APKs
+	restoreMu       sync.Mutex      // App.lock around blackbox restore
 
 	Heavy      *procx.Pool
 	Subprocess *procx.Pool
@@ -88,10 +91,17 @@ type App struct {
 	Terminals *workspace.Manager // the Editor's terminal registry
 	failures  *failureLimiter
 	StartedAt string
+	activity  projectActivity // my_activity per project (project_activity.go)
+	writers   lastWriters     // latest writer per project (project_people.go)
+	// Presence: which agent is on which node, memory only (routes_presence.go, Go only).
+	Presence *presence.Hub
+	invites  inviteLimiter // public invite routes (routes_invites.go, Go only)
 }
 
 // NewApp is App.__init__ for the ported subset.
 func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
+	// List previews name a video's poster frame only when one can be made.
+	store.PosterFrames = VideoPosters()
 	if cfg.ReadPool <= 0 {
 		cfg.ReadPool = max(8, 2*runtime.NumCPU())
 	}
@@ -122,7 +132,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 		sessionProjects: map[string]string{}, responses: newResponseCache(), Streams: stream.NewHub(), Terminals: workspace.NewManager(),
 		failures: &failureLimiter{buckets: map[string][]float64{}},
 		Heavy:    procx.NewPool(cfg.HeavyLimit), Subprocess: procx.NewPool(cfg.SubprocessMax),
-		Admission: procx.NewPool(cfg.MaxInFlight)}
+		Admission: procx.NewPool(cfg.MaxInFlight), Presence: presence.New()}
 	a.StartedAt = time.Now().UTC().Format("2006-01-02T15:04:05") + "+00:00"
 	if a.Assets != nil && a.Assets.Dir != "" {
 		if dir := project.FindDemoAssets(a.Assets.Dir); dir != "" {
@@ -161,6 +171,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 	ctx := context.Background()
 	if os.Getenv("ARK_REPLAY_CLOCK") == "1" {
 		project.ReplayIDs.Store(true)
+		project.SeedDatesFixed.Store(true)
 	}
 	if !cfg.NoDemo && len(manager.ListProjects()) == 0 {
 		// ProjectManager(seed_demo=True): the first-run demo project.
@@ -214,6 +225,9 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 	boot := &reqCtx{app: a, ctx: ctx}
 	if err := a.project.Store.BackfillCreatorAssignees(ctx, boot.accountName); err != nil {
 		return nil, fmt.Errorf("creator-assignee backfill: %w", err)
+	}
+	if err := a.adoptLegacyChat(ctx, a.project); err != nil {
+		return nil, fmt.Errorf("legacy chat owner: %w", err)
 	}
 	a.setupBlackbox(ctx)
 	return a, nil

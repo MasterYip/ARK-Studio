@@ -120,7 +120,8 @@ func migrate(ctx context.Context, q sqlitedb.Querier) error {
 		return err
 	}
 	if len(cols) > 0 && !cols["user"] {
-		// v10: per-user Assistant chat history (old rows stay shared).
+		// v10: per-user Assistant chat history.  The old rows keep user ''
+		// until Store.AdoptLegacyChat gives them to the project owner.
 		if _, err := q.ExecContext(ctx, "ALTER TABLE chat_messages ADD COLUMN user TEXT NOT NULL DEFAULT ''"); err != nil {
 			return err
 		}

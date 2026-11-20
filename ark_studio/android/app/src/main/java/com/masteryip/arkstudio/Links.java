@@ -1,12 +1,7 @@
 package com.masteryip.arkstudio;
 
-import android.content.Intent;
-import android.net.Uri;
-import android.widget.Toast;
+import com.masteryip.arkstudio.data.LinkPolicy;
 
-import com.masteryip.arkstudio.data.PairingLink;
-
-import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -40,13 +35,14 @@ final class Links {
             a.openWeb(value);
             return;
         }
-        String lower = value.toLowerCase(Locale.ROOT);
-        if (lower.startsWith("mailto:") || lower.startsWith("tel:")) {
-            external(a, value);
+        String scheme = LinkPolicy.scheme(value);
+        if (!scheme.isEmpty() && !"http".equals(scheme) && !"https".equals(scheme)) {
+            // mailto: to a mail app, file: shows the path, other schemes are dropped.
+            ExternalLinks.handle(a, value, LinkPolicy.decide(value, true, a.session.serverUrl));
             return;
         }
         String url = absolute(a, value);
-        if (PairingLink.sameOrigin(a.session.serverUrl, url)) {
+        if (LinkPolicy.decide(url, true, a.session.serverUrl) == LinkPolicy.Action.STAY) {
             Matcher media = MEDIA_RAW.matcher(url);
             if (media.find()) {
                 a.startActivity(MediaActivity.intent(a, url, "", null));
@@ -61,10 +57,6 @@ final class Links {
 
     /** Other origins always go to the system browser, never into the signed-in WebView. */
     static void external(BaseActivity a, String url) {
-        try {
-            a.startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
-        } catch (Exception failed) {
-            Toast.makeText(a, R.string.link_failed, Toast.LENGTH_SHORT).show();
-        }
+        ExternalLinks.browser(a, url);
     }
 }

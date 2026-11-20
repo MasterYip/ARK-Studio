@@ -32,6 +32,22 @@ export class GraphFilterIndex {
     this.hasBodies = snapshot.bodies !== false;
   }
 
+  /**
+   * A unit saved in this tab: update its row (fields the snapshot node
+   * already has) so the next filter pass sees it.  Returns false if absent.
+   */
+  updateNode(unit) {
+    const row = unit ? this.byId.get(unit.id) : null;
+    if (!row) return false;
+    for (const key of Object.keys(unit)) if (key in row.node) row.node[key] = unit[key];
+    row.tags = new Set(row.node.tags || []);
+    row.namespaces = new Set((row.node.tags || []).map((tag) => tag.includes(":") ? tag.split(":", 1)[0] : "tag"));
+    row.search[0] = asciiFold(row.node.title);
+    if (typeof unit.body === "string" && row.search[2] != null) row.search[2] = asciiFold(unit.body);
+    this.orders.clear();
+    return true;
+  }
+
   /** Add full bodies for text search ({bodies: [[id, body], ...]}). */
   attachBodies(data) {
     for (const [id, body] of data?.bodies || []) {

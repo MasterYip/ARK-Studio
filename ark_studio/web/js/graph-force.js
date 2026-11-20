@@ -4,23 +4,19 @@ import { applyExactRepulsion } from "./graph-core.js";
 export function applyRepulsion(nodes, strength, { theta = 0.55, exactThreshold = 400 } = {}) {
   const n = nodes.length;
   if (!strength || n < 2) return;
-  const pair = (a, b, i, j, mass = 1) => {
-    let dx = a.x - b.x, dy = a.y - b.y;
-    let d2 = dx * dx + dy * dy;
-    if (d2 < 0.000001) {
-      const angle = (Math.min(i, j) * 31 + Math.max(i, j)) * 2.399963;
-      const sign = i < j ? 1 : -1;
-      dx = Math.cos(angle) * sign; dy = Math.sin(angle) * sign; d2 = 1;
-    }
-    const factor = strength * mass / (Math.max(64, d2) * Math.sqrt(d2));
-    return [dx * factor, dy * factor];
-  };
   if (n <= exactThreshold) {
     applyExactRepulsion(nodes, strength);
     return;
   }
-  const index = new Map(nodes.map((node, i) => [node, i]));
+  // Each node's index, for the tie-break of coincident nodes (a typed
+  // array lookup instead of a Map: this runs for every pair of neighbours).
+  const slot = new Map();
+  for (let i = 0; i < n; i++) slot.set(nodes[i], i);
   const tree = quadtree(nodes, (node) => node.x, (node) => node.y);
+  tree.visit((quad) => {
+    if (!quad.length) for (let leaf = quad; leaf; leaf = leaf.next) leaf.i = slot.get(leaf.data);
+    return false;
+  });
   tree.visitAfter((quad) => {
     let mass = 0, x = 0, y = 0;
     if (quad.length) {
@@ -51,8 +47,16 @@ export function applyRepulsion(nodes, strength, { theta = 0.55, exactThreshold =
         }
       } else {
         for (let leaf = quad; leaf; leaf = leaf.next) if (leaf.data !== node) {
-          const [x, y] = pair(node, leaf.data, i, index.get(leaf.data));
-          ax[i] += x; ay[i] += y;
+          const other = leaf.data, j = leaf.i;
+          let dx = node.x - other.x, dy = node.y - other.y;
+          let d2 = dx * dx + dy * dy;
+          if (d2 < 0.000001) {
+            const angle = (Math.min(i, j) * 31 + Math.max(i, j)) * 2.399963;
+            const sign = i < j ? 1 : -1;
+            dx = Math.cos(angle) * sign; dy = Math.sin(angle) * sign; d2 = 1;
+          }
+          const factor = strength / (Math.max(64, d2) * Math.sqrt(d2));
+          ax[i] += dx * factor; ay[i] += dy * factor;
         }
       }
       return false;

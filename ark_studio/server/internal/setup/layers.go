@@ -994,6 +994,9 @@ func (e *Env) SaveLayer(raw *obj, v *Viewer, layer, actor string, propose bool, 
 	record := pyjson.NewObject("format", LayerFormat, "setup_version", LayerVersion, "layer", layer,
 		"owner", owner, "state", state, "profile", profile, "digest", digest, "confirmation", conf,
 		"verification", verification, "locations", locations, "hosts", hosts, "updated_at", now, "updated_by", actor)
+	if snap := carriedSnapshot(previous); snap != nil {
+		record.Set(SnapshotKey, snap)
+	}
 	if err := e.write(e.layerTarget(layer, owner), record, pyjson.NewObject("at", now, "actor", actor,
 		"layer", layerName(layer, owner), "event", state, "digest", digest, "previous_state", previous.Value("state"))); err != nil {
 		return nil, err
@@ -1097,10 +1100,10 @@ func (e *Env) AddLocation(v *Viewer, key, pathOrRef, actor, hostID, hostLabel, s
 	}
 	record.Set("locations", locations)
 	if layer == "user" {
+		// A location is not profile content (it is outside the digest): it
+		// neither leaves "unset" nor needs a new confirmation, so a person
+		// can add a device's paths without blocking anyone (T-0053).
 		record.Set("hosts", upsertHost(listOr(record.Value("hosts")), host, text(hostLabel, 60)))
-		if record.Value("state") == "unset" {
-			record.Set("state", "draft")
-		}
 	}
 	now := utcNow()
 	record.Set("updated_at", now).Set("updated_by", actor)
@@ -1152,50 +1155,170 @@ func (e *Env) Propose(v *Viewer, layer, actor string) (*obj, error) {
 	return pyjson.NewObject("ok", true, "layer", layer, "state", record.Value("state"), "digest", record.Value("digest")), nil
 }
 
+// ProposeAll sends every layer the viewer may write that has changes since
+// its last confirmation (state draft or stale) for confirmation, in one
+// call: the project layer and the viewer's own layer.  Strict mode proposes
+// nothing when a changed layer has validation errors; otherwise such a layer
+// stays a draft and is reported in the warnings.  It returns one entry per
+// layer ({layer, owner, state, digest, proposed}) and the warnings.
+func (e *Env) ProposeAll(v *Viewer, actor string, strict bool) ([]any, []string, error) {
+	if !v.CanWrite {
+		return nil, nil, setupErr("this action needs write access to the project", 403, "SETUP_FORBIDDEN")
+	}
+	type target struct {
+		layer, owner string
+		record       *obj
+	}
+	targets := []target{}
+	for _, layer := range []string{"project", "user"} {
+		owner := ""
+		if layer == "user" {
+			if v.Legacy || v.User == "" {
+				continue
+			}
+			owner = v.User
+		}
+		record, err := e.loadLayer(layer, owner)
+		if err != nil {
+			return nil, nil, err
+		}
+		targets = append(targets, target{layer, owner, record})
+	}
+	unset := true
+	warnings := []string{}
+	for _, t := range targets {
+		if t.record.Value("state") != "unset" {
+			unset = false
+		}
+		s := t.record.Value("state")
+		if (s == "draft" || s == "stale") && !pyjson.Truthy(t.record.Value("valid")) {
+			if strict {
+				return nil, nil, e.invalidLayer(t.record, t.layer, t.owner)
+			}
+			warnings = append(warnings, layerName(t.layer, t.owner)+": has validation errors and stays a draft")
+		}
+	}
+	if unset {
+		return nil, nil, setupErr("there is no profile to confirm", 409, "SETUP_UNSET")
+	}
+	now := utcNow()
+	out := []any{}
+	for _, t := range targets {
+		s := t.record.Value("state")
+		proposed := false
+		if (s == "draft" || s == "stale") && pyjson.Truthy(t.record.Value("valid")) {
+			t.record.Set("state", "proposed").Set("confirmation", nil).Set("updated_at", now).Set("updated_by", actor)
+			if err := e.write(e.layerTarget(t.layer, t.owner), t.record, pyjson.NewObject("at", now, "actor", actor,
+				"layer", layerName(t.layer, t.owner), "event", "proposed", "digest", t.record.Value("digest"))); err != nil {
+				return nil, nil, err
+			}
+			proposed = true
+		}
+		out = append(out, pyjson.NewObject("layer", t.layer, "owner", t.owner, "state", t.record.Value("state"),
+			"digest", t.record.Value("digest"), "proposed", proposed))
+	}
+	return out, warnings, nil
+}
+
+// Pending is the layers waiting for confirmation ({layer, owner, digest})
+// among the entries ProposeAll returns.
+func Pending(layers []any) []any {
+	out := []any{}
+	for _, x := range layers {
+		item := x.(*obj)
+		if item.Value("state") == "proposed" {
+			out = append(out, pyjson.NewObject("layer", item.Value("layer"), "owner", item.Value("owner"),
+				"digest", item.Value("digest")))
+		}
+	}
+	return out
+}
+
 // IsHumanActor is is_human_actor.
 func IsHumanActor(actor string) bool { return strings.HasPrefix(actor, "human:") }
 
+// LayerDigest is one layer the human reviewed: the layer and the digest seen.
+type LayerDigest struct {
+	Layer  string
+	Digest string
+}
+
 // ConfirmLayer is confirm_layer.
 func (e *Env) ConfirmLayer(v *Viewer, layer, actor, digest, note string) (*obj, error) {
-	if err := checkLayerWriter(v, layer, v.User); err != nil {
-		return nil, err
-	}
-	if !IsHumanActor(actor) || v.Legacy {
-		return nil, setupErr("only a human can confirm the environment profile; agents may draft and propose", 403, "SETUP_HUMAN_REQUIRED")
-	}
-	owner := ""
-	if layer == "project" {
-		if !v.Admin {
-			return nil, setupErr("only a project admin can confirm the project layer", 403, "SETUP_ADMIN_REQUIRED")
-		}
-	} else {
-		owner = v.User
-		if owner == "" {
-			return nil, setupErr("you can only change your own setup layer", 403, "SETUP_NOT_OWNER")
-		}
-	}
-	record, err := e.loadLayer(layer, owner)
+	done, err := e.ConfirmLayers(v, []LayerDigest{{layer, digest}}, actor, note)
 	if err != nil {
 		return nil, err
 	}
-	if record.Value("state") == "unset" {
-		return nil, setupErr("there is no profile to confirm", 409, "SETUP_UNSET")
+	return done[0].(*obj), nil
+}
+
+// ConfirmLayers confirms several layers at once: every layer is checked
+// (permission, validity, digest) before any is written, so either all of
+// them are confirmed or none.  It returns one {ok, layer, state, digest}
+// per layer.
+func (e *Env) ConfirmLayers(v *Viewer, items []LayerDigest, actor, note string) ([]any, error) {
+	if len(items) == 0 {
+		return nil, setupErr("layers is required", 400, "SETUP_INVALID")
 	}
-	if valid, ok := record.Get("valid"); ok && !pyjson.Truthy(valid) {
-		return nil, e.invalidLayer(record, layer, owner)
+	type target struct {
+		layer, owner string
+		record       *obj
 	}
-	if digest != record.Value("digest") {
-		return nil, setupErr("digest mismatch: the profile changed since it was reviewed", 409, "SETUP_DIGEST")
+	targets := []target{}
+	seen := map[string]bool{}
+	for _, item := range items {
+		layer := item.Layer
+		if seen[layer] {
+			return nil, setupErr("each layer may be confirmed once per request", 400, "SETUP_INVALID")
+		}
+		seen[layer] = true
+		if err := checkLayerWriter(v, layer, v.User); err != nil {
+			return nil, err
+		}
+		if !IsHumanActor(actor) || v.Legacy {
+			return nil, setupErr("only a human can confirm the environment profile; agents may draft and propose", 403, "SETUP_HUMAN_REQUIRED")
+		}
+		owner := ""
+		if layer == "project" {
+			if !v.Admin {
+				return nil, setupErr("only a project admin can confirm the project layer", 403, "SETUP_ADMIN_REQUIRED")
+			}
+		} else {
+			owner = v.User
+			if owner == "" {
+				return nil, setupErr("you can only change your own setup layer", 403, "SETUP_NOT_OWNER")
+			}
+		}
+		record, err := e.loadLayer(layer, owner)
+		if err != nil {
+			return nil, err
+		}
+		if record.Value("state") == "unset" {
+			return nil, setupErr("there is no profile to confirm", 409, "SETUP_UNSET")
+		}
+		if valid, ok := record.Get("valid"); ok && !pyjson.Truthy(valid) {
+			return nil, e.invalidLayer(record, layer, owner)
+		}
+		if item.Digest != record.Value("digest") {
+			return nil, setupErr("digest mismatch: the profile changed since it was reviewed", 409, "SETUP_DIGEST")
+		}
+		targets = append(targets, target{layer, owner, record})
 	}
 	now := utcNow()
-	record.Set("state", "confirmed").Set("confirmation", pyjson.NewObject("by", actor, "at", now,
-		"digest", record.Value("digest"), "note", text(note, 1000))).Set("verification", nil)
-	record.Delete("needs_reconfirmation")
-	if err := e.write(e.layerTarget(layer, owner), record, pyjson.NewObject("at", now, "actor", actor,
-		"layer", layerName(layer, owner), "event", "confirmed", "digest", record.Value("digest"))); err != nil {
-		return nil, err
+	out := []any{}
+	for _, t := range targets {
+		record := t.record
+		record.Set("state", "confirmed").Set("confirmation", pyjson.NewObject("by", actor, "at", now,
+			"digest", record.Value("digest"), "note", text(note, 1000))).Set("verification", nil)
+		record.Set(SnapshotKey, snapshotOf(record, now))
+		record.Delete("needs_reconfirmation")
+		if err := e.write(e.layerTarget(t.layer, t.owner), record, pyjson.NewObject("at", now, "actor", actor,
+			"layer", layerName(t.layer, t.owner), "event", "confirmed", "digest", record.Value("digest"))); err != nil {
+			return nil, err
+		}
+		out = append(out, pyjson.NewObject("ok", true, "layer", t.layer, "state", "confirmed", "digest", record.Value("digest")))
 	}
-	return pyjson.NewObject("ok", true, "layer", layer, "state", "confirmed", "digest", record.Value("digest")), nil
+	return out, nil
 }
 
 // LoadUserDigest is load_user(path, user)["digest"] (the 1.0 confirm default).

@@ -59,6 +59,7 @@ type Store struct {
 
 	assignee          atomic.Pointer[assigneeCache]
 	creatorBackfilled atomic.Bool
+	chatAdopted       atomic.Bool  // AdoptLegacyChat ran (or found its meta key)
 	writesSincePrune  atomic.Int64 // Store._writes_since_prune
 	backfillMu        sync.Mutex
 	snap              snapState
@@ -67,6 +68,10 @@ type Store struct {
 	closeOnce         sync.Once
 	manifestDirty     atomic.Bool   // project.json rewrite deferred (touchManifest)
 	manifestKick      chan struct{} // wakes manifestFlusher
+	signalMu          sync.Mutex    // WriteSignal (updates.go, Go only)
+	signal            chan struct{}
+	ovMu              sync.Mutex // overview cache (overview.go)
+	ovCache           []overviewEntry
 }
 
 // Open is Store.__init__: open/migrate ark.sqlite3 and prepare logs/.

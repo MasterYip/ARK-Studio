@@ -58,7 +58,7 @@ var authEnv = map[string][]string{
 }
 
 var authDetail = map[string]string{
-	"claude":   "Run `claude /login` or set ANTHROPIC_API_KEY.",
+	"claude":   "Run `claude /login`, or set ANTHROPIC_API_KEY or ANTHROPIC_AUTH_TOKEN in the env block of ~/.claude/settings.json.",
 	"codex":    "Run `codex login` or set OPENAI_API_KEY.",
 	"dsh":      "Configure model credentials in DSH or Settings → Assistant.",
 	"opencode": "Run `opencode auth login` or export a provider API key.",
@@ -364,7 +364,10 @@ func (c *Catalog) authFor(id string) *pyjson.Object {
 		if len(sources) > 0 {
 			return base("authenticated", true, "environment", sources, "Claude credential found in the environment.")
 		}
-		path := filepath.Join(home, ".claude", ".credentials.json")
+		if ok, method, more, detail := claudeSettingsAuth(claudeLayers(home)); ok {
+			return base("authenticated", true, method, appendSources(sources, more...), detail)
+		}
+		path := filepath.Join(claudeConfigDir(home), ".credentials.json")
 		state, data := readJSONStructure(path)
 		if state != "missing" {
 			sources = appendSources(sources, fileLabel(path, home))
@@ -399,7 +402,10 @@ func (c *Catalog) authFor(id string) *pyjson.Object {
 		if len(sources) > 0 {
 			return base("authenticated", true, "environment", sources, "Provider API key found in the environment.")
 		}
-		path := filepath.Join(home, ".codex", "auth.json")
+		if ok, more, detail := codexProviderAuth(home); ok {
+			return base("authenticated", true, "config_provider", appendSources(sources, more...), detail)
+		}
+		path := filepath.Join(codexDir(home), "auth.json")
 		state, data := readJSONStructure(path)
 		if state != "missing" {
 			sources = appendSources(sources, fileLabel(path, home))
@@ -466,25 +472,7 @@ func (c *Catalog) authFor(id string) *pyjson.Object {
 
 // ---------------------------------------------------------------- models
 
-var builtinModels = map[string][][2]string{
-	"claude": {{"opus", "opus (latest Opus alias)"}, {"sonnet", "sonnet (latest Sonnet alias)"},
-		{"haiku", "haiku (latest Haiku alias)"}, {"fable", "fable (latest Fable alias)"}},
-	"codex": {{"gpt-6-astra", ""}, {"gpt-6", ""}, {"gpt-5.6", ""}, {"gpt-5.5", ""}, {"gpt-5.4", ""},
-		{"gpt-5.3-codex-spark", ""}, {"gpt-5.2", ""}},
-	"gemini":   {{"gemini-2.5-pro", ""}, {"gemini-2.5-flash", ""}, {"gemini-2.5-flash-lite", ""}},
-	"opencode": {{"anthropic/claude-sonnet-4-5", ""}, {"openai/gpt-5", ""}},
-	"cursor":   {{"auto", "auto"}, {"sonnet-4.5", ""}, {"gpt-5", ""}},
-	"dsh":      {{"deepseek-v4.1-flash-1017", ""}},
-}
-
 var builtinEfforts = map[string][]string{"claude": {"low", "medium", "high", "xhigh", "max"}}
-
-var noListCommand = map[string]string{
-	"claude": "Claude Code has no model list command",
-	"gemini": "Gemini CLI has no model list command",
-	"cursor": "Cursor Agent has no verified model list command",
-	"dsh":    "DSH has no model list command",
-}
 
 func looksSecret(value string) bool {
 	lowered := pytext.Lower(pytext.Strip(value))
@@ -589,13 +577,14 @@ type discovery struct {
 	defaultEffort string
 	err           string
 	fullList      bool
+	extraMethods  []string // further config files that were read
 }
 
 func result(method string, models []*pyjson.Object, def, effort, err string, full bool) discovery {
 	if len(models) > maxModels {
 		models = models[:maxModels]
 	}
-	return discovery{method, models, def, effort, err, full}
+	return discovery{method: method, models: models, def: def, defaultEffort: effort, err: err, fullList: full}
 }
 
 func runFailure(label string, r RunResult) string {
@@ -754,12 +743,7 @@ func hasModel(models []*pyjson.Object, id string) bool {
 }
 
 func codexConfigModels(home string) discovery {
-	codexHome := pytext.Strip(os.Getenv("CODEX_HOME"))
-	dir := filepath.Join(home, ".codex")
-	if codexHome != "" {
-		dir = codexHome
-	}
-	path := filepath.Join(dir, "config.toml")
+	path := filepath.Join(codexDir(home), "config.toml")
 	_, rest, _ := strings.Cut(fileLabel(path, home), ":")
 	method := "config:" + rest
 	state, text := readTextBounded(path)
@@ -788,58 +772,6 @@ func codexConfigModels(home string) discovery {
 		e = effort[0]
 	}
 	return result(method, models, def, e, "", false)
-}
-
-var claudeModelEnv = []string{"ANTHROPIC_MODEL", "ANTHROPIC_DEFAULT_OPUS_MODEL", "ANTHROPIC_DEFAULT_SONNET_MODEL", "ANTHROPIC_DEFAULT_HAIKU_MODEL"}
-
-func claudeConfigModels(home string) discovery {
-	path := filepath.Join(home, ".claude", "settings.json")
-	method := "config:~/.claude/settings.json"
-	state, raw := readJSONConfig(path)
-	errText := ""
-	if state == "unreadable" || state == "malformed" {
-		errText = "settings.json is " + string(state)
-	}
-	data, ok := asObject(raw)
-	if !ok {
-		data = pyjson.NewObject()
-	}
-	settingsEnv, ok := asObject(data.Value("env"))
-	if !ok {
-		settingsEnv = pyjson.NewObject()
-	}
-	def := CleanModelID(data.Value("model"))
-	type found struct{ value, name string }
-	var hits []found
-	for _, name := range claudeModelEnv {
-		value := CleanModelID(settingsEnv.Value(name))
-		if value == "" {
-			if v, ok := os.LookupEnv(name); ok {
-				value = CleanModelID(v)
-			}
-		}
-		if value != "" {
-			hits = append(hits, found{value, name})
-			if name == "ANTHROPIC_MODEL" && def == "" {
-				def = value
-			}
-		}
-	}
-	var models []*pyjson.Object
-	if def != "" {
-		models = append(models, entry(def, "detected", "config", "", nil, ""))
-	}
-	for _, h := range hits {
-		if !hasModel(models, h.value) {
-			models = append(models, entry(h.value, "detected", "config", h.value+" ("+h.name+")", nil, ""))
-		}
-	}
-	effort := cleanEfforts([]any{data.Value("effortLevel")})
-	e := ""
-	if len(effort) > 0 {
-		e = effort[0]
-	}
-	return result(method, models, def, e, errText, false)
 }
 
 func opencodeConfigModels(home string) discovery {
@@ -1026,6 +958,7 @@ func mergeModels(preset *pyjson.Object, results []discovery, checkedAt any, assi
 		if len(r.models) > 0 || r.def != "" {
 			methods = append(methods, r.method)
 		}
+		methods = append(methods, r.extraMethods...)
 		for _, item := range r.models {
 			add(item)
 		}
@@ -1046,16 +979,6 @@ func mergeModels(preset *pyjson.Object, results []discovery, checkedAt any, assi
 			methods = append(methods, "config:ARK assistant")
 		}
 	}
-	builtinUsed := false
-	if !full && len(pm) == 0 {
-		for _, b := range builtinModels[id] {
-			label := b[1]
-			if label == "" {
-				label = b[0]
-			}
-			builtinUsed = add(entry(b[0], "builtin", "builtin", label, nil, "")) || builtinUsed
-		}
-	}
 	if pe := builtinEfforts[id]; len(pe) > 0 {
 		for _, item := range options {
 			if !item.Has("efforts") {
@@ -1070,10 +993,13 @@ func mergeModels(preset *pyjson.Object, results []discovery, checkedAt any, assi
 		}
 	}
 	source := "provider_default"
-	detected := false
+	detected, available := false, false
 	for _, item := range options {
-		if item.Value("source") == "detected" {
+		switch item.Value("source") {
+		case "detected":
 			detected = true
+		case "available":
+			available = true
 		}
 	}
 	switch {
@@ -1081,35 +1007,13 @@ func mergeModels(preset *pyjson.Object, results []discovery, checkedAt any, assi
 		source = "configured"
 	case detected:
 		source = "detected"
-	case builtinUsed:
-		source = "builtin"
+	case available:
+		source = "available"
 	}
-	listFailed := false
-	for _, r := range results {
-		if (strings.HasPrefix(r.method, "cli:") || strings.HasPrefix(r.method, "api:")) && r.err != "" {
-			listFailed = true
-		}
-	}
-	reasonCode, detail := "", ""
+	detail := ""
 	switch {
 	case full:
 		detail = "Detected from " + strings.Join(methods, ", ") + "."
-	case builtinUsed:
-		reason := ""
-		switch {
-		case !installed:
-			reasonCode, reason = "not_installed", "the provider is not installed"
-		case listFailed:
-			reasonCode, reason = "list_failed", "the provider list command failed"
-		case noListCommand[id] != "":
-			reasonCode, reason = "no_list_command", noListCommand[id]
-		default:
-			reasonCode, reason = "not_run", "no list command was run"
-		}
-		detail = "Built-in list; " + reason + "."
-		if len(methods) > 0 {
-			detail += " Also read " + strings.Join(methods, ", ") + "."
-		}
 	case len(methods) > 0:
 		detail = "Read from " + strings.Join(methods, ", ") + "."
 	case len(pm) > 0:
@@ -1139,9 +1043,9 @@ func mergeModels(preset *pyjson.Object, results []discovery, checkedAt any, assi
 		"error", pytext.Prefix(strings.Join(uniq, "; "), maxModelError*2),
 		"checked_at", checkedAt,
 		"detail", detail,
-		"builtin", builtinUsed,
+		"builtin", false,
 		"full_list", full,
-		"reason", reasonCode,
+		"reason", "",
 	)
 }
 
@@ -1380,6 +1284,13 @@ func (c *Catalog) discoverModels(preset *pyjson.Object, resolved string) *pyjson
 			}
 			results = append(results, bundled)
 		}
+	case installed && id == "claude":
+		remote, ok := c.remote[id]
+		if c.explicit || !ok {
+			remote = claudeAPIModels(c.Home, c.Runner.HTTPGet)
+			c.remote[id] = remote
+		}
+		results = append(results, remote)
 	case installed && id == "opencode":
 		results = append(results, opencodeCLIModels(resolved, c.Runner.List))
 	case installed && id == "dsh":

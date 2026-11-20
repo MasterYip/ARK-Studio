@@ -604,8 +604,8 @@ func (m *Manager) Create(projectID, projectName string, permission string, ttlSe
 		projectName = "Project"
 	}
 	src := "qr"
-	if source == "password" {
-		src = "password"
+	if source == "password" || source == SourceDesktop {
+		src = source
 	}
 	r := &Pairing{ID: pairID, TokenHash: sha(token), ProjectID: projectID, ProjectName: projectName, Permission: perm,
 		CreatedAt: now, ExpiresAt: now + float64(ttl), User: user, SessionTTL: sessionSeconds, Source: src}
@@ -712,7 +712,8 @@ func (m *Manager) Authenticate(token, projectID, method, path string) (*Session,
 		m.dropSession(s.TokenHash)
 		return nil, merr(401, "The mobile session has expired. Pair again.", "MOBILE_TOKEN_EXPIRED")
 	}
-	if r := m.pairings[s.PairingID]; r != nil && r.RevokedAt != nil && *r.RevokedAt != 0 {
+	r := m.pairings[s.PairingID]
+	if r != nil && r.RevokedAt != nil && *r.RevokedAt != 0 {
 		m.dropSession(s.TokenHash)
 		return nil, merr(401, "This mobile session was revoked.", "MOBILE_TOKEN_REVOKED")
 	}
@@ -724,7 +725,10 @@ func (m *Manager) Authenticate(token, projectID, method, path string) (*Session,
 	if verb == "" {
 		verb = "GET"
 	}
-	if s.Permission == "read_only" && verb != "GET" && verb != "HEAD" && path != "/api/mobile/session/project" {
+	// A desktop link is read-only on its project but may create projects
+	// (DesktopLinkPathAllowed; the server checks the account's role).
+	desktopWrite := r != nil && r.Source == SourceDesktop && DesktopLinkPathAllowed(path, verb)
+	if s.Permission == "read_only" && verb != "GET" && verb != "HEAD" && path != "/api/mobile/session/project" && !desktopWrite {
 		return nil, merr(403, "This phone has read-only access. Generate a full-access pairing "+
 			"code on the desktop to allow edits.", "MOBILE_READ_ONLY")
 	}

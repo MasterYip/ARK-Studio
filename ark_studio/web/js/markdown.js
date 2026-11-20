@@ -7,7 +7,7 @@ const markdown = new Marked({ gfm: true, breaks: true }, {
       name: "arkReference", level: "inline",
       start: (source) => source.search(/\\?\[\[/),
       tokenizer(source) {
-        const match = /^(\\?)\[\[([A-Za-z0-9][A-Za-z0-9_-]*)\]\]/.exec(source);
+        const match = /^(\\?)\[\[((?:prj_[A-Za-z0-9]+\/)?[A-Za-z0-9][A-Za-z0-9_-]*)\]\]/.exec(source);
         if (match) return { type: match[1] ? "arkLiteral" : "arkReference", raw: match[0], text: match[2] };
       },
     },

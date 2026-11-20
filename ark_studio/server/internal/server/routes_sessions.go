@@ -11,6 +11,7 @@ import (
 	"errors"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"arkstudio/go/internal/assistcfg"
@@ -29,6 +30,7 @@ var sessionsPorted = []PortedRoute{
 	{"exact:/api/agent-sessions/presets", "GET,HEAD"},
 	{`regex:^/api/agent-sessions/([^/]+)$`, "GET,HEAD"},
 	{`regex:^/api/agent-sessions/([^/]+)$`, "DELETE"},
+	{`regex:^/api/agent-sessions/([^/]+)$`, "PATCH"},
 	{`regex:^/api/agent-sessions/([^/]+)/approvals$`, "GET,HEAD"},
 	{`regex:^/api/agent-sessions/([^/]+)/approvals/([^/]+)$`, "POST"},
 	{`regex:^/api/agent-sessions/([^/]+)/archive$`, "POST"},
@@ -92,6 +94,9 @@ func (a *App) configureSessions() {
 
 // onSessionChange is App._on_session_change: keep the redacted mirror in step.
 func (a *App) onSessionChange(s *sessions.Session, event string) {
+	if event == "finish" || event == "delete" {
+		a.revokeSessionTokens(s)
+	}
 	c := &reqCtx{app: a, ctx: context.Background()}
 	p, err := c.projectByID(a.Sessions.ProjectID(s))
 	if err != nil || p == nil {
@@ -348,6 +353,7 @@ func objectList(v any) []*pyjson.Object {
 // sessionHooks are the request-bound SessionManager providers.
 func (c *reqCtx) sessionHooks() *sessions.Hooks {
 	return &sessions.Hooks{
+		AgentToken: c.app.sessionAgentToken,
 		Project: func() (*pyjson.Object, error) {
 			p, err := c.require("read")
 			if err != nil {
@@ -539,7 +545,13 @@ func (c *reqCtx) sessionsGet(path string) error {
 		if err := guard(g[1]); err != nil {
 			return err
 		}
-		return c.okErr(m.Transcript(g[1]))
+		tail, _ := strconv.Atoi(c.query.First("tail", "0"))
+		image, _ := strconv.Atoi(c.query.First("image", "0"))
+		opts := sessions.TranscriptOptions{Tail: tail, Known: c.query.First("known", ""), Item: c.query.First("item", ""), Image: image}
+		if agent := c.query.First("agent", ""); agent != "" {
+			return c.okErr(m.AgentTranscript(g[1], agent, opts))
+		}
+		return c.okErr(m.TranscriptPage(g[1], opts))
 	}
 	if g := reSessApprovals.FindStringSubmatch(path); g != nil {
 		if err := guard(g[1]); err != nil {
@@ -654,7 +666,16 @@ func (c *reqCtx) sessionsPost(path string, body *pyjson.Object, actor string) (b
 		if err := write(g[1]); err != nil {
 			return true, err
 		}
-		return true, c.okErr(m.Steer(h, g[1], bodyText(body, "text", "message"), body.Value("context")))
+		res, err := m.Steer(h, g[1], bodyText(body, "text", "message"), body.Value("context"))
+		if err != nil || !pyjson.Truthy(body.Value("now")) {
+			return true, c.okErr(res, err)
+		}
+		// Ctrl+Enter: the new message skips the queue.
+		steer, _ := res.Value("steer").(*pyjson.Object)
+		if steer == nil || steer.Value("status") != "queued" {
+			return true, c.okErr(res, nil)
+		}
+		return true, c.okErr(m.SendSteerNow(h, g[1], pyjson.Str(steer.Value("id")), c.actor()))
 	}
 	if g := reSessReorder.FindStringSubmatch(path); g != nil {
 		if err := write(g[1]); err != nil {
@@ -708,6 +729,9 @@ func (c *reqCtx) sessionsPost(path string, body *pyjson.Object, actor string) (b
 		if err := write(g[1]); err != nil {
 			return true, err
 		}
+		if strOrEmpty(body.Value("action")) == "send_now" {
+			return true, c.okErr(m.SendSteerNow(h, g[1], g[2], c.actor()))
+		}
 		s, err := m.RemoveSteer(g[1], g[2])
 		if err != nil {
 			return true, err
@@ -751,8 +775,24 @@ func (c *reqCtx) sessionsPost(path string, body *pyjson.Object, actor string) (b
 	return false, nil
 }
 
-// sessionsPatch is the PATCH steer branch of do_PATCH.
+// sessionsPatch is the PATCH steer branch of do_PATCH, and the session's
+// title (rename: the session's creator or a project admin).
 func (c *reqCtx) sessionsPatch(path string, body *pyjson.Object) (bool, error) {
+	if g := reAgentSession.FindStringSubmatch(path); g != nil {
+		if err := c.guardSessionAccess(g[1], "write"); err != nil {
+			return true, err
+		}
+		title, ok := body.Get("title")
+		if !ok {
+			return true, apiErr(400, "title is required", "")
+		}
+		s, err := c.app.Sessions.Rename(g[1], strOrEmpty(title))
+		if err != nil {
+			return true, err
+		}
+		c.ok(pyjson.NewObject("session", s, "renamed", true))
+		return true, nil
+	}
 	g := reSteer.FindStringSubmatch(path)
 	if g == nil {
 		return false, nil

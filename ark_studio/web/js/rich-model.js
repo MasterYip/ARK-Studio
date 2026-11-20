@@ -221,3 +221,29 @@ export function acceptVizMessage(event, frames) {
     height: Math.round(Math.max(VIZ_MIN_HEIGHT, Math.min(VIZ_MAX_HEIGHT, height))),
   };
 }
+
+// ---------------------------------------------------------------- anchors
+// Review anchors (docs/agents/working-mode.md "Review anchors"; Go
+// store/anchors.go AnchorSlug mirrors these rules): a heading's slug is its
+// plain text, lower-cased, with every run of characters that are not letters
+// or digits turned into "-" and leading/trailing "-" removed; repeated slugs
+// get "-1", "-2".  A heading or paragraph ending in "{#id}" uses that id.
+export function anchorSlug(text) {
+  return String(text || "").trim().toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-").replace(/^-+|-+$/g, "");
+}
+
+export const EXPLICIT_ANCHOR_RE = /\s*\{#([A-Za-z0-9\p{L}][\w\p{L}\p{N}.-]*)\}\s*$/u;
+
+/** Assigns ids to headings in order: `[{ text, explicit }] -> [id]`. */
+export function headingAnchors(headings = []) {
+  const counts = new Map();
+  return headings.map(({ text, explicit }) => {
+    if (explicit) return explicit;
+    const slug = anchorSlug(text);
+    if (!slug) return "";
+    const n = counts.get(slug) || 0;
+    counts.set(slug, n + 1);
+    return n ? `${slug}-${n}` : slug;
+  });
+}

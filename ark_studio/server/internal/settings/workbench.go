@@ -9,7 +9,9 @@ import (
 	"arkstudio/go/internal/compat/pytext"
 )
 
-// workbench_prefs.py: personal workbench layout presets on the profile.
+// workbench_prefs.py: personal workbench layout presets on the profile, plus
+// the Go-only "layout" member (the current arrangement, T-0024; see
+// tests/python/contract/go_only.py FIXES "workbench-current-layout").
 
 var (
 	builtinPresets = map[string]bool{"default": true, "focus": true, "research": true, "writing": true, "review": true}
@@ -213,7 +215,7 @@ func WorkbenchPrefs(value any, strict bool) (*pyjson.Object, error) {
 
 func workbenchPrefs(value any) (*pyjson.Object, error) {
 	v, ok := value.(*pyjson.Object)
-	if !ok || !onlyKeys(v, "presets", "default") {
+	if !ok || !onlyKeys(v, "presets", "default", "layout", "layout_at") {
 		return nil, WorkbenchError{}
 	}
 	presets, ok := getDefault(v, "presets", []any{}).([]any)
@@ -244,5 +246,26 @@ func workbenchPrefs(value any) (*pyjson.Object, error) {
 	if !ok || (def != "" && !builtinPresets[def] && !ids[def]) {
 		return nil, WorkbenchError{}
 	}
-	return pyjson.NewObject("presets", outPresets, "default", def), nil
+	out := pyjson.NewObject("presets", outPresets, "default", def)
+	// Go-only (T-0024): the user's current arrangement, so dragged views
+	// follow the account like the presets do.  Same rules as a preset layout.
+	if raw, ok := v.Get("layout"); ok && raw != nil {
+		layout, err := workbenchLayout(raw)
+		if err != nil {
+			return nil, err
+		}
+		out.Set("layout", layout)
+		// layout_at: when the layout was saved (ms since the epoch), so a
+		// browser can tell a newer copy from a stale cached one.
+		if raw, ok := v.Get("layout_at"); ok && raw != nil {
+			at, ok := numberIn(raw, 0, 1<<53-1)
+			if !ok {
+				return nil, WorkbenchError{}
+			}
+			out.Set("layout_at", at)
+		}
+	} else if raw, ok := v.Get("layout_at"); ok && raw != nil {
+		return nil, WorkbenchError{}
+	}
+	return out, nil
 }

@@ -24,6 +24,7 @@ import (
 
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
+	"arkstudio/go/internal/setup"
 )
 
 // OnlineWindow is ONLINE_WINDOW: seconds a passive signal counts as online.
@@ -383,8 +384,9 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 		}
 	}
 	fingerprint := server.Value("fingerprint")
+	legacyFingerprint := server.Value("legacy_fingerprint")
 	hostDevice := func(hostID string, label any) string {
-		if pyEq(hostID, fingerprint) {
+		if pyEq(hostID, fingerprint) || (legacyFingerprint != nil && pyEq(hostID, legacyFingerprint)) {
 			return "ark"
 		}
 		if m, ok := gpuNames[pytext.Lower(hostID)]; ok && m != "" {
@@ -453,6 +455,16 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 			resources = append(resources, setupResource{prefix + "/" + pyjson.Str(item.Value("id")), layer, owner, item})
 		}
 	}
+	// Go only (2026-11-20): sizes measured on each location's device.
+	sizes := map[string]*pyjson.Object{}
+	for _, x := range iterate(sources.Value("location_stats")) {
+		if s, ok := x.(*pyjson.Object); ok {
+			k := setup.StatKey(pyjson.Str(s.Value("resource")), pyjson.Str(s.Value("host_id")), pyjson.Str(s.Value("path")))
+			if prev := sizes[k]; prev == nil || pyjson.Str(s.Value("measured_at")) >= pyjson.Str(prev.Value("measured_at")) {
+				sizes[k] = s
+			}
+		}
+	}
 	locations := map[string][]*pyjson.Object{}
 	for _, record := range allRecords {
 		for _, l := range iterate(record.Value("locations")) {
@@ -508,8 +520,11 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 			if pyjson.Truthy(loc.Value("verified_at")) {
 				verified = loc.Value("verified_at")
 			}
-			g.resource(deviceID, resKind, name, "path", loc.Value("path_or_ref"), "setup_key", r.key,
+			res := g.resource(deviceID, resKind, name, "path", loc.Value("path_or_ref"), "setup_key", r.key,
 				"owner", resOwner, "verified_at", verified, "metrics", m, "layer", r.layer)
+			if s := sizes[setup.StatKey(r.key, pyjson.Str(loc.Value("host_id")), pyjson.Str(loc.Value("path_or_ref")))]; s != nil {
+				res.Set("size", setup.PublicStat(s))
+			}
 			placed = true
 			if kind == "repository" {
 				if remote := GitHost(or(details.Value("remote"), "")); remote != "" {
@@ -612,6 +627,7 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 				}
 				c := res.Copy()
 				c.Set("device", "unplaced").Set("path", nil).Set("redacted", true)
+				c.Delete("size")
 				kept = append(kept, c)
 			}
 			continue
@@ -622,6 +638,7 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 			}
 			res = res.Copy()
 			res.Set("path", nil).Set("redacted", true).Set("metrics", nil).Set("verified_at", nil)
+			res.Delete("size")
 		}
 		kept = append(kept, res)
 	}

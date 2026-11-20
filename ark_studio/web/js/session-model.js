@@ -19,6 +19,7 @@ const EN_TEXT = {
   "session.provider.auth_unknown": "auth unknown",
   "common.unknown": "unknown",
   "session.untitled": "Untitled session",
+  "session.new_title": "New session · {provider}",
   "session.file_fallback": "file",
   "session.composer.hint_stdin": "Running — this message is queued as a steer and written to the process stdin.",
   "session.composer.hint_next_turn": "Running — this one-shot agent cannot read stdin; the steer waits for the next continue.",
@@ -55,6 +56,12 @@ const EN_TEXT = {
   "session.approval.kind_tool": "tool",
   "session.relation.fork": "fork",
   "session.relation.side_chat": "side chat",
+  "tasks.models.default_tag": "default",
+  "tasks.models.rank.effective": "in effect",
+  "tasks.models.rank.overridden": "overridden",
+  "tasks.models.rank.alias_target": "alias mapping",
+  "tasks.models.origin_env": "{key} (environment)",
+  "tasks.models.origin_file": "{key} in {file}",
 };
 /* i18n-ignore-end */
 
@@ -195,7 +202,10 @@ export function sessionRoots(sessions = []) {
 }
 
 export function sessionTitle(session, { t = enText } = {}) {
-  return session?.title || t("session.untitled");
+  if (session?.title) return session.title;
+  // A session started without a first message, not renamed yet.
+  const provider = session?.platform_label || session?.platform || "";
+  return provider ? t("session.new_title", { provider }) : t("session.untitled");
 }
 
 export function mediaKind(pathOrName = "", mime = "") {
@@ -547,6 +557,9 @@ export function threadBlocks(items = []) {
     blocks.push({ kind: "separator", key: `sep-${item.id}`, at: item.at });
   };
   items.forEach((item, index) => {
+    // Task records (sub-agents and background work whose call is not in the
+    // transcript) show in the activity chips and lists, not as turns.
+    if (item.type === "task" || (item.type === "notice" && item.level === "task")) return;
     if (item.type === "tool") {
       if (!tools) {
         tools = { kind: "tools", key: `tools-${item.id}`, items: [] };
@@ -573,17 +586,50 @@ export function threadBlocks(items = []) {
 }
 
 export function blockSignature(block = {}) {
+  const size = (value) => (value === null || value === undefined ? -1
+    : typeof value === "string" ? value.length : JSON.stringify(value).length);
   const parts = (item = {}) => [item.id, item.status, item.streaming ? 1 : 0,
     String(item.text || "").length, item.at || "", item.completed_at || "",
-    item.output === null || item.output === undefined ? -1 : JSON.stringify(item.output).length,
-    item.message || "", item.decided_at || ""].join(":");
+    size(item.output), item.output_preview ? "p" : "",
+    item.message || "", item.decided_at || "",
+    item.task ? `${item.task.status}/${item.task.background ? 1 : 0}/${item.task.last || ""}/${item.task.summary || ""}` : "",
+    item.children || 0, item.last_output || "", Array.isArray(item.images) ? item.images.length : Number(item.images) || 0].join(":");
   if (block.kind === "tools") return block.items.map(parts).join("|");
   if (block.kind === "separator") return `sep:${block.at}`;
   return parts(block.item);
 }
 
+/**
+ * What a live session is doing, the one source for the badge, the status
+ * line, the working indicator, the composer and Stop:
+ *   "turn"     a turn runs (a one-shot process is in its turn for as long as
+ *              it lives, also when it has been quiet for a while);
+ *   "waiting"  a long-lived Claude Code process between turns (background
+ *              tasks may still run; they show in their own chip);
+ *   "starting" / "stopping", or the session's status when it is not live.
+ */
+export function sessionPhase(session) {
+  if (!isActiveSession(session)) return session?.status || "stopped";
+  if (session.status === "starting" || session.status === "stopping") return session.status;
+  if (session.capabilities?.stream_input && session.status === "idle") return "waiting";
+  return "turn";
+}
+
+/** Is a turn running (the working indicator, Enter queues, Stop stops the turn)? */
+export function turnRunning(session) {
+  return ["turn", "starting", "stopping"].includes(sessionPhase(session));
+}
+
+/** The status a badge shows: a quiet one-shot turn still runs; a waiting process is idle. */
+export function shownStatus(session) {
+  const phase = sessionPhase(session);
+  if (phase === "turn") return "running";
+  if (phase === "waiting") return "idle";
+  return session?.status || "stopped";
+}
+
 export function liveActivity(items = [], session = {}) {
-  if (!isActiveSession(session)) return null;
+  if (!turnRunning(session)) return null;
   const last = items[items.length - 1] || null;
   let phase = session.status === "idle" ? "waiting" : "working";
   if (session.status === "starting") phase = "starting";
@@ -601,9 +647,10 @@ export function liveActivity(items = [], session = {}) {
 // ---------------------------------------------------------------- models
 // Provider model catalog helpers.  ``capabilities`` is the provider catalog's
 // capability record (``preset.provider_capabilities``): ``model_options`` rows
-// are ``{id, label, source: configured|detected|builtin, default?, efforts?}``.
+// are ``{id, label, source: configured|detected|available|builtin, default?, efforts?}``;
+// ``available`` rows come from the provider endpoint's model list.
 
-export const MODEL_SOURCE_ORDER = ["configured", "detected", "builtin"];
+export const MODEL_SOURCE_ORDER = ["configured", "detected", "available", "builtin"];
 export const CUSTOM_MODEL_VALUE = "__custom__";
 
 export function modelOptions(preset = {}, capabilities = {}) {
@@ -641,6 +688,26 @@ export function modelOptions(preset = {}, capabilities = {}) {
     }
   }
   return out;
+}
+
+/**
+ * Option text for the model picker. Detected Claude Code entries carry
+ * ``origin_key``/``origin_file``/``rank`` (where the id is configured and
+ * whether it is the one in effect, overridden, or an alias mapping).
+ */
+export function modelOptionLabel(item = {}, { t = enText } = {}) {
+  const id = String(item.id || "");
+  let label;
+  if (item.origin_key && item.rank) {
+    const origin = item.origin_file
+      ? t("tasks.models.origin_file", { key: item.origin_key, file: item.origin_file })
+      : t("tasks.models.origin_env", { key: item.origin_key });
+    label = `${id} (${origin} · ${t(`tasks.models.rank.${item.rank}`)})`;
+  } else {
+    const extra = String(item.label || "");
+    label = !extra || extra === id ? id : extra.startsWith(id) ? extra : `${id} — ${extra}`;
+  }
+  return item.default ? `${label} · ${t("tasks.models.default_tag")}` : label;
 }
 
 export function defaultModelOption(options = []) {

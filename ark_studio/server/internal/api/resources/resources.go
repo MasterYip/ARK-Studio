@@ -25,6 +25,9 @@ type Handlers struct {
 	// GPUFor, when set, replaces Deps.GPU with the GPU source scoped to the
 	// request's project and viewer (gpu.ScopedSource, T-0018).
 	GPUFor func(p *project.Project) (resdom.GPUSource, error)
+	// OnGraph, when set, is told that the project's graph was read (the
+	// server schedules due location sizes in the background).
+	OnGraph func(p *project.Project)
 }
 
 var reDevice = api.PyRe(`/api/resources/devices/([^/]+)`, true)
@@ -42,7 +45,7 @@ func (h Handlers) sources(c api.Ctx, p *project.Project) (*pyjson.Object, error)
 	}
 	return resdom.Collect(c.Context(), deps,
 		resdom.Project{ID: p.ID(), Name: p.Name(), Path: p.Path},
-		resdom.Host{Hostname: host, Fingerprint: setup.MachineFingerprint()}, now)
+		resdom.Host{Hostname: host, Fingerprint: setup.MachineFingerprint(), LegacyFingerprint: setup.LegacyMachineFingerprint()}, now)
 	// Deps.GPU is always set by the server, so resources.ErrGPUNotPorted cannot occur.
 }
 
@@ -59,6 +62,9 @@ func (h Handlers) Graph(c api.Ctx) error {
 	graph, err := resdom.BuildGraph(src, c.Actor())
 	if err != nil {
 		return err
+	}
+	if h.OnGraph != nil {
+		h.OnGraph(p)
 	}
 	c.OK(graph)
 	return nil

@@ -55,6 +55,11 @@ func (m *Manager) RequestStop(id string) (*pyjson.Object, error) {
 		m.mu.Unlock()
 		return out, nil
 	}
+	if isStream(s) {
+		m.mu.Unlock()
+		m.stopStream(s)
+		return m.Public(s, false), nil
+	}
 	s.stopRequested = true
 	s.Meta.Set("status", "stopping")
 	m.saveLocked(s)
@@ -162,6 +167,16 @@ func (m *Manager) contextEntries(h *Hooks, s *Session, attachments any) ([]*pyjs
 			label = relPath
 			text = "### File `" + relPath + "`\n\n```" + LanguageFor(filepath.Base(target)) + "\n" + content + "\n```"
 			key = "file:" + relPath
+		case "image_data":
+			if s == nil {
+				return nil, serr("images can be attached once the session has a workspace", 400, "")
+			}
+			rel, err := m.saveUpload(s, strOr(raw.Value("name")), strOr(raw.Value("data")))
+			if err != nil {
+				return nil, err
+			}
+			raw = pyjson.NewObject("kind", "media", "path", rel)
+			fallthrough
 		case "media", "image", "video", "audio":
 			kind = "media"
 			rawPath := pytext.Strip(strOr(raw.Value("path")))
@@ -184,7 +199,7 @@ func (m *Manager) contextEntries(h *Hooks, s *Session, attachments any) ([]*pyjs
 			}
 			size := strconv.FormatInt(fi.Size(), 10)
 			content = mime + ", " + size + " bytes"
-			text = "### Media `" + relPath + "`\n- mime: " + mime + "\n- size: " + size + " bytes\n" +
+			text = "### Media `" + relPath + "`\n- file: " + target + "\n- mime: " + mime + "\n- size: " + size + " bytes\n" +
 				"- The file lives in this session's private workspace; open it " +
 				"through the ARK artifact API if the platform supports images."
 			key = "media:" + relPath
@@ -670,6 +685,9 @@ func (m *Manager) Steer(h *Hooks, id, text string, context any) (*pyjson.Object,
 	}
 	m.mu.Lock()
 	followup := pyjson.Truthy(s.Meta.Value("followup"))
+	if isStream(s) && s.Meta.Value("turn_state") != "waiting" {
+		followup = false // queued in ARK until the turn ends ("Send now" writes it at once)
+	}
 	channel := "next_turn"
 	if followup {
 		channel = "stdin"
@@ -707,7 +725,7 @@ func (m *Manager) Steer(h *Hooks, id, text string, context any) (*pyjson.Object,
 	m.mu.Unlock()
 	if followup {
 		display := shown + contextMarker(entries)
-		if err := m.writeInput(s, payload, true, &display); err != nil {
+		if err := m.sendUserMessage(s, text, entries, display, true); err != nil {
 			m.mu.Lock()
 			item.Set("status", "failed").Set("error", err.Error())
 			m.saveLocked(s)
@@ -903,7 +921,7 @@ func (m *Manager) SendInput(h *Hooks, id, text string, context any) (*pyjson.Obj
 		shown = "Use the attached context."
 	}
 	display := shown + contextMarker(entries)
-	if err := m.writeInput(s, payload, true, &display); err != nil {
+	if err := m.sendUserMessage(s, text, entries, display, true); err != nil {
 		return nil, err
 	}
 	return m.Public(s, true), nil
@@ -974,6 +992,12 @@ func (m *Manager) allLogEntries(s *Session, stream string) []*pyjson.Object {
 
 // Transcript is SessionManager.transcript.
 func (m *Manager) Transcript(id string) (*pyjson.Object, error) {
+	return m.TranscriptPage(id, TranscriptOptions{})
+}
+
+// TranscriptPage is Transcript through the session's cached builder,
+// shaped by `o` (a page of items, an unchanged marker, or one item).
+func (m *Manager) TranscriptPage(id string, o TranscriptOptions) (*pyjson.Object, error) {
 	s, err := m.Get(id)
 	if err != nil {
 		return nil, err
@@ -982,10 +1006,25 @@ func (m *Manager) Transcript(id string) (*pyjson.Object, error) {
 	m.mu.Lock()
 	platform := strOr(s.Meta.Value("platform"))
 	m.mu.Unlock()
-	data := BuildTranscript(TranscriptInput{SessionID: s.ID, Status: pyjson.Str(payload.Value("status")),
+	cached, found := m.cachedTranscript(s, TranscriptInput{SessionID: s.ID, Status: pyjson.Str(payload.Value("status")),
 		Prompt: strOr(payload.Value("prompt")), PromptAt: or(payload.Value("started_at"), payload.Value("created_at")),
-		Stdout: m.allLogEntries(s, "stdout"), Stderr: m.allLogEntries(s, "stderr"),
-		Error: strOr(payload.Value("error")), Platform: platform, Notice: strOr(payload.Value("notice"))})
+		Error: strOr(payload.Value("error")), Platform: platform, Notice: strOr(payload.Value("notice")),
+		Waiting: m.streamTurnState(s) == "waiting"}, o.Item)
+	if o.Item != "" {
+		return shapeTranscript(cached, found, o), nil
+	}
+	// The cached reply is shared: permission items and stats are copied
+	// before they are updated.
+	data := cached.Copy()
+	data.Set("stats", objOr(cached.Value("stats")).Copy())
+	list := make([]any, 0, len(objects(cached.Value("items"))))
+	for _, it := range objects(cached.Value("items")) {
+		if it.Value("type") == "permission" {
+			it = it.Copy()
+		}
+		list = append(list, it)
+	}
+	data.Set("items", list)
 	approvals := objOr(payload.Value("approvals"))
 	recorded := map[string]*pyjson.Object{}
 	for _, item := range objects(approvals.Value("items")) {
@@ -1032,7 +1071,7 @@ func (m *Manager) Transcript(id string) (*pyjson.Object, error) {
 		pyjson.Str(pending), permissionSignature(items)}, "|"))
 	data.Set("counts", objOr(payload.Value("counts")))
 	data.Set("raw_status", or(payload.Value("raw_status"), payload.Value("status")))
-	return data, nil
+	return shapeTranscript(data, nil, o), nil
 }
 
 // WorkspaceIndex is SessionManager.workspace_index.
@@ -1274,6 +1313,7 @@ type ContinueOptions struct {
 	Context                             any
 	Actor                               string
 	Resume                              bool
+	KeepQueue                           bool // send-now: other queued messages stay queued
 }
 
 func isNoneOrEmpty(v any) bool { return v == nil || v == "" }
@@ -1291,6 +1331,12 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 	}
 	platformNow := s.Meta.Value("platform")
 	m.mu.Unlock()
+	// A long-lived Claude Code session that ended (idle, stopped, crashed,
+	// server restart) continues its own conversation.
+	if !o.Resume && pyEq(platformNow, "claude") && m.streamEnabled() && m.Resumable(s) && !m.IsActive(s) &&
+		(isNoneOrEmpty(o.Platform) || pyEq(o.Platform, "claude")) {
+		o.Resume = true
+	}
 	if o.Resume {
 		if !m.Resumable(s) {
 			return nil, serr("this session has no provider session id to resume", 409, "SESSION_NOT_RESUMABLE")
@@ -1356,7 +1402,10 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		return nil, err
 	}
 	m.mu.Lock()
-	queued := m.drainSteerLocked(s)
+	var queued []string
+	if !o.KeepQueue {
+		queued = m.drainSteerLocked(s)
+	}
 	m.mu.Unlock()
 	var prompt string
 	if o.Resume {
@@ -1364,6 +1413,12 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		if len(queued) > 0 {
 			prompt += "\n\n## Queued interventions\n" + strings.Join(queued, "\n\n")
 		}
+		if len(entries) > 0 {
+			prompt += renderContext(entries)
+		}
+		prompt = limit(pytext.Strip(prompt), maxPrompt)
+	} else if pyjson.Truthy(s.Meta.Value("awaiting_first")) {
+		prompt = text
 		if len(entries) > 0 {
 			prompt += renderContext(entries)
 		}
@@ -1386,6 +1441,8 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 	}
 	if text != "" {
 		m.appendEvent(s, "stdout", "› "+text, "input")
+		m.autoTitle(s, text)
+		m.recordMedia(s, entries)
 	}
 	m.mu.Lock()
 	if m.expirePendingLocked(s, "a new turn started before a decision") > 0 {
@@ -1451,6 +1508,16 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		label = "."
 	}
 	m.refreshWorkspacePermission(s, preset, workspace, projectRef, apiBase, label)
+	if o.Resume {
+		// A resumed Claude Code session gets the pasted images as image blocks.
+		m.mu.Lock()
+		for _, e := range entries {
+			if e.Value("kind") == "media" {
+				s.pendingEntries = append(s.pendingEntries, e)
+			}
+		}
+		m.mu.Unlock()
+	}
 	if err := m.spawn(h, s, preset, prompt, cwdDir, workspace, artifacts, projectRef, apiBase, readToken, false, actor); err != nil {
 		return nil, err
 	}

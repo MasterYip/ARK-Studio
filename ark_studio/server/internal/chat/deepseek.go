@@ -479,7 +479,7 @@ func (e *Env) history(text string, strip bool) ([]any, error) {
 		return nil, err
 	}
 	messages := []any{pyjson.NewObject("role", "system", "content", prompt)}
-	rows, err := e.Store.ChatHistory(e.Ctx, 24, e.HistoryUser)
+	rows, err := e.Store.ChatHistory(e.Ctx, 24, e.HistoryUser, e.HistoryLegacy)
 	if err != nil {
 		return nil, err
 	}

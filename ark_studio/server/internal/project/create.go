@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"arkstudio/go/internal/platform/clock"
 	"arkstudio/go/internal/platform/textfile"
@@ -184,6 +185,7 @@ func ApplySeed(ctx context.Context, st *store.Store, key string) error {
 	if err != nil {
 		return err
 	}
+	shift := SeedShiftDays(key, clock.Now())
 	for i, raw := range v.([]any) {
 		op := raw.(*pyjson.Object)
 		args, _ := op.Value("args").(*pyjson.Object)
@@ -198,6 +200,7 @@ func ApplySeed(ctx context.Context, st *store.Store, key string) error {
 		switch op.Value("op") {
 		case "create_unit":
 			data, _ := arg("data", nil).(*pyjson.Object)
+			shiftSeedDates(data, shift)
 			_, err = st.CreateUnit(ctx, data, actor, store.Who{})
 		case "create_link":
 			_, err = st.CreateLink(ctx, arg("source", nil), arg("target", nil), arg("relation", nil), arg("note", ""), actor)
@@ -223,6 +226,52 @@ func ApplySeed(ctx context.Context, st *store.Store, key string) error {
 		}
 	}
 	return nil
+}
+
+// SeedDatesFixed keeps the recorded seed dates (the differential replay
+// compares the seeded units with the Python server's, which never moves them).
+var SeedDatesFixed atomic.Bool
+
+// seedAnchors is, per seed with dated units, the day its dates were written
+// for.  Go-only: the seed moves every start/end date by the days between
+// that day and today, so an example project never opens with weeks-old
+// deadlines ("21 overdue, 72d late") and its Gantt and Due cards stay current.
+var seedAnchors = map[string]string{
+	"demo":     "2026-10-20", // PredActor: a few items late, a busy next week
+	"tutorial": "2026-11-01",
+	"paper":    "2026-10-26", // the starter task is due in a week
+}
+
+// SeedShiftDays is the number of days the dates of seed key move at now.
+func SeedShiftDays(key string, now time.Time) int {
+	anchor, ok := seedAnchors[key]
+	if !ok || SeedDatesFixed.Load() {
+		return 0
+	}
+	a, err := time.Parse("2006-01-02", anchor)
+	if err != nil {
+		return 0
+	}
+	now = now.UTC()
+	today := time.Date(now.Year(), now.Month(), now.Day(), 0, 0, 0, 0, time.UTC)
+	return int(today.Sub(a).Hours() / 24)
+}
+
+// shiftSeedDates moves the start_at / end_at days (YYYY-MM-DD) of a seeded
+// unit by days.
+func shiftSeedDates(data *pyjson.Object, days int) {
+	if data == nil || days == 0 {
+		return
+	}
+	for _, key := range []string{"start_at", "end_at"} {
+		s, ok := data.Value(key).(string)
+		if !ok || len(s) != 10 {
+			continue
+		}
+		if d, err := time.Parse("2006-01-02", s); err == nil {
+			data.Set(key, d.AddDate(0, 0, days).Format("2006-01-02"))
+		}
+	}
 }
 
 // copyDemoAssets is seed._copy_demo_assets (shutil.copy2: data and mtime;

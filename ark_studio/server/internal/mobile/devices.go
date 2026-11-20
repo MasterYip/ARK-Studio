@@ -34,6 +34,8 @@ func (m *Manager) ProjectDevices(projectID string) []*pyjson.Object {
 		agent := strings.ToLower(agents[r.ID])
 		label := "Phone"
 		switch {
+		case r.Source == SourceDesktop:
+			label = "ARK Studio desktop"
 		case strings.Contains(agent, "iphone"):
 			label = "iPhone"
 		case strings.Contains(agent, "ipad"):

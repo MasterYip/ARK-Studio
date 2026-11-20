@@ -380,10 +380,16 @@ func ProjectSettings(manifest *pyjson.Object) (*pyjson.Object, error) {
 	if err != nil {
 		return nil, err
 	}
-	return pyjson.NewObject("graph", NormalizeGraph(s.Value("graph")), "arrows", NormalizeArrows(s.Value("arrows")),
+	out := pyjson.NewObject("graph", NormalizeGraph(s.Value("graph")), "arrows", NormalizeArrows(s.Value("arrows")),
 		"assistant", assistant,
 		"agents", NormalizeAgents(s.Value("agents")), "palette", NormalizePalette(s.Value("palette")),
-		"sessions", NormalizeSessions(s.Value("sessions"))), nil
+		"sessions", NormalizeSessions(s.Value("sessions")))
+	// Go-only (T-0036): present only once a project admin has set a value,
+	// so projects without one answer exactly like Python.
+	if display, _ := GraphDisplay(s.Value("graph_display"), false); display.Len() > 0 {
+		out.Set("graph_display", display)
+	}
+	return out, nil
 }
 
 // UpdateGraph is update_graph(base, patch).
@@ -501,7 +507,7 @@ func PersonalAppearance(value any) *pyjson.Object {
 	if !ok {
 		return out
 	}
-	for _, group := range []string{"palette", "graph", "arrows"} {
+	for _, group := range []string{"palette", "graph", "arrows", "graph_display"} {
 		if v.Value(group) == nil {
 			continue
 		}
@@ -512,6 +518,11 @@ func PersonalAppearance(value any) *pyjson.Object {
 			res, err = personalPalette(v.Value(group))
 		case "graph":
 			res, err = personalGraph(v.Value(group))
+		case "graph_display":
+			res, _ = GraphDisplay(v.Value(group), false)
+			if res.Len() == 0 {
+				continue
+			}
 		default:
 			res, err = personalArrows(v.Value(group))
 		}
@@ -530,7 +541,7 @@ func UpdatePersonalAppearance(base, patch any) (*pyjson.Object, error) {
 	}
 	var unknown []string
 	for _, k := range p.Keys() {
-		if k != "palette" && k != "graph" && k != "arrows" {
+		if k != "palette" && k != "graph" && k != "arrows" && k != "graph_display" {
 			unknown = append(unknown, k)
 		}
 	}
@@ -552,6 +563,14 @@ func UpdatePersonalAppearance(base, patch any) (*pyjson.Object, error) {
 			res, err = personalPalette(value)
 		case "graph":
 			res, err = personalGraph(value)
+		case "graph_display":
+			// Go-only (T-0036): sparse per-setting overrides; replaces the
+			// whole group, an empty object clears it.
+			res, err = GraphDisplay(value, true)
+			if err == nil && res.Len() == 0 {
+				merged.Delete(group)
+				continue
+			}
 		default:
 			res, err = personalArrows(value)
 		}

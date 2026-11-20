@@ -33,7 +33,11 @@ export const VIEW_DEFAULTS = [
   { id: "changes", container: "left", icon: "git", titleKey: "workbench.view.changes" },
   { id: "details", container: "right", icon: "info", titleKey: "inspector.details" },
   { id: "localgraph", container: "right", icon: "graph", titleKey: "workbench.view.localgraph" },
-  { id: "assistant", container: "bottom", icon: "sparkles", titleKey: "assistant.title" },
+  // Agent sessions: a chat beside the work, the session list on Execute › Runs.
+  { id: "sessions", container: "left", icon: "message", titleKey: "workbench.view.sessions" },
+  // The open session's properties (Execute › Runs).
+  { id: "sessionprops", container: "right", icon: "cpu", titleKey: "workbench.view.sessionprops" },
+  { id: "assistant", container: "bottom", icon: "sparkles", titleKey: "nav.assistant" },
   { id: "terminal", container: "bottom", icon: "terminal", titleKey: "files.terminal" },
 ];
 
@@ -81,6 +85,13 @@ export function clampSectionSize(value) {
   if (!Number.isFinite(size) || size <= 0) return SECTION_SIZE;
   return Math.round(Math.max(SECTION_LIMITS[0], Math.min(SECTION_LIMITS[1], size)));
 }
+
+// User plugin views ("u-" + plugin id, view-plugins.js) keep their place in
+// a layout even while the plugin is not loaded (disabled, still loading, or
+// installed in another browser): normalize leaves such slots alone, and the
+// shell simply does not show a view nobody registered.
+export const PLUGIN_SLOT_RE = /^u-[a-z][a-z0-9-]{1,28}[a-z0-9]$/;
+export const isPluginSlot = (id) => PLUGIN_SLOT_RE.test(String(id));
 
 function knownIds(views = VIEW_DEFAULTS) {
   return views.map((view) => view.id);
@@ -160,7 +171,7 @@ export function normalizeWorkbench(raw, views = VIEW_DEFAULTS) {
     const ids = [];
     for (const id of Array.isArray(list) ? list : []) {
       const key = String(id);
-      if (!known.includes(key) || seen.has(key)) continue;
+      if ((!known.includes(key) && !isPluginSlot(key)) || seen.has(key)) continue;
       seen.add(key);
       ids.push(key);
     }
@@ -196,6 +207,12 @@ export function normalizeWorkbench(raw, views = VIEW_DEFAULTS) {
     if (last) last.views.push(id); else box.sections.push(newSection([id]));
   }
   return finalize(containers);
+}
+
+// Forget a view's place (a removed plugin).
+export function removeViewSlot(layout, id) {
+  if (!containerOf(layout, id)) return layout;
+  return edit(layout, (containers) => { takeOut(containers, id); });
 }
 
 export function containerOf(layout, id) {
@@ -262,6 +279,130 @@ export function moveView(layout, id, to, index = Infinity) {
     const at = Math.max(0, Math.min(target.views.length, Number.isFinite(index) ? index : target.views.length));
     target.views.splice(at, 0, id);
     focus(containers, to, target, id);
+  });
+}
+
+// Is `id` on screen in `layout` (container visible, section expanded and
+// showing it)?  Model-level check without the workspace filter.
+function shownIn(containers, id) {
+  const { name, section } = findSection(containers, id);
+  if (!section) return false;
+  const box = containers[name];
+  const others = box.sections.filter((item) => item.views.length);
+  const collapsed = others.length > 1 && (section.collapsed || others.some((item) => item.maximized && item !== section));
+  return Boolean(box.visible && section.active === id && !collapsed);
+}
+
+// Drag & drop / keyboard placement used by the activity bar and every tab
+// strip: put `id` into container `to` right before (`side: "before"`) or
+// after `anchor` (a view of `to`), in the anchor's section.  Without an
+// anchor the view goes to the end of the container's last section (a new
+// section when the container is empty).
+//   * Reordering inside the same section keeps what each section shows.
+//   * Moving to another section or container keeps an open view open (it
+//     becomes the shown view of its new section); moving into another
+//     container also focuses it there and shows that container.
+export function placeView(layout, id, to, { anchor = "", side = "before" } = {}) {
+  const from = containerOf(layout, id);
+  if (!from || !CONTAINERS.includes(to) || anchor === id) return layout;
+  if (anchor && containerOf(layout, anchor) !== to) return layout;
+  return edit(layout, (containers) => {
+    const wasShown = shownIn(containers, id);
+    const own = findSection(containers, id).section;
+    const box = containers[to];
+    let target = anchor ? findSection(containers, anchor).section : box.sections.filter((item) => item.views.length).pop() || null;
+    const ownActive = own.active;
+    const before = own.views.slice();
+    takeOut(containers, id, target);
+    if (!target) {
+      target = newSection();
+      box.sections.push(target);
+    }
+    let at = target.views.length;
+    if (anchor) {
+      at = target.views.indexOf(anchor);
+      if (side === "after") at += 1;
+    }
+    target.views.splice(at, 0, id);
+    if (target === own) {
+      if (before.join("\n") === target.views.join("\n")) return false;
+      target.active = ownActive;
+      return undefined;
+    }
+    if (from !== to) focus(containers, to, target, id);
+    else if (wasShown) {
+      target.active = id;
+      target.collapsed = false;
+      box.active = id;
+    }
+    return undefined;
+  });
+}
+
+// Where a drop lands in a row of activity icons (y) or tabs (x).  `items`:
+// [{ id, start, end }] in screen order (the item's extent along the row),
+// `dragged`: the view being moved, `pos`: the pointer along the row.
+//   * Over an item of the same row the dragged view takes that item's
+//     place: before it when it is earlier than the dragged one, after it
+//     when it is later.  So dropping anywhere on the neighbouring icon moves
+//     one step, up as well as down (by halves, the near half of a neighbour
+//     meant "where it already is" and refused the drop).
+//   * Over an item of another row (the view comes from elsewhere) the half
+//     under the pointer decides.
+//   * In a gap: before the next item; past the last item: after it.
+// Returns { anchor, side }, or null over the dragged item itself.
+export function slotSpot(items, dragged, pos) {
+  if (!items.length) return null;
+  const from = items.findIndex((item) => item.id === dragged);
+  for (let k = 0; k < items.length; k += 1) {
+    const item = items[k];
+    if (pos < item.start) return { anchor: item.id, side: "before" };
+    if (pos > item.end) continue;
+    if (k === from) return null;
+    if (from < 0) return { anchor: item.id, side: pos < (item.start + item.end) / 2 ? "before" : "after" };
+    return { anchor: item.id, side: k < from ? "before" : "after" };
+  }
+  return { anchor: items[items.length - 1].id, side: "after" };
+}
+
+// The order views appear in a container (activity bar / tab strips), with
+// an optional workspace filter.
+export function viewOrder(layout, name, applies = () => true) {
+  return (layout.containers[name]?.views || []).filter((id) => applies(id));
+}
+
+// Keyboard "Move up / down" (also left / right in a tab strip): swap places
+// with the neighbouring view in the container's order (crossing into the
+// neighbour's section when it is in another one).  Only views passing
+// `applies` count as neighbours, so the move is visible on screen.
+export function shiftView(layout, id, delta, applies = () => true) {
+  const name = containerOf(layout, id);
+  if (!name || !delta) return layout;
+  const order = viewOrder(layout, name, (item) => item === id || applies(item));
+  const index = order.indexOf(id);
+  const neighbour = order[index + (delta < 0 ? -1 : 1)];
+  if (!neighbour) return layout;
+  return placeView(layout, id, name, { anchor: neighbour, side: delta < 0 ? "before" : "after" });
+}
+
+// Can `id` move up (-1) / down (+1) in its container's order?
+export function canShiftView(layout, id, delta, applies = () => true) {
+  const name = containerOf(layout, id);
+  if (!name) return false;
+  const order = viewOrder(layout, name, (item) => item === id || applies(item));
+  const index = order.indexOf(id);
+  return index >= 0 && Boolean(order[index + (delta < 0 ? -1 : 1)]);
+}
+
+// Does `layout` place every view where `base` (the default layout, see
+// defaultLayout) does: same views, order and sections per container?  Used
+// to grey out "Reset view layout".
+export function isDefaultPlacement(layout, base) {
+  if (!layout || !base) return false;
+  return CONTAINERS.every((name) => {
+    const a = layout.containers?.[name]?.sections || [];
+    const b = base.containers?.[name]?.sections || [];
+    return a.length === b.length && a.every((section, i) => section.views.join("\n") === b[i].views.join("\n"));
   });
 }
 
@@ -496,7 +637,10 @@ export function parseWorkbench(text, legacy = {}, views = VIEW_DEFAULTS) {
   let parsed = null;
   try { parsed = JSON.parse(text || "null"); } catch { parsed = null; }
   if (parsed && parsed.v === 1) return normalizeWorkbench(parsed, views);
-  return migrateLegacy(legacy, views);
+  // Nothing stored in this browser: the Default preset.  (The pre-workbench
+  // panel keys are still written by the old panel code, so they are no sign
+  // of an earlier layout and are not migrated any more.)
+  return builtinPresetLayout("default", null, views);
 }
 
 export function migrateLegacy(legacy = {}, views = VIEW_DEFAULTS) {
@@ -516,11 +660,21 @@ export function migrateLegacy(legacy = {}, views = VIEW_DEFAULTS) {
 // the account profile (prefs.workbench, validated by the server) with a
 // browser fallback; this module only shapes them.
 export const PRESET_STORE_KEY = "ark.workbench.presets.v1";
-export const BUILTIN_PRESETS = ["default", "focus", "research", "writing", "review"];
+export const BUILTIN_PRESETS = ["default", "focus"];
 export const MAX_PRESETS = 20;
 
 // `sections`: [[views…], …] stacked in order (the first view is shown).
 const BUILTIN_SPECS = {
+  // The default arrangement (the maintainer's "MY_default"): every tool view
+  // in the left bar with the Local graph open, Details on the right, the
+  // Terminal in a hidden bottom panel.
+  default: {
+    left: { sections: [["filters", "explorer", "search", "changes", "assistant", "localgraph", "sessions"]], active: "localgraph", visible: true, size: 269 },
+    right: { sections: [["details", "sessionprops"]], active: "details", visible: true, size: 354 },
+    bottom: { sections: [["terminal"]], active: "terminal", visible: false, size: 260 },
+  },
+  // Arrangements kept for stacked-section layouts and tests; not offered in
+  // the Layout menu (BUILTIN_PRESETS is Default and Focus only).
   // Details over the Local graph.
   research: {
     left: { sections: [["filters", "search", "explorer", "changes"]], active: "filters", visible: true },
@@ -550,7 +704,6 @@ function withMaximized(layout, value) {
 // The layout a built-in preset produces.  Focus/Zen keeps the current
 // placement and hides every sidebar and the panel.
 export function builtinPresetLayout(id, current = null, views = VIEW_DEFAULTS) {
-  if (id === "default") return createWorkbench(views);
   if (id === "focus") {
     let next = normalizeWorkbench(current || createWorkbench(views), views);
     for (const name of CONTAINERS) next = setContainerVisible(next, name, false);
@@ -560,8 +713,9 @@ export function builtinPresetLayout(id, current = null, views = VIEW_DEFAULTS) {
   if (!spec) return null;
   const containers = {};
   for (const name of CONTAINERS) {
-    const { sections, ...rest } = spec[name];
-    containers[name] = { ...rest, size: DEFAULT_SIZES[name], sections: sections.map((ids) => newSection(ids)) };
+    const { sections, size, ...rest } = spec[name];
+    containers[name] = { ...rest, size: size || DEFAULT_SIZES[name],
+      sections: sections.map((ids) => { const s = newSection(ids); if (ids.includes(rest.active)) s.active = rest.active; return s; }) };
   }
   return normalizeWorkbench({ v: 1, containers }, views);
 }
@@ -579,7 +733,18 @@ export function normalizePresetStore(raw, views = VIEW_DEFAULTS) {
     if (presets.length >= MAX_PRESETS) break;
   }
   const def = String(src.default || "");
-  return { presets, default: BUILTIN_PRESETS.includes(def) || ids.has(def) ? def : "" };
+  const out = { presets, default: BUILTIN_PRESETS.includes(def) || ids.has(def) ? def : "" };
+  // The user's current arrangement (synced with the account, see
+  // layout-presets.js); kept through every preset edit.
+  if (src.layout && typeof src.layout === "object" && src.layout.v === 1) {
+    out.layout = storableLayout(normalizeWorkbench(src.layout, views), views);
+    // When it was saved (ms since the epoch): a browser applies the account
+    // copy only when it is newer than its own (a cached, older profile
+    // must not undo a later change made here).
+    const at = Number(src.layout_at);
+    if (Number.isSafeInteger(at) && at > 0) out.layout_at = at;
+  }
+  return out;
 }
 
 export function presetLayout(id, store, current = null, views = VIEW_DEFAULTS) {
@@ -594,8 +759,8 @@ export function defaultLayout(store, current = null, views = VIEW_DEFAULTS) {
 }
 
 // What the server stores for a layout (integer sizes in its bounds).
-export function storableLayout(layout) {
-  const clean = normalizeWorkbench(layout);
+export function storableLayout(layout, views = VIEW_DEFAULTS) {
+  const clean = normalizeWorkbench(layout, views);
   const containers = {};
   for (const name of CONTAINERS) {
     const box = clean.containers[name];
@@ -614,6 +779,25 @@ export function storableLayout(layout) {
 
 function slug(name) {
   return String(name).toLowerCase().normalize("NFKD").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 32) || "layout";
+}
+
+// The preset store with the user's current layout set (or removed with null).
+export function withCurrentLayout(store, layout, views = VIEW_DEFAULTS, at = 0) {
+  const clean = normalizePresetStore(store, views);
+  const { layout: _layout, layout_at: _at, ...rest } = clean;
+  if (!layout) return rest;
+  const out = { ...rest, layout: storableLayout(layout, views) };
+  if (Number.isSafeInteger(at) && at > 0) out.layout_at = at;
+  return out;
+}
+
+// Should a browser whose own layout dates from `localAt` take the account's
+// copy?  Only when the account has one that is newer (or the browser has
+// no date: first visit on this device).
+export function accountLayoutIsNewer(store, localAt = 0) {
+  if (!store?.layout) return false;
+  const at = Number(store.layout_at) || 0;
+  return !(Number(localAt) > 0) || at > Number(localAt);
 }
 
 // Save (or overwrite a same-named) user preset.  Returns { store, id }.
@@ -641,7 +825,7 @@ export function renamePreset(store, id, name) {
 
 export function deletePreset(store, id) {
   const clean = normalizePresetStore(store);
-  return { presets: clean.presets.filter((item) => item.id !== id), default: clean.default === id ? "" : clean.default };
+  return { ...clean, presets: clean.presets.filter((item) => item.id !== id), default: clean.default === id ? "" : clean.default };
 }
 
 export function setDefaultPreset(store, id) {

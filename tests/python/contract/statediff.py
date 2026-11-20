@@ -122,12 +122,21 @@ class StateNormalizer:
         return value
 
 
+# Tables only the Go server keeps, left out of the comparison: the project
+# picker's latest writer per project (ark_studio/server/internal/org/people.go).
+# Review rounds and groups (ark_studio/server/internal/store/reviewrounds.go,
+# reviewgroups.go) are created on first use.
+GO_ONLY_TABLES = ("project_last_writer", "project_invites", "org_options", "review_rounds", "review_groups",
+                  "review_group_members", "review_group_comments")
+
+
 def _dump_sqlite(path: Path, norm: StateNormalizer) -> dict:
     con = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
     try:
         out = {}
         tables = [r[0] for r in con.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_stat%' ORDER BY name")]
+            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_stat%' ORDER BY name")
+            if r[0] not in GO_ONLY_TABLES]
         for table in tables:
             cols = [r[1] for r in con.execute(f'PRAGMA table_info("{table}")')]
             try:
@@ -136,7 +145,8 @@ def _dump_sqlite(path: Path, norm: StateNormalizer) -> dict:
                 rows = sorted(con.execute(f'SELECT * FROM "{table}"').fetchall(), key=repr)
             out[table] = [{c: (norm.sealed(dict(zip(cols, row)), v) if (table, c) in SECRET_TABLE_COLUMNS
                                else norm.cell(c, v)) for c, v in zip(cols, row)} for row in rows]
-        out["__schema__"] = sorted(r[0] or "" for r in con.execute("SELECT sql FROM sqlite_master"))
+        out["__schema__"] = sorted(r[1] or "" for r in con.execute("SELECT tbl_name, sql FROM sqlite_master")
+                                   if r[0] not in GO_ONLY_TABLES)
         return out
     finally:
         con.close()

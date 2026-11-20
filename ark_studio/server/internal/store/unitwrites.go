@@ -53,9 +53,15 @@ type wtx struct {
 	units   []int64
 	full    bool // structure changed: the graph snapshot must rebuild
 	noTouch bool
+	// batch (Go only, batch.go) tags every activity entry of a multi-unit
+	// operation with one id, so the entries of one batch edit can be grouped.
+	batch string
 }
 
 func (w *wtx) log(actor, action string, unitID any, detail *pyjson.Object) error {
+	if w.batch != "" && detail != nil {
+		detail.Set("batch", w.batch)
+	}
 	line, err := logActivity(w.ctx, w.q, actor, action, unitID, detail)
 	if err != nil {
 		return err
@@ -274,6 +280,16 @@ func logNeeds(w *wtx, actor string, unitID int64, uid, title any, old, new strin
 		"from", nilIfEmpty(old), "to", nilIfEmpty(new)))
 }
 
+// logNeedsNote is logNeeds with the review note of a unit entering review
+// (Go only: the agents' update feed and the activity list show it).
+func logNeedsNote(w *wtx, actor string, unitID int64, uid, title any, old, new string, note *string) error {
+	detail := pyjson.NewObject("uid", uid, "title", title, "from", nilIfEmpty(old), "to", nilIfEmpty(new))
+	if note != nil && *note != "" && new == "review" {
+		detail.Set("review_note", *note)
+	}
+	return w.log(actor, "unit.needs", unitID, detail)
+}
+
 func nilIfEmpty(s string) any {
 	if s == "" {
 		return nil
@@ -358,6 +374,13 @@ func (s *Store) CreateUnit(ctx context.Context, data *pyjson.Object, actor strin
 }
 
 func (s *Store) createUnit(ctx context.Context, data *pyjson.Object, actor string, who Who) (int64, error) {
+	return s.createUnitIn(ctx, nil, data, actor, who)
+}
+
+// createUnitIn is createUnit inside an open write when outer is not nil (Go
+// only, batch.go): the unit row goes into that transaction, and links/media
+// in data are not supported there.
+func (s *Store) createUnitIn(ctx context.Context, outer *wtx, data *pyjson.Object, actor string, who Who) (int64, error) {
 	title, err := cleanTextField(data.Value("title"), "title", maxTitle, true)
 	if err != nil {
 		return 0, err
@@ -389,6 +412,17 @@ func (s *Store) createUnit(ctx context.Context, data *pyjson.Object, actor strin
 	needs := needsTransition("", typeName, status, false)
 	if needs != "" {
 		tags = append(tags, needsNS+":"+needs)
+	}
+	var reviewNote *string
+	if data.Has("review_note") {
+		note, err := cleanReviewNote(data.Value("review_note"))
+		if err != nil {
+			return 0, err
+		}
+		if needs != "review" {
+			return 0, storeErr("review_note needs status review")
+		}
+		reviewNote = &note
 	}
 	startAt, err := cleanDate(data.Value("start_at"), "start_at")
 	if err != nil {
@@ -435,7 +469,7 @@ func (s *Store) createUnit(ctx context.Context, data *pyjson.Object, actor strin
 	}
 	origin = pytext.Prefix(origin, 40)
 	var unitID int64
-	err = s.write(ctx, func(w *wtx) error {
+	insert := func(w *wtx) error {
 		w.full = true
 		uid, err := nextUID(ctx, w.q, typeName)
 		if err != nil {
@@ -465,11 +499,21 @@ func (s *Store) createUnit(ctx context.Context, data *pyjson.Object, actor strin
 			return err
 		}
 		if needs != "" {
-			return logNeeds(w, actor, unitID, uid, title, "", needs)
+			if err := reviewTransition(w, unitID, "", needs, body, actor, reviewNote); err != nil {
+				return err
+			}
+			return logNeedsNote(w, actor, unitID, uid, title, "", needs, reviewNote)
 		}
 		return nil
-	})
-	if err != nil {
+	}
+	if outer != nil {
+		if pyjson.Truthy(data.Value("links")) || pyjson.Truthy(data.Value("media")) ||
+			pyjson.Truthy(data.Value("members")) || pyjson.Truthy(data.Value("design")) {
+			return 0, storeErr("links, media and topic members cannot be set here")
+		}
+		return unitID, insert(outer)
+	}
+	if err = s.write(ctx, insert); err != nil {
 		return 0, err
 	}
 	links, err := listOf(data.Value("links"))
@@ -655,6 +699,27 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 		if !sameSorted(tags, oldTags) {
 			changed = append(changed, "tags")
 		}
+		// Go only: review_note, the reviewer's pointer for this review round.
+		var reviewNote *string
+		if patch.Has("review_note") {
+			note, err := cleanReviewNote(patch.Value("review_note"))
+			if err != nil {
+				return err
+			}
+			if needs != "review" {
+				return storeErr("review_note needs status review (set it together with status review, or while the unit is in review)")
+			}
+			reviewNote = &note
+			if oldNeeds == "review" {
+				current, open, err := openRoundNote(ctx, q, unitID)
+				if err != nil {
+					return err
+				}
+				if !open || current != note {
+					changed = append(changed, "review_note")
+				}
+			}
+		}
 		meta := row.Get("meta_json")
 		if patch.Has("meta") {
 			m, ok := patch.Value("meta").(*pyjson.Object)
@@ -714,6 +779,9 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 		if err := writeTags(ctx, q, unitID, tags); err != nil {
 			return err
 		}
+		if err := reviewTransition(w, unitID, oldNeeds, needs, body, actor, reviewNote); err != nil {
+			return err
+		}
 		fields := sortedUnique(changed)
 		detail := pyjson.NewObject("uid", row.Get("uid"), "title", title, "fields", fields)
 		if containsString(changed, "status") {
@@ -726,7 +794,7 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 			return err
 		}
 		if needs != oldNeeds {
-			return logNeeds(w, actor, unitID, row.Get("uid"), title, oldNeeds, needs)
+			return logNeedsNote(w, actor, unitID, row.Get("uid"), title, oldNeeds, needs, reviewNote)
 		}
 		return nil
 	}()
@@ -793,6 +861,9 @@ func syncNeeds(w *wtx, row sqlitedb.Row, archived bool, actor string) error {
 			return err
 		}
 	}
+	if err := reviewTransition(w, row.Int("id"), old, next, row.Str("body"), actor, nil); err != nil {
+		return err
+	}
 	return logNeeds(w, actor, row.Int("id"), row.Get("uid"), row.Get("title"), old, next)
 }
 
@@ -811,7 +882,9 @@ func (s *Store) ArchiveUnit(ctx context.Context, ref any, actor string) (*pyjson
 		if err := syncNeeds(w, row, true, actor); err != nil {
 			return err
 		}
-		links, err := sqlitedb.Query(ctx, w.q, "SELECT id, source_id, target_id, relation FROM unit_links WHERE source_id=? OR target_id=?",
+		links, err := sqlitedb.Query(ctx, w.q, `SELECT l.id, l.source_id, l.target_id, l.relation, l.note, l.created_at,
+                   l.created_by, s.uid suid, t.uid tuid FROM unit_links l JOIN units s ON s.id=l.source_id
+                   JOIN units t ON t.id=l.target_id WHERE l.source_id=? OR l.target_id=? ORDER BY l.id`,
 			row.Int("id"), row.Int("id"))
 		if err != nil {
 			return err
@@ -819,8 +892,10 @@ func (s *Store) ArchiveUnit(ctx context.Context, ref any, actor string) (*pyjson
 		if _, err := w.q.ExecContext(ctx, "DELETE FROM unit_links WHERE source_id=? OR target_id=?", row.Int("id"), row.Int("id")); err != nil {
 			return err
 		}
+		// The removed links go into the activity row so that a restore from
+		// the recycle bin can put the node back where it was (trash.go).
 		if err := w.log(actor, "unit.archive", row.Int("id"), pyjson.NewObject("uid", row.Get("uid"),
-			"title", row.Get("title"), "links_deleted", int64(len(links)))); err != nil {
+			"title", row.Get("title"), "links_deleted", int64(len(links)), "links", trashLinks(links))); err != nil {
 			return err
 		}
 		out = pyjson.NewObject("id", row.Get("id"), "uid", row.Get("uid"), "archived", true, "links_deleted", int64(len(links)))
@@ -844,7 +919,14 @@ func (s *Store) RestoreUnit(ctx context.Context, ref any, actor string) (*pyjson
 		if err := syncNeeds(w, row, false, actor); err != nil {
 			return err
 		}
-		if err := w.log(actor, "unit.restore", row.Int("id"), pyjson.NewObject("uid", row.Get("uid"), "title", row.Get("title"))); err != nil {
+		restored := int64(0)
+		if row.Int("archived") != 0 {
+			if restored, err = restoreTrashLinks(w, row); err != nil {
+				return err
+			}
+		}
+		if err := w.log(actor, "unit.restore", row.Int("id"), pyjson.NewObject("uid", row.Get("uid"), "title", row.Get("title"),
+			"links_restored", restored)); err != nil {
 			return err
 		}
 		out = pyjson.NewObject("id", row.Get("id"), "uid", row.Get("uid"), "archived", false)

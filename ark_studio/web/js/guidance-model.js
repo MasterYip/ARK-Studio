@@ -1,19 +1,25 @@
+// Five steps, one per stage of the core loop: capture (and connect your
+// agent), plan, evidence, execute, review and accept.  Graph layouts, filters
+// and phone pairing are taught where they are used (the tutorial chapters,
+// Settings), not here.  `target` is the element the spotlight frames.
 export const GUIDANCE_STEPS = [
-  { id: "home", workspace: "home" },
-  { id: "prompts", workspace: "home", target: ".start-panel" },
-  { id: "research", workspace: "research" },
-  { id: "map", workspace: "map" },
-  ...["force", "tree", "mind", "node"].map((id) => ({ id, surface: true, layout: id })),
-  { id: "edit", surface: true, layout: "mind", practice: true },
-  { id: "filter", surface: true, layout: "mind", practice: true },
-  { id: "relations", surface: true, layout: "mind" },
+  { id: "capture", workspace: "home", target: ".start-panel" },
+  { id: "plan", workspace: "research" },
+  { id: "evidence", workspace: "map" },
   { id: "execute", workspace: "execute" },
-  { id: "output", workspace: "output" },
-  { id: "editor", workspace: "editor" },
-  { id: "assistant", workspace: "assistant" },
-  { id: "settings", workspace: "settings" },
-  { id: "mobile", workspace: "settings", settingsTab: "access", target: ".android-apps" },
+  { id: "review", workspace: "home", target: ".needs-panel" },
 ];
+
+// The tutorial project (ARK Studio Demo).
+export const TUTORIAL_PROJECT_ID = "ark-demo";
+
+/**
+ * What finishing the last step does: in the tutorial project it opens the
+ * tutorial topic graph ("tutorial-topic"); elsewhere the guide just ends ("done").
+ */
+export function guidanceFinish(project) {
+  return project?.id === TUTORIAL_PROJECT_ID ? "tutorial-topic" : "done";
+}
 
 const STATUSES = new Set(["new", "paused", "dismissed", "completed"]);
 

@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	apidocs "arkstudio/go/internal/api/agentdocs"
+	chatapi "arkstudio/go/internal/api/chat"
 )
 
 // The agent docs API lives in internal/api/agentdocs.
@@ -14,10 +15,12 @@ import (
 // harness skips cases on them against Python, and diffreplay strips their
 // additions to /api/agent/v1/interface before comparing with Python
 // (tests/python/contract/go_only.py).
-var GoOnlyRoutes = []PortedRoute{
+var GoOnlyRoutes = append([]PortedRoute{
 	{"goonly:exact:/api/agent/v1/docs", "GET,HEAD"},
 	{"goonly:prefix:/api/agent/v1/docs/", "GET,HEAD"},
-}
+	{"goonly:exact:" + chatapi.PluginChatPath, "POST"}, // routes_chat.go (view plugins' ai:chat)
+}, append(append(append(desktopRoutesGoOnly, presenceRoutesGoOnly...), // routes_desktop.go, routes_presence.go
+	agentWatchGoOnly...), append(append(append(append(trashRoutesGoOnly, agentRulesGoOnly...), inviteRoutesGoOnly...), mediaThumbGoOnly...), append(append(append(reviewRoutesGoOnly, importArkGoOnly...), agentLinksGoOnly...), batchRoutesGoOnly...)...)...)...) // routes_agentwatch.go, routes_trash.go, routes_agentrules.go, routes_invites.go, media_thumb.go, routes_reviews.go, routes_importark.go, routes_agentlinks.go, routes_batch.go
 
 const markdownType = apidocs.MarkdownType
 

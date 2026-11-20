@@ -9,7 +9,7 @@ import com.masteryip.arkstudio.api.ArkClient;
 import com.masteryip.arkstudio.model.Board;
 import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.ui.Async;
-import com.masteryip.arkstudio.ui.Fmt;
+import com.masteryip.arkstudio.ui.Labels;
 import com.masteryip.arkstudio.ui.Ui;
 
 import org.json.JSONArray;
@@ -101,7 +101,7 @@ final class TasksPage extends ShellActivity.Page {
             case "blocked": return c.getString(R.string.status_blocked);
             case "done": return c.getString(R.string.status_done);
             case "archived": return c.getString(R.string.status_archived);
-            default: return Fmt.human(status);
+            default: return Labels.of(c, status);
         }
     }
 

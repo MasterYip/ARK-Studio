@@ -1,4 +1,4 @@
-// Copies the ARK brand assets the chooser uses from ark_studio/web/brand (the single
+// Copies the ARK brand assets the bundled pages use from ark_studio/web/brand (the single
 // source) into ui/brand, and checks that the sidecar binary for the target
 // triple exists (scripts/release/build-server.sh --sidecar src-tauri/binaries).
 import { copyFileSync, existsSync, mkdirSync, readdirSync } from "node:fs";

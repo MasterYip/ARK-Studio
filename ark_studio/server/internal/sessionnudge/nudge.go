@@ -1,0 +1,142 @@
+// Package sessionnudge reminds an agent that ARK launched (Run panel,
+// session sidebar) of people's replies in ARK while the agent sits idle
+// (T-0053, 2026-11-19).  An external agent watches the update feed itself
+// (GET /api/agent/v1/updates, the watcher scripts); a session ARK started
+// can also be woken from here when its project allows it: a running, idle
+// session that takes follow-up input gets the people's updates since the
+// last look as one short input turn, and a finished one-shot run (claude
+// -p, codex exec) that can be resumed natively is continued with it.
+//
+// The package knows nothing about the server: the caller supplies the
+// sessions, the update feed and the way to send input (Deps).
+package sessionnudge
+
+import (
+	"context"
+	"fmt"
+	"strings"
+	"sync"
+	"time"
+
+	"arkstudio/go/internal/compat/pyjson"
+)
+
+// Session is one ARK-launched session as the nudger sees it.
+type Session struct {
+	ID        string
+	ProjectID string
+	User      string // the account it acts for
+	Idle      bool   // running and quiet for a while
+	Accepts   bool   // takes follow-up input
+	Stopped   bool   // finished recently and can be resumed with a new turn
+}
+
+// Batch is the people's updates after a cursor.
+type Batch struct {
+	Items []*pyjson.Object
+	Epoch string
+	Top   int64
+}
+
+// Deps connects the nudger to the server.
+type Deps struct {
+	Sessions func() []Session
+	Enabled  func(projectID string) bool
+	Top      func(ctx context.Context, projectID string) (epoch string, top int64, err error)
+	Since    func(ctx context.Context, s Session, after int64) (Batch, error)
+	Send     func(s Session, text string) error
+}
+
+type cursor struct {
+	epoch string
+	after int64
+}
+
+// Nudger keeps one feed cursor per session.
+type Nudger struct {
+	D      Deps
+	mu     sync.Mutex
+	cursor map[string]cursor
+}
+
+// Tick looks once at every session; it returns the sessions nudged.
+func (n *Nudger) Tick(ctx context.Context) []string {
+	n.mu.Lock()
+	defer n.mu.Unlock()
+	if n.cursor == nil {
+		n.cursor = map[string]cursor{}
+	}
+	var sent []string
+	live := map[string]bool{}
+	for _, s := range n.D.Sessions() {
+		live[s.ID] = true
+		if s.ProjectID == "" || (n.D.Enabled != nil && !n.D.Enabled(s.ProjectID)) {
+			continue
+		}
+		c, ok := n.cursor[s.ID]
+		if !ok { // first sight: the feed starts now
+			if epoch, top, err := n.D.Top(ctx, s.ProjectID); err == nil {
+				n.cursor[s.ID] = cursor{epoch, top}
+			}
+			continue
+		}
+		if !(s.Idle && s.Accepts) && !s.Stopped {
+			continue // the agent is working: keep the cursor, nudge when it rests
+		}
+		b, err := n.D.Since(ctx, s, c.after)
+		if err != nil {
+			continue
+		}
+		if b.Epoch != c.epoch { // history replaced: start again at now
+			n.cursor[s.ID] = cursor{b.Epoch, b.Top}
+			continue
+		}
+		if len(b.Items) == 0 {
+			n.cursor[s.ID] = cursor{c.epoch, b.Top}
+			continue
+		}
+		if err := n.D.Send(s, Text(b.Items)); err != nil {
+			continue // try again next tick
+		}
+		n.cursor[s.ID] = cursor{c.epoch, b.Top}
+		sent = append(sent, s.ID)
+	}
+	for id := range n.cursor {
+		if !live[id] {
+			delete(n.cursor, id)
+		}
+	}
+	return sent
+}
+
+// Run ticks until ctx ends.
+func (n *Nudger) Run(ctx context.Context, every time.Duration) {
+	t := time.NewTicker(every)
+	defer t.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-t.C:
+			n.Tick(ctx)
+		}
+	}
+}
+
+const maxListed = 5
+
+// Text is the input turn: what happened, then what to do.
+func Text(items []*pyjson.Object) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "ARK: %d new update(s) from people while you were idle:\n", len(items))
+	for i, it := range items {
+		if i == maxListed {
+			fmt.Fprintf(&b, "- and %d more\n", len(items)-maxListed)
+			break
+		}
+		fmt.Fprintf(&b, "- %s\n", pyjson.Str(it.Value("summary")))
+	}
+	b.WriteString("Read GET /api/agent/v1/updates, act on them under the core rules (reply with reply_to, resolve, " +
+		"record decisions, set review for what I must look at), then go on. If you already handled them, say so in one line.")
+	return b.String()
+}

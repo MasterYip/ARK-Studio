@@ -20,8 +20,8 @@ html[data-theme="dark"] .ark-lockup-dark { display:block; }
 .entry-themes button:hover { color:var(--entry-accent); background:var(--entry-bg); }
 .entry-themes button:focus-visible { outline:2px solid var(--entry-accent); outline-offset:3px; }
 .entry-themes svg { width:18px; height:18px; }
-/* Match the native controls' center line, with an 8 px gap on their left. */
-body:has(#ark-desktop-controls) .entry-themes { top:var(--ark-desktop-controls-top,9px); right:104px; height:32px; display:grid; align-items:center; }
+/* Match the window controls' center line, with an 8 px gap on their left (reserve: see app.css). */
+body:has(#ark-desktop-controls) .entry-themes { top:var(--ark-desktop-controls-top,9px); right:var(--ark-desktop-controls-reserve,calc(var(--ark-desktop-controls-space,102px) + 8px)); height:32px; display:grid; align-items:center; }
 body:has(#ark-desktop-controls) .entry-themes button { width:28px; height:28px; }
 body:has(#ark-desktop-controls) .entry-brand { max-width:calc(100% - 188px); }
 .entry-progress { position:absolute; z-index:1; left:40px; bottom:40px; width:min(320px,calc(100% - 80px)); }

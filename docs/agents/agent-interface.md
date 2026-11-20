@@ -74,7 +74,9 @@ GET /api/agent/v1/setup          # state, readiness, open questions, summary
 
 If `readiness.ready` is false, or the state is `stale`, the agent runs the
 **setup** skill. It discovers read-only, asks the user the open questions one
-stage at a time, then drafts and proposes the profile. It stops before task
+stage at a time, then drafts and proposes the profile. One
+`POST /api/agent/v1/setup/propose {}` sends every changed layer (the project
+layer and the agent's user layer) for confirmation. It stops before task
 work. Only a human confirms the exact profile digest; agents receive `403`.
 Verify is read-only.
 
@@ -141,6 +143,10 @@ X-ARK-Project: <project id>             # account mode: which project to use
   Tokens may expire (never / 30 / 90 days); revoking the token, or disabling
   or deleting the account, stops it at once. Each account may hold 10 active
   tokens. Failed bearer attempts are rate-limited per client (HTTP 429).
+  Home -> "Copy prompt" rotates instead of piling up: its token is labelled
+  "Home starter prompt (<project id>) – <date>", and each copy revokes the
+  older starter tokens of that project except the previous one, so an agent
+  started from the last copy keeps working and at most two stay active.
 - `GET /api/agent/v1/whoami` returns `{user, actor, token_kind, token_label,
   scope, expires_at, projects}`: who the agent acts for and which projects
   (with effective permission) it can reach. Call it first.
@@ -331,6 +337,27 @@ most multi-agent failures start at the hand-off, not at the model.
 - **Artifacts** live under the project (`assets/`, `reports/`) and are attached
   via `/api/agent/v1/media`; the body carries the claim and the link.
 
+### Presence: announce what you work on
+
+The project's graphs show live which agent is on which node.  Reads of one
+unit (`GET /api/agent/v1/units/<id>`) and every write (create, update,
+status, comment, media, link) place your badge on the node for 30 s; nothing
+is stored.  For longer work on one node, announce it:
+
+```http
+POST /api/agent/v1/presence
+{"unit": "T-0043", "state": "working", "note": "Implementing the overlay"}
+```
+
+`state` is `working` (kept 5 min, refreshed by another announcement or any
+touch of the node) or `done` (ends it).  The reply, like
+`GET /api/presence` for project members, is
+`{"project", "entries": [{"actor", "label", "kind": "cursor"|"working",
+"state": "reading"|"writing"|"working", "unit", "uid", "title", "action",
+"note", "at", "expires_at"}], "now", "ttl"}`.  The browser receives the same
+payload as `event: presence` on `GET /api/events?presence=1`.  Your badge is
+named after `X-Agent-Name` (or the token's account).
+
 ### GPU Queue Monitoring
 
 For the GPU queue list, use `GET /api/agent/v1/gpu/jobs?limit=100` with a personal
@@ -346,6 +373,78 @@ first, with deterministic ID ordering for tied timestamps. Responses include
 Explicit `/jobs/<id>/logs?tail=20` requests may fetch remote logs. See the
 [monitoring contract](../operations/gpu.md#queue-monitoring-api) for authorization, paging
 semantics and examples. Native task-token routes enforce the exact session.
+
+### Updates for the agent
+
+`GET /api/agent/v1/updates` is how an agent learns what people did since it
+last looked: comments and replies, Send back and Accept on review nodes,
+answered decisions, changes to its units, tasks assigned to its user, setup
+confirmations and (experimental) messages. Read scope is enough.
+
+| Parameter | Meaning |
+| --- | --- |
+| `since` | the `cursor` of the previous reply; omitted, the reply starts the feed at "now" (no items) |
+| `wait` | 0–60 seconds; the request is held until an update arrives or the time is up |
+| `kinds` | comma-separated item kinds (unknown kinds: 400 `BAD_KINDS`) |
+| `mine=1` | only units the agent or its user created, or that are assigned to the user |
+| `limit` | activity rows read per call, 1–500 (default 100) |
+
+Reply: `{cursor, items, count, more, reset, reason?, mine, kinds, waited_ms}`.
+Each item is `{id, kind, unit, uid, title, type, status, actor, at, summary,
+link}` plus `comment {id, body, kind, reply_to, resolved}`, `change {field,
+from, to}`, `layer` or `message {id, body, status, ack, reply}` where the
+kind has one. Kinds: `comment`, `reply`, `mention`, `sent_back`, `accepted`,
+`decided`, `comment_reopened`, `status`, `assignee`, `importance`,
+`archived`, `assigned`, `decision`, `setup_confirmed`, `message`.
+
+- **Cursor.** Opaque; it encodes the project's activity log position and
+  history epoch. A cursor from another project, a malformed one or one from
+  before a snapshot restore returns `reset: true` with a fresh cursor and no
+  items.
+- **Who.** Only actions by people (and the Assistant acting for them) are
+  items; writes with any agent token are not.
+- **Long poll.** A waiting request wakes on the server's write notification,
+  not by polling; at most 4 waiting requests per token (429
+  `AGENT_WAIT_LIMIT`). Waiting requests do not count against the server's
+  request limits.
+- **CLI.** `ark-server agent watch` wraps the route; see
+  [Watch for replies](working-mode.md#watch-for-replies) for when to check
+  and what to do with each kind.
+
+Experimental messages (off in the UI until Settings > Advanced >
+"Experimental: message agents" is on; see
+[Agent messaging](../development/agent-messaging.md)):
+
+| Route | Purpose |
+| --- | --- |
+| `GET /api/agent/v1/messages?status=` | messages for this agent (marks queued ones delivered) |
+| `GET /api/agent/v1/messages/{id}` | one message with its thread |
+| `POST /api/agent/v1/messages/{id}/ack` | mark it read (write scope) |
+| `POST /api/agent/v1/messages/{id}/reply` | `{body}`: reply; the person sees it in ARK (write scope) |
+
+### Links
+
+Links are typed edges between two units (`source` → `target`, one
+`relation`). A pair of units can carry several relations, one link each.
+
+| Request | What it does |
+| --- | --- |
+| `POST /api/agent/v1/links` | `{source, target, relation, note?}`: create a link (`relation` defaults to `relates_to`; an existing link answers `already: true`) |
+| `GET /api/agent/v1/units/{uid}/links` | the unit's links: `{id, direction, relation, source, target, note, created_by, other}`, `direction` is `out` (the unit is the source) or `in`; filters `?direction=in\|out&relation=` |
+| `DELETE /api/agent/v1/links` | `{source, target, relation?}` in the JSON body or the query: delete that link |
+| `DELETE /api/agent/v1/links/{id}` | delete one link by id |
+| `PATCH /api/agent/v1/links/{id}` | `{relation}`: change the relation of one link |
+
+Deleting by pair without `relation` works when the two units have exactly one
+link from `source` to `target`; with several it answers 409 `LINK_AMBIGUOUS`
+and lists them in `links`. No such link answers 404 `LINK_NOT_FOUND`; the
+message names a link in the opposite direction if there is one.
+`relates_to` and `unset` have no direction, so either order deletes them.
+Changing a relation to one the pair already has answers 409 `LINK_EXISTS`.
+The writes need write scope, show in activity as `link.delete` /
+`link.update` with your agent name, and appear in other agents' updates like
+any other write. Removing a `part_of` link detaches the child from its parent;
+the child stays in the project.
 
 ### Project palette
 

@@ -99,7 +99,8 @@ function onRevision(data) {
 
 function connect() {
   if (typeof EventSource === "undefined") { startPolling(); return; }
-  const url = authenticatedUrl("/api/events");
+  // presence=1: the agent presence frames too (presence.js, T-0043).
+  const url = authenticatedUrl("/api/events?presence=1");
   source = new EventSource(url);
   let opened = false;
   const stream = source;
@@ -123,6 +124,12 @@ function connect() {
     const project = tabProjectId();
     clientCache.markStale((route) => /^\/api\/(agent-sessions|session-contexts|worktrees|gpu\/dashboard)/.test(route), project);
     emit("ark:sessions-changed", { project });
+  });
+  // Which agent is on which node (the full live set each time).
+  source.addEventListener("presence", (event) => {
+    let data;
+    try { data = JSON.parse(event.data); } catch { return; }
+    emit("ark:presence", data);
   });
   source.addEventListener("denied", () => {
     stop();
@@ -179,6 +186,7 @@ function startPolling() {
   };
   tick();
   pollTimer = window.setInterval(tick, POLL_MS);
+  emit("ark:live", { live: false, polling: true });
 }
 
 function stop() {
@@ -186,9 +194,22 @@ function stop() {
   reconnectTimer = 0;
   source?.close();
   source = null;
-  if (pollTimer) window.clearInterval(pollTimer);
-  pollTimer = 0;
+  if (pollTimer) {
+    window.clearInterval(pollTimer);
+    pollTimer = 0;
+    emit("ark:live", { live: false, polling: false });
+  }
   setLive(false);
+}
+
+/** Open a fresh stream unless one is live (also leaves polling to retry it). */
+function reconnect() {
+  if (!started || syncState.live) return;
+  stop();
+  failures = 0;
+  reconnectDelay = PROBE_MIN_MS;
+  knownRevision = "";
+  connect();
 }
 
 export const liveSync = {
@@ -201,24 +222,22 @@ export const liveSync = {
   /** Project switched: reconnect for the new project. */
   restart() {
     stop();
+    emit("ark:presence-reset", { project: tabProjectId() });
     knownRevision = "";
     knownCursor = "";
     connect();
   },
   stop() { started = false; stop(); },
+  /** "Sync now": reconnect a stream that is down. */
+  reconnect,
   retryPending,
   get pending() { return pending; },
+  /** The stream is blocked and the revision poll runs instead. */
+  get polling() { return Boolean(pollTimer); },
 };
 
 // The server is reachable again: open a fresh stream (an old one may be
 // CLOSED for good) and catch up through the delta.
 if (typeof window !== "undefined") {
-  window.addEventListener("ark:reconnected", () => {
-    if (!started || syncState.live) return;
-    stop();
-    failures = 0;
-    reconnectDelay = PROBE_MIN_MS;
-    knownRevision = "";
-    connect();
-  });
+  window.addEventListener("ark:reconnected", reconnect);
 }

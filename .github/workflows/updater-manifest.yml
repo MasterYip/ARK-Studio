@@ -1,0 +1,60 @@
+# Keeps the updater's second endpoint current: copies latest.json of a
+# published vX.Y.Z release to the fixed release with the tag `updater`
+# (created as a pre-release when missing, so `releases/latest` never points
+# at it). Installed apps read releases/latest/download/latest.json first and
+# releases/download/updater/latest.json second (tauri.conf.json).
+#
+# Runs when a release is published (release.yml leaves its release as a
+# draft; draft assets are not downloadable, so the copy waits for publishing),
+# or by hand for a given tag. Releases without latest.json, pre-releases and
+# versions older than the current copy are skipped
+# (scripts/release/updater-mirror.mjs). See docs/development/release.md.
+name: Updater manifest
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release tag to copy latest.json from (vX.Y.Z)"
+        required: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: updater-manifest
+  cancel-in-progress: false
+
+jobs:
+  mirror:
+    name: Copy latest.json to the updater release
+    runs-on: ubuntu-22.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      REPO: ${{ github.repository }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          sparse-checkout: scripts/release
+      - name: Copy when newer
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/updater"; mkdir -p "$work/release" "$work/current"
+          prerelease="$(gh release view "$TAG" --repo "$REPO" --json isPrerelease,isDraft -q 'if .isDraft then "true" else (.isPrerelease|tostring) end')"
+          gh release download "$TAG" --repo "$REPO" -p latest.json -D "$work/release" 2>/dev/null || true
+          if gh release view updater --repo "$REPO" >/dev/null 2>&1; then
+            gh release download updater --repo "$REPO" -p latest.json -D "$work/current" 2>/dev/null || true
+          fi
+          decision="$(node scripts/release/updater-mirror.mjs decide "$TAG" "$prerelease" "$work/release/latest.json" "$work/current/latest.json")"
+          echo "$decision"
+          [ "$decision" = copy ] || exit 0
+          if ! gh release view updater --repo "$REPO" >/dev/null 2>&1; then
+            gh release create updater --repo "$REPO" --target "$GITHUB_SHA" --prerelease --latest=false \
+              --title "ARK Studio updater" \
+              --notes "Update manifest for installed ARK Studio apps (a copy of the newest release's latest.json). Not a release: download ARK Studio from the latest release."
+          fi
+          gh release upload updater "$work/release/latest.json" --repo "$REPO" --clobber
+          gh release download updater --repo "$REPO" -p latest.json -O - | head -c 400; echo

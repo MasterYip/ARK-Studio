@@ -13,6 +13,7 @@ import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.platform.Accounts;
 import com.masteryip.arkstudio.ui.Async;
 import com.masteryip.arkstudio.ui.Fmt;
+import com.masteryip.arkstudio.ui.Labels;
 import com.masteryip.arkstudio.ui.Ui;
 
 import org.json.JSONArray;
@@ -124,7 +125,7 @@ final class HomePage extends ShellActivity.Page {
         LinearLayout row = Ui.row(a);
         row.addView(Ui.label(a, a.getString(R.string.setup_status), 15, Ui.text(a), true), Ui.lp(0, Ui.WRAP, 1));
         boolean good = state.equals("confirmed") || state.equals("verified");
-        row.addView(Ui.chip(a, Fmt.human(state), good ? Ui.ok(a) : Ui.warn(a), good ? Ui.okSoft(a) : Ui.warnSoft(a)));
+        row.addView(Ui.chip(a, Labels.of(a, state), good ? Ui.ok(a) : Ui.warn(a), good ? Ui.okSoft(a) : Ui.warnSoft(a)));
         card.addView(row);
         if (!good) {
             card.addView(Ui.small(a, a.getString(R.string.setup_hint)));
@@ -175,21 +176,36 @@ final class HomePage extends ShellActivity.Page {
         int color = severity.equals("high") ? Ui.danger(a) : severity.equals("medium") ? Ui.warn(a) : Ui.muted(a);
         int soft = severity.equals("high") ? Ui.dangerSoft(a) : severity.equals("medium") ? Ui.warnSoft(a)
                 : Ui.codeBg(a);
-        row.addView(Ui.chip(a, Fmt.human(action.optString("kind")), color, soft));
+        row.addView(Ui.chip(a, Labels.of(a, action.optString("kind")), color, soft));
         row.addView(Ui.oneLine(Ui.label(a, action.optString("title"), 15, Ui.text(a), true)), Ui.lp(0, Ui.WRAP, 1));
         card.addView(row);
-        String detail = action.optString("detail", "");
+        String detail = actionDetail(action);
         if (!detail.isEmpty()) card.addView(Ui.small(a, detail));
         JSONObject unit = action.optJSONObject("unit");
         if (unit != null) Ui.clickable(card, v -> openUnit(unit.optString("uid"), unit.optString("type")));
         return card;
     }
 
+    /** The server sends English details; the kind says which one, like the web overview. */
+    private String actionDetail(JSONObject action) {
+        String detail = action.optString("detail", "");
+        switch (action.optString("kind")) {
+            case "overdue":
+                return detail.startsWith("Due ")
+                        ? a.getString(R.string.action_overdue, detail.substring(4)) : detail;
+            case "blocked": return a.getString(R.string.action_blocked);
+            case "claim": return a.getString(R.string.action_claim);
+            case "assign": return a.getString(R.string.action_assign);
+            case "idea": return a.getString(R.string.action_idea);
+            default: return detail;
+        }
+    }
+
     private View activityRow(JSONObject item) {
         LinearLayout row = Ui.column(a);
         row.setPadding(0, Ui.dp(a, 8), 0, Ui.dp(a, 8));
         String title = item.optString("unit_title", "");
-        String action = item.optString("action", "");
+        String action = Labels.of(a, item.optString("action", ""));
         TextView line = Ui.oneLine(Ui.body(a, title.isEmpty() ? action : title));
         row.addView(line);
         row.addView(Ui.oneLine(Ui.small(a, item.optString("actor", "") + " · " + action + " · "
@@ -229,7 +245,7 @@ final class HomePage extends ShellActivity.Page {
             int checked = -1;
             for (int i = 0; i < projects.length(); i++) {
                 JSONObject p = projects.optJSONObject(i);
-                names[i] = p.optString("name") + "  (" + Fmt.human(p.optString("permission")) + ")";
+                names[i] = p.optString("name") + "  (" + Labels.of(a, p.optString("permission")) + ")";
                 if (p.optString("id").equals(result.optString("current"))) checked = i;
             }
             new AlertDialog.Builder(a)

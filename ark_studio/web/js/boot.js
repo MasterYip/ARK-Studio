@@ -112,6 +112,7 @@
   }
   function finish() {
     if (ready) return;
+    try { sessionStorage.removeItem("ark.boot.retriedAt"); } catch (_) { /* storage disabled */ }
     progress(4); ready = true; clearTimeout(slowTimer);
     performance.mark("ark-ready");
     // Cached loads have no artificial minimum animation duration.
@@ -122,8 +123,19 @@
       window.removeEventListener("unhandledrejection", onRejection);
     });
   }
+  // A file that failed to load is usually transient (a burst limit, a
+  // deploy swapping files): reload once by itself before showing the error.
+  var RETRY_KEY = "ark.boot.retriedAt";
+  function retriedRecently() {
+    try { return Date.now() - Number(sessionStorage.getItem(RETRY_KEY) || 0) < 30000; } catch (_) { return true; }
+  }
   function fail(message) {
     if (ready) return;
+    if (!retriedRecently()) {
+      var marked = false;
+      try { sessionStorage.setItem(RETRY_KEY, String(Date.now())); marked = true; } catch (_) { /* no storage: show the error */ }
+      if (marked) { ready = true; setTimeout(function () { location.reload(); }, 400); return; }
+    }
     clearTimeout(slowTimer);
     host.classList.add("has-error"); stage.textContent = message;
     track.removeAttribute("aria-valuenow");

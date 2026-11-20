@@ -151,6 +151,7 @@ func (s *Store) noteWrite(ctx context.Context, before string, units []int64) {
 	}); err != nil {
 		after = ""
 	}
+	defer s.signalWrite() // wake long polls (updates.go, Go only)
 	l := &s.snap.log
 	s.snap.logMu.Lock()
 	defer s.snap.logMu.Unlock()

@@ -3,6 +3,7 @@ const TAG_STORAGE_KEY = "ark.tagShortcuts.v1";
 export const DEFAULT_SHORTCUTS = {
   palette: "Ctrl+K",
   chat: "Alt+J",
+  sync: "Alt+R",
   newUnit: "N",
   editorSave: "Ctrl+S",
   editorClose: "Ctrl+W",
@@ -17,6 +18,8 @@ export const SHORTCUT_ACTIONS = [
     hintKey: "settings.palette_shortcut_hint" },
   { id: "chat", labelKey: "settings.chat_shortcut",
     hintKey: "settings.chat_shortcut_hint" },
+  { id: "sync", labelKey: "settings.sync_shortcut",
+    hintKey: "settings.sync_shortcut_hint" },
   { id: "newUnit", labelKey: "settings.new_shortcut",
     hintKey: "settings.new_shortcut_hint" },
   { id: "editorSave", labelKey: "settings.editor_save_shortcut",

@@ -3,20 +3,32 @@
 // localStorage ark.settingsTab, guidance steps) resolve to a tab + section.
 // Pure data so tests can check it without a DOM.
 
+// Scopes: "overview" is the first screen (what lives where, plus shortcuts);
+// "project" is shared with every collaborator; "personal" follows your
+// account, except the "browser" tab, which is stored only in this browser.
+// Graph display settings live under Appearance by graph type (T-0036): the
+// project defaults in the "graph" section, a person's overrides in
+// "graphOverride".
+// Tabs marked `advanced` are listed under an "Advanced" heading.
 export const SETTINGS_TABS = [
+  { id: "overview", scope: "overview", sections: ["overview"] },
   { id: "appearance", scope: "project", sections: ["appearance", "graph"] },
-  { id: "agents", scope: "project", sections: ["projectAgents", "projectAssistant", "providers", "skills"] },
-  { id: "resources", scope: "project", sections: ["setupResources", "gpu"] },
-  { id: "access", scope: "project", sections: ["mobile", "remote", "sessionUploads"] },
+  { id: "agents", scope: "project", sections: ["projectAgents", "agentRules", "projectAssistant", "providers", "skills"] },
   { id: "data", scope: "project", sections: ["data", "blackbox", "deleteProject"] },
+  { id: "trash", scope: "project", sections: ["trash"] },
+  { id: "members", scope: "project", sections: ["members"] },
+  { id: "resources", scope: "project", advanced: true, sections: ["setupResources", "gpu"] },
+  { id: "access", scope: "project", advanced: true, sections: ["mobile", "sessionUploads"] },
   { id: "profile", scope: "personal", sections: ["profile", "account", "environment"] },
-  { id: "display", scope: "personal", sections: ["display", "appearanceOverride", "shortcuts", "guidance"] },
-  { id: "personalAI", scope: "personal", sections: ["assistant", "personalAgents", "agentAccess"] },
+  { id: "display", scope: "personal", sections: ["display", "advanced", "appearanceOverride", "graphOverride", "shortcuts", "guidance"] },
+  { id: "personalAI", scope: "personal", sections: ["assistant", "personalAgents", "personalAgentRules", "agentAccess"] },
+  { id: "plugins", scope: "personal", sections: ["plugins"] },
+  { id: "browser", scope: "personal", sections: ["infohubSource", "remote"] },
   { id: "about", scope: "personal", sections: ["about"] },
   { id: "admin", scope: "admin", sections: ["admin"] },
 ];
 
-export const DEFAULT_SETTINGS_TAB = "appearance";
+export const DEFAULT_SETTINGS_TAB = "overview";
 
 // The section that owns the graph Save/Discard/Reset controls.
 export const GRAPH_SECTION = "graph";

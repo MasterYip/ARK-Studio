@@ -1,13 +1,16 @@
 import {
   api, exportUrl, getMobileToken, setMobileToken, clearMobileToken, setTabProject, tabProjectId,
   configureClientCache, clearClientData, clientCache, prefetchUnits, prefetchRoute, qs,
-  startEarlyGet, adoptBootRequests, prefetchProject, dropProjectPrefetch,
+  startEarlyGet, adoptBootRequests, prefetchProject, dropProjectPrefetch, checkConnectivity, syncState,
 } from "./api.js";
 import { liveSync } from "./live-sync.js";
+import { loadPresence, setPresenceEnabled } from "./presence.js";
 import { installSyncStatus, markFirstRender } from "./sync-status.js";
+import { installSyncNow, requestSync, syncTopButton } from "./sync-now.js";
+import { installPullToSync } from "./pull-to-sync.js";
 import { cacheRoute, prefetchPlan, slowConnection } from "./client-cache-model.js";
-import { UNIT_SAVED_EVENT } from "./unit-edit.js";
-import { S, setTab, persistFilters, resetFilters, saveFiltersAsDefault, clearFilterDefault, setLanguage, toggleTheme, activeFilterCount, filtersActive, filtersToParams, baseTypes, routeKey, PLAN_SUBS, emptyFilters, toggleTypeFilter, toggleStatusFilter, toggleImportanceFilter } from "./state.js";
+import { UNIT_SAVED_EVENT, syncUnitLocally } from "./unit-edit.js";
+import { S, setTab, persistFilters, resetFilters, saveFiltersAsDefault, clearFilterDefault, setLanguage, toggleTheme, activeFilterCount, filtersActive, filtersToParams, baseTypes, routeKey, PLAN_SUBS, emptyFilters, toggleTypeFilter, toggleStatusFilter, toggleImportanceFilter, RECENT_DAYS } from "./state.js";
 import { applyProjectPalette } from "./appearance.js";
 import { appearanceOverrides, resolveAppearance, APPEARANCE_CHANGED } from "./appearance-overrides.js";
 import { t, getLang } from "./i18n.js";
@@ -21,10 +24,11 @@ import {
   initPwa, renderPairGate, promptInstall, pwaSnapshot, syncThemeColor, watchKeyboard,
 } from "./mobile-ui.js";
 import {
-  toast, openModal, openProjectModal, projectRows, refreshedProjectRows, openCreateUnit, openImportModal, openAssistant, openLinkModal, openDispatchModal,
-  openExtractModal, openBulkEdit, openRelationModal, renderFilterRail, closeOverlay, viewToggle,
+  toast, openModal, openProjectModal, openCreateUnit, openImportModal, openAssistant, openLinkModal, openDispatchModal,
+  openExtractModal, openRelationModal, renderFilterRail, closeOverlay, viewToggle, confirmDialog, actorLabel,
 } from "./components.js";
 import { openInspector, closeInspector, showInspectorPlaceholder } from "./inspector.js";
+import { openMultiInspector, multiInspectorWanted } from "./inspector-multi.js";
 import { renderOverview } from "./views/overview.js";
 import { saveFiltersAsTopic } from "./topic-actions.js";
 import { ruleFromFilters } from "./topic-model.js";
@@ -34,29 +38,50 @@ import { renderEditor, editorExplorerVisible, setExplorerVisible, EXPLORER_CHANG
 import { keyFromRoute } from "./editor-model.js";
 import { needsCount } from "./needs-model.js";
 import { installUnitContextMenu, openUnitInEditor } from "./unit-menu.js";
-import { setActiveGraphPhysics, setActiveGraphArrows } from "./graph.js";
+import { setActiveGraphPhysics, setActiveGraphArrows, setMindNodeStore } from "./graph.js";
+import { getMindSettings, setActiveGraphDisplay } from "./mind-settings.js";
+import { createMindNodeStore } from "./mind-node-state.js";
 import { GraphFilterIndex } from "./graph-filter.js";
 import { mountGuidance } from "./guidance.js";
+import { maybeShowWelcome } from "./views/welcome.js";
+import { startReloadGuard, safeUrl, reopenTarget } from "./reload-guard.js";
 import { getShortcut, formatShortcut, shortcutMatches, shortcutLabel, SHORTCUTS_CHANGED } from "./shortcuts.js";
 import { applyLayoutPrefs, mountSessionDock, relocalizeSessionDock, toggleSessionDock, clearAssistantHistory } from "./session-dock.js";
 import {
-  initWorkbench, registerView, viewHost, shellActive, render as renderWorkbench, toggleWorkbenchContainer,
-  containerState, containerTitle, workbenchKeyDown, viewContainerVisible, WORKBENCH_CHANGED, showView,
+  initWorkbench, viewHost, shellActive, render as renderWorkbench, toggleWorkbenchContainer,
+  containerState, containerTitle, workbenchKeyDown, viewContainerVisible, WORKBENCH_CHANGED, showView, revealView,
+  setActivityFooter,
 } from "./workbench.js";
 import { createTerminalPanel } from "./terminal-panel.js";
+import { createSessionSidebar } from "./session-sidebar.js";
+import { initPluginHost, registerBuiltinView, loadUserPlugins } from "./plugin-host.js";
 import { createChangesPanel } from "./changes-panel.js";
 import { createSearchPanel } from "./search-view.js";
 import { createLocalGraphPanel } from "./local-graph-view.js";
 import { initLayoutPresets, openLayoutMenu, presetCommands } from "./layout-presets.js";
 import { assigneeMatches } from "./filter-store.js";
 import { setUserDirectory } from "./users.js";
-import { accountMenuButton, initProfilePrefs } from "./profile.js";
+import {
+  accountMenuButton, homeFilterQuery, initProfilePrefs, mindLayoutEntry, saveMindLayoutEntry, PROFILE_REFRESHED,
+} from "./profile.js";
 import { trackActivationPoint } from "./floating-position.js";
 import { installDesktopShell } from "./desktop-shell.js";
+import { withDesktopGroups, applyDesktopQuery, confirmLinkDesktop } from "./desktop-hub.js";
+import { advancedEnabled, ADVANCED_CHANGED } from "./advanced.js";
+import { liveProjectPicker, initProjectPrefs, withKnownActivity } from "./project-picker.js";
+import { contextMenuOpen } from "./context-menu.js";
+import { reviewHash, reviewView } from "./needs-model.js";
+import { parseJoinHash, openJoinDialog } from "./invites.js";
 
 // Inside the ARK Studio desktop app (borderless window): top bar = title bar.
 installDesktopShell();
 
+// A load right after the page hung (or crashed), or with ?safe=1, starts at
+// Home instead of reopening the view that hung it (reload-guard.js).
+const startGuard = startReloadGuard();
+if (startGuard.safe && !parsePairHash(location.hash)) {
+  try { history.replaceState(null, "", safeUrl(location.href)); } catch { /* ignore */ }
+} else startGuard.safe = false;
 const appRoot = document.getElementById("app");
 const topbar = document.getElementById("topbar");
 const mobileTabbar = document.getElementById("mobile-tabbar");
@@ -81,16 +106,9 @@ const WORKSPACES = [
   ["editor", "nav.editor", "edit"],
 ];
 
-// Assistant and Settings remain utilities in the right-hand icon cluster,
-// matching the old shell instead of competing with the research workspaces.
-const AUX_WORKSPACES = [
-  ["assistant", "nav.assistant", "message"],
-  ["settings", "nav.settings", "settings"],
-];
-
 const WORKSPACE_TABS = {
   home: ["overview"],
-  research: ["ideas", "plan"],
+  research: ["ideas", "plan", "review"],
   map: ["map"],
   execute: ["tasks"],
   output: ["production", "distribution"],
@@ -120,6 +138,7 @@ function workspaceHashForRoute(tab = S.tab, sub = S.sub) {
   if (tab === "overview") return "#/home";
   if (tab === "ideas") return "#/research/idea";
   if (tab === "plan") return `#/research/${PLAN_SUBS.includes(sub) ? sub : "story"}`;
+  if (tab === "review") return reviewHash(S.reviewView);
   if (tab === "map") return "#/map";
   if (tab === "tasks") {
     const view = EXECUTE_VIEWS.includes(S.taskView) ? S.taskView : "board";
@@ -136,10 +155,15 @@ function navigateWorkspace(workspace, detail = null) {
   let tab = "overview";
   let sub = "story";
   let taskView = null;
+  let review = null;
   if (workspace === "research") {
     const stage = String(detail || "").replace(/^plan\//, "");
     if (detail === "idea" || detail === "capture") tab = "ideas";
-    else if (PLAN_SUBS.includes(stage)) {
+    else if (/^review(\/|$)/.test(String(detail || ""))) {
+      // Research › Review: "review" (waiting) or "review/history".
+      tab = "review";
+      review = reviewView(String(detail).split("/")[1]);
+    } else if (PLAN_SUBS.includes(stage)) {
       tab = "plan";
       sub = stage;
     } else {
@@ -165,15 +189,17 @@ function navigateWorkspace(workspace, detail = null) {
   }
   if (S.tab === tab && (tab !== "plan" || S.sub === sub)
       && (!taskView || S.taskView === taskView)
+      && (!review || reviewView(S.reviewView) === review)
       && workspaceForTab(S.tab) === workspace) {
     syncTopbar();
     return;
   }
   setTab(tab, sub);
   if (taskView) S.taskView = EXECUTE_VIEWS.includes(taskView) ? taskView : "board";
+  if (review) S.reviewView = review;
   S.workspace = workspace;
   const hash = workspace === "research"
-    ? (tab === "ideas" ? "#/research/idea" : `#/research/${sub}`)
+    ? (tab === "ideas" ? "#/research/idea" : tab === "review" ? reviewHash(S.reviewView) : `#/research/${sub}`)
     : workspace === "execute" ? `#/execute/${S.taskView}`
     : workspace === "output" ? workspaceHashForRoute(tab)
     : workspace === "editor" ? workspaceHashForRoute("editor")
@@ -193,6 +219,14 @@ const ctx = {
     return false;
   },
   refresh: () => renderRoute({ keepScroll: true }),
+  // Data changed in this tab: graph views update in place (refreshData).
+  refreshData: () => refreshData(),
+  // Units saved in this tab (assignee picker, Assign to ▸): patch them where
+  // they are shown, then reconcile without rebuilding a graph.
+  unitsChanged: (units) => {
+    for (const unit of units || []) if (unit) syncUnitLocally(ctx, unit);
+    return refreshData();
+  },
   changeLanguage: (lang) => changeLanguage(lang),
   renderTopbar: () => renderTopbar(),
   get graphs() { return graphs; },
@@ -201,6 +235,7 @@ const ctx = {
   syncInspectorMode: async (mode = "") => {
     if (mode) {
       S.graphMode = mode === "read" ? "read" : "edit";
+      try { localStorage.setItem("ark.graphMode", S.graphMode); } catch { /* storage disabled */ }
       if (ctx._syncingGraphMode) return;
       ctx._syncingGraphMode = true;
       try {
@@ -211,6 +246,10 @@ const ctx = {
       } finally {
         ctx._syncingGraphMode = false;
       }
+    }
+    if (S.drawerOpen && S.multi) {
+      await openMultiInspector(ctx, S.multi.refs, { graph: S.multi.graph, forceFloating: S.drawerFloating });
+      return;
     }
     if (!S.drawerOpen || !S.detail?.id) return;
     await openInspector(ctx, S.detail.id, S.drawerAnchor, { forceFloating: S.drawerFloating });
@@ -241,6 +280,13 @@ const ctx = {
     await openInspector(ctx, ref, anchor, { forceFloating: true });
   },
   openCreate: (defaults = {}) => openCreateUnit(ctx, defaults),
+  // Inspector "Show on map": open the Map graph, then select and centre the node.
+  showOnMap: (uid) => {
+    if (!uid) return;
+    S.mapFocus = uid;
+    if (S.tab === "map" && S.view !== "graph") ctx.setView("graph");
+    else navigate("map");
+  },
   // A topic opens in Research > Topics; #/research/topic/<uid> deep-links it.
   openTopic: (ref, { keepTrail = false } = {}) => {
     if (!ref) return;
@@ -265,7 +311,13 @@ const ctx = {
   saveFiltersAsTopic: () => saveFiltersAsTopic(ctx, ruleFromFilters(S.filters, baseTypes())),
   openImport: () => openImportModal(ctx),
   openExtract: () => openExtractModal(ctx),
-  openBulkEdit: (nodes) => openBulkEdit(ctx, nodes),
+  // Bulk edit (graph context menu): the multi-selection inspector.
+  openBulkEdit: (nodes) => {
+    const list = (nodes || []).filter((node) => node?.uid);
+    if (list.length === 1) return ctx.openUnit(list[0].uid);
+    const graph = graphs.find((item) => list.some((node) => item.selectedNodes?.has(node.id))) || null;
+    return openMultiInspector(ctx, list.map((node) => node.id), { graph, anchor: currentActivationPoint() });
+  },
   openEdgeRelation: (edge, source, target) => openRelationModal(ctx, edge, source, target),
   openAssistant: () => openAssistant(ctx),
   openLinkModal: (source, target) => openLinkModal(ctx, source, target),
@@ -283,7 +335,7 @@ const ctx = {
   openDispatch: (unit) => openDispatchModal(ctx, unit),
   dispatchTaskSession: (unit) => loadTasks().then((view) => view.dispatchTaskSession(ctx, unit)).catch((err) => toast(err.message, "err")),
   openSessionLaunch: (prefill) => loadTasks().then((view) => view.openLaunchSession(ctx, prefill)).catch((err) => toast(err.message, "err")),
-  openProject: () => openProjectModal(ctx),
+  openProject: () => openProjectModal(ctx, "open"),
   openPalette: () => openPalette(),
   openExport,
   setView: (view) => { S.view = view; renderRoute({ keepScroll: true }); },
@@ -308,7 +360,7 @@ const ctx = {
     applyFiltersIncremental();
   },
   setRecentDays: (days) => {
-    S.filters.recentDays = [1, 3, 7, 30].includes(Number(days)) ? Number(days) : 7;
+    S.filters.recentDays = RECENT_DAYS.includes(Number(days)) ? Number(days) : 7;
     S.filters.timeMode = "recent";
     paintFiltersNow();
     applyFiltersIncremental();
@@ -441,12 +493,42 @@ const ctx = {
   renderTopbar,
   updateTopbar: () => syncTopbar(),
   syncNeedsBadge: () => syncNeedsBadge(),
-  trackGraph: (g) => graphs.push(g),
+  trackGraph: (g) => {
+    graphs.push(g);
+    // Project graphs feed their selection to the multi-selection inspector.
+    if (g?.opts?.projectUnits) g.onSelectionChange = (nodes) => onGraphSelection(g, nodes);
+  },
   untrackGraph: (g) => { graphs = graphs.filter((item) => item !== g); },
   trackGantt: (g) => gantts.push(g),
   refreshFilters: () => paintFiltersNow(),
   toast,
 };
+
+// The open inspector again (single unit or multi-selection), e.g. after the
+// docked pane was toggled.
+function reopenInspector() {
+  if (S.multi) return openMultiInspector(ctx, S.multi.refs, { graph: S.multi.graph });
+  if (S.detail?.id) return openInspector(ctx, S.detail.id, S.drawerAnchor);
+  return null;
+}
+
+const sameRefs = (a = [], b = []) => a.length === b.length && a.every((id, i) => String(id) === String(b[i]));
+
+// A project graph's selection changed (GraphView.onSelectionChange): two or
+// more nodes show their shared attributes when the inspector is open or
+// docked; going back to one node shows that node, none closes the panel.
+function onGraphSelection(graph, nodes) {
+  if (!graphs.includes(graph)) return;
+  const refs = nodes.map((node) => node.id).filter((id) => !String(id).startsWith("local-"));
+  if (refs.length >= 2) {
+    if (!multiInspectorWanted(S) || (S.multi && sameRefs(S.multi.refs, refs))) return;
+    openMultiInspector(ctx, refs, { graph, forceFloating: S.drawerOpen && S.drawerFloating });
+    return;
+  }
+  if (!S.multi || S.multi.graph !== graph) return;
+  if (refs.length === 1) ctx.openUnit(nodes.find((node) => node.id === refs[0])?.uid || refs[0]);
+  else closeInspector(ctx);
+}
 
 if (typeof window !== "undefined") {
   window.__ARK__ = {
@@ -467,7 +549,9 @@ let remoteSyncBusy = false;
 let refreshTimer = 0;
 let refreshToast = false;
 
-function editingRemoteTarget() {
+// `manual`: the person asked for the sync (Sync now), so an open inspector,
+// context menu or preview does not hold it back; typing and dialogs still do.
+function editingRemoteTarget({ manual = false } = {}) {
   const active = document.activeElement;
   const tag = String(active?.tagName || "").toLowerCase();
   if (active?.isContentEditable) return true;
@@ -478,7 +562,8 @@ function editingRemoteTarget() {
   }
   if (document.querySelector('.ai-composer[aria-busy="true"]')
       || [...document.querySelectorAll('.ai-composer-input')].some((input) => input.value.trim())) return true;
-  if (document.querySelector(".modal-backdrop, .palette-backdrop, .drawer:not(.inspector-empty), .graph-menu, .unit-ref-preview, .infohub-preview, .iv-overlay, .guidance-layer")) return true;
+  if (document.querySelector(".modal-backdrop, .palette-backdrop, .iv-overlay, .guidance-layer")) return true;
+  if (!manual && document.querySelector(".drawer:not(.inspector-empty), .graph-menu, .unit-ref-preview, .infohub-preview")) return true;
   return false;
 }
 
@@ -499,14 +584,28 @@ async function runRefresh() {
   }
   const announce = refreshToast;
   refreshToast = false;
-  if (await refreshFromRemote() && announce) toast(t("remote.synced"), "ok");
+  if (await refreshFromRemote() && announce) toast(remoteUpdateText(), "ok");
 }
 
-async function refreshFromRemote() {
-  if (remoteSyncBusy || editingRemoteTarget()) return false;
+// M5: say who changed the project (the newest activity row) instead of
+// assuming "another device"; an agent's write names the agent.
+function remoteUpdateText() {
+  const actor = String(S.activity?.[0]?.actor || "");
+  const me = String(S.session?.user || "");
+  if (!actor || actor === "human:ui" || actor.startsWith("human:plugin:") || actor === me || actor === "system" || actor.startsWith("system:")) {
+    return t("home.remote_update");
+  }
+  return t("home.remote_update_by", { who: actorLabel(actor) });
+}
+
+// `manual` (Sync now): waits for a background refresh instead of skipping,
+// and failures are thrown for the caller to report.
+async function refreshFromRemote({ manual = false } = {}) {
+  while (manual && remoteSyncBusy) await new Promise((resolve) => setTimeout(resolve, 100));
+  if (remoteSyncBusy || editingRemoteTarget({ manual })) return false;
   remoteSyncBusy = true;
   const routeSeq = loadSeq, projectId = S.project?.id;
-  const interrupted = () => editingRemoteTarget() || routeSeq !== loadSeq || projectId !== S.project?.id;
+  const interrupted = () => editingRemoteTarget({ manual }) || routeSeq !== loadSeq || projectId !== S.project?.id;
   try {
     const boot = await api.bootstrap({ fresh: true });
     if (interrupted()) return false;
@@ -538,10 +637,59 @@ async function refreshFromRemote() {
       await renderRoute({ keepScroll: true, preloaded: data });
     }
     return true;
-  } catch { return false; /* the next change or reconnect retries */ }
-  finally {
+  } catch (err) {
+    if (manual) throw err;
+    return false; // the next change or reconnect retries
+  } finally {
     remoteSyncBusy = false;
   }
+}
+
+// Sync now (top-bar button, Alt+R, the status bar's sync item): read the
+// project from the server again, bypassing the cache, and repaint the
+// current page in place (same path as a change from elsewhere: the camera,
+// selection and scroll position stay).  A stream that is down reconnects.
+async function syncNow() {
+  if (!(await checkConnectivity())) {
+    throw new Error(t(syncState.connectivity === "unreachable" ? "sync.unreachable" : "sync.offline"));
+  }
+  liveSync.reconnect();
+  // Every cached entry checked before now is read from the server once.
+  syncState.syncRequestedAt = Date.now();
+  if (!S.project) {
+    applyBootstrap(await api.bootstrap({ fresh: true }));
+    return;
+  }
+  // Open nodes (inspector, Editor tabs) revalidate; edited ones keep drafts.
+  window.dispatchEvent(new CustomEvent("ark:units-touched", { detail: { ids: null } }));
+  if (S.drawerOpen && S.detail?.id != null) api.unit(S.detail.id).catch(() => {});
+  if (!(await refreshFromRemote({ manual: true }))) {
+    // Someone is typing or a dialog is open: the cache is fresh now and the
+    // page repaints as soon as they are done.
+    await api.bootstrap({ fresh: true });
+    scheduleRefresh();
+  }
+}
+installSyncNow(syncNow);
+installPullToSync(appRoot, requestSync, () => Boolean(S.project) && !showingPairGate);
+
+// Data changed through this tab (a reassignment, a removed link, an archived
+// node): bring the visible view up to date.  A Map/Ideas graph is never
+// rebuilt for it: the snapshot is reloaded and re-filtered through
+// GraphView.setData's in-place path, so nodes whose attributes changed are
+// patched where they stand (graph-change.js) and only added or removed nodes
+// move; the camera stays.  Other views re-render as before.
+async function refreshData() {
+  const graphView = (S.view === "graph" || S.view === "split") && ["ideas", "map"].includes(S.tab)
+    && graphs.some((graph) => graph.clipboardSource !== "infohub");
+  if (!graphView) return renderRoute({ keepScroll: true });
+  const routeSeq = loadSeq, projectId = S.project?.id;
+  const snapshot = await api.graphSnapshot({ fresh: true }).catch(() => null);
+  if (routeSeq !== loadSeq || projectId !== S.project?.id) return undefined;
+  S.graphIndex = snapshot ? await graphIndexFor(snapshot) : null;
+  await applyFiltersIncremental({ silent: true, remote: true });
+  syncTopbar();
+  return undefined;
 }
 
 // A cached response was revalidated and the server had newer data.
@@ -561,8 +709,6 @@ window.addEventListener("ark:cache-updated", (event) => {
 
 // The server answers again after an outage: catch up on what changed.
 window.addEventListener("ark:reconnected", () => scheduleRefresh());
-// The status-bar sync item was clicked: check for changes now.
-window.addEventListener("ark:manual-sync", () => scheduleRefresh({ announce: false }));
 
 // This account lost access to the project the tab showed (grant revoked or
 // project removed): its cache is gone; show what the server serves now.
@@ -577,6 +723,7 @@ window.addEventListener("ark:project-access-lost", async (event) => {
 });
 
 function startLiveSync() {
+  loadPresence();
   liveSync.start({
     onChange: ({ own, delta }) => {
       // Open units (inspector, Editor tabs) revalidate now; a clean panel
@@ -633,7 +780,7 @@ function prefetchDetails({ neighboursOf = null } = {}) {
     try { recent = JSON.parse(sessionStorage.getItem(PREFETCH_KEY) || "[]"); } catch { /* ignore */ }
     const plan = prefetchPlan({
       neighbours,
-      needs: (S.needsYou || []).map((item) => item.id || item.uid),
+      needs: (S.needsYou || []).filter((item) => item.kind !== "review_group").map((item) => item.id || item.uid),
       recent,
       visible: (S.units || []).slice(0, 30).map((unit) => unit.id),
     }, { cached: clientCache.cachedUnitIds(), budget: slow ? 12 : 30, slow });
@@ -641,6 +788,7 @@ function prefetchDetails({ neighboursOf = null } = {}) {
   }), 300);
 }
 
+const PREFETCH_SNAPSHOT_MAX_NODES = 3000;
 let workspacePrefetchDone = false;
 function prefetchWorkspaces() {
   if (workspacePrefetchDone || connectionIsSlow()) return;
@@ -651,8 +799,12 @@ function prefetchWorkspaces() {
     // the cache and revalidate in the background.
     const units = (tab, sort, extra = {}) => `/api/units${qs(filtersToParams(emptyFilters(), {
       types: baseTypes(tab, "story"), limit: 600, sort: S.sort || sort, facets: 1, ...extra }))}`;
+    // A large project's graph snapshot (megabytes; parsing and caching it
+    // blocks the page for a moment) waits until the Map is opened.
+    const smallGraph = Number(S.stats?.total || 0) <= PREFETCH_SNAPSHOT_MAX_NODES;
     const paths = [
-      "/api/project/overview", "/api/topics", "/api/graph/snapshot?bodies=0",
+      `/api/project/overview${qs(homeFilterQuery(S.project?.id))}`, "/api/topics",
+      ...(smallGraph ? ["/api/graph/snapshot?bodies=0"] : []),
       units("ideas", "updated", { origins: "infohub", slim: 1 }),
       units("tasks", "importance", { slim: 1 }),
       // Execute: agent sessions (Board/Runs), presets, session context
@@ -990,6 +1142,7 @@ async function bootWorkbench() {
   const data = await api.bootstrap();
   applyBootstrap(data);
   initProfilePrefs(data.profile);
+  mindNodeStore.reset();
   applyLayoutPrefs();
   document.body.classList.toggle("assistant-dock-open", Boolean(S.sessionDock));
   rememberProject();
@@ -998,18 +1151,30 @@ async function bootWorkbench() {
   if (route.topicRef) S.topicRef = route.topicRef;
   S.workspace = route.workspace || workspaceForTab(route.tab);
   if (route.taskView) S.taskView = route.taskView;
+  if (route.reviewView) S.reviewView = route.reviewView;
   if (route.tab === "editor") S.editorKey = route.editorKey || "";
   applyViewQuery();
   applyFilterTabQuery();
   window.ARKBoot?.progress(3);
   setupWorkbench();
   initLayoutPresets(data.profile);
+  initProjectPrefs(data.profile, { toast });
+  // The picker ranks projects by the person's own activity, which only GET
+  // /api/projects carries: load it once now so the first menu is in order.
+  api.projects().then((list) => {
+    if (Array.isArray(list?.projects)) S.projects = list.projects;
+  }).catch(() => { /* the bootstrap list stays */ });
   await renderRoute();
   markFirstRender();
+  // An invite link (#/join/<token>) opens its Join dialog; the Welcome waits for the next visit.
+  const joining = maybeOpenJoin();
   mountSessionDock(ctx);
   installUnitContextMenu(ctx);
+  // First run: the Welcome speaks first; the guide invitation waits for it.
+  if (!joining) maybeShowWelcome(ctx);
   ctx.guidance = mountGuidance(ctx);
   window.ARKBoot?.finish();
+  if (startGuard.safe) offerReopen();
   prefetchDetails();
   prefetchWorkspaces();
   prefetchViewModules();
@@ -1018,10 +1183,20 @@ async function bootWorkbench() {
   else setTimeout(() => initPwa(), 0);
   const unitRef = new URLSearchParams(location.search).get("unit");
   if (unitRef) setTimeout(() => ctx.openUnit(unitRef), 80);
+  // ?ark_open_project= / ?ark_new_project=1 (the desktop app opening a server).
+  applyDesktopQuery({
+    currentProjectId: () => S.project?.id,
+    openProjectById: (id) => switchProject({ id, name: (S.projects || []).find((p) => p.id === id)?.name || "" }),
+    openNewProject: () => openProjectModal(ctx, "new"),
+    linkDesktop: () => confirmLinkDesktop({ modal: openModal, toast }),
+    toast,
+  });
   window.addEventListener("hashchange", onHashChange);
   window.addEventListener("popstate", onHashChange);
   // "System" theme preference following the OS (profile.js).
   window.addEventListener("ark:theme-applied", () => { renderTopbar(); graphs.forEach((g) => g._draw?.()); });
+  // Advanced features shown/hidden: sub-tabs and page panels change.
+  window.addEventListener(ADVANCED_CHANGED, () => { renderTopbar(); if (S.tab !== "settings") renderRoute({ keepScroll: true }); });
   window.addEventListener("keydown", onKeyDown);
   window.addEventListener("beforeunload", (event) => {
     if (!editorHasDirty()) return;
@@ -1066,7 +1241,7 @@ function renderNoProjectState() {
       h("div", { class: "head-actions" },
         h("button", {
           class: "primary-btn", type: "button",
-          onclick: () => openProjectModal(ctx),
+          onclick: () => openProjectModal(ctx, "new"),
         }, icon("plus", "sm"), t("project.create")),
         h("button", {
           class: "ghost-btn", type: "button",
@@ -1095,7 +1270,7 @@ function applyBootstrap(data, reset = false) {
   S.project = data.summary ? { ...data.summary } : null;
   // This tab keeps showing this project until the person switches here.
   setTabProject(S.project?.id || "");
-  S.projects = data.projects || S.projects;
+  S.projects = withKnownActivity(data.projects, S.projects) || S.projects;
   S.session = data.session || S.session;
   S.org = data.org || S.org;
   if (Array.isArray(data.users)) setUserDirectory(data.users, data.profile);
@@ -1113,8 +1288,13 @@ function applyBootstrap(data, reset = false) {
   if (switched && previous && previous !== S.project?.id) {
     rememberProject();
     liveSync.restart();
+    // View plugins: session write grants end; "project" event subscribers hear it.
+    window.dispatchEvent(new CustomEvent("ark:project-switched", { detail: { id: S.project?.id || "", name: S.project?.name || "" } }));
   }
   if (switched) {
+    // A topic of the previous project means nothing here.
+    S.topicRef = "";
+    S.topicTrail = [];
     S.taskSessions = [];
     S.sessionsLoaded = false;
     S.selectedSessionId = null;
@@ -1192,11 +1372,39 @@ function applyProject(data) {
   renderRoute({ keepScroll: true });
 }
 
-// Project palette, graph physics and line ends, with this person's overrides on top.
+// Mind card widths and pinned images: per project for this person.
+const mindNodeStore = createMindNodeStore({
+  projectId: () => S.project?.id,
+  loadEntry: mindLayoutEntry,
+  saveEntry: saveMindLayoutEntry,
+  storage: (() => { try { return localStorage; } catch { return null; } })(),
+});
+setMindNodeStore(mindNodeStore);
+window.addEventListener("pagehide", () => mindNodeStore.flush());
+// A fresher account profile (profile.js refreshAccountPrefs) may carry other
+// Mind card widths and pins than the cached one: the next graph data uses it.
+window.addEventListener(PROFILE_REFRESHED, () => mindNodeStore.reset());
+
+// Project palette, graph physics, line ends and graph display settings,
+// with this person's overrides on top.
 function applyEffectiveAppearance() {
   const effective = resolveAppearance(S.project?.settings, appearanceOverrides());
   setActiveGraphPhysics(effective.graph);
   setActiveGraphArrows(effective.arrows);
+  const before = getMindSettings();
+  const after = setActiveGraphDisplay(effective.graph_display.values);
+  // Agent presence is an overlay (graph-presence.js): toggling it redraws
+  // no graph and relayouts nothing.
+  const drawn = ({ agentPresence: _presence, ...rest }) => JSON.stringify(rest);
+  if (drawn(before) !== drawn(after)) {
+    // Alignment, auto layout and images change the Mind layout itself.
+    for (const graph of graphs) {
+      if (graph.layout === "mind") graph._applyLayout?.(false);
+      else graph._draw?.();
+    }
+    window.dispatchEvent(new CustomEvent("ark:graph-display", { detail: after }));
+  }
+  if (before.agentPresence !== after.agentPresence) setPresenceEnabled(after.agentPresence);
   applyProjectPalette(effective.palette);
 }
 
@@ -1213,6 +1421,14 @@ function applySettings(data) {
   renderTopbar();
 }
 
+function offerReopen() {
+  const target = reopenTarget(startGuard.previousUrl, location.href);
+  toast(t(startGuard.reason === "param" ? "app.safe_start.param" : "app.safe_start.recovered"), "", {
+    duration: 15000,
+    action: target ? { label: t("app.safe_start.reopen"), onClick: () => location.assign(target) } : null,
+  });
+}
+
 // -------------------------------------------------------------------- route
 function parseHash() {
   const raw = (location.hash || "").replace(/^#\/?/, "").trim();
@@ -1226,6 +1442,7 @@ function parseHash() {
     const view = parts[1] || "story";
     if (view === "idea" || view === "capture") return { tab: "ideas", sub: "story", workspace };
     if (view === "graph") return { tab: "map", sub: "story", workspace: "map" };
+    if (view === "review") return { tab: "review", sub: "story", workspace, reviewView: reviewView(parts[2]) };
     const stage = PLAN_SUBS.includes(view) ? view : "story";
     if (stage === "topic" && parts[2]) {
       return { tab: "plan", sub: stage, workspace, topicRef: decodeURIComponent(parts[2]) };
@@ -1256,7 +1473,29 @@ function parseHash() {
 
 let pairClaimBusy = false;
 
+// <server>/#/join/<token>: an invite link opened while signed in (signed
+// out, the login page shows it first and keeps the hash through sign-in).
+let joinBusy = false;
+function maybeOpenJoin() {
+  const token = parseJoinHash(location.hash);
+  if (!token) return false;
+  if (joinBusy) return true;
+  joinBusy = true;
+  // The token leaves the address bar and the history at once.
+  try { history.replaceState(null, "", location.pathname + location.search + "#/home"); } catch { /* ignore */ }
+  openJoinDialog(token, {
+    onJoined: async (project, result) => {
+      if (result && result.already_member === false) toast(t("join.joined", { project: project.name || "" }), "ok");
+      api.projects().then((list) => { if (Array.isArray(list?.projects)) S.projects = list.projects; }).catch(() => {});
+      await switchProject({ id: project.id, name: project.name || "" });
+    },
+    onDone: () => { joinBusy = false; },
+  });
+  return true;
+}
+
 async function onHashChange() {
+  if (maybeOpenJoin()) return;
   // A QR scanned while this PWA/WebView is already open changes only the hash.
   // Claim it here too; otherwise the old (possibly read-only) mobile token
   // would survive and a newly scanned full-access QR would appear ignored.
@@ -1291,10 +1530,12 @@ async function onHashChange() {
   if (route.tab === S.tab
       && (route.tab !== "plan" || route.sub === S.sub)
       && (!route.taskView || route.taskView === S.taskView)
+      && (!route.reviewView || route.reviewView === reviewView(S.reviewView))
       && (route.workspace || workspaceForTab(route.tab)) === S.workspace) return;
   setTab(route.tab, route.sub);
   S.workspace = route.workspace || workspaceForTab(route.tab);
   if (route.taskView) S.taskView = route.taskView;
+  if (route.reviewView) S.reviewView = route.reviewView;
   applyViewQuery();
   applyFilterTabQuery();
   renderRoute();
@@ -1469,6 +1710,7 @@ function renderCurrentView(host) {
     case "overview": return renderOverview(host, ctx);
     case "ideas": return lazyView(host, VIEW_MODULES.ideas, "renderIdeas");
     case "plan": return lazyView(host, VIEW_MODULES.plan, "renderPlan");
+    case "review": return lazyView(host, VIEW_MODULES.review, "renderReview");
     case "map": return lazyView(host, VIEW_MODULES.map, "renderMap");
     case "tasks": return lazyView(host, loadTasks, "renderTasks");
     case "production": return lazyView(host, () => import("./views/production.js"), "renderProduction");
@@ -1485,6 +1727,7 @@ function renderCurrentView(host) {
 const VIEW_MODULES = {
   ideas: () => import("./views/ideas.js"),
   plan: () => import("./views/plan.js"),
+  review: () => import("./views/review.js"),
   map: () => import("./views/map.js"),
   tasks: loadTasks,
   production: () => import("./views/production.js"),
@@ -1538,14 +1781,20 @@ async function graphIndexFor(snapshot, { needBodies = Boolean(S.filters.q) } = {
 // GET /api/bootstrap contains the GET /api/project payload; reuse it instead
 // of a second request.  Live sync refreshes the bootstrap after changes.
 let bootstrapProject = null;
+// The bootstrap reply doubles as the first Home load; after a few seconds
+// (or for a fresh read) Home asks GET /api/project again, so its counts and
+// getting-started checklist follow this tab's own writes.
+const BOOTSTRAP_REUSE_MS = 5000;
+
 function projectFromBootstrap() {
   if (!bootstrapProject) return null;
   if (bootstrapProject.data.summary?.id !== S.project?.id) return null;
+  if (Date.now() - bootstrapProject.at > BOOTSTRAP_REUSE_MS) return null;
   return bootstrapProject.data;
 }
 
 async function projectData(opts) {
-  return projectFromBootstrap() || api.project(opts);
+  return (!opts?.fresh && projectFromBootstrap()) || api.project(opts);
 }
 
 async function loadRouteData({ fresh = false } = {}) {
@@ -1557,6 +1806,10 @@ async function loadRouteData({ fresh = false } = {}) {
   }
   if (S.tab === "chat" || S.tab === "editor") {
     return { units: [], total: 0 };
+  }
+  if (S.tab === "review") {
+    const project = await projectData(opts);
+    return { needsYou: project.needs_you || [], units: [], total: 0 };
   }
   if (S.tab === "settings") {
     const project = await projectData(opts);
@@ -1575,7 +1828,7 @@ async function loadRouteData({ fresh = false } = {}) {
     // older server without it still gets Needs you and the header.
     const [project, overview] = await Promise.all([
       projectData(opts),
-      api.overview(opts).catch(() => null),
+      api.overview(opts, homeFilterQuery(S.project?.id)).catch(() => null),
     ]);
     return {
       stats: project.stats,
@@ -1966,6 +2219,8 @@ function openAppMenu({ trigger = document.activeElement, projects = false } = {}
   const focusables = () => [...sheet.querySelectorAll("button:not([disabled]), a[href], input, select, textarea")]
     .filter((el) => el.getClientRects().length);
   const onKey = (event) => {
+    // A project card's context menu handles its own keys (Escape closes it only).
+    if (contextMenuOpen()) return;
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
@@ -2012,31 +2267,16 @@ function openAppMenu({ trigger = document.activeElement, projects = false } = {}
 
 function projectMenuSheet(act, close) {
   const current = S.project || {};
-  const list = h("div", {
-    class: "project-list app-menu-projects", role: "group", "data-menu-group": "projects",
-    "aria-label": t("app.menu.projects"),
+  // Cards in picker order (pins, then the person's own activity); refreshed
+  // in the background with cards keeping their places, so a click in
+  // progress stays on its project.
+  const picker = liveProjectPicker(ctx, {
+    label: t("app.menu.projects"),
+    beforeOpen: () => { closeInspector(ctx); close({ restore: false }); },
   });
-  const fill = (projects) => {
-    clear(list);
-    if (!projects.length) { list.appendChild(h("div", { class: "empty sm" }, t("project.empty"))); return; }
-    list.append(...projectRows(ctx, projects, {
-      beforeOpen: () => { closeInspector(ctx); close({ restore: false }); },
-    }));
-    (list.querySelector(".project-row.current") || list.querySelector(".project-row"))?.setAttribute("data-menu-autofocus", "");
-  };
-  const shown = S.projects || [];
-  fill(shown);
-  api.projects().then((data) => {
-    if (!list.isConnected || !Array.isArray(data?.projects)) return;
-    S.projects = data.projects;
-    // Rows keep their places: a click in progress stays on its project.
-    const rows = refreshedProjectRows(shown, data.projects);
-    if (!rows) return;
-    const focused = list.contains(document.activeElement) ? document.activeElement.dataset.projectId : "";
-    fill(rows);
-    if (focused) list.querySelector(`.project-row[data-project-id="${CSS.escape(focused)}"]`)?.focus();
-  }).catch(() => { /* keep the cached list */ });
-  const newSpec = getShortcut("newUnit");
+  const list = picker.el;
+  list.classList.add("app-menu-projects");
+  picker.focusCurrent()?.setAttribute("data-menu-autofocus", "");
   return h("div", { class: "mobile-menu-sheet app-menu-sheet", role: "dialog", "aria-labelledby": "app-menu-title" },
     h("div", { class: "app-menu-head" },
       h("img", { class: "app-menu-mark", src: "./brand/ark-mark.svg", alt: "", width: 22, height: 22 }),
@@ -2051,27 +2291,24 @@ function projectMenuSheet(act, close) {
         h("small", null, t("project.current")),
         h("b", null, current.name || t("common.project")),
         h("span", { class: "app-menu-path", title: current.path || "" }, current.path || "—"))),
-    list,
+    withDesktopGroups(list, { close: () => close({ restore: false }), toast, modal: openModal }),
+    // Two actions only: create a project, or open another one (the list
+    // above already switches between the known ones).
     h("div", { class: "mobile-menu-actions app-menu-actions" },
       h("button", {
-        class: "btn primary", type: "button", "data-menu-action": "new-unit",
-        title: newSpec ? `${t("action.new")} (${shortcutLabel(newSpec)})` : t("action.new"),
-        onclick: act(() => openCreateUnit(ctx, {})),
-      }, icon("plus", "sm"), h("span", null, t("action.new")),
-        newSpec ? h("span", { class: "kbd" }, shortcutLabel(newSpec)) : null),
+        class: "btn primary", type: "button", "data-menu-action": "new-project",
+        onclick: act(() => { closeInspector(ctx); openProjectModal(ctx, "new"); }),
+      }, icon("plus", "sm"), t("project.new")),
       h("button", {
-        class: "btn ghost", type: "button", "data-menu-action": "projects",
-        onclick: act(() => { closeInspector(ctx); openProjectModal(ctx); }),
-      }, icon("folder", "sm"), t("app.menu.manage_projects")),
-      h("button", {
-        class: "btn ghost", type: "button", "data-menu-action": "home",
-        onclick: act(() => navigateWorkspace("home")),
-      }, icon("home", "sm"), t("nav.home"))));
+        class: "btn ghost", type: "button", "data-menu-action": "open-project",
+        onclick: act(() => { closeInspector(ctx); openProjectModal(ctx, "open"); }),
+      }, icon("folder", "sm"), t("project.open_other"))));
 }
 
 function mobileMenuSheet(act) {
   const pwa = pwaSnapshot();
-  const items = [...MOBILE_PRIMARY_TABS, ...MOBILE_SECONDARY_TABS];
+  const items = [...MOBILE_PRIMARY_TABS, ...MOBILE_SECONDARY_TABS]
+    .filter((item) => item.id !== "distribution" || advancedEnabled() || S.tab === "distribution");
   return h("div", { class: "mobile-menu-sheet", role: "dialog", "aria-label": t("app.mobile.nav_label") },
     h("div", { class: "mobile-menu-grab" }),
     h("div", { class: "mobile-menu-title" }, icon("overview", "sm"), t("app.mobile.menu_title")),
@@ -2081,7 +2318,7 @@ function mobileMenuSheet(act) {
       onclick: act(() => { item.workspace ? navigateWorkspace(item.workspace) : navigate(item.id, item.id === "plan" ? S.sub : null); }),
     }, icon(item.icon, "sm"), h("span", null, t(item.labelKey))))),
     h("div", { class: "mobile-menu-actions" },
-      h("button", { class: "btn ghost", onclick: act(() => openCreateUnit(ctx, {})) }, icon("plus", "sm"), t("action.new")),
+      h("button", { class: "btn ghost", onclick: act(() => openCreateUnit(ctx, {})) }, icon("plus", "sm"), t("action.new_node")),
       h("button", { class: "btn ghost", onclick: act(() => openProjectModal(ctx)) }, icon("folder", "sm"), t("app.mobile.project")),
       h("button", {
         class: "btn ghost",
@@ -2093,7 +2330,7 @@ function mobileMenuSheet(act) {
       h("button", {
         class: "btn ghost",
         onclick: act(() => changeLanguage(getLang() === "zh" ? "en" : "zh")),
-      }, icon("command", "sm"), getLang() === "zh" ? "English" : "中文"), // i18n-ignore: language names shown in their own language
+      }, icon("globe", "sm"), getLang() === "zh" ? "English" : "中文"), // i18n-ignore: language names shown in their own language
       h("button", { class: "btn ghost", onclick: act(() => openExport()) }, icon("download", "sm"), t("action.export")),
       S.tab === "tasks" ? h("button", {
         class: "btn ghost",
@@ -2150,6 +2387,7 @@ function mobileNavTitle() {
     : null;
   if (session) return session.title || session.id || t("nav.tasks");
   if (S.tab === "ideas") return t("ideas.title");
+  if (S.tab === "review") return t("review.title");
   if (S.tab === "map") return t("map.title");
   if (S.tab === "tasks") return t("tasks.title");
   if (S.tab === "editor") return t("nav.editor");
@@ -2160,13 +2398,16 @@ function workspaceSubtabs(workspace) {
   const items = [];
   const add = (label, active, onclick, data, stage = false) => items.push({ label, active, onclick, data, stage });
   if (workspace === "research") {
-    add(t("type.idea"), S.tab === "ideas", () => navigateWorkspace("research", "idea"), { "data-workspace-view": "idea" });
+    add(t("nav.ideas"), S.tab === "ideas", () => navigateWorkspace("research", "idea"), { "data-workspace-view": "idea" });
     // Story, Related, Method and Experiment are default topics; every topic
     // (built-in or not) opens from the topic bar on this page.
     add(t("nav.topic"), S.tab === "plan", () => { if (S.tab !== "plan") navigateWorkspace("research", "topic"); },
       { "data-workspace-stage": "topic" });
+    add(t("nav.review"), S.tab === "review", () => navigateWorkspace("research", "review"), { "data-workspace-view": "review" });
   } else if (workspace === "execute") {
     const active = EXECUTE_VIEW_ALIASES[S.taskView] || "board";
+    // GPU and Resources are everyday tools for this team: always shown
+    // (the advanced switch only folds rarely used views).
     for (const [id, label] of [["board", t("view.board")], ["runs", t("app.subtab.runs")], ["gpu", "GPU"], ["resources", t("resources.tab")]]) {
       add(label, active === (EXECUTE_VIEW_ALIASES[id] || id),
         () => navigateWorkspace("execute", id), { "data-workspace-view": id });
@@ -2174,7 +2415,9 @@ function workspaceSubtabs(workspace) {
   } else if (workspace === "output") {
     const active = S.tab === "distribution" ? "distribution" : "assets";
     add(t("production.assets"), active === "assets", () => navigateWorkspace("output", "assets"), { "data-workspace-view": "assets" });
-    add(t("nav.distribution"), active === "distribution", () => navigateWorkspace("output", "distribution"), { "data-workspace-view": "distribution" });
+    if (advancedEnabled() || active === "distribution") {
+      add(t("nav.distribution"), active === "distribution", () => navigateWorkspace("output", "distribution"), { "data-workspace-view": "distribution" });
+    }
   }
   return items;
 }
@@ -2358,56 +2601,102 @@ function renderTopbar() {
   topbar.dataset.workspace = workspaceForTab(S.tab);
   topbar.dataset.tab = S.tab;
 
+  // Every control on the right is one `top-ctl`: same height, radius, idle,
+  // hover and active look (app.css "Top-bar controls").
   const layoutToggle = (name) => {
     const info = layoutToggleInfo(name);
     return h("button", {
-      class: `icon-btn layout-toggle ${info.active ? "on" : ""}`.trim(), title: info.label, "aria-pressed": info.active ? "true" : "false",
+      class: `icon-btn top-ctl layout-toggle ${info.active ? "on" : ""}`.trim(), type: "button", title: info.label,
+      "aria-pressed": info.active ? "true" : "false",
       "aria-label": info.label, "aria-disabled": info.disabled ? "true" : undefined, "data-layout": name,
       onclick: () => onLayoutToggle(name),
-    }, icon(name, "sm"));
+    }, icon(name));
   };
+  // Panel toggles (classic layout only; the workbench hides them) and the
+  // layout presets (workbench only).
   const layoutToggles = h("div", { class: "layout-toggles" },
     layoutToggle("panel-left"), layoutToggle("panel-right"), layoutToggle("panel-bottom"),
     h("button", {
-      class: "icon-btn layout-toggle layout-presets-btn", type: "button", title: t("workbench.preset.menu"),
+      class: "icon-btn top-ctl layout-toggle layout-presets-btn", type: "button", title: t("workbench.preset.menu"),
       "aria-label": t("workbench.preset.menu"), "aria-haspopup": "menu",
       onclick: (event) => openLayoutMenu(event.currentTarget),
-    }, icon("layers", "sm")));
-
-  const auxTabs = h("div", { class: "aux-tabs", "aria-label": t("app.nav_utilities") },
-    AUX_WORKSPACES.map(([id, label, iconName]) => h("button", {
-      class: `tab-aux ${workspaceForTab(S.tab) === id ? "active" : ""}`.trim(),
-      type: "button", "data-workspace": id,
-      title: id === "assistant" ? `${t(label)} (${formatShortcut(getShortcut("chat"))})` : t(label),
-      "aria-label": t(label),
-      "aria-current": workspaceForTab(S.tab) === id ? "page" : undefined,
-      onclick: () => navigateWorkspace(id),
-    }, icon(iconName, "sm"))));
+    }, icon("layers")));
+  const sync = syncTopButton();
+  sync.classList.add("top-ctl");
+  const account = accountMenuButton(ctx);
+  account?.classList.add("top-ctl");
+  // Left to right: search, sync, Assistant, layout, theme, language.  On the
+  // desktop workbench Settings and the account sit at the bottom of the
+  // activity bar; without it (narrower windows) they end the top bar, and
+  // phones reach Settings from the bottom tab bar.
   const actions = h("div", { class: "top-actions" },
-    layoutToggles,
-    auxTabs,
-    h("button", { class: "search-btn", onclick: () => openPalette(), title: searchTitle() },
-      icon("search", "sm"), h("span", null, t("action.search")),
+    h("button", { class: "search-btn top-ctl", type: "button", onclick: () => openPalette(), title: searchTitle() },
+      icon("search"), h("span", null, t("action.search")),
       h("span", { class: "kbd palette-kbd", hidden: !getShortcut("palette") }, shortcutLabel(getShortcut("palette")))),
     h("button", {
-      class: `icon-btn mobile-filter-btn ${["ideas", "plan", "map"].includes(S.tab) ? "" : "hidden"}`.trim(),
-      title: t("action.filters"),
+      class: `icon-btn top-ctl mobile-filter-btn ${["ideas", "plan", "map"].includes(S.tab) ? "" : "hidden"}`.trim(),
+      type: "button", title: t("action.filters"), "aria-label": t("action.filters"),
       onclick: () => setFilterOverlay(!S.railOpen),
     }, icon("filter")),
-    h("div", { class: "lang-toggle", title: t("palette.cmd.lang") },
-      h("button", { class: getLang() === "en" ? "on" : "", onclick: () => changeLanguage("en") }, "EN"), // i18n-ignore: language code
-      h("button", { class: getLang() === "zh" ? "on" : "", onclick: () => changeLanguage("zh") }, "中")),
+    sync,
+    workspaceButton("assistant", "assistant-top-btn top-ctl", `${t("nav.assistant")} (${formatShortcut(getShortcut("chat"))})`),
+    layoutToggles,
     h("button", {
-      class: "icon-btn theme-top-btn", title: t("palette.cmd.theme"), "aria-label": t("palette.cmd.theme"),
+      class: "icon-btn top-ctl theme-top-btn", type: "button", title: t("palette.cmd.theme"), "aria-label": t("palette.cmd.theme"),
       onclick: () => { toggleTheme(); renderTopbar(); graphs.forEach((g) => g._draw?.()); },
     }, icon(S.theme === "dark" ? "sun" : "moon")),
-    accountMenuButton(ctx),
+    // One toggle: shows the current language, a click switches to the other.
+    h("button", {
+      class: "lang-toggle top-ctl", type: "button", lang: getLang() === "zh" ? "zh" : "en",
+      title: t("topbar.lang_switch"), "aria-label": t("topbar.lang_switch"),
+      onclick: () => changeLanguage(getLang() === "zh" ? "en" : "zh"),
+    }, getLang() === "zh" ? "中" : "EN"), // i18n-ignore: language codes
+    workspaceButton("settings", "settings-top-btn top-ctl"),
+    account,
     h("button", {
       class: "mobile-menu-btn", type: "button", title: t("action.more"), "aria-label": t("app.more_nav"),
       onclick: (event) => openAppMenu({ trigger: event.currentTarget }),
     }, icon("more")));
   topbar.appendChild(actions);
+  renderActivityFoot();
   syncThemeColor(S.theme);
+}
+
+// Assistant and Settings each have their own button (no shared pill); the
+// Settings one in the top bar only shows where there is no activity bar.
+// The Assistant is the star everywhere; Sessions keep the chat bubble.
+const WORKSPACE_BUTTONS = { assistant: ["nav.assistant", "sparkles"], settings: ["nav.settings", "settings"] };
+
+function workspaceButton(id, extraClass, title = null, { side = false } = {}) {
+  const [label, iconName] = WORKSPACE_BUTTONS[id];
+  const active = workspaceForTab(S.tab) === id;
+  return h("button", {
+    class: `${side ? "wb-act" : "icon-btn"} ${extraClass} workspace-btn ${active ? (side ? "on" : "active") : ""}`.trim(),
+    type: "button", "data-workspace": id, title: title || t(label), "aria-label": t(label),
+    "aria-current": active ? "page" : undefined,
+    onclick: () => navigateWorkspace(id),
+  }, icon(iconName, side ? "sm" : undefined));
+}
+
+// Bottom of the workbench activity bar (as in VS Code): Settings, then the
+// account avatar, whose menu opens to the right of the bar.
+const activityFoot = h("div", { class: "wb-activity-foot" });
+function renderActivityFoot() {
+  clear(activityFoot);
+  activityFoot.append(workspaceButton("settings", "wb-foot-btn", null, { side: true }));
+  const account = accountMenuButton(ctx, { side: true });
+  if (account) activityFoot.append(account);
+  setActivityFooter(activityFoot);
+}
+
+function syncWorkspaceButtons() {
+  const activeWorkspace = workspaceForTab(S.tab);
+  for (const button of document.querySelectorAll(".workspace-btn[data-workspace]")) {
+    const active = button.dataset.workspace === activeWorkspace;
+    button.classList.toggle(button.classList.contains("wb-act") ? "on" : "active", active);
+    if (active) button.setAttribute("aria-current", "page");
+    else button.removeAttribute("aria-current");
+  }
 }
 
 // Count of items waiting on the user, shown on the Home tab.
@@ -2477,7 +2766,7 @@ async function onLayoutToggle(name) {
     localStorage.setItem("ark.inspectorPane", S.inspectorPane ? "1" : "0");
     document.body.classList.toggle("inspector-pinned", S.inspectorPane && S.drawerOpen);
     if (!S.inspectorPane) closeInspector(ctx);
-    else if (S.drawerOpen && S.detail?.id) await openInspector(ctx, S.detail.id, S.drawerAnchor);
+    else if (S.drawerOpen && (S.multi || S.detail?.id)) await reopenInspector();
     else showInspectorPlaceholder(ctx);
     renderTopbar();
     return;
@@ -2490,15 +2779,26 @@ async function onLayoutToggle(name) {
 // Register the existing panels as workbench views and keep the legacy
 // panel flags (filtersVisible, inspectorPane, sessionDock) mirroring the
 // container that holds each view, so code that reads them keeps working.
+//
+// The built-in views are first-party view plugins (view-plugins.js,
+// plugin-host.js): the same registry and lifecycle as user plugins.  Panel
+// views mount their element; Filters, Explorer, Details and the Assistant
+// are rendered into their container by their owners (viewHost(id)).
+// `update({ reason: "show" })` is the former onShow hook.
 const FILTER_TABS = ["ideas", "plan", "map"];
+const panelPlugin = (panel) => ({
+  mount: (container) => container.appendChild(panel.el),
+  update: (state) => { if (state.reason === "show") panel.shown?.(); },
+});
 function setupWorkbench() {
-  registerView({ id: "filters", applies: (state) => FILTER_TABS.includes(state.tab) });
-  registerView({ id: "explorer", applies: (state) => state.tab === "editor" });
-  registerView({ id: "details", applies: (state) => Boolean(state.drawerOpen) || !["tasks", "editor"].includes(state.tab) });
-  registerView({
-    id: "assistant", applies: (state) => state.tab !== "chat",
+  initPluginHost(ctx);
+  registerBuiltinView("filters", {}, { applies: (state) => FILTER_TABS.includes(state.tab) });
+  registerBuiltinView("explorer", {}, { applies: (state) => state.tab === "editor" });
+  registerBuiltinView("details", {}, { applies: (state) => Boolean(state.drawerOpen) || !["tasks", "editor"].includes(state.tab) });
+  registerBuiltinView("assistant", {}, {
+    applies: (state) => state.tab !== "chat",
     tooltip: () => t("session.dock.subtitle"),
-    actions: () => [{ icon: "message", title: t("session.dock.full_chat"), onClick: () => navigate("chat") }],
+    actions: () => [{ icon: "sparkles", title: t("session.dock.full_chat"), onClick: () => navigate("chat") }],
     menu: () => [{ label: t("chat.clear_history"), icon: "trash", danger: true, onClick: () => clearAssistantHistory(ctx) }],
   });
   // Former Execute › Files: git review and the project terminal.
@@ -2506,24 +2806,43 @@ function setupWorkbench() {
     onOpenDiff: (path, base) => openInEditor(ctx, { kind: "diff", path, base }, { preview: true }),
     onCount: () => renderWorkbench(),
   });
-  registerView({ id: "changes", applies: (state) => state.tab === "editor", badge: () => changes.count() || "", onShow: () => changes.shown() })
-    .appendChild(changes.el);
+  registerBuiltinView("changes", panelPlugin(changes), { applies: (state) => state.tab === "editor", badge: () => changes.count() || "" });
   // Local graph sits with Details (right sidebar): both follow the selection.
   const localGraph = createLocalGraphPanel(ctx);
-  registerView({
-    id: "localgraph", onShow: () => localGraph.shown(),
+  registerBuiltinView("localgraph", panelPlugin(localGraph), {
     // In the Editor only while a node tab is open (or a node is in Details).
     applies: (state) => Boolean(state.drawerOpen)
       || (state.tab === "editor" ? String(state.editorKey || "").startsWith("unit:") : !["tasks", "settings", "chat"].includes(state.tab)),
-  }).appendChild(localGraph.el);
+  });
   window.addEventListener("ark:selection", () => renderWorkbench());
   searchPanel = createSearchPanel(ctx);
-  registerView({ id: "search", onShow: () => searchPanel.shown() }).appendChild(searchPanel.el);
+  registerBuiltinView("search", panelPlugin(searchPanel));
   const terminal = createTerminalPanel();
-  registerView({ id: "terminal", applies: (state) => ["editor", "tasks"].includes(state.tab), onShow: () => terminal.shown() })
-    .appendChild(terminal.el);
+  registerBuiltinView("terminal", panelPlugin(terminal), { applies: (state) => ["editor", "tasks"].includes(state.tab) });
+  // Agent sessions as a chat beside the work; shares one stream with Execute › Sessions.
+  sessionSidebar = createSessionSidebar(ctx);
+  // Execute › Runs: its list shows in the Sessions view, its details in Session properties.
+  registerBuiltinView("sessionprops", {}, { applies: (state) => state.tab === "tasks" && state.taskView === "sessions" });
+  ctx.sessionPage = {
+    mount({ list, props }) {
+      sessionSidebar.showList(list);
+      const host = viewHost("sessionprops");
+      if (host) host.replaceChildren(props);
+      // The list is how the page is used: open its view; show the properties when their bar is open.
+      requestAnimationFrame(() => { showView("sessions", true); revealView("sessionprops"); });
+    },
+  };
+  registerBuiltinView("sessions", panelPlugin(sessionSidebar), {
+    tooltip: () => t("session.sidebar.tooltip"),
+    actions: () => [
+      { icon: "plus", title: t("session.sidebar.new"), onClick: () => sessionSidebar.newSession() },
+      { icon: "external", title: t("session.sidebar.open_page"), onClick: () => sessionSidebar.openPage() },
+    ],
+  });
   initWorkbench(ctx, { onLayoutChange: onWorkbenchChange });
   if (shellActive()) syncPanelFlags();
+  // The user's own plugins (Settings > Plugins), sandboxed; off unless enabled.
+  loadUserPlugins().catch(() => {});
 }
 
 // "Files" (old Execute tab, mobile menu, deep links) now means the Editor
@@ -2534,6 +2853,14 @@ function openProjectFiles() {
 }
 
 let searchPanel = null;
+let sessionSidebar = null;
+
+// Palette "Sessions sidebar": the docked chat on a wide window, the
+// Sessions page on a narrow one (the workbench shell is desktop-only).
+function openSessionSidebar() {
+  if (shellActive()) showView("sessions", true);
+  else navigateWorkspace("execute", "sessions");
+}
 
 // Ctrl+Shift+F: Search view (prefilled with the selected text); F4 /
 // Shift+F4 step through its results.
@@ -2574,7 +2901,7 @@ async function onWorkbenchChange({ reason }) {
     if (shellActive()) syncPanelFlags();
     mountSessionDock(ctx);
     await renderRoute({ keepScroll: true });
-    if (S.drawerOpen && S.detail?.id) await openInspector(ctx, S.detail.id, S.drawerAnchor);
+    if (S.drawerOpen && (S.multi || S.detail?.id)) await reopenInspector();
     renderTopbar();
     return;
   }
@@ -2584,7 +2911,7 @@ async function onWorkbenchChange({ reason }) {
   if (S.sessionDock !== before.dock) mountSessionDock(ctx);
   if (S.inspectorPane !== before.inspector) {
     if (!S.inspectorPane && S.drawerOpen) closeInspector(ctx);
-    else if (S.inspectorPane && S.drawerOpen && S.detail?.id) await openInspector(ctx, S.detail.id, S.drawerAnchor);
+    else if (S.inspectorPane && S.drawerOpen && (S.multi || S.detail?.id)) await reopenInspector();
     else showInspectorPlaceholder(ctx);
   }
   syncTopbar();
@@ -2608,12 +2935,7 @@ function syncTopbar() {
   }
   syncNeedsBadge();
   const activeWorkspace = workspaceForTab(S.tab);
-  for (const button of topbar.querySelectorAll(".tab-aux[data-workspace]")) {
-    const active = button.dataset.workspace === activeWorkspace;
-    button.classList.toggle("active", active);
-    if (active) button.setAttribute("aria-current", "page");
-    else button.removeAttribute("aria-current");
-  }
+  syncWorkspaceButtons();
   for (const button of topbar.querySelectorAll(".tab[data-workspace]")) {
     const active = button.dataset.workspace === activeWorkspace;
     button.classList.toggle("active", active);
@@ -2646,7 +2968,7 @@ function syncTopbar() {
   for (const button of topbar.querySelectorAll(".top-subtab[data-workspace-view]")) {
     const id = button.dataset.workspaceView;
     let active = false;
-    if (activeWorkspace === "research") active = id === "idea" && S.tab === "ideas";
+    if (activeWorkspace === "research") active = (id === "idea" && S.tab === "ideas") || (id === "review" && S.tab === "review");
     else if (activeWorkspace === "execute") active = (EXECUTE_VIEW_ALIASES[S.taskView] || "board") === (EXECUTE_VIEW_ALIASES[id] || id);
     else if (activeWorkspace === "output") active = (id === "distribution" ? "distribution" : "assets") === (S.tab === "distribution" ? "distribution" : "assets");
     button.classList.toggle("on", active);
@@ -2674,6 +2996,7 @@ async function changeLanguage(lang) {
   renderMobileNav();
   renderTopbar();
   relocalizeSessionDock(ctx);
+  sessionSidebar?.relocalize();
   await renderRoute({ keepScroll: true });
   // The inspector lives outside the route; rebuild it so its labels follow the language.
   if (S.drawerOpen && S.selectedId) await ctx.reloadDetail();
@@ -2696,6 +3019,13 @@ function onKeyDown(e) {
     if (S.tab === "chat") { focusChat(); return; }
     navigate("chat");
     setTimeout(focusChat, 80);
+    return;
+  }
+  // Also from a text field: Alt+R types nothing, and a field being edited
+  // holds the repaint back until it is done (refreshFromRemote).
+  if (shortcutMatches(e, getShortcut("sync"))) {
+    e.preventDefault();
+    requestSync();
     return;
   }
   if (e.key === "Escape") {
@@ -2735,6 +3065,7 @@ function openPalette() {
   const commands = [
     { id: "overview", label: t("palette.cmd.overview"), cat: t("palette.commands"), run: () => navigate("overview") },
     { id: "ideas", label: t("palette.cmd.ideas"), cat: t("palette.commands"), run: () => navigate("ideas") },
+    { id: "sync", label: t("sync.now"), cat: t("palette.commands"), run: () => requestSync() },
     { id: "plan", label: t("palette.cmd.plan"), cat: t("palette.commands"), run: () => navigate("plan", "story") },
     { id: "map", label: t("palette.cmd.map"), cat: t("palette.commands"), run: () => navigate("map") },
     { id: "tasks", label: t("palette.cmd.tasks"), cat: t("palette.commands"), run: () => navigate("tasks") },
@@ -2747,6 +3078,7 @@ function openPalette() {
     { id: "new", label: t("palette.cmd.new"), cat: t("palette.commands"), run: () => openCreateUnit(ctx, {}) },
     { id: "import", label: t("palette.cmd.import"), cat: t("palette.commands"), run: () => openImportModal(ctx) },
     { id: "assistant", label: t("palette.cmd.assistant"), cat: t("palette.commands"), run: () => openAssistant(ctx) },
+    { id: "sessions-view", label: t("palette.cmd.sessions_view"), cat: t("palette.commands"), run: () => openSessionSidebar() },
     { id: "theme", label: t("palette.cmd.theme"), cat: t("palette.commands"), run: () => { toggleTheme(); renderTopbar(); } },
     { id: "lang", label: t("palette.cmd.lang"), cat: t("palette.commands"), run: () => changeLanguage(getLang() === "zh" ? "en" : "zh") },
     { id: "export", label: t("palette.cmd.export"), cat: t("palette.commands"), run: () => openExport() },

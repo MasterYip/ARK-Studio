@@ -77,7 +77,12 @@ chat_messages(id, at, role, content, tools_json, meta_json)
 | Editor | project files + node attachments | open-file tabs (empty state: recent files) | per file: preview/source, pretty, table |
 
 The top bar groups the views into six main workspace tabs (Home, Research,
-Map, Execute, Output, Editor); Assistant and Settings are icons on the right.
+Map, Execute, Output, Editor). Its right group reads, left to right: search,
+Sync now, Assistant, layout, light/dark theme and EN/中, each its own control in
+one shared style (`.top-ctl`: same height, radius, hover and active states). On
+the desktop workbench Settings and the account avatar sit at the bottom of the
+activity bar; without the workbench they end the top bar, and phones reach
+Settings from the bottom tab bar.
 The main tabs are **fixed**: they never shrink or scroll at any desktop or
 tablet width. The active workspace's sub-tabs (Plan stages, Execute views,
 Output views, or the Editor's open files) follow on the same row in

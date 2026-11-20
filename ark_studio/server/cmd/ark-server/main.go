@@ -180,7 +180,8 @@ func serve(o *options) (int, error) {
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	app.Bind(host, port)
-	app.StartGPUQueue() // serve(): app.gpu.start_configured_queue()
+	app.StartGPUQueue()                                         // serve(): app.gpu.start_configured_queue()
+	app.StartSessionNudge(context.Background(), 30*time.Second) // Go only: wake idle ARK-launched agents (T-0053)
 	var handler http.Handler = app
 	if desktopSecret != "" {
 		if !server.IsLoopbackHost(host) {

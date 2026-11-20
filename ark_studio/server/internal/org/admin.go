@@ -994,9 +994,58 @@ func (m *Manager) UpdateProfile(ctx context.Context, username string, body *pyjs
 				merged.Set("workbench", workbench)
 			}
 		}
+		if prefs.Has("projects") {
+			// Go-only (T-0034): the project picker's pins and hidden
+			// projects; null or two empty lists clear them.
+			projects, err := settings.ProjectPrefs(prefs.Value("projects"), true)
+			if prefs.Value("projects") == nil {
+				projects, err = pyjson.NewObject(), nil
+			}
+			if err != nil {
+				return nil, orgErr(400, err.Error(), "PROFILE_INVALID")
+			}
+			if projects.Len() > 0 {
+				merged.Set("projects", projects)
+			} else {
+				merged.Delete("projects")
+			}
+		}
+		if prefs.Has("mind_layout") {
+			// Go-only (T-0036): Mind card widths and pinned images per
+			// project ({project_id: entry | null}); null clears them all.
+			layout, err := settings.UpdateMindLayout(merged.Value("mind_layout"), prefs.Value("mind_layout"))
+			if prefs.Value("mind_layout") == nil {
+				layout, err = pyjson.NewObject(), nil
+			}
+			if err != nil {
+				return nil, orgErr(400, err.Error(), "PROFILE_INVALID")
+			}
+			if layout.Len() > 0 {
+				merged.Set("mind_layout", layout)
+			} else {
+				merged.Delete("mind_layout")
+			}
+		}
+		if prefs.Has("home_filter") {
+			// Go-only: what Home's graph shows per project ({project_id:
+			// {limit, types, statuses, days} | null}); null clears them all.
+			filters, err := settings.UpdateHomeFilter(merged.Value("home_filter"), prefs.Value("home_filter"))
+			if prefs.Value("home_filter") == nil {
+				filters, err = pyjson.NewObject(), nil
+			}
+			if err != nil {
+				return nil, orgErr(400, err.Error(), "PROFILE_INVALID")
+			}
+			if filters.Len() > 0 {
+				merged.Set("home_filter", filters)
+			} else {
+				merged.Delete("home_filter")
+			}
+		}
 		var extra []string
 		for _, k := range prefs.Keys() {
-			if k != "lang" && k != "theme" && k != "display" && k != "appearance" && k != "workbench" {
+			if k != "lang" && k != "theme" && k != "display" && k != "appearance" && k != "workbench" && k != "projects" &&
+				k != "mind_layout" && k != "home_filter" {
 				extra = append(extra, k)
 			}
 		}
@@ -1166,6 +1215,75 @@ const (
 	maxTokenLabel   = 80
 )
 
+// Home starter-prompt tokens (Go-only, UX-18).  Each Copy prompt on Home
+// mints a token, and only its hash is stored, so an existing value can never
+// be handed out again.  A create with {"purpose": "starter", "project": <id>}
+// therefore rotates instead: the new token is labelled
+// "Home starter prompt (<project>) – <date>", and every older starter token
+// of the same user and project is revoked except the newest one, so an agent
+// started from the previous copy keeps working.  At most two starter tokens
+// per user and project stay active, and copying never runs into the
+// per-account limit.  A create without "purpose" is unchanged (Python parity).
+const (
+	starterLabelPrefix = "Home starter prompt"
+	starterKeep        = 1 // previous starter tokens kept active per project
+)
+
+var reStarterProject = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$`)
+
+// starterPurpose reads the optional "purpose"/"project" members of a create.
+func starterPurpose(body *pyjson.Object) (bool, string, error) {
+	purpose := pytext.Lower(pytext.Strip(strArg(body.Value("purpose"))))
+	if purpose == "" {
+		return false, "", nil
+	}
+	if purpose != "starter" {
+		return false, "", orgErr(400, "purpose must be starter (or omitted)", "AGENT_TOKEN_PURPOSE_INVALID")
+	}
+	project := pytext.Strip(strArg(body.Value("project")))
+	if !reStarterProject.MatchString(project) {
+		return false, "", orgErr(400, "a starter token needs the project id", "AGENT_TOKEN_PROJECT_INVALID")
+	}
+	return true, project, nil
+}
+
+func starterLabelFor(project string) string {
+	return starterLabelPrefix + " (" + project + ")"
+}
+
+func starterLabel(project string, now float64) string {
+	return starterLabelFor(project) + " – " + time.Unix(0, int64(now*1e9)).UTC().Format("2006-01-02")
+}
+
+// starterTokensToRetire lists the user's unrevoked starter tokens for the
+// project that a new one replaces (all but the newest starterKeep), and how
+// many of them still count as active (not expired).
+func (m *Manager) starterTokensToRetire(ctx context.Context, userID, project string) ([]string, int, error) {
+	rows, err := m.rows(ctx, "SELECT * FROM agent_tokens WHERE user_id=? AND revoked_at IS NULL "+
+		"ORDER BY created_at DESC, rowid DESC", userID)
+	if err != nil {
+		return nil, 0, err
+	}
+	prefix := starterLabelFor(project) + " – "
+	var out []string
+	kept, active := 0, 0
+	for _, r := range rows {
+		if !strings.HasPrefix(r.Str("label"), prefix) {
+			continue
+		}
+		expired := m.tokenPublic(r).Value("expired") == true
+		if !expired && kept < starterKeep {
+			kept++
+			continue
+		}
+		out = append(out, r.Str("id"))
+		if !expired {
+			active++
+		}
+	}
+	return out, active, nil
+}
+
 // TokenClock is the agent-token clock (AgentTokenStore._now); the replay pins it.
 var TokenClock = func() float64 {
 	if t, ok := clock.Replay(); ok {
@@ -1196,7 +1314,9 @@ func (m *Manager) tokenList(ctx context.Context, userID string) ([]any, int, err
 	active := 0
 	for _, r := range rows {
 		p := m.tokenPublic(r)
-		if p.Value("expired") != true {
+		// Session tokens (session_tokens.go) are not the person's to manage
+		// and do not count against the limit.
+		if p.Value("expired") != true && !strings.HasPrefix(r.Str("label"), SessionTokenLabel) {
 			active++
 		}
 		out = append(out, p)
@@ -1270,11 +1390,23 @@ func (m *Manager) CreateAgentToken(ctx context.Context, username string, body *p
 	if label == "" {
 		label = "Agent token"
 	}
+	starter, project, err := starterPurpose(body)
+	if err != nil {
+		return nil, err
+	}
+	var retire []string
+	retireActive := 0
+	if starter {
+		label = starterLabel(project, TokenClock())
+		if retire, retireActive, err = m.starterTokensToRetire(ctx, user.Str("id"), project); err != nil {
+			return nil, err
+		}
+	}
 	_, active, err := m.tokenList(ctx, user.Str("id"))
 	if err != nil {
 		return nil, err
 	}
-	if active >= maxActiveTokens {
+	if active-retireActive >= maxActiveTokens {
 		return nil, orgErr(409, fmt.Sprintf("You already have %d active agent tokens. Revoke one before creating another.", maxActiveTokens), "AGENT_TOKEN_LIMIT")
 	}
 	secret := tokenPrefix + rnd.URLSafe("agent_tokens", 30)
@@ -1298,11 +1430,35 @@ func (m *Manager) CreateAgentToken(ctx context.Context, username string, body *p
 	if err := m.Log(ctx, user.Str("id"), "personal.agent_token.create", "", pyjson.NewObject("token", id, "scope", scope)); err != nil {
 		return nil, err
 	}
+	rotated := []any{}
+	if len(retire) > 0 {
+		at := isoAt(TokenClock())
+		for _, old := range retire {
+			n, err := m.execCount(ctx, "UPDATE agent_tokens SET revoked_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL",
+				at, old, user.Str("id"))
+			if err != nil {
+				return nil, err
+			}
+			if n > 0 {
+				rotated = append(rotated, old)
+			}
+		}
+		if len(rotated) > 0 {
+			if err := m.Log(ctx, user.Str("id"), "personal.agent_token.rotate", "",
+				pyjson.NewObject("token", id, "project", project, "revoked", rotated)); err != nil {
+				return nil, err
+			}
+		}
+	}
 	list, err := m.ListAgentTokens(ctx, username)
 	if err != nil {
 		return nil, err
 	}
 	out := pyjson.NewObject("token", secret, "item", item)
+	if starter {
+		// Go-only (tests/python/contract/go_only.py "agent-token-starter-rotation").
+		out.Set("rotated", rotated)
+	}
 	for _, k := range list.Keys() {
 		out.Set(k, list.Value(k))
 	}

@@ -226,7 +226,9 @@ func memberProbe(payload *pyjson.Object) {
 
 // registration is the Go-only "registration" member of the scoped replies:
 // which configured servers the project registers, which it could register
-// (names only, like setup discovery) and the hint when it registers none.
+// (names only, admins only) and the hint when it registers none.  Members get
+// empty available/suggested lists: they register servers in Setup, whose
+// discovery offers the names (T-0026).
 func (s *Service) registration(sc Scope, cfg *pyjson.Object, projectID string) *pyjson.Object {
 	var servers []any
 	if cfg != nil {
@@ -269,6 +271,9 @@ func (s *Service) registration(sc Scope, cfg *pyjson.Object, projectID string) *
 				}
 			}
 		}
+	}
+	if !sc.Admin {
+		available, suggested = []any{}, []any{}
 	}
 	out := pyjson.NewObject("registered", registered, "available", available, "missing", missing,
 		"suggested", suggested)

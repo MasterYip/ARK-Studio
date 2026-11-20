@@ -15,6 +15,7 @@ import (
 	"arkstudio/go/internal/mobile"
 	"arkstudio/go/internal/org"
 	"arkstudio/go/internal/sessions"
+	"arkstudio/go/internal/setup"
 )
 
 // GPUSource is what the graph reads from the GPU service (gpu_probe.GpuService).
@@ -57,7 +58,7 @@ type Deps struct {
 type Project struct{ ID, Name, Path string }
 
 // Host is the ARK server host: hostname and setup.machine_fingerprint().
-type Host struct{ Hostname, Fingerprint string }
+type Host struct{ Hostname, Fingerprint, LegacyFingerprint string }
 
 func platformID() string {
 	switch runtime.GOOS {
@@ -186,11 +187,10 @@ func Collect(ctx context.Context, d Deps, p Project, host Host, now float64) (*p
 		}
 		prefs.Set(name, dp)
 	}
-	return pyjson.NewObject(
+	out := pyjson.NewObject(
 		"now", now,
 		"project", pyjson.NewObject("id", p.ID, "name", p.Name, "path", p.Path, "db", filepath.Join(p.Path, "ark.sqlite3")),
-		"server", pyjson.NewObject("hostname", host.Hostname, "platform", platformID(), "fingerprint", host.Fingerprint,
-			"disk", disk, "load1", load),
+		"server", serverInfo(host, disk, load),
 		"layers", layers,
 		"history", history,
 		"gpu", gpu,
@@ -198,7 +198,16 @@ func Collect(ctx context.Context, d Deps, p Project, host Host, now float64) (*p
 		"phones", phones,
 		"users", users,
 		"prefs", prefs,
-	), nil
+	)
+	// Go only (2026-11-20): stored sizes of the resource locations.
+	if stats := setup.ReadLocationStats(p.Path); len(stats) > 0 {
+		list := make([]any, len(stats))
+		for i, s := range stats {
+			list[i] = s
+		}
+		out.Set("location_stats", list)
+	}
+	return out, nil
 }
 
 // ------------------------------------------------- personal device settings
@@ -295,4 +304,15 @@ func SetDevicePref(ctx context.Context, o *org.Manager, username, deviceID strin
 	out := pyjson.NewObject("device", deviceID)
 	out.Update(state)
 	return out, nil
+}
+
+// serverInfo is the ARK server's row; legacy_fingerprint (Go only) is its
+// pre-machine-id device id, which older setup locations still carry.
+func serverInfo(host Host, disk, load any) *pyjson.Object {
+	o := pyjson.NewObject("hostname", host.Hostname, "platform", platformID(), "fingerprint", host.Fingerprint,
+		"disk", disk, "load1", load)
+	if host.LegacyFingerprint != "" && host.LegacyFingerprint != host.Fingerprint {
+		o.Set("legacy_fingerprint", host.LegacyFingerprint)
+	}
+	return o
 }

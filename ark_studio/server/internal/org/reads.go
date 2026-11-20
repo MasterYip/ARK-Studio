@@ -162,6 +162,18 @@ func Prefs(r sqlitedb.Row) *pyjson.Object {
 	if workbench, _ := settings.WorkbenchPrefs(data.Value("workbench"), false); workbench.Len() > 0 {
 		out.Set("workbench", workbench)
 	}
+	// Go-only (T-0034): the project picker's pins and hidden projects.
+	if projects, _ := settings.ProjectPrefs(data.Value("projects"), false); projects.Len() > 0 {
+		out.Set("projects", projects)
+	}
+	// Go-only (T-0036): Mind card widths and pinned images per project.
+	if layout := settings.MindLayoutPrefs(data.Value("mind_layout")); layout.Len() > 0 {
+		out.Set("mind_layout", layout)
+	}
+	// Go-only: what Home's graph shows per project.
+	if filters := settings.HomeFilterPrefs(data.Value("home_filter")); filters.Len() > 0 {
+		out.Set("home_filter", filters)
+	}
 	return out
 }
 

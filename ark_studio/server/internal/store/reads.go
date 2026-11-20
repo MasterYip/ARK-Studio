@@ -50,6 +50,15 @@ func (s *Store) GetUnit(ctx context.Context, ref string) (*pyjson.Object, error)
 		}
 		out.Set("links_out", linksOut).Set("links_in", linksIn).Set("comments", comments).
 			Set("topics", topics).Set("activity", activity).Set("raw_url", "/api/units/"+pyjson.Str(id))
+		// Go only: the open review groups the unit belongs to (reviewgroups.go),
+		// only when there are any, so other payloads stay as they were.
+		groups, err := groupsOfUnit(ctx, q, id)
+		if err != nil {
+			return err
+		}
+		if len(groups) > 0 {
+			out.Set("review_groups", groups)
+		}
 		return nil
 	})
 	return out, err

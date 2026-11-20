@@ -52,14 +52,13 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.google.zxing.integration.android.IntentIntegrator;
 import com.google.zxing.integration.android.IntentResult;
+import com.masteryip.arkstudio.data.LinkPolicy;
 import com.masteryip.arkstudio.data.ServerEntry;
 import com.masteryip.arkstudio.data.ServerStore;
 import com.masteryip.arkstudio.data.ServerUrl;
 
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 
@@ -734,6 +733,9 @@ public class MainActivity extends AppCompatActivity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(true);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        // target=_blank and window.open() reach onCreateWindow (openPopupUrl)
+        // instead of replacing the ARK page.
+        settings.setSupportMultipleWindows(true);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         settings.setUserAgentString(settings.getUserAgentString() + " ARKAndroid/1.1");
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
@@ -749,12 +751,16 @@ public class MainActivity extends AppCompatActivity {
         webView.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return handleUri(request.getUrl());
+                // Server redirects (http -> https, sign-in) keep loading here.
+                if (request.isRedirect()) {
+                    return false;
+                }
+                return handleUri(request.getUrl(), request.isForMainFrame());
             }
 
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, String url) {
-                return handleUri(Uri.parse(url));
+                return handleUri(Uri.parse(url), true);
             }
 
             @Override
@@ -811,6 +817,12 @@ public class MainActivity extends AppCompatActivity {
         });
 
         webView.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture,
+                                          android.os.Message resultMsg) {
+                return ExternalLinks.catchPopup(MainActivity.this, resultMsg, MainActivity.this::openPopupUrl);
+            }
+
             @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback,
                                              FileChooserParams params) {
@@ -984,32 +996,30 @@ public class MainActivity extends AppCompatActivity {
 
     // ------------------------------------------------------------------ links
 
-    private boolean handleUri(Uri uri) {
+    /**
+     * Pages of the active ARK server stay here; other sites open in the
+     * browser, mailto: in a mail app, file: links copy their path and every
+     * other scheme is dropped (LinkPolicy).
+     */
+    private boolean handleUri(Uri uri, boolean mainFrame) {
         if (uri == null) {
             return true;
         }
-        String scheme = uri.getScheme() == null ? "" : uri.getScheme().toLowerCase(Locale.ROOT);
-        if ("http".equals(scheme) || "https".equals(scheme)) {
-            return false;
+        String url = uri.toString();
+        LinkPolicy.Action action = LinkPolicy.decide(url, mainFrame,
+                activeEntry == null ? null : activeEntry.getUrl(),
+                webView == null ? null : webView.getUrl());
+        return ExternalLinks.handle(this, url, action);
+    }
+
+    /** target=_blank and window.open(): ARK pages load here, the rest leaves. */
+    private void openPopupUrl(String url) {
+        LinkPolicy.Action action = LinkPolicy.decide(url, true,
+                activeEntry == null ? null : activeEntry.getUrl(),
+                webView == null ? null : webView.getUrl());
+        if (!ExternalLinks.handle(this, url, action) && webView != null) {
+            webView.loadUrl(url);
         }
-        if ("file".equals(scheme)) {
-            Toast.makeText(this, R.string.file_link, Toast.LENGTH_LONG).show();
-            return true;
-        }
-        if ("mailto".equals(scheme) || "tel".equals(scheme)) {
-            try {
-                startActivity(new Intent(Intent.ACTION_VIEW, uri));
-            } catch (Exception ignored) {
-                // No mail/dialer app installed.
-            }
-            return true;
-        }
-        try {
-            startActivity(new Intent(Intent.ACTION_VIEW, uri));
-        } catch (Exception failed) {
-            Toast.makeText(this, R.string.link_failed, Toast.LENGTH_SHORT).show();
-        }
-        return true;
     }
 
     // --------------------------------------------------------------- downloads
@@ -1157,7 +1167,9 @@ public class MainActivity extends AppCompatActivity {
         if (days < 7) {
             return getString(R.string.time_days, days);
         }
-        return new SimpleDateFormat("MMM d", Locale.getDefault()).format(new Date(timestamp));
+        return android.text.format.DateUtils.formatDateTime(this, timestamp,
+                android.text.format.DateUtils.FORMAT_SHOW_DATE | android.text.format.DateUtils.FORMAT_NO_YEAR
+                        | android.text.format.DateUtils.FORMAT_ABBREV_MONTH);
     }
 
     private int dp(int value) {

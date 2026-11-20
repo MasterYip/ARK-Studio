@@ -23,5 +23,21 @@ export function graphPanel(ctx, S) {
   });
   ctx.trackGraph(graph);
   graph.setData(S.graph?.nodes || [], S.graph?.edges || [], { selected: null, layout: preferredGraphLayout(S.view === "split" ? "tree" : "force") });
+  if (S.tab === "map" && ctx.S.mapFocus) focusWhenPlaced(ctx, graph, ctx.S.mapFocus);
   return panel;
+}
+
+// "Show on map" from Node details: select the node and centre it once the
+// layout has placed it (a force layout keeps moving for a moment).
+function focusWhenPlaced(ctx, graph, uid) {
+  ctx.S.mapFocus = null;
+  const find = () => (graph.nodes || []).find((node) => node.uid === uid || String(node.id) === String(uid));
+  if (!find()) return;
+  for (const delay of [80, 700]) {
+    setTimeout(() => {
+      const node = find();
+      if (node && Number.isFinite(node.x)) graph.focus(node);
+    }, delay);
+  }
+  ctx.openUnit(uid);
 }

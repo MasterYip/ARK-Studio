@@ -3,6 +3,7 @@ import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api } from "./api.js";
 import { upsertUsers, userBadge, userLabel } from "./users.js";
+import { confirmDialog } from "./components.js";
 
 // Organization administration: users, teams, project grants and Linux-account
 // mappings.  Every action calls the existing /api/org/* endpoints; the server
@@ -98,8 +99,17 @@ export function renderAdminPanel(ctx) {
             role: createRole.value,
           })),
         }, icon("plus", "sm"), t("admin.create_user")))));
+    // The server refuses to disable or delete yourself or the last owner;
+    // say so up front instead of offering the buttons.  Local mode has no
+    // passwords, so Reset password is hidden there.
+    const me = ctx.S.session?.user || "";
+    const owners = state.users.filter((item) => item.role === "owner" && !item.disabled).length;
+    const local = Boolean(ctx.S.session?.local);
     for (const user of state.users) {
       const role = roleSelect(user);
+      const self = user.username === me;
+      const lastOwner = user.role === "owner" && owners <= 1;
+      const lockReason = self ? t("admin.self_locked") : lastOwner ? t("admin.last_owner_locked") : "";
       const linux = state.linux[user.username] || [];
       const assignInput = h("input", {
         class: "input", placeholder: t("admin.linux_account"),
@@ -138,11 +148,15 @@ export function renderAdminPanel(ctx) {
           }, icon("save", "sm"), t("admin.save_role")),
           h("button", {
             class: "ghost-btn", type: "button",
-            onclick: () => run(() => api.updateOrgUser(user.id,
-              { disabled: !user.disabled })),
+            disabled: Boolean(lockReason) && !user.disabled, title: !user.disabled ? lockReason || undefined : undefined,
+            onclick: async () => {
+              if (!user.disabled && !await confirmDialog(t("admin.disable_confirm", { name: user.username }),
+                { title: t("admin.disable"), confirmLabel: t("admin.disable"), danger: true })) return;
+              run(() => api.updateOrgUser(user.id, { disabled: !user.disabled }));
+            },
           }, icon(user.disabled ? "check" : "ban", "sm"),
           user.disabled ? t("admin.enable") : t("admin.disable")),
-          h("button", {
+          local ? null : h("button", {
             class: "ghost-btn", type: "button",
             onclick: () => {
               const value = window.prompt(t("admin.new_password_for") + " " + user.username);
@@ -151,12 +165,15 @@ export function renderAdminPanel(ctx) {
           }, icon("shield", "sm"), t("admin.reset_password")),
           h("button", {
             class: "ghost-btn danger", type: "button",
-            onclick: () => {
-              if (window.confirm(`${t("admin.delete")} ${user.username}?`)) {
+            disabled: Boolean(lockReason), title: lockReason || undefined,
+            onclick: async () => {
+              if (await confirmDialog(t("admin.delete_confirm", { name: user.username }),
+                { title: t("admin.delete_title"), confirmLabel: t("admin.delete"), danger: true })) {
                 run(() => api.deleteOrgUser(user.id));
               }
             },
-          }, icon("trash", "sm"), t("admin.delete"))),
+          }, icon("trash", "sm"), t("admin.delete")),
+          lockReason ? h("span", { class: "muted", style: { fontSize: "11px" } }, lockReason) : null),
         linuxDetails));
     }
   }

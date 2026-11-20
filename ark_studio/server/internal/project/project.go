@@ -218,6 +218,17 @@ func (m *Manager) ListProjects() []*pyjson.Object {
 	return out
 }
 
+// Cached is the already open project at path (as listed by ListProjects),
+// or nil; it never opens one.
+func (m *Manager) Cached(path string) *Project {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if p, ok := m.cache[path]; ok {
+		return p
+	}
+	return m.byRef[path]
+}
+
 // Open is ProjectManager.open(ref) with a per-path cache (App._cached_project).
 func (m *Manager) Open(ref string) (*Project, error) {
 	ref = pytext.Strip(ref)

@@ -139,9 +139,9 @@ func TestServersForScopeAndView(t *testing.T) {
 		available string
 	}{
 		{"unscoped (pre-T-0018)", Unscoped(), "a100-box,h20,spare", true, false, ""},
-		{"member, registered", member, "a100-box", false, false, "h20,spare"},
+		{"member, registered", member, "a100-box", false, false, ""},
 		{"admin, registered", admin, "a100-box", true, false, "h20,spare"},
-		{"member, nothing registered", unreg, "", false, true, "a100-box,h20,spare"},
+		{"member, nothing registered", unreg, "", false, true, ""},
 		{"local/admin, nothing registered", unregAdmin, "", true, true, "a100-box,h20,spare"},
 	}
 	for _, tc := range cases {
@@ -185,6 +185,10 @@ func TestServersForScopeAndView(t *testing.T) {
 		}
 		if got := nameList(reg.Value("available")); got != tc.available {
 			t.Errorf("%s: available %q, want %q", tc.name, got, tc.available)
+		}
+		// T-0026: members get no server names (setup discovery offers them).
+		if _, ok := reg.Value("suggested").([]any); !ok || (!tc.sc.Admin && nameList(reg.Value("suggested")) != "") {
+			t.Errorf("%s: suggested %s", tc.name, pyjson.Dumps(reg))
 		}
 		if (reg.Value("hint_code") == HintNotRegistered) != tc.hint || (tc.hint && !pyjson.Truthy(reg.Value("hint"))) {
 			t.Errorf("%s: hint %v", tc.name, pyjson.Dumps(reg))
@@ -408,11 +412,17 @@ func TestQueueSubmitForRefusals(t *testing.T) {
 		t.Errorf("member submit without server: %v", err)
 	}
 	// Migration aid: the project's jobs name a server it has not registered.
-	out, _ = svc.ServersFor(Scope{Registered: []string{"h20"}}, "p1")
+	out, _ = svc.ServersFor(Scope{Registered: []string{"h20"}, Admin: true}, "p1")
 	if got := nameList(out.Value("registration").(*pyjson.Object).Value("suggested")); got != "a100-box" {
 		t.Errorf("suggested %q, want a100-box", got)
 	}
-	if out, _ = svc.ServersFor(unreg, "other"); nameList(out.Value("registration").(*pyjson.Object).Value("suggested")) != "" {
+	// T-0026: a member's view names no server it does not register.
+	out, _ = svc.ServersFor(Scope{Registered: []string{"h20"}}, "p1")
+	if reg := out.Value("registration").(*pyjson.Object); nameList(reg.Value("suggested")) != "" ||
+		nameList(reg.Value("available")) != "" {
+		t.Errorf("member registration names servers: %s", pyjson.Dumps(reg))
+	}
+	if out, _ = svc.ServersFor(unregAdmin, "other"); nameList(out.Value("registration").(*pyjson.Object).Value("suggested")) != "" {
 		t.Error("another project's jobs are suggested")
 	}
 }

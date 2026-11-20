@@ -8,6 +8,7 @@
 //                   two-finger pinch (pointer events)
 //   double-click    toggle fit <-> 100% at the cursor
 //   keys            + / - zoom, 0 fit, 1 100%, arrows pan, Esc closes a lightbox
+//   right-click     copy image / copy link / open in new tab; Ctrl+C copies
 //
 // The <img> itself is transformed (translate + scale, origin 0 0) instead of
 // being drawn to a canvas, so SVGs are re-rasterised by the browser and stay
@@ -15,6 +16,8 @@
 import { h } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
+import { contextMenuOpen } from "./context-menu.js";
+import { attachImageContextMenu } from "./image-copy.js";
 import {
   clampPan, distance, fitScale, fitView, formatZoom, midpoint, panBy, pinchView, stepScale, wheelFactor, zoomAt,
 } from "./image-viewer-model.js";
@@ -55,6 +58,8 @@ export function createImageViewer({
     class: `iv iv-${lightbox ? "lightbox" : "embedded"} ${className}`.trim(),
     tabindex: "0", role: "img", "aria-label": alt || t("viewer.image"), title: t(lightbox ? "viewer.hint_lightbox" : "viewer.hint_embedded"),
   }, img, bar);
+  // Right-click: copy image / copy link / open in new tab; Ctrl+C copies.
+  attachImageContextMenu(root, () => ({ src: img.currentSrc || img.src, kind: "image", caption: alt }), { focusable: false });
 
   let nat = { w: 0, h: 0 };
   let view = { scale: 1, x: 0, y: 0 };
@@ -235,7 +240,7 @@ export function openImageLightbox({ src, alt = "", title = "", meta = "", action
   const viewer = createImageViewer({ src, alt, mode: "lightbox", onClose: close });
   // Esc anywhere closes, even if focus moved to a header button.
   const onKey = (event) => {
-    if (event.key !== "Escape") return;
+    if (event.key !== "Escape" || contextMenuOpen()) return; // Esc closes the image menu first
     event.preventDefault();
     event.stopPropagation();
     close();
@@ -330,6 +335,7 @@ export function openMediaLightbox({ items = [], index = 0, title = "", srcOf = (
     prev.disabled = next.disabled = items.length < 2;
   }
   const onKey = (event) => {
+    if (contextMenuOpen()) return; // the image menu has the keys
     if (event.key === "Escape") { event.preventDefault(); event.stopPropagation(); close(); return; }
     if (event.target?.closest?.("video, audio, iframe")) return;
     const delta = { ArrowLeft: -1, PageUp: -1, ArrowRight: 1, PageDown: 1 }[event.key];

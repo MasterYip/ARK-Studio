@@ -18,6 +18,7 @@ import com.masteryip.arkstudio.model.Transcript;
 import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.ui.Async;
 import com.masteryip.arkstudio.ui.Fmt;
+import com.masteryip.arkstudio.ui.Labels;
 import com.masteryip.arkstudio.ui.MarkdownView;
 import com.masteryip.arkstudio.ui.Ui;
 
@@ -64,7 +65,7 @@ public class RunActivity extends BaseActivity {
             case "errored": return c.getString(R.string.run_errored);
             case "stopped": return c.getString(R.string.run_stopped);
             case "archived": return c.getString(R.string.run_archived);
-            default: return Fmt.human(status);
+            default: return Labels.of(c, status);
         }
     }
 
@@ -246,7 +247,7 @@ public class RunActivity extends BaseActivity {
                 String desc = block.item.optString("description", block.item.optString("command",
                         block.item.optString("tool")));
                 card.addView(Ui.small(this, desc));
-                card.addView(Ui.small(this, Fmt.human(block.item.optString("status", block.item.optString("decision")))));
+                card.addView(Ui.small(this, Labels.of(this, block.item.optString("status", block.item.optString("decision")))));
                 return card;
             }
             default: {
@@ -329,7 +330,7 @@ public class RunActivity extends BaseActivity {
             send.setEnabled(true);
             composer.setText("");
             JSONObject steer = result.optJSONObject("steer");
-            toast(steer != null ? getString(R.string.steer_status, Fmt.human(steer.optString("status")))
+            toast(steer != null ? getString(R.string.steer_status, Labels.of(this, steer.optString("status")))
                     : getString(R.string.continued));
             reloadSoon();
         }, error -> {

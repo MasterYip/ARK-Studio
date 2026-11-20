@@ -19,8 +19,10 @@ import {
   RESOURCE_TYPES, buildResourcesModel, utilisation, ageSeconds, agoKey, rowBox, CARD_METRICS,
   usageTone, formatBytes, collapseToggleBox, setCollapsed, toggleCollapsed, collapsibleIds,
   resourcesKeyAction, nearestInDirection, cardsInBox, foldTargets,
-  rowKind, gpuDetail, cpuDetail, storageDetail, formatMb, formatUsedOf, mergeProbeDetails,
+  rowKind, gpuDetail, cpuDetail, storageDetail, formatMb, formatUsedOf, mergeProbeDetails, separateCards,
 } from "./resources-model.js";
+import { sizeView, formatSize, graphHostId, isLocalPath } from "./location-size-model.js";
+import { sizeBadge, refreshLocationSize } from "./location-size.js";
 
 const REFRESH_MS = 30000;
 const FILTER_KEY = "ark.resourcesGraph.filters";
@@ -126,7 +128,7 @@ export function resourcesGraphPanel(ctx) {
   }, content);
   const modeReadBtn = tool(t("graph.mode.read_title"), t("graph.mode.read"), () => setMode("read"), { class: "graph-mode-btn" });
   const modeEditBtn = tool(t("graph.mode.edit_title"), t("graph.mode.edit"), () => setMode("edit"), { class: "graph-mode-btn" });
-  const fullscreenBtn = tool(t("resources.fullscreen"), icon("maximize", "sm"), () => toggleFullscreen(),
+  const fullscreenBtn = tool(t("graph.fullscreen"), icon("expand", "sm"), () => toggleFullscreen(),
     { "data-resources-tool": "fullscreen" });
   const tools = h("div", { class: "graph-tools resources-tools", "data-resources-tools": "" },
     h("div", { class: "graph-mode" }, modeReadBtn, modeEditBtn),
@@ -200,6 +202,15 @@ export function resourcesGraphPanel(ctx) {
       }
       return [card.id, { ...card, ...pos }];
     }));
+    // Hand-placed cards and changed heights can overlap: push them apart.
+    const pinned = new Set([...state.layout.keys()].filter((id) => state.positions.has(id)));
+    if (pinned.size || !pristine) {
+      const separated = separateCards([...state.layout.values()], pinned);
+      for (const [id, pos] of separated) {
+        const card = state.layout.get(id);
+        if (card.x !== pos.x || card.y !== pos.y) { state.layout.set(id, { ...card, ...pos }); pristine = false; }
+      }
+    }
     state.waypoints = pristine ? waypoints : null;
     reroute();
     renderFilters();
@@ -378,6 +389,9 @@ export function resourcesGraphPanel(ctx) {
     draw();
   }
 
+
+  // Full screen for the whole panel; the same button (Lucide expand/shrink)
+  // switches back, and Esc exits as usual.
   function toggleFullscreen() {
     if (document.fullscreenElement === panel) document.exitFullscreen?.();
     else panel.requestFullscreen?.().catch((err) => ctx.toast?.(err.message, "err"));
@@ -386,10 +400,10 @@ export function resourcesGraphPanel(ctx) {
   const onFullscreen = () => {
     const on = document.fullscreenElement === panel;
     panel.classList.toggle("fullscreen", on);
-    const label = t(on ? "resources.exit_fullscreen" : "resources.fullscreen");
+    const label = t(on ? "graph.exit_fullscreen" : "graph.fullscreen");
     fullscreenBtn.title = label;
     fullscreenBtn.setAttribute("aria-label", label);
-    fullscreenBtn.replaceChildren(icon(on ? "minimize" : "maximize", "sm"));
+    fullscreenBtn.replaceChildren(icon(on ? "shrink" : "expand", "sm"));
     requestAnimationFrame(() => { draw(); if (on) stage.focus({ preventScroll: true }); });
   };
   document.addEventListener("fullscreenchange", onFullscreen);
@@ -413,10 +427,13 @@ export function resourcesGraphPanel(ctx) {
     renderDetails();
   }
 
+  // Every fold/expand changes card heights: lay the cards out again (hand-
+  // placed cards keep their place) so nothing overlaps; the view is not
+  // re-fitted.
   function applyFold(next) {
     state.collapsed = next;
     saveJSON(COLLAPSED_KEY, [...next]);
-    rebuild();
+    rebuild({ relayout: true });
   }
 
   // Mind's semantics: the selected cards; with nothing selected the focused
@@ -826,7 +843,26 @@ export function resourcesGraphPanel(ctx) {
     if (m.storage) return t("resources.storage.used_of", { used: formatBytes(m.used_bytes), total: formatBytes(m.total_bytes) });
     if (res.kind === "gpu" && m.job) return m.job;
     if (res.kind === "compute" && m.gpus) return t("resources.gpus_n", { n: m.gpus });
+    if (res.size && (res.size.kind || "dir") !== "missing" && res.size.bytes != null) {
+      return `${res.size.capped ? "≥ " : ""}${formatSize(res.size.bytes)}`;
+    }
     return "";
+  }
+
+  // A resource at a path on its device's file system (repository, workspace,
+  // storage, database): its folder size is shown.
+  const sizedPath = (res) => Boolean(res.path && !res.metrics?.storage && !res.redacted && isLocalPath(res.path));
+
+  async function refreshSize(res, device, button) {
+    button.disabled = true;
+    try {
+      const r = await refreshLocationSize({ resource: res.setup_key, path: res.path,
+        hostId: graphHostId(res.device) ?? "", deviceLabel: device.label });
+      ctx.toast?.(r.message, r.done || r.queued ? "ok" : "");
+      if (r.done) await load();
+      else if (r.queued) setTimeout(() => { load(); }, 4000);
+    } catch (err) { ctx.toast?.(err.message, "err"); }
+    finally { button.disabled = false; }
   }
 
   // One-line rows: two thin bars, utilisation and memory (GPU, CPU and
@@ -878,6 +914,7 @@ export function resourcesGraphPanel(ctx) {
       tooltip.append(...[h("b", null, res.label),
         h("div", null, `${t(`resources.type.${res.kind}`)}${res.owner ? ` · ${res.owner}` : ""}`),
         res.path && !res.metrics?.storage ? h("div", { class: "mono" }, res.path) : res.redacted ? h("div", null, t("resources.path_hidden")) : null,
+        sizedPath(res) ? h("div", { "data-resources-size": res.id }, `${t("size.label")}: ${sizeView(res.size, { t }).text}`) : null,
         ...metricLines(res).map((line) => h("div", null, line)),
         res.last_known ? h("div", null, t("resources.last_known_hint")) : null].filter(Boolean));
     } else {
@@ -983,6 +1020,8 @@ export function resourcesGraphPanel(ctx) {
         h("div", { class: "physics-name" }, `${t(`resources.type.${res.kind}`)} · ${res.label}`),
         rowKind(res) !== "line" ? detailBlock(res, device) : null,
         res.path && !res.metrics?.storage ? h("code", null, res.path) : res.redacted ? h("p", { class: "muted" }, t("resources.path_hidden")) : null,
+        sizedPath(res) ? h("p", { class: "muted resources-size" }, sizeBadge(res.size, {
+          onRefresh: res.setup_key ? (button) => refreshSize(res, device, button) : null })) : null,
         ...metricLines(res).map((line) => h("p", { class: "muted" }, line))) : null,
       actions, privacy].filter(Boolean));
   }

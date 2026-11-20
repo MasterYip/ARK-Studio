@@ -2,6 +2,17 @@
 (function () {
   "use strict";
   var lang;
+  // In the Android app the UI follows the phone's language until the user picks one
+  // in ARK (state.js setLanguage and a ?lang= login link clear ark.langAuto).  This is the
+  // first script on index.html and login.html, so every later reader sees the value.
+  try {
+    if (/\bARKAndroid\//.test(navigator.userAgent || "")
+        && (!localStorage.getItem("ark.lang") || localStorage.getItem("ark.langAuto") === "1")) {
+      var system = (navigator.languages && navigator.languages[0]) || navigator.language || "";
+      localStorage.setItem("ark.lang", /^zh\b/i.test(system) ? "zh" : "en");
+      localStorage.setItem("ark.langAuto", "1");
+    }
+  } catch (_) {}
   try { lang = new URLSearchParams(location.search).get("lang") || localStorage.getItem("ark.lang"); } catch (_) {}
   var zh = lang === "zh", root = document.documentElement;
   var theme = new URLSearchParams(location.search).get("theme");

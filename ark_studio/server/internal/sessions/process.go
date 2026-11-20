@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"arkstudio/go/internal/secretredact"
 	"bufio"
 	"errors"
 	"io/fs"
@@ -29,6 +30,7 @@ type process struct {
 	stdout, stderr *os.File
 	exited         atomic.Bool
 	stdinClosed    atomic.Bool
+	done           chan struct{} // closed once the monitor has finished the session
 }
 
 func (p *process) running() bool { return !p.exited.Load() }
@@ -100,7 +102,7 @@ func startProcess(argv []string, dir string, env []string) (*process, error) {
 	inR.Close()
 	outW.Close()
 	errW.Close()
-	return &process{cmd: cmd, stdin: inW, stdout: outR, stderr: errR}, nil
+	return &process{cmd: cmd, stdin: inW, stdout: outR, stderr: errR, done: make(chan struct{})}, nil
 }
 
 // osErrorText is str(OSError) for a failed Popen.
@@ -158,6 +160,10 @@ func (m *Manager) readStream(s *Session, name string, f *os.File) {
 					defer func() { _ = recover() }()
 					m.observeOutputLine(s, text)
 				}()
+				func() {
+					defer func() { _ = recover() }()
+					m.observeStreamLine(s, text)
+				}()
 			}
 		}
 		if err != nil {
@@ -186,13 +192,27 @@ func (m *Manager) monitor(s *Session, p *process, wg *sync.WaitGroup) {
 	_ = p.stdout.Close()
 	_ = p.stderr.Close()
 	m.finish(s, code)
+	close(p.done)
 }
 
 // appendEvent is ManagedSession.append_event.
 func (m *Manager) appendEvent(s *Session, stream, line, kind string) {
 	line = strings.TrimRight(line, "\r\n")
-	if utf8.RuneCountInString(line) > maxLogLine {
-		line = limit(line, maxLogLine) + " …[truncated]"
+	// JSON event lines (stream-json tool results) get a larger limit: cut
+	// short they cannot be parsed any more.
+	max := maxLogLine
+	if strings.HasPrefix(line, "{") {
+		max = maxJSONLogLine
+	}
+	if utf8.RuneCountInString(line) > max {
+		line = limit(line, max) + " …[truncated]"
+	}
+	if strings.Contains(line, "arka_") || (s.agentSecret != "" && strings.Contains(line, s.agentSecret)) {
+		var extra []string
+		if s.agentSecret != "" {
+			extra = []string{s.agentSecret}
+		}
+		line, _ = secretredact.Text(line, extra)
 	}
 	entry := pyjson.NewObject("t", NowISO(), "line", line)
 	if kind != "" {
@@ -280,6 +300,11 @@ func (m *Manager) expirePendingLocked(s *Session, reason string) int {
 
 // finish is ManagedSession.finish.
 func (m *Manager) finish(s *Session, code *int) {
+	// Read stderr before the status changes: the session must not show as
+	// ended while stream mode is still on and its error still the generic
+	// one (a new session started in that window would use the rejected
+	// flags again).
+	rejected := (code == nil || *code != 0) && m.stderrRejectsStream(s)
 	m.mu.Lock()
 	if !activeStatuses[strOr(s.Meta.Value("status"))] {
 		m.mu.Unlock()
@@ -302,10 +327,17 @@ func (m *Manager) finish(s *Session, code *int) {
 	if code != nil && *code != 0 && !s.stopRequested {
 		s.Meta.Set("error", "process exited with code "+pyjson.Str(int64(*code)))
 	}
+	if isStream(s) {
+		s.Meta.Set("turn_state", "")
+	}
 	stderrCount := intOr(objOr(s.Meta.Value("counts")).Value("stderr"), 0)
 	transcript := strings.ToLower(strOr(s.Meta.Value("platform"))) == "codex"
 	if !stopped && stderrCount > 0 && !transcript && !pyjson.Truthy(s.Meta.Value("error")) {
 		s.Meta.Set("error", "process exited with errors")
+	}
+	if !stopped && rejected && isStream(s) {
+		m.disableStream()
+		s.Meta.Set("error", "This Claude Code version does not take stream input; send the message again to run it as a one-shot turn.")
 	}
 	m.saveLocked(s)
 	m.mu.Unlock()

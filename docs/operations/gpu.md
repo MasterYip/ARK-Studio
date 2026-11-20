@@ -91,7 +91,9 @@ The scoped replies carry a Go-only `registration` object: `registered`,
 `available` (configured names this project does not register), `missing`
 (registered names the list does not have), `suggested` (available names this
 project's queue jobs already ran on) and, when nothing is registered,
-`hint_code` and `hint`. The queue worker places a queued job only on servers
+`hint_code` and `hint`. `available` and `suggested` are filled only for
+viewers who see connection details (below); for everyone else they are empty
+lists, and setup discovery is where a member finds the names to register. The queue worker places a queued job only on servers
 its project registers; a job of a project that registers none stays queued.
 
 **Connection details** (`host`, `port`, `user`, `note`, `timeout_seconds`,
@@ -106,11 +108,11 @@ and config errors do not name the private path.
 **Local mode follows the same rule.** The single local user is the admin (full
 details), but a project still shows only the servers it registers: the list is
 one file for every project on the machine, and a project that registers
-nothing should not start jobs on a machine meant for another. The GPU board
-and Settings → GPU offer a one-click **Use these servers in this project**
-button (it saves compute resources for the suggested, else all available,
-servers into the viewer's own setup layer through
-`POST /api/skills/setup/draft`), so the change costs one click per project.
+nothing should not start jobs on a machine meant for another. GPU servers are
+registered in Setup: when a project registers none, the GPU board and
+Settings → GPU show a note with an **Open Setup** button (Settings → Setup /
+Resources, where a member edits their own resources); the note does not list
+server names.
 
 ### Migration (existing installations)
 
@@ -119,12 +121,12 @@ registered. Nothing is written automatically: adding a resource to a confirmed
 setup layer turns it back into a draft, which would undo people's
 confirmations. Per project, one member with write access does one of:
 
-1. Open **Execute → GPU** (or **Settings → GPU**) and click **Use … in this
-   project**. The button lists the servers this project's queue jobs already
-   used (`registration.suggested`), else every configured server; or
-2. In **Setup → Resources**, add a *compute* resource of kind `ssh` with
-   `gpu_server` set to the server name (repeat per server); or
-3. From an agent: `POST /api/agent/v1/setup/resource` with
+1. Open **Execute → GPU** (or **Settings → GPU**) and click **Open Setup**,
+   or go to **Settings → Setup / Resources** directly; there add a *compute*
+   resource of kind `ssh` with `gpu_server` set to the server name (repeat per server). An admin can see
+   the servers this project's queue jobs already used in
+   `registration.suggested`; or
+2. From an agent: `POST /api/agent/v1/setup/resource` with
    `{"resource": {"id": "gpu-a", "kind": "compute", "details": {"kind": "ssh", "gpu_server": "gpu-a"}}}`.
 
 Queued jobs of a project that registers none of its servers wait in the queue

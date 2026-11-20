@@ -9,7 +9,7 @@ export const MOBILE_PERMISSION_STORAGE_KEY = "ark.mobile.permission";
 export const MOBILE_EXPIRES_STORAGE_KEY = "ark.mobile.expires";
 
 // Six destinations fit a 360 px phone at 60 px each and cover the mobile-first
-// screens.  Plan/Production/Distribution stay in the "More" sheet so the
+// screens.  Topics/Assets/Distribution stay in the "More" sheet so the
 // desktop information architecture is preserved.
 export const MOBILE_PRIMARY_TABS = [
   { id: "home", workspace: "home", labelKey: "nav.home", icon: "home" },

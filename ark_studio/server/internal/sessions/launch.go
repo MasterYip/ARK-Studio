@@ -136,14 +136,23 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 		return nil, serr(label+" is not installed or configured", 400, "")
 	}
 	title := limit(pytext.Strip(bodyStr(body, "title")), maxTitle)
-	if title == "" {
+	prompt := limit(pytext.Strip(bodyStr(body, "prompt")), maxPrompt)
+	if title == "" && prompt != "" {
 		title = label + " session"
 	}
-	prompt := limit(pytext.Strip(bodyStr(body, "prompt")), maxPrompt)
 	presetID := pyjson.Str(preset.Value("id"))
-	if prompt == "" && promptRequired[presetID] {
-		return nil, serr(label+" requires an initial prompt", 400, "")
+	// Pasted images are saved once the session has a workspace (below).
+	contextIn, startImages := splitImageContext(body.Value("context"))
+	startCtx, err := m.startContextEntries(h, contextIn)
+	if err != nil {
+		return nil, err
 	}
+	if len(startCtx) > 0 {
+		prompt = limit(composeMessage(prompt, startCtx), maxPrompt)
+	}
+	// A session may start without a first message: a long-lived process
+	// waits for it; a one-shot agent starts with it (awaiting_first).
+	awaitFirst := prompt == "" && len(startImages) == 0 && promptRequired[presetID]
 	model := limit(pytext.Strip(bodyStr(body, "model")), 80)
 	agent := limit(pytext.Strip(bodyStr(body, "agent")), 120)
 	effort := limit(pytext.Strip(bodyStr(body, "effort")), 40)
@@ -317,12 +326,32 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 			"ARK_TASK_API_BASE", apiBase),
 		"counts", pyjson.NewObject("stdout", int64(0), "stderr", int64(0), "bytes", int64(0)), "actor", actor)
 	s := &Session{ID: sessionID, Folder: folder, Meta: meta, m: m}
+	if len(startImages) > 0 {
+		entries, err := m.contextEntries(h, s, startImages)
+		if err != nil {
+			return nil, err
+		}
+		s.pendingEntries = entries
+	}
 	m.mu.Lock()
 	m.sessions[sessionID] = s
 	m.order = append(m.order, sessionID)
 	m.saveLocked(s)
 	m.mu.Unlock()
-	return s, m.spawn(h, s, preset, prompt, cwdDir, workspace, artifacts, projectRef, apiBase, readToken, false, actor)
+	startEntries := s.pendingEntries
+	if awaitFirst && !(presetID == "claude" && m.streamEnabled()) {
+		// Nothing to run yet: the first message starts the agent (Continue).
+		m.mu.Lock()
+		meta.Set("status", "stopped").Set("awaiting_first", true).Set("notice", "")
+		m.saveLocked(s)
+		m.mu.Unlock()
+		return s, nil
+	}
+	if err := m.spawn(h, s, preset, prompt, cwdDir, workspace, artifacts, projectRef, apiBase, readToken, false, actor); err != nil {
+		return s, err
+	}
+	m.recordMedia(s, startEntries) // the first turn shows its images
+	return s, nil
 }
 
 func expand(token string, values [][2]string) string {
@@ -402,6 +431,8 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	}
 	effort := strOr(meta.Value("effort"))
 	resumeID := strOr(meta.Delete("resume_native_id"))
+	pending := s.pendingEntries
+	s.pendingEntries = nil
 	m.mu.Unlock()
 	env := m.buildEnv(h, s, projectRef, apiBase, readToken, workspace, artifacts, actor)
 	values := [][2]string{{"prompt", prompt}, {"model", model}, {"effort", effort}, {"workspace", cwdDir},
@@ -435,6 +466,12 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 			argv = insertAt(argv, at, "-c", "model_reasoning_effort="+effort)
 		}
 	}
+	if presetID == "codex" {
+		m.mu.Lock()
+		access := pyjson.Str(or(meta.Value("access_mode"), "read_only"))
+		m.mu.Unlock()
+		argv = withCodexSandbox(argv, access)
+	}
 	if presetID == "claude" && len(argv) > 1 {
 		var extra []string
 		if model != "" && !contains(argv, "--model") {
@@ -444,6 +481,27 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 			extra = append(extra, "--effort", effort)
 		}
 		argv = insertAt(argv, 1, extra...)
+	}
+	// A long-lived Claude Code process takes every message on stdin.
+	stream := false
+	if presetID == "claude" && len(argv) > 1 && m.streamEnabled() {
+		if next, ok := claudeStreamArgv(argv, prompt); ok {
+			if m.makeRoom(actor, s) {
+				argv, stream = next, true
+			}
+		}
+	}
+	if presetID == "claude" && len(argv) > 1 && !stream {
+		argv = insertAt(argv, 1, claudeStreamArgs(argv)...)
+	}
+	if !stream && len(pending) > 0 {
+		// One-shot turns cannot take image blocks: the agent gets the paths.
+		prompt = limit(composeMessage(prompt, pending), maxPrompt)
+		for i, part := range argv {
+			if part == strOr(meta.Value("prompt")) && part != "" {
+				argv[i] = prompt
+			}
+		}
 	}
 	m.mu.Lock()
 	previous := strOr(meta.Value("linux_account"))
@@ -487,9 +545,30 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	s.proc = proc
 	now := NowISO()
 	meta.Set("status", "running").Set("pid", int64(proc.pid())).Set("started_at", now).Set("last_activity_at", now)
+	if stream {
+		meta.Set("stream_input", true).Set("followup", true).Set("turn_state", "running")
+	} else if meta.Has("stream_input") {
+		meta.Delete("stream_input")
+		meta.Delete("turn_state")
+		meta.Set("followup", pyjson.Truthy(preset.Value("followup")))
+	}
 	m.saveLocked(s)
 	m.mu.Unlock()
 	m.startReaders(s, proc)
+	if stream {
+		m.startStreamReaper()
+		if prompt != "" || len(pending) > 0 {
+			if err := m.sendUserMessage(s, prompt, pending, prompt, recordPrompt); err != nil {
+				return serr("could not send the first message: "+err.Error(), 409, "")
+			}
+		} else {
+			m.mu.Lock()
+			meta.Set("turn_state", "waiting")
+			m.saveLocked(s)
+			m.mu.Unlock()
+		}
+		return nil
+	}
 	if prompt != "" && preset.Value("prompt_mode") == "stdin" {
 		_ = m.writeInput(s, prompt, recordPrompt, nil)
 	}
@@ -497,6 +576,27 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		proc.closeStdin()
 	}
 	return nil
+}
+
+// splitImageContext separates pasted images (saved after the session has a
+// workspace) from the rest of a new session's context.
+func splitImageContext(raw any) (any, []any) {
+	list, ok := raw.([]any)
+	if !ok {
+		return raw, nil
+	}
+	var rest, images []any
+	for _, x := range list {
+		if o, ok := x.(*pyjson.Object); ok && pytext.Lower(strOr(o.Value("kind"))) == "image_data" {
+			images = append(images, x)
+			continue
+		}
+		rest = append(rest, x)
+	}
+	if rest == nil {
+		return nil, images
+	}
+	return rest, images
 }
 
 func isWriteCredential(name string) bool {
@@ -599,9 +699,25 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 		{"PYTHONUNBUFFERED", "1"}, {"PYTHONIOENCODING", "utf-8"}} {
 		env.set(kv[0], kv[1])
 	}
+	// ark-server's own folder first, so `ark-server agent watch` and
+	// `ark-server agent host-id` work inside every session (T-0053).
+	exeDir := ""
+	if exe, err := os.Executable(); err == nil {
+		exeDir = filepath.Dir(exe)
+	}
+	if runtime.GOOS == "windows" && exeDir != "" {
+		current := env.get("PATH")
+		if current == "" {
+			current = os.Getenv("PATH")
+		}
+		env.set("PATH", exeDir+string(os.PathListSeparator)+current)
+	}
 	if runtime.GOOS != "windows" {
 		home, _ := os.UserHomeDir()
 		var parts []string
+		if exeDir != "" {
+			parts = append(parts, exeDir)
+		}
 		for _, p := range []string{filepath.Join(home, ".local", "bin"), filepath.Join(home, "bin"), "/usr/local/bin"} {
 			if isDir(p) {
 				parts = append(parts, p)
@@ -626,10 +742,37 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 		}
 		env.set("PATH", strings.Join(ordered, string(os.PathListSeparator)))
 	}
-	if access == "full_access" {
-		if m.WriteToken != "" {
-			env.set("ARK_AGENT_TOKEN", m.WriteToken)
+	token := ""
+	if h != nil && h.AgentToken != nil {
+		if secret, id, err := h.AgentToken(actor, s.ID, access); err == nil && secret != "" {
+			token = secret
+			m.mu.Lock()
+			s.agentSecret = secret
+			if id != "" {
+				ids := []any{}
+				if old, ok := s.Meta.Value("agent_token_ids").([]any); ok {
+					ids = append(ids, old...)
+				}
+				s.Meta.Set("agent_token_ids", append(ids, id))
+			}
+			m.mu.Unlock()
 		}
+	} else if access == "full_access" {
+		token = m.WriteToken
+	}
+	if token != "" {
+		env.set("ARK_AGENT_TOKEN", token)
+		env.set("ARK_TOKEN", token) // the name the ARK watcher scripts read
+	}
+	// The server root and project for the agent API (/api/agent/v1/...);
+	// ARK_TASK_API_BASE is the task API, not the root.
+	if root := strings.TrimSuffix(apiBase, "/api/task-agent/v1"); root != apiBase && root != "" {
+		env.set("ARK_URL", root)
+	}
+	if pid := strOr(projectRef.Value("id")); pid != "" {
+		env.set("ARK_PROJECT", pid)
+	}
+	if access == "full_access" {
 		env.set("ARK_TASK_FULL_ACCESS", "1")
 	} else {
 		ro := "0"
@@ -748,7 +891,7 @@ func (m *Manager) contract(sessionID string, preset, project *pyjson.Object, tas
 		lines = append(lines,
 			"## Full access\n",
 			"- Project: **"+name+"** (`"+ppath+"`)",
-			"- ARK's write token is provided as `ARK_AGENT_TOKEN` for `/api/agent/v1/...`.",
+			"- ARK's write token is provided as `ARK_AGENT_TOKEN` (also `ARK_TOKEN`) for `$ARK_URL/api/agent/v1/...`, with `X-ARK-Project: $ARK_PROJECT`.",
 			"- Writes are logged as activity; use them deliberately and only for this project.",
 			"### GPU queue",
 			"Do not choose a GPU with `nvidia-smi` and do not SSH to a GPU host yourself.",
@@ -840,4 +983,47 @@ func (m *Manager) refreshWorkspacePermission(s *Session, preset *pyjson.Object, 
 	_ = writeJSON(filepath.Join(workspace, "ark-context.json"), context)
 	_ = os.WriteFile(filepath.Join(workspace, "ARK-TASK.md"),
 		textfile.Encode(m.contract(s.ID, preset, projectRef, taskRef, cwd, apiBase, access, worktree, workspace)), 0o644)
+}
+
+// startContextEntries renders the context attached to a new session's first
+// prompt (the Sessions sidebar's "add context").  Only units and text
+// snippets: files and media live in a session workspace that does not exist
+// yet.
+func (m *Manager) startContextEntries(h *Hooks, raw any) ([]*pyjson.Object, error) {
+	if !pyjson.Truthy(raw) {
+		return nil, nil
+	}
+	if list, ok := raw.([]any); ok {
+		for _, x := range list {
+			o, ok := x.(*pyjson.Object)
+			if !ok {
+				continue
+			}
+			switch pytext.Lower(pytext.Strip(strOr(or(o.Value("kind"), o.Value("type"))))) {
+			case "unit", "task", "text", "snippet":
+			default:
+				return nil, serr("a new session can start with units and text snippets only", 400, "")
+			}
+		}
+	}
+	return m.contextEntries(h, nil, raw)
+}
+
+// claudeStreamArgs asks Claude Code's print mode for stream-json, so the
+// transcript sees tool calls, sub-agents and background tasks (not only the
+// final text).  Commands that already pick an output format keep it.
+func claudeStreamArgs(argv []string) []string {
+	if !contains(argv, "-p") && !contains(argv, "--print") {
+		return nil
+	}
+	for _, a := range argv {
+		if a == "--output-format" || strings.HasPrefix(a, "--output-format=") {
+			return nil
+		}
+	}
+	out := []string{"--output-format", "stream-json"}
+	if !contains(argv, "--verbose") {
+		out = append(out, "--verbose")
+	}
+	return out
 }

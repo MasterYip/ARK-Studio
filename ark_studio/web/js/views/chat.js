@@ -170,6 +170,9 @@ export function renderChat(host, ctx) {
 
   function renderThread() {
     clear(thread);
+    // The empty thread shows the suggestions itself; the side "Try" card
+    // only appears once a conversation exists (no duplicate list).
+    sideSuggest.hidden = !messages.length;
     if (!messages.length) {
       thread.append(h("div", { class: "chat-empty" },
         h("div", { class: "chat-empty-icon" }, icon("sparkles")),
@@ -205,6 +208,7 @@ export function renderChat(host, ctx) {
     setBusy(true);
     const user = { role: "user", content, at: new Date().toISOString() };
     thread.querySelector(".chat-empty")?.remove();
+    sideSuggest.hidden = false;
     const userEl = messageEl(user);
     thread.appendChild(userEl);
     const pending = { role: "assistant", content: "", meta: {} };

@@ -15,6 +15,23 @@ import (
 // NeedsMediaLimit is NEEDS_MEDIA_LIMIT.
 const NeedsMediaLimit = 40
 
+// PosterFrames is set by the server when it can make video poster frames
+// (ffmpeg installed): previews then carry poster_url.
+var PosterFrames bool
+
+func httpMedia(url any) bool {
+	u := strings.ToLower(pyjson.Str(orNilStr(url)))
+	return strings.HasPrefix(u, "http://") || strings.HasPrefix(u, "https://") || strings.HasPrefix(u, "data:")
+}
+
+// thumbableImage: the formats the thumbnail route decodes.
+func thumbableImage(url any) bool {
+	path := strings.ToLower(pyjson.Str(orNilStr(url)))
+	path, _, _ = strings.Cut(path, "?")
+	path, _, _ = strings.Cut(path, "#")
+	return hasSuffixAny(path, []string{".png", ".jpg", ".jpeg", ".gif"})
+}
+
 var (
 	previewImageExt = []string{".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".avif", ".bmp"}
 	previewVideoExt = []string{".mp4", ".webm", ".mov", ".m4v", ".ogv"}
@@ -303,10 +320,20 @@ func (s *Store) previewMediaBatch(ctx context.Context, q sqlitedb.Querier, idLis
 				continue
 			}
 			item.Set("preview_kind", kind)
+			local := !httpMedia(item.Value("url"))
 			if kind == "image" {
-				item.Set("thumb_url", item.Value("raw_url"))
+				// A small JPEG for list previews (server media_thumb.go) when
+				// the server can make one; the original otherwise.
+				thumb := item.Value("raw_url")
+				if local && thumbableImage(item.Value("url")) {
+					thumb = "/api/media/" + pyjson.Str(item.Value("id")) + "/thumb"
+				}
+				item.Set("thumb_url", thumb)
 			} else {
 				item.Set("thumb_url", nil)
+				if local && PosterFrames {
+					item.Set("poster_url", "/api/media/"+pyjson.Str(item.Value("id"))+"/thumb")
+				}
 			}
 			if source != nil {
 				item.Set("from", pyjson.NewObject("id", source.Get("id"), "uid", source.Get("uid"),
@@ -398,6 +425,7 @@ func (s *Store) needsYou(ctx context.Context, q sqlitedb.Querier) ([]any, error)
 		return nil, err
 	}
 	items := []any{}
+	objects := make([]*pyjson.Object, 0, len(rows))
 	var fromIDs []int64
 	fromItems := map[int64][]*pyjson.Object{}
 	for _, r := range rows {
@@ -426,7 +454,23 @@ func (s *Store) needsYou(ctx context.Context, q sqlitedb.Querier) ([]any, error)
 			fromItems[e.from] = append(fromItems[e.from], item)
 		}
 		items = append(items, item)
+		objects = append(objects, item)
 	}
+	// Go only: review requests (reviewrounds.go) and review groups.
+	if err := s.enrichReviews(ctx, q, rows, objects); err != nil {
+		return nil, err
+	}
+	groups, err := s.reviewGroups(ctx, q, "review", true)
+	if err != nil {
+		return nil, err
+	}
+	for _, g := range groups {
+		o := g.(*pyjson.Object)
+		o.Set("uid", o.Value("id")).Set("type", "review_group").Set("updated_at", o.Value("opened_at")).
+			Set("review_since", o.Value("opened_at")).Set("review_round", o.Value("round")).
+			Set("assignee", nil).Set("assignee_effective", nil).Set("assignee_from", nil)
+	}
+	items = append(groups, items...)
 	if len(fromIDs) > 0 {
 		sort.Slice(fromIDs, func(i, j int) bool { return fromIDs[i] < fromIDs[j] })
 		brows, err := groupRows(ctx, q, "SELECT id, uid, title, type FROM units WHERE id IN ({marks})", sqlitedb.Args(fromIDs))

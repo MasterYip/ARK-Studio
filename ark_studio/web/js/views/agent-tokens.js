@@ -8,6 +8,13 @@ import { t } from "../i18n.js";
 import { icon } from "../icons.js";
 import { api } from "../api.js";
 import { openModal, toast } from "../components.js";
+import {
+  forgetStarterTokenId, loadStarterToken, saveStarterToken, starterTokenListed,
+} from "../starter-token-store.js";
+
+function storage() {
+  try { return globalThis.localStorage || null; } catch { return null; }
+}
 
 // Stored token label (data, not UI): kept English so it can be recognised.
 /* i18n-ignore-start */
@@ -54,6 +61,8 @@ function confirmRevoke(item, onRevoked) {
         onClick: async () => {
           try {
             const data = await api.revokeAgentToken(item.id);
+            const store = storage();
+            if (store) forgetStarterTokenId(store, item.id);
             toast(t("tokens.revoked"), "ok");
             onRevoked(data);
           } catch (err) { toast(err.message, "err"); return false; }
@@ -179,9 +188,17 @@ export function legacyServerTokenPanel() {
 }
 
 // ---------------------------------------------------------- Home prompts
-export function homePromptLabel(date = new Date()) {
+// The server labels a project's starter token "Home starter prompt (<id>) –
+// <date>" and rotates them (ark_studio/server/internal/org/admin.go).  Tokens
+// labelled "Home starter prompt – <date>" come from before that (no project).
+export function homePromptLabel(date = new Date(), projectId = "") {
   const day = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
-  return `${HOME_PROMPT_LABEL}${LABEL_SEPARATOR}${day}`;
+  return `${HOME_PROMPT_LABEL}${projectId ? ` (${projectId})` : ""}${LABEL_SEPARATOR}${day}`;
+}
+
+/** Starter tokens minted before rotation existed: no project, never rotated by the server. */
+export function isLegacyPromptToken(item) {
+  return !item?.expired && String(item?.label || "").startsWith(`${HOME_PROMPT_LABEL}${LABEL_SEPARATOR}`);
 }
 
 function manualCopy(text) {
@@ -196,40 +213,78 @@ function manualCopy(text) {
   setTimeout(() => area.select(), 0);
 }
 
-// Ask, then mint a personal token for a Home starter prompt and copy the
-// prompt with the token filled in.  Nothing is created without the click on
-// "Create token and copy".  Existing values cannot be shown again (only a
-// hash is stored), so "reuse" means offering to retire older prompt tokens.
+// Copy prompt (Home card, prompt preview).  The server keeps only a hash of
+// a token, so a value can be handed out again only from this browser: the
+// starter token minted here is stored per account and project
+// (starter-token-store.js).  With a stored, unexpired token the click copies
+// at once: the text is built and clipboard.writeText is called inside the
+// click, with no request, no dialog and no rotation.  The token list is
+// checked afterwards; a token the server no longer lists (revoked, expired,
+// rotated away by a copy in another browser) is forgotten and the next Copy
+// mints a new one.
+//
+// Without a stored token: ask, then mint.  Nothing is created without the
+// click on "Create token and copy".  The server rotates (purpose: "starter"):
+// each mint replaces this project's older starter tokens and keeps the
+// previous one active, so a running agent is not cut off and copying never
+// reaches the per-account limit.  Starter tokens from before rotation (no
+// project in the label) can be revoked here; that happens before the new
+// token is created, so a full account still gets its copy.
 // One token flow at a time: further Copy clicks while the token list is
 // loading or the confirmation is open are ignored (no stacked dialogs, no
 // duplicate requests, never two tokens for one copy).
+// Resolves to { reused, copied } (copied: false when cancelled or failed).
 let tokenFlow = null;
 
-export function copyPromptWithToken(buildText) {
+export function copyPromptWithToken(buildText, { projectId = "", user = "local" } = {}) {
   if (tokenFlow) return tokenFlow;
+  const store = storage();
+  const kept = store && projectId ? loadStarterToken(store, user, projectId) : null;
+  if (kept) {
+    // Synchronous up to clipboard.writeText: still inside the user's click.
+    const text = buildText(kept.token);
+    tokenFlow = copyText(text).then((ok) => {
+      if (ok) toast(t("start.token_copied"), "ok");
+      else manualCopy(text);
+      checkKeptToken(store, kept.id);
+      return { reused: true, copied: true };
+    }).finally(() => { tokenFlow = null; });
+    return tokenFlow;
+  }
   tokenFlow = new Promise((resolve) => {
-    openTokenFlow(buildText, resolve).catch(() => resolve());
+    openTokenFlow(buildText, { projectId, user, store }, resolve)
+      .catch(() => resolve({ reused: false, copied: false }));
   }).finally(() => { tokenFlow = null; });
   return tokenFlow;
 }
 
-async function openTokenFlow(buildText, done) {
-  let existing = [];
+// After a reuse: is the token still listed?  If not, forget it and say so.
+async function checkKeptToken(store, id) {
+  let tokens = null;
+  try { tokens = (await api.agentTokens()).tokens || []; } catch { return; }
+  if (starterTokenListed(tokens, id)) return;
+  forgetStarterTokenId(store, id);
+  toast(t("start.token_gone"), "err");
+}
+
+async function openTokenFlow(buildText, { projectId, user, store }, done) {
+  let legacy = [];
   try {
-    existing = ((await api.agentTokens()).tokens || [])
-      .filter((item) => !item.expired && String(item.label || "").startsWith(HOME_PROMPT_LABEL));
-  } catch (err) { toast(err.message, "err"); done(); return; }
-  const label = homePromptLabel();
+    legacy = ((await api.agentTokens()).tokens || []).filter(isLegacyPromptToken);
+  } catch (err) { toast(err.message, "err"); done({ reused: false, copied: false }); return; }
+  const label = homePromptLabel(new Date(), projectId);
   const revokeOld = h("input", { type: "checkbox" });
   revokeOld.checked = true;
   let minting = false;
+  let copied = false;
   openModal({
-    onClose: () => done(),
+    onClose: () => done({ reused: false, copied }),
     title: t("start.token_title"),
     body: h("div", { class: "stack" },
       h("p", null, t("start.token_body", { label })),
-      existing.length ? h("p", { class: "muted" }, t("start.token_existing", { count: existing.length })) : null,
-      existing.length ? h("label", { class: "row tight agent-token-revoke-old" }, revokeOld,
+      projectId ? h("p", { class: "muted", "data-token-rotation": "" }, t("start.token_rotation")) : null,
+      legacy.length ? h("p", { class: "muted" }, t("start.token_existing", { count: legacy.length })) : null,
+      legacy.length ? h("label", { class: "row tight agent-token-revoke-old" }, revokeOld,
         h("span", null, t("start.token_revoke_old"))) : null,
       h("div", { class: "notice" }, icon("alert", "sm"), h("div", null, t("start.token_warning")))),
     actions: [
@@ -239,20 +294,27 @@ async function openTokenFlow(buildText, done) {
         onClick: async () => {
           if (minting) return false;
           minting = true;
-          let data;
-          try {
-            data = await api.createAgentToken({ label, scope: "write", expires_days: 90 });
-          } catch (err) { minting = false; toast(err.message, "err"); return false; }
-          const text = buildText(data.token);
-          const ok = await copyText(text);
-          if (ok) toast(t("start.token_copied"), "ok");
-          if (existing.length && revokeOld.checked) {
-            for (const old of existing) {
+          if (legacy.length && revokeOld.checked) {
+            for (const old of legacy) {
               try { await api.revokeAgentToken(old.id); } catch { /* already gone */ }
             }
+            legacy = [];
           }
+          let data;
+          try {
+            data = await api.createAgentToken({ label, scope: "write", expires_days: 90,
+              ...(projectId ? { purpose: "starter", project: projectId } : {}) });
+          } catch (err) { minting = false; toast(err.message, "err"); return false; }
+          if (store && projectId) {
+            saveStarterToken(store, user, projectId,
+              { token: data.token, id: data.item?.id, expires_at: data.item?.expires_at });
+          }
+          const text = buildText(data.token);
+          const ok = await copyText(text);
+          copied = true;
+          if (ok) toast(t("start.token_copied"), "ok");
           if (!ok) manualCopy(text);
-          done();
+          return true;
         },
       },
     ],

@@ -12,6 +12,7 @@ import { installUnitReferences } from "./unit-references.js";
 import { exportBundleMenuItem } from "./export-menu.js";
 import { historyMenuItem, setHistoryContext } from "./node-history.js";
 import { setNodeReveal } from "./node-reveal.js";
+import { agentMessageMenuItem } from "./agent-messages.js";
 
 export const OPEN_IN_EDITOR_SHORTCUT = "Alt+Enter";
 
@@ -49,6 +50,7 @@ export function unitMenuItems(ctx, unit, event = null) {
     historyMenuItem(unit, ctx),
     { separator: true },
     assignMenuItem([unit], ctx),
+    agentMessageMenuItem(ctx, unit), // experimental, null while off
     exportBundleMenuItem([{ uid }]),
     { label: t("unit_menu.copy_uid"), icon: "copy", onClick: () => copyText(uid) },
   ];

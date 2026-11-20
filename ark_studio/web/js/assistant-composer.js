@@ -5,6 +5,9 @@ import { t } from "./i18n.js";
 /**
  * Compact assistant composer used by both the Chat tab and the session dock.
  * The input is one line high by default and grows up to 140px with content.
+ * The composer is a CSS size container (app.css .ai-composer): in a narrow
+ * dock the access badge collapses to its icon (label kept as aria-label and
+ * tooltip), the model name truncates and the send button stays visible.
  */
 export function createAssistantComposer({ placeholder, onSubmit, model = "DeepSeek", onPlus = null }) {
   let busy = false;
@@ -26,11 +29,12 @@ export function createAssistantComposer({ placeholder, onSubmit, model = "DeepSe
   }, icon("plus", "sm"));
   const access = h("button", {
     class: "ai-composer-access", type: "button",
-    title: t("composer.access_title"),
-  }, icon("alert", "sm"), t("composer.full_access"));
+    title: `${t("composer.access_title")}: ${t("composer.full_access")}`,
+    "aria-label": t("composer.full_access"),
+  }, icon("alert", "sm"), h("span", { class: "ai-composer-access-label" }, t("composer.full_access")));
   const modelBtn = h("button", {
-    class: "ai-composer-model", type: "button", title: t("composer.model_title"),
-  }, model, icon("chevron", "sm"));
+    class: "ai-composer-model", type: "button", title: `${t("composer.model_title")}: ${model}`,
+  }, h("span", { class: "ai-composer-model-label" }, model), icon("chevron", "sm"));
   const el = h("div", { class: "ai-composer" },
     input,
     h("div", { class: "ai-composer-bar" },

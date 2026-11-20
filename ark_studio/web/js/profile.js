@@ -14,7 +14,12 @@ import { api, authenticatedUrl } from "./api.js";
 import { S, setLanguage, setTheme } from "./state.js";
 import { openContextMenu } from "./context-menu.js";
 import { setDisplayPrefs } from "./appearance.js";
-import { setAppearanceOverrides } from "./appearance-overrides.js";
+import { appearanceOverrides, setAppearanceOverrides } from "./appearance-overrides.js";
+import { LEGACY_MIND_KEY, LEGACY_MIND_DONE_KEY, migrateLegacyMind } from "./graph-display.js";
+import { localLayoutBackend } from "./mind-node-state.js";
+import {
+  homeFilterEntry, homeFilterFromPrefs, homeFilterIsDefault, homeFilterParams, normalizeHomeFilter,
+} from "./home-filter-model.js";
 import {
   currentUsername, displayName, upsertUser, upsertUsers, userAvatar,
 } from "./users.js";
@@ -115,6 +120,8 @@ export function initProfilePrefs(profile) {
   // A savable account profile is the source of truth for appearance
   // overrides; without one (no account, read-only device) the browser copy is.
   if (prefsState.persist) setAppearanceOverrides(prefs.appearance || {}, { replace: true });
+  if (prefsState.persist) refreshAccountPrefs();
+  else migrateLegacyGraphDisplay();
   let loginTheme;
   try {
     loginTheme = localStorage.getItem("ark.loginTheme");
@@ -146,6 +153,112 @@ export async function saveAppearanceOverride(patch) {
   return setAppearanceOverrides(data.profile?.prefs?.appearance || {}, { replace: true });
 }
 
+// ------------------------------------------- graph display migration (T-0036)
+// The Mind and marker settings used to live in this browser only
+// ("ark.mind.v1").  On the first load after the move, the values this person
+// had changed become their personal override (account settings already
+// saved elsewhere win), saved to the account once; the browser copy is then
+// renamed so it is never read again.  A failed save leaves it in place and
+// the next load tries again; the look is applied right away either way.
+function storageGet(key) { try { return localStorage.getItem(key); } catch { return null; } }
+
+// The bootstrap reply that carried `profile` may come from the browser's
+// cache (shown at once, revalidated later), so it can predate a change saved
+// a moment ago, on this device or another.  Re-read the account from the
+// server (bypassing the cached GET /api/me) and adopt its appearance before
+// migrating anything into it: otherwise a later save would build on the
+// stale copy and drop values.
+export const PROFILE_REFRESHED = "ark:profile-refreshed";
+let refreshing = null;
+export function refreshAccountPrefs() {
+  refreshing ||= api.me({ fresh: true }).then((data) => {
+    if (!data?.profile) return;
+    prefsState.profile = data.profile;
+    setAppearanceOverrides(data.profile.prefs?.appearance || {}, { replace: true });
+    window.dispatchEvent(new CustomEvent(PROFILE_REFRESHED, { detail: data.profile }));
+  }).catch(() => { /* offline: the cached profile stays */ })
+    .then(() => migrateLegacyGraphDisplay())
+    .finally(() => { refreshing = null; });
+  return refreshing;
+}
+
+export function migrateLegacyGraphDisplay() {
+  const raw = storageGet(LEGACY_MIND_KEY);
+  if (raw === null) return null;
+  const retire = () => {
+    try {
+      localStorage.setItem(LEGACY_MIND_DONE_KEY, raw);
+      localStorage.removeItem(LEGACY_MIND_KEY);
+    } catch { /* storage unavailable */ }
+  };
+  const { override, changed } = migrateLegacyMind(raw, appearanceOverrides().graph_display);
+  if (!changed) { retire(); return null; }
+  setAppearanceOverrides({ graph_display: override });
+  if (!prefsState.persist) { retire(); return Promise.resolve(override); }
+  return api.updateMe({ prefs: { appearance: { graph_display: override } } }).then((data) => {
+    prefsState.profile = data.profile;
+    setAppearanceOverrides(data.profile?.prefs?.appearance || {}, { replace: true });
+    retire();
+    return override;
+  }).catch(() => null);
+}
+
+// ------------------------------------------------ per-project Mind layout
+// Card widths and pinned images (mind-node-state.js): on the account profile
+// (prefs.mind_layout) when it can be saved, in this browser otherwise.
+const localLayout = localLayoutBackend(typeof localStorage === "undefined" ? null : localStorage);
+
+export function mindLayoutEntry(projectId) {
+  if (!prefsState.persist) return localLayout.loadEntry(projectId);
+  return prefsState.profile?.prefs?.mind_layout?.[projectId] || null;
+}
+
+export function saveMindLayoutEntry(projectId, entry) {
+  if (!projectId) return;
+  if (!prefsState.persist) { localLayout.saveEntry(projectId, entry); return; }
+  api.updateMe({ prefs: { mind_layout: { [projectId]: entry } } })
+    .then((data) => { prefsState.profile = data.profile; })
+    .catch(() => localLayout.saveEntry(projectId, entry));
+}
+
+// ------------------------------------------------- Home shows (per project)
+// What the Home header graph draws (home-filter-model.js): on the account
+// profile (prefs.home_filter), where the server reads it for the overview;
+// a read-only device keeps it in this browser and asks for it explicitly.
+const HOME_FILTER_KEY = "ark.homeFilter:";
+
+export function homeFilterFor(projectId) {
+  if (!prefsState.persist) {
+    try {
+      const raw = localStorage.getItem(HOME_FILTER_KEY + projectId);
+      if (raw) return normalizeHomeFilter(JSON.parse(raw));
+    } catch { /* storage unavailable */ }
+  }
+  return homeFilterFromPrefs(prefsState.profile?.prefs, projectId);
+}
+
+/** Query parameters GET /api/project/overview needs (none: the server knows). */
+export function homeFilterQuery(projectId) {
+  if (prefsState.persist || !projectId) return {};
+  const filter = homeFilterFor(projectId);
+  return homeFilterIsDefault(filter) ? {} : homeFilterParams(filter);
+}
+
+export async function saveHomeFilter(projectId, filter) {
+  if (!projectId) return homeFilterFor(projectId);
+  const entry = homeFilterEntry(filter);
+  if (!prefsState.persist) {
+    try {
+      if (entry) localStorage.setItem(HOME_FILTER_KEY + projectId, JSON.stringify(entry));
+      else localStorage.removeItem(HOME_FILTER_KEY + projectId);
+    } catch { /* storage unavailable */ }
+    return homeFilterFor(projectId);
+  }
+  const data = await api.updateMe({ prefs: { home_filter: { [projectId]: entry } } });
+  prefsState.profile = data.profile;
+  return homeFilterFor(projectId);
+}
+
 // ----------------------------------------------------------- account menu
 function goToProfile(ctx) {
   try {
@@ -156,12 +269,15 @@ function goToProfile(ctx) {
   else ctx.navigateWorkspace?.("settings");
 }
 
-/** Top-bar avatar button: who is signed in, Profile, Sign out. */
-export function accountMenuButton(ctx) {
+/** Avatar button: who is signed in, Profile, Sign out.  `side` places it at
+ *  the bottom of the activity bar: the menu then opens to the right of the
+ *  bar and upward (openContextMenu flips it above the avatar's bottom edge
+ *  when it would run off the screen); otherwise it drops below the top bar. */
+export function accountMenuButton(ctx, { side = false } = {}) {
   const username = currentUsername() || S.session?.user || "";
   if (!username) return null;
   const button = h("button", {
-    class: "icon-btn account-btn", type: "button",
+    class: `${side ? "wb-act" : "icon-btn"} account-btn`, type: "button",
     title: t("profile.account_menu"), "aria-label": t("profile.account_menu"),
     "aria-haspopup": "menu",
     onclick: (event) => {
@@ -169,7 +285,8 @@ export function accountMenuButton(ctx) {
       const local = Boolean(S.session?.local);
       const shown = displayName(username);
       openContextMenu({
-        x: rect.right - 240, y: rect.bottom + 6,
+        ...(side ? { x: rect.right + 6, y: rect.bottom } : { x: rect.right - 240, y: rect.bottom + 6 }),
+        returnFocus: event.currentTarget,
         items: [
           { label: shown === username ? shown : `${shown} · @${username}`, icon: "user", disabled: true },
           { separator: true },
@@ -425,7 +542,8 @@ export function renderProfilePanels(ctx) {
         display_name: nameInput.value.trim(),
         bio: bioInput.value.trim(),
         email: emailInput.value.trim(),
-        prefs: { lang: langSelect.value, theme: themeSelect.value },
+        // Theme has one picker (Personal › Display); keep whatever it set.
+        prefs: { lang: langSelect.value, theme: themePref() },
       };
       if (avatar.kind === "initials"
           && (before.avatar?.kind !== "initials" || before.avatar?.color !== avatar.color)) {
@@ -483,8 +601,7 @@ export function renderProfilePanels(ctx) {
       field(t("profile.display_name"), nameInput, { error: nameError, counter: nameCount }),
       field(t("profile.email"), emailInput, { error: emailError, hint: t("profile.email_hint") }),
       field(t("profile.bio"), bioInput, { error: bioError, counter: bioCount, full: true }),
-      field(t("profile.language"), langSelect),
-      field(t("profile.theme"), themeSelect, { hint: t("profile.prefs_hint") })));
+      field(t("profile.language"), langSelect, { hint: t("profile.prefs_hint") })));
 
   const passwordPanel = renderPasswordPanel(ctx);
   const boot = prefsState.profile;

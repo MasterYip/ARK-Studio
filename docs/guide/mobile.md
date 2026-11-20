@@ -89,6 +89,8 @@ Equivalent environment configuration:
 | `ARK_DETECT_PUBLIC_IP` | `1` opts into a short public-IP lookup |
 | `ARK_TRUST_PROXY` | `1` trusts `X-Forwarded-For/Proto/Prefix` from your proxy |
 | `ARK_ALLOWED_HOSTS` | extra Host-header allow-list entries |
+| `ARK_APP_RELEASE_REPO` | GitHub `owner/name` whose latest release provides the Android APKs (default `MasterYip/ARK-Studio`; for forks) |
+| `ARK_APP_RELEASE_API` | GitHub API base for that lookup (default `https://api.github.com`; GitHub Enterprise) |
 
 The equivalent flags are `--auth-user`, `--auth-password`,
 `--auth-password-file`, `--auth-password-hash`, `--auth-session-ttl`,
@@ -373,6 +375,7 @@ caching and the standalone window.
 | `POST` | `/login` | CSRF + same origin | verify username/password, set the session cookie |
 | `POST` | `/api/mobile/pair/claim` | one-time code + same origin | exchange a desktop-issued QR for a project-scoped device session |
 | `POST` | `/api/mobile/login` | username + password (JSON) | native clients: exchange the account password for a device token |
+| `POST` | `/api/desktop/link` | session | ARK Studio desktop: a one-time link code, claimed with `/api/mobile/pair/claim` (Go only; [desktop links](desktop-link.md)) |
 | `POST` | `/logout` | session | clear the cookie and return to login |
 | `GET` | `/api/auth/session` | public | `auth_required`, `authenticated`, user, expiry |
 | `POST` | `/api/auth/logout` | session | JSON logout used by Settings |
@@ -621,16 +624,31 @@ cache stores no project data; offline mode only guarantees the app skeleton.
 
 ## Android app
 
-`ark_studio/android/` builds two apps that install side by side, both downloadable from
-Settings → Project → Access:
+`ark_studio/android/` builds two apps that install side by side. Both are
+attached to every [GitHub release](https://github.com/MasterYip/ARK-Studio/releases/latest)
+as `ARK-Studio-<version>-android.apk` and `ARK-Studio-<version>-android-web.apk`,
+and Settings → Mobile → Android apps links (with a QR code per app) to the
+APKs of the latest release:
 
-- **ARK Studio** (`:app`, `com.masteryip.arkstudio`, 3.0): the native app below,
-  served at `/download/ARK-Studio-android.apk`.
+- **ARK Studio** (`:app`, `com.masteryip.arkstudio`, 3.0): the native app below.
 - **ARK Studio Web** (`:webapp`, `com.masteryip.arkstudio.web`, 3.0-web): the
   lightweight shell that opens the full web app in a WebView and pairs inside the
-  page, served at `/download/ARK-Studio-webapp.apk`.
+  page.
 
-`GET /api/mobile/apps` reports which builds are present on the server.
+The ARK server, not the browser, finds the latest release:
+`GET /api/mobile/apps` asks the GitHub API
+(`/repos/<owner>/<name>/releases/latest`, unauthenticated) for the APK assets
+by name and caches the answer for an hour; a failed lookup keeps the last good
+answer and is retried after 5 minutes, and with no answer at all the links
+point to the release page. Forks set `ARK_APP_RELEASE_REPO` (and
+`ARK_APP_RELEASE_API` for GitHub Enterprise). The reply also carries the
+release `version`, `release_url` and, per app, `qr_svg` and whether a local
+build exists (`local`, `local_url`).
+
+The old server paths keep working for older apps and bookmarks:
+`/download/ARK-Studio-android.apk` (alias `/download/ark.apk`) and
+`/download/ARK-Studio-webapp.apk` serve a build copied to the server's `dist/`
+when there is one, and otherwise redirect (302) to the latest release's APK.
 
 The native app is described next.
 It is a hybrid: everyday screens are native, the rest is the web app in a

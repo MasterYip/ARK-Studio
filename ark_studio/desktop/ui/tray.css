@@ -1,0 +1,35 @@
+/* ARK Studio desktop: the tray window (Windows). Tokens come from desktop.css. The window is
+   transparent; the card sits in an 8 px margin that holds its shadow. */
+html, body.tray-body { height: auto; overflow: hidden; background: transparent; }
+body.tray-body { padding: 0; -webkit-user-select: none; user-select: none; cursor: default; }
+.tray-card {
+  position: absolute; top: 8px; left: 8px; width: max-content; min-width: 236px; max-width: 320px;
+  padding: 6px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface);
+  box-shadow: 0 6px 20px rgba(15, 23, 42, .16), 0 1px 4px rgba(15, 23, 42, .08); outline: none;
+}
+.tray-head { display: flex; align-items: center; gap: 9px; padding: 6px 8px 8px; }
+.tray-head img { width: 22px; height: 22px; flex: none; }
+.tray-head-text { min-width: 0; display: flex; flex-direction: column; line-height: 1.3; }
+.tray-name { font-weight: 650; color: var(--ink); }
+.tray-name small { margin-left: 6px; font-weight: 500; font-size: 0.6875rem; color: var(--mute); }
+.tray-status { display: flex; align-items: center; gap: 6px; font-size: 0.6875rem; color: var(--mute); }
+.tray-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--mute); opacity: .6; }
+.tray-status.is-running i { background: var(--ok); opacity: 1; }
+.tray-sep { height: 0; margin: 4px 6px; border-top: 1px solid var(--line); }
+.tray-group { padding: 6px 10px 2px; font-size: 0.625rem; font-weight: 650; letter-spacing: .04em; text-transform: uppercase; color: var(--mute); }
+.tray-item {
+  width: 100%; display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 4px 10px;
+  border: 0; border-radius: 6px; background: transparent; color: var(--ink); font: inherit; text-align: left; cursor: default;
+}
+.tray-item svg { width: 15px; height: 15px; flex: none; color: var(--mute); }
+.tray-item span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.tray-item:focus { outline: none; }
+.tray-item:focus, .tray-item:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.tray-item:focus svg, .tray-item:hover svg { color: var(--accent); }
+.tray-item:focus-visible { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.tray-item.is-primary { font-weight: 650; }
+.tray-item.is-accent { color: var(--accent); }
+.tray-item.is-accent svg { color: var(--accent); }
+.tray-item.is-indent { padding-left: 20px; }
+.tray-item.is-danger:focus, .tray-item.is-danger:hover { background: var(--err-bg); color: var(--err); }
+.tray-item.is-danger:focus svg, .tray-item.is-danger:hover svg { color: var(--err); }

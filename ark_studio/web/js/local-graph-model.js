@@ -2,18 +2,55 @@
 // the client graph snapshot ({ nodes, edges }).  Pure and DOM-free so
 // tests/js/local_graph_model.test.mjs can import it.
 
-export const LOCAL_GRAPH_STORE_KEY = "ark.localGraph.v1";
+export const LOCAL_GRAPH_STORE_KEY = "ark.localGraph.v2";
+// v1 stored depth 1 as the default; v2 (default two levels) keeps the other
+// choices from v1 and starts at depth 2.
+export const LOCAL_GRAPH_STORE_KEY_V1 = "ark.localGraph.v1";
+
+export function migrateStoredOptions(v2Raw, v1Raw) {
+  const parse = (raw) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const v2 = parse(v2Raw);
+  if (v2) return normalizeOptions(v2);
+  const v1 = parse(v1Raw);
+  return normalizeOptions(v1 ? { ...v1, depth: 2 } : {});
+}
+// v3 (T-0036) stores `depth` only when the person picked a depth other than
+// the default from Settings › Appearance › Graphs › Local graph, so a new
+// default reaches everyone who never chose one.  v1/v2 always stored a depth;
+// the old default (2) reads as "not chosen".
+export const LOCAL_GRAPH_STORE_KEY_V3 = "ark.localGraph.v3";
+
+/** `{ options, depthChosen }` from the stored records (newest first). */
+export function loadLocalOptions(v3Raw, v2Raw, v1Raw, defaultDepth = 2) {
+  const parse = (raw) => { try { return raw ? JSON.parse(raw) : null; } catch { return null; } };
+  const v3 = parse(v3Raw);
+  if (v3 && typeof v3 === "object") {
+    const options = normalizeOptions({ ...v3, depth: v3.depth ?? defaultDepth }, defaultDepth);
+    return { options, depthChosen: v3.depth !== undefined && options.depth !== defaultDepth };
+  }
+  const older = migrateStoredOptions(v2Raw, v1Raw);
+  const depthChosen = older.depth !== 2 && older.depth !== defaultDepth;
+  return { options: normalizeOptions({ ...older, depth: depthChosen ? older.depth : defaultDepth }, defaultDepth), depthChosen };
+}
+
+/** What to store: the options without `depth` unless it was chosen. */
+export function storableOptions(options, depthChosen) {
+  if (depthChosen) return { ...options };
+  const { depth: _depth, ...rest } = options;
+  return rest;
+}
+
 export const LOCAL_GRAPH_CAP = 300;
 export const DIRECTIONS = ["both", "out", "in"];
 // Layouts offered in the Local graph (the main graph's Force and Mind).
 export const LOCAL_LAYOUTS = ["force", "mind"];
 
-export function normalizeOptions(value = {}) {
+export function normalizeOptions(value = {}, defaultDepth = 2) {
   const src = value && typeof value === "object" ? value : {};
   const depth = Math.round(Number(src.depth));
   const list = (items) => (Array.isArray(items) ? [...new Set(items.map(String))].slice(0, 100) : []);
   return {
-    depth: depth >= 1 && depth <= 3 ? depth : 1,
+    depth: depth >= 1 && depth <= 3 ? depth : defaultDepth,
     direction: DIRECTIONS.includes(src.direction) ? src.direction : "both",
     layout: LOCAL_LAYOUTS.includes(src.layout) ? src.layout : "force",
     // Hidden relation / node types (empty = show everything).

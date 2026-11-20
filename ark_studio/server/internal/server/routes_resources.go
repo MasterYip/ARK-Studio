@@ -18,5 +18,6 @@ func (c *reqCtx) resourcesHandlers() resapi.Handlers {
 				return nil, err
 			}
 			return gpu.ScopedSource{Svc: c.app.GPU(), Scope: sc, ProjectID: p.ID()}, nil
-		}}
+		},
+		OnGraph: func(p *project.Project) { c.app.sizes().scan(p.Path) }}
 }

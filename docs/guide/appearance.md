@@ -43,10 +43,10 @@ name. Changes to active colors leave saved themes intact.
 
 ## Arrowheads (graph line ends)
 
-**Settings > Project > Appearance > Arrowheads**, next to graph physics, sets
+**Settings > Project > Appearance > Graphs > General > Arrowheads** sets
 how graph connections show direction, like line ends in Visio. The live preview
 beside it redraws on every change; Save, Discard and Reset apply to physics and
-arrowheads together.
+arrowheads together (see *Graphs* below for the other tabs).
 
 - **Arrowhead**: none, filled triangle (default), open arrow, stealth, diamond
   (hollow), filled diamond, dot or bar.
@@ -117,11 +117,81 @@ inspector's relation labels, APIs and exports keep the stored direction.
 `reverse` is only valid inside `relations` (not in `style`) and must be a
 boolean; other values are rejected on save and ignored when read.
 
+## Graphs: settings by graph type
+
+**Settings > Project > Appearance > Graphs** groups every graph setting by the
+graph it affects, with one small tab per graph type (click or use Left/Right,
+Home/End). Each setting has a one-line explanation; the live preview stays
+beside the tabs.
+
+| Tab | Settings |
+| --- | --- |
+| General (every graph) | arrowheads and per-relation line ends, node fade in / fade out |
+| Force & node | graph physics (repulsion, distance, gravity, damping); circular node markers: size, distance, spacing angle |
+| Mind | node alignment, auto layout, Mind marker size, show image attachments (also node-graph cards), pinned image size |
+| Local graph | default depth (1 to 3), history rings |
+
+Topics and the Resources graph have no settings of their own: Topic graphs use
+General and Force & node; the Resources graph keeps only its filters and
+positions (view state, in this browser).
+
+These values are **project defaults**, saved for everyone with the Save bar
+(project admins). Everyone can change any of them for themselves in
+**Settings > Personal > Appearance & input > My graphs**, which has the same
+tabs. Graph physics and arrowheads keep their group override (below). The
+other settings are overridden **one at a time**: changing a control makes it
+yours (badge *Yours*; the others show *Project* or *Default*), the ↺ button on
+a row goes back to the project default for that setting, and **Reset to
+project** in a tab's header clears all your values in that tab. Your values
+follow your account to every device and project.
+
+Resolution, per setting: your value, else the project default, else ARK's
+built-in default.
+
+Before this change the Mind and marker settings were stored in each browser
+(*Personal > This browser*, which now only points here). On the first load the
+values you had changed there become your personal overrides, saved to your
+account once (values your account already has win); the browser copy is then
+retired. Values equal to the old defaults are not copied, so a project default
+set later reaches you. The old place keeps a short pointer.
+
+Card widths you drag on a Mind card and images you pin beside a card are
+layout, not preferences: they are kept per project for you (on your account
+profile, `prefs.mind_layout`; in this browser without an account) and move
+there from the old browser storage the first time the project's Mind graph
+shows those nodes. Choices made in a graph's own toolbar (layout, read/edit
+mode, connection filters, Local graph depth and filters, node-graph positions,
+panel heights) stay in this browser.
+
+Storage (Go server only; the frozen Python server refuses these members):
+
+```json
+// PATCH /api/project/settings  (absent until set; null or {} clears)
+{ "graph_display": { "mind": { "show_images": false }, "local": { "depth": 3 } } }
+
+// PATCH /api/me  (sparse personal override; null or {} clears)
+{ "prefs": { "appearance": { "graph_display": { "force": { "marker_scale": 2 } } } } }
+
+// PATCH /api/me  (per project; an entry replaces that project, null removes it)
+{ "prefs": { "mind_layout": { "prj_x": {
+  "widths": { "U-1": 240 },
+  "pinned_images": { "U-1": { "media_id": 7, "side": "right", "w": 260, "h": 130, "aspect": 2 } } } } } }
+```
+
+Keys and ranges: `general.transitions`, `general.agent_presence` (bool); `force.marker_scale` 0.5–2.5,
+`force.marker_gap` 0–2, `force.marker_arc` 0.1–1; `mind.align` `left` or
+`center`, `mind.auto_layout`, `mind.show_images` (bool), `mind.marker_scale`
+0.3–2, `mind.image_size` 80–620 (whole px); `local.depth` 1–3 (whole),
+`local.rings` (bool). Unknown tabs or keys and out-of-range values are
+rejected on save and ignored when read. `mind_layout` keeps the 30 most
+recently saved projects and at most 500 nodes per map.
+
 ## Personal overrides
 
 Some project appearance settings can be overridden for yourself in
-**Settings > Personal > Appearance & input** (*My palette*, *My graph physics*,
-*My arrowheads*).
+**Settings > Personal > Appearance & input** (*My palette*; under *My graphs*:
+*My graph physics*, *My arrowheads* and the per-setting graph display values
+described above).
 Resolution is project, then person, per group:
 
 | Group | Project value | Personal override |
@@ -144,9 +214,8 @@ project. Signed-in accounts store them with their profile; without an account
 profile (or on a read-only paired phone) they stay in this browser. Personal
 overrides never write `project.json`, so a member without project-admin rights
 can still set them. Theme mode, high contrast and text size were already
-personal and are unchanged. Mind-map layout and circular-marker settings are
-not project values (they are stored in this browser), so they have no override
-layer. `GET/POST /api/agent/v1/project/palette` always reads and writes the
+personal and are unchanged. Graph display settings (Mind, markers, Local
+graph) are overridden per setting, see *Graphs* above. `GET/POST /api/agent/v1/project/palette` always reads and writes the
 project palette, never anyone's override.
 
 `PATCH /api/me` sets or clears groups; `null` clears one:

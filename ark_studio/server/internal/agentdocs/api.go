@@ -19,6 +19,7 @@ var Endpoints = []struct{ Name, Path, Summary string }{
 	{"setup", "/api/agent/v1/setup", "Your view of the project setup and its readiness; run the setup skill when not ready."},
 	{"context", "/api/agent/v1/context", "Project summary, counts and current work."},
 	{"whoami", "/api/agent/v1/whoami", "Who the token acts for: user, scope and reachable projects."},
+	{"updates", "/api/agent/v1/updates", "What people did since your cursor that you should act on (comments, Send back, decisions, assignments); ?wait=<s> long-polls."},
 }
 
 func usage() *pyjson.Object {
@@ -112,6 +113,23 @@ func Capabilities() []any {
 			"summary", "Index of ARK's documentation: path, title, summary, section, bytes, updated, plus a start-here order."),
 		pyjson.NewObject("id", "docs.read", "kind", "read", "method", "GET", "path", Base+"/{path}",
 			"summary", "One doc as text/markdown; ?section={heading-slug} returns one heading's section, ?format=json returns {path, title, headings, markdown}."),
+		pyjson.NewObject("id", "watch.updates", "kind", "read", "method", "GET", "path", "/api/agent/v1/updates",
+			"summary", "Updates for this agent since a cursor: comments, replies, mentions, Send back / Accept / decisions, "+
+				"changes to your units, new decisions and tasks assigned to you, setup confirmations, messages. "+
+				"?since=<cursor>&wait=<seconds, max 60>&kinds=<a,b>&mine=1. Docs: agents/working-mode.md#watch-for-replies."),
+		pyjson.NewObject("id", "messages.list", "kind", "read", "method", "GET", "path", "/api/agent/v1/messages",
+			"summary", "Experimental: messages a person sent to their agents; also delivered as kind \"message\" in updates."),
+		pyjson.NewObject("id", "messages.ack", "kind", "write", "method", "POST", "path", "/api/agent/v1/messages/{id}/ack",
+			"summary", "Experimental: mark a message read."),
+		pyjson.NewObject("id", "messages.reply", "kind", "write", "method", "POST", "path", "/api/agent/v1/messages/{id}/reply",
+			"summary", "Experimental: reply to a message with {\"body\": \"...\"}; the person sees it in ARK."),
+		pyjson.NewObject("id", "links.list", "kind", "read", "method", "GET", "path", "/api/agent/v1/units/{id}/links",
+			"summary", "One unit's links: {id, direction in|out, relation, source, target, note, other unit}. ?direction=in|out&relation=."),
+		pyjson.NewObject("id", "links.delete", "kind", "write", "method", "DELETE", "path", "/api/agent/v1/links",
+			"summary", "Delete a link: {source, target, relation?} in the body or query, or DELETE /api/agent/v1/links/{id}. "+
+				"409 LINK_AMBIGUOUS lists the relations when relation is omitted and there are several; 404 when there is none."),
+		pyjson.NewObject("id", "links.update", "kind", "write", "method", "PATCH", "path", "/api/agent/v1/links/{id}",
+			"summary", "Change a link's relation: {\"relation\": \"supports\"}."),
 	}
 }
 

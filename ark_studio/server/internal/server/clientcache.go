@@ -30,11 +30,11 @@ const clientCacheSchema = int64(1)
 // Revision stream timing (EVENTS_TICK, EVENTS_KEEPALIVE, EVENTS_RECHECK,
 // EVENTS_LIFETIME) and UNIT_DETAILS_LIMIT.
 const (
-	eventsTick       = time.Second
-	eventsKeepalive  = 20 * time.Second
-	eventsRecheck    = 10 * time.Second
-	eventsLifetime   = 600 * time.Second
-	unitDetailsLimit = 60
+	eventsTick           = time.Second
+	eventsKeepalive      = 20 * time.Second
+	eventsRecheckDefault = 10 * time.Second
+	eventsLifetime       = 600 * time.Second
+	unitDetailsLimit     = 60
 )
 
 // etagMatches is _etag_matches: weak comparison of If-None-Match with one tag.
@@ -353,6 +353,11 @@ func (c *reqCtx) eventStream() error {
 	lastRevision, haveRevision := "", false
 	lastSessions, haveSessions := "", false
 	var sessionsChecked time.Time
+	// Go only (routes_presence.go): ?presence=1 adds the agent presence frames.
+	withPresence := c.app.Presence != nil && c.query.First("presence", "") == "1"
+	var presenceWake <-chan struct{}
+	lastPresence := ""
+	var lastTick time.Time
 	for {
 		select {
 		case <-c.app.Streams.Done():
@@ -360,6 +365,30 @@ func (c *reqCtx) eventStream() error {
 		default:
 		}
 		now := time.Now()
+		if withPresence {
+			presenceWake = c.app.Presence.Changed(p.ID())
+			c.app.Presence.Sweep(p.ID())
+			// The first frame only when an agent is there; then every change.
+			frame := c.presencePayload(p.ID())
+			if sig := string(pyjson.Dumps(frame.Value("entries"))); sig != lastPresence {
+				if lastPresence != "" || sig != "[]" {
+					if !write("event: presence\ndata: " + string(pyjson.Dumps(frame)) + "\n\n") {
+						return nil
+					}
+					lastWrite = now
+				}
+				lastPresence = sig
+			}
+			if now.Sub(lastTick) < eventsTick {
+				// Woken by a presence change: the revision and session checks
+				// keep their own pace.
+				if !c.waitEvents(presenceWake, lastTick.Add(eventsTick).Sub(now)) {
+					return nil
+				}
+				continue
+			}
+			lastTick = now
+		}
 		if now.Sub(lastCheck) >= eventsRecheck {
 			lastCheck = now
 			event := ""
@@ -376,7 +405,9 @@ func (c *reqCtx) eventStream() error {
 					}
 				}
 			}
-			if event == "" {
+			// Without sign-in (c.app.Auth == nil) every project is open, as in
+			// projectFor; checkProjectAccess would deny the anonymous actor.
+			if event == "" && c.app.Auth != nil {
 				if err := c.checkProjectAccess(p, "read"); err != nil {
 					if _, denied := err.(*ApiError); !denied {
 						return nil
@@ -428,12 +459,28 @@ func (c *reqCtx) eventStream() error {
 			write("event: reconnect\ndata: {}\n\n")
 			return nil
 		}
-		select {
-		case <-c.r.Context().Done():
+		if !c.waitEvents(presenceWake, eventsTick) {
 			return nil
-		case <-c.app.Streams.Done():
-			return nil
-		case <-time.After(eventsTick):
 		}
 	}
 }
+
+// waitEvents waits d, or less when wake (nil: never) is closed; false when
+// the client left or the server is stopping.
+func (c *reqCtx) waitEvents(wake <-chan struct{}, d time.Duration) bool {
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-c.r.Context().Done():
+		return false
+	case <-c.app.Streams.Done():
+		return false
+	case <-wake:
+	case <-timer.C:
+	}
+	return true
+}
+
+// eventsRecheck is how often the revision stream re-checks the caller's
+// access (EVENTS_RECHECK); tests shorten it.
+var eventsRecheck = eventsRecheckDefault

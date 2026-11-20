@@ -8,6 +8,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -93,6 +94,10 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	parsed := pyurl.Parse(target)
 	c := &reqCtx{app: a, w: w, r: r, ctx: ctx, target: target, rawPath: parsed.Path,
 		path: pyurl.Unquote(parsed.Path), query: pyurl.ParseQS(parsed.Query), releaseAdmission: release}
+	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		// Agent writes move the agent's presence cursor (routes_presence.go, Go only).
+		c.ctx = store.WithActivityObserver(c.ctx, c.observeActivity)
+	}
 	if replayClockOn {
 		clock.SetReplay(nil)
 		if raw := r.Header.Get("X-Replay-Clock"); raw != "" {
@@ -425,8 +430,17 @@ func (c *reqCtx) writeActor() string {
 	if c.agentToken() != "" {
 		return "agent:api"
 	}
+	// A user view plugin acting through the browser host with the user's
+	// session (D-0003; web/js/plugin-host.js): still the user ("human:"),
+	// named after the plugin in activity and node history.  Go only.
+	if id := c.header("X-ARK-Plugin"); pluginIDRe.MatchString(id) {
+		return "human:plugin:" + id
+	}
 	return "human:ui"
 }
+
+// pluginIDRe is a view plugin id (web/js/view-plugins.js PLUGIN_ID_RE).
+var pluginIDRe = regexp.MustCompile(`^[a-z][a-z0-9-]{1,28}[a-z0-9]$`)
 
 // readJSON is Handler._read_json.
 func (c *reqCtx) readJSON() (*pyjson.Object, error) {

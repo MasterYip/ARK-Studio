@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">ARK Studio Web</string>
+    <string name="app_name" translatable="false">ARK Studio Web</string>
     <string name="app_eyebrow">MOBILE CONSOLE</string>
 
     <string name="servers_heading">Servers</string>
@@ -29,7 +29,7 @@
     <string name="name_optional">Name (optional)</string>
     <string name="name_hint">Living room laptop</string>
     <string name="server_url_label">Server URL</string>
-    <string name="url_hint">http://192.168.1.20:8891</string>
+    <string name="url_hint" translatable="false">http://192.168.1.20:8891</string>
     <string name="manual_hint">Use the ARK URL from your computer. Pairing links with a #pair= fragment are supported and stored without the one-time token.</string>
     <string name="save_connect">Add &amp; connect</string>
     <string name="cancel">Cancel</string>
@@ -49,8 +49,8 @@
     <string name="change_server">Servers</string>
     <string name="choose_file">Choose a file</string>
     <string name="file_chooser_failed">No file picker is available.</string>
-    <string name="file_link">This file link points to the ARK server\'s filesystem. Use the Files tab to download it.</string>
     <string name="link_failed">No app can open that link.</string>
+    <string name="file_link_copied">This link points to a file on the ARK server. Path copied: %1$s</string>
 
     <string name="download_started">Download started</string>
     <string name="download_failed">Could not download: %1$s</string>
@@ -59,7 +59,7 @@
     <string name="error_title">Can\'t reach this server</string>
     <string name="error_note">Nothing was removed. This server is still in your list, so you can retry when it is back online.</string>
     <string name="server_list">Server list</string>
-    <string name="error_server">%1$s\n%2$s</string>
+    <string name="error_server" translatable="false">%1$s\n%2$s</string>
     <string name="error_host_lookup">Host not found</string>
     <string name="error_connection_refused">Connection refused</string>
     <string name="error_timeout">Connection timed out</string>

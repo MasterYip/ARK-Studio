@@ -10,7 +10,9 @@ import { openModal } from "../components.js";
 import { openSetupReview } from "./setup-resources.js";
 import { newArkSessionId } from "../session-context-model.js";
 import { STARTER_PROMPTS, promptLang, starterPromptText } from "../starter-prompts.js";
-import { needsReview } from "../setup-review-model.js";
+import { needsReview, needsConfirm } from "../setup-review-model.js";
+import { connectionStatus } from "./agent-connect.js";
+import { agentMessageButton } from "../agent-messages.js";
 
 const HIDE_KEY = "ark.onboarding.hidden";
 
@@ -20,11 +22,36 @@ function arkBase() {
   return appUrl("").replace(/\/+$/, "");
 }
 
+// The project's and this person's composed agent rules (GET /api/agent-rules),
+// fetched when the Home panel renders so that Copy stays synchronous inside
+// the click.  Until they arrive (or on an older server) the prompt carries
+// ARK's default rules.
+let composedRules = { project: "", rules: null };
+export function loadComposedRules(projectId = "") {
+  return api.agentRules()
+    .then((reply) => { composedRules = { project: projectId, rules: reply?.effective || null }; return composedRules.rules; })
+    .catch(() => null);
+}
+export function setComposedRules(projectId, rules) { composedRules = { project: projectId, rules }; }
+
 export function promptText(id, project, { token = "", sessionId = "", lang = promptLang(getLang()) } = {}) {
-  return starterPromptText(id, project, { url: arkBase(), token, sessionId, lang });
+  const rules = composedRules.project === (project?.id || "") ? composedRules.rules : null;
+  return starterPromptText(id, project, { url: arkBase(), token, sessionId, lang, rules });
 }
 
-const STATE_TONE = { unset: "warn", draft: "warn", proposed: "info", stale: "warn", confirmed: "ok", verified: "ok" };
+// Setup chips are neutral: "not set up yet" or "not applicable" is not a
+// warning (UX-09); only "waiting for you" stands out (info) and done is ok.
+const STATE_TONE = { unset: "", draft: "", proposed: "info", stale: "info", confirmed: "ok", verified: "ok" };
+
+// One setup-state request per Home render: the start panel and the Needs
+// you row share it (both are built in the same pass).
+let setupStateRequest = null;
+export function loadSetupState() {
+  if (!setupStateRequest) {
+    setupStateRequest = api.setupState().finally(() => { setTimeout(() => { setupStateRequest = null; }, 0); });
+  }
+  return setupStateRequest;
+}
 
 // One preview dialog at a time: a second Preview click while it is open (or
 // opening) only switches its prompt; nothing stacks.  Preview never mints a
@@ -80,18 +107,24 @@ export function openPromptPreview(id, project, { onCopy } = {}) {
 
 export function startPanel(ctx) {
   const project = ctx.S.project || {};
-  // The user's own choice wins; otherwise a project that already has work
-  // starts with the prompts folded to one row (Home leads with its state).
-  const stored = localStorage.getItem(HIDE_KEY);
-  const hidden = stored === "1" || (stored === null && (ctx.S.stats?.total || 0) >= 20);
+  loadComposedRules(project.id || "");
+  // "Connect your agent" (UI line A, UX-03): open until an agent first wrote
+  // to this project, then folded to one row with the connection state.  The
+  // person's own Show/Hide for this project wins.  On an example project it
+  // stays open ("try your agent on this example").
+  const hideKey = `${HIDE_KEY}:${project.id || "local"}`;
+  let stored = null;
+  try { stored = localStorage.getItem(hideKey); } catch { /* storage unavailable */ }
+  const hidden = stored === "1" || (stored === null && !project.demo && Boolean(ctx.S.overview?.agents?.first_at));
   const panel = h("section", { class: `panel start-panel ${hidden ? "collapsed" : ""}`.trim() });
   const status = h("div", { class: "start-status" });
+  const connection = connectionStatus(ctx);
   let setupState = null;
 
   const toggle = () => {
     const now = !panel.classList.contains("collapsed");
     panel.classList.toggle("collapsed", now);
-    localStorage.setItem(HIDE_KEY, now ? "1" : "0");
+    try { localStorage.setItem(hideKey, now ? "1" : "0"); } catch { /* storage unavailable */ }
     toggleBtn.textContent = now ? t("start.show") : t("start.hide");
   };
   const toggleBtn = h("button", { class: "link", "data-start-toggle": "", onclick: toggle }, hidden ? t("start.show") : t("start.hide"));
@@ -101,12 +134,19 @@ export function startPanel(ctx) {
   panel.append(
     h("div", { class: "panel-head" },
       h("div", { class: "start-title" },
-        h("h3", null, t("start.title")),
-        h("span", { class: "muted start-sub" }, t("start.subtitle"))),
-      h("div", { class: "row start-head-actions" }, status, toggleBtn)),
+        h("h3", null, t(project.demo ? "home.connect.demo_title" : "home.connect.title")),
+        connection.el,
+        h("span", { class: "muted start-sub" }, t(project.id === "ark-demo" ? "home.connect.tutorial_sub"
+          : project.demo ? "home.connect.demo_sub" : "start.subtitle"))),
+      h("div", { class: "row start-head-actions" }, status, agentMessageButton(ctx), toggleBtn)),
   );
 
-  const copy = (id) => copyPromptWithToken((token) => promptText(id, project, { token, sessionId: newArkSessionId() }));
+  // A stored starter token copies inside the click (agent-tokens.js); the
+  // connection line starts waiting only after a copy, and only if it is not
+  // waiting already (connectionStatus refresh()).
+  const copy = (id) => copyPromptWithToken((token) => promptText(id, project, { token, sessionId: newArkSessionId() }),
+    { projectId: project.id || "", user: ctx.S.session?.user || "local" })
+    .then((result) => { if (result?.copied) connection.refresh(); });
   const preview = (id) => openPromptPreview(id, project, { onCopy: (current) => copy(current) });
   const cards = h("div", { class: "start-grid start-grid-two" }, ...STARTER_PROMPTS.map((item) =>
     h("div", { class: `start-card start-card-${item.id}`, "data-prompt": item.id },
@@ -124,30 +164,28 @@ export function startPanel(ctx) {
   const renderStatus = () => {
     clear(status);
     if (!setupState) return;
-    // One element: "Review & confirm" while a layer waits for this user,
-    // otherwise the setup state (docs/operations/multi-user-setup.md).
+    // One element: "Review & confirm" while a layer waits for this user's
+    // confirmation; otherwise the setup state as a neutral chip, which opens
+    // the review for an admin's draft (it explains what to ask the agent)
+    // and Settings → Setup / Resources otherwise
+    // (docs/operations/multi-user-setup.md).
     const chip = setupChip(setupState);
+    const confirm = needsConfirm(setupState);
     const review = needsReview(setupState);
     status.appendChild(h("button", {
-      class: review ? "btn sm primary start-setup" : `start-chip start-setup ${chip.tone}`.trim(),
+      class: confirm ? "btn sm primary start-setup" : `start-chip start-setup ${chip.tone}`.trim(),
       type: "button", "data-setup-chip": chip.id, ...(review ? { "data-setup-review": "" } : {}),
       title: review ? chip.text : t("start.chip_title", { host: setupState.host?.label || "" }),
       onclick: () => {
-        if (review) { openSetupReview(setupState, "", load); return; }
+        if (review) { openSetupReview(setupState, load); return; }
         try { localStorage.setItem("ark.settingsTab", "setupResources"); localStorage.setItem("ark.settingsScope", "project"); } catch { /* ignore */ }
         ctx.navigate?.("settings");
       },
-    }, review ? t("start.review") : chip.text));
-    // Once setup is done the prompts fold to one row unless the user chose
-    // to show them; the dashboard comes first.  "Show" keeps them reachable.
-    if (setupState.readiness?.ready && localStorage.getItem(HIDE_KEY) === null && !panel.classList.contains("collapsed")) {
-      panel.classList.add("collapsed");
-      toggleBtn.textContent = t("start.show");
-    }
+    }, confirm ? t("start.review") : chip.text));
   };
   const load = async () => {
     try {
-      setupState = await api.setupState();
+      setupState = await loadSetupState();
     } catch {
       setupState = null; // older server or no permission: prompts still work
     }
@@ -166,9 +204,38 @@ export function setupChip(state) {
   }
   const mine = state.layers?.user?.state;
   if (mine === "draft" || mine === "proposed" || mine === "stale") {
-    return { id: `mine-${mine}`, tone: "warn", text: t(`start.mine.${mine}`) };
+    return { id: `mine-${mine}`, tone: STATE_TONE[mine], text: t(`start.mine.${mine}`) };
   }
-  const missing = (state.readiness?.needs_location || []).length;
-  if (missing) return { id: "needs-location", tone: "warn", text: t("start.needs_location", { count: missing }) };
+  // Local single-user mode: the agent registers paths under its own host
+  // id, which differs from the browser's, so "needs a location here" would
+  // only be noise after confirming.
+  const missing = state.viewer?.token_kind === "local" ? 0 : (state.readiness?.needs_location || []).length;
+  if (missing) return { id: "needs-location", tone: "", text: t("start.needs_location", { count: missing }) };
   return { id: "ready-here", tone: "ok", text: t("start.ready_here") };
+}
+
+/**
+ * Home "Needs you": a row while a setup layer waits for this user's
+ * confirmation (an agent proposed it).  Empty until the state arrives;
+ * `onShown()` lets the panel adjust its count and empty message.
+ */
+export function setupNeedsRow({ onShown, onChange } = {}) {
+  const slot = h("div", { class: "needs-setup-slot" });
+  const fill = async () => {
+    let state;
+    try { state = await loadSetupState(); } catch { return; }
+    clear(slot);
+    if (!needsConfirm(state)) return;
+    const project = state.layers?.project?.state === "proposed" && state.layers.project.can_confirm !== false;
+    slot.appendChild(h("div", { class: "needs-setup", "data-needs-setup": project ? "project" : "user" },
+      h("span", { class: "start-ic" }, icon("settings", "sm")),
+      h("div", { class: "needs-setup-text" },
+        h("b", null, t(project ? "needs.setup.title" : "needs.setup.title_mine")),
+        h("span", null, t("needs.setup.hint"))),
+      h("button", { class: "btn sm primary", type: "button", "data-setup-review": "",
+        onclick: () => openSetupReview(state, () => { fill(); onChange?.(); }) }, t("start.review"))));
+    onShown?.();
+  };
+  fill();
+  return slot;
 }

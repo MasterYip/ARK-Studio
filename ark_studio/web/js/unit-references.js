@@ -3,6 +3,7 @@ import { h } from "./dom.js";
 import { t } from "./i18n.js";
 import { createInspectorPreview, placeFloating } from "./inspector.js";
 import { activationPoint } from "./floating-position.js";
+import { parseCrossRef } from "./import-ark-model.js";
 
 const SELECTOR = "a.rich-unit-link[data-unit-ref]";
 
@@ -30,9 +31,18 @@ export function installUnitReferences(ctx) {
     }, 200);
   }
 
-  function openDetails(ref, point = null) {
+  // A reference followed from the Read view opens in the Read view too, so
+  // a chain of links (the tutorial's next-chapter links) stays readable.
+  function openDetails(ref, point = null, link = null) {
     close();
-    ctx.openUnit?.(ref, point, { revealPane: true });
+    // [[prj_xxx/T-0042]]: a node in another project (the source of an import).
+    const cross = parseCrossRef(ref);
+    if (cross) {
+      if (cross.project === ctx.S.project?.id) ctx.openUnit?.(cross.uid, point, { revealPane: true });
+      else Promise.resolve(ctx.switchProject?.({ id: cross.project })).then(() => ctx.openUnit?.(cross.uid, null, { revealPane: true }));
+      return;
+    }
+    ctx.openUnit?.(ref, point, { revealPane: true, ...(link?.closest(".read-view") ? { readOnly: true } : {}) });
   }
 
   function bindCard(link) {
@@ -50,8 +60,14 @@ export function installUnitReferences(ctx) {
       h("div", { class: "drawer-body" }, h("p", { class: "unit-ref-message", role: "status" }, t("refs.loading"))));
     document.getElementById("overlay-root").appendChild(card);
     bindCard(link); placeFloating(card, point);
+    const cross = parseCrossRef(ref);
+    if (cross && cross.project !== projectKey()) {
+      card.querySelector(".unit-ref-message").textContent = t("refs.other_project", { uid: cross.uid });
+      request = null;
+      return;
+    }
     try {
-      const { unit } = await api.unit(ref, { signal: controller.signal });
+      const { unit } = await api.unit(cross ? cross.uid : ref, { signal: controller.signal });
       if (current !== version || project !== projectKey() || !link.isConnected) return;
       card.remove();
       card = createInspectorPreview(ctx, unit, point, () => { link.focus({ preventScroll: true }); close(); });
@@ -92,7 +108,7 @@ export function installUnitReferences(ctx) {
     if (!link || event.defaultPrevented || event.button !== 0) return;
     event.stopPropagation(); close();
     if (event.ctrlKey || event.metaKey || event.shiftKey || event.altKey) return;
-    event.preventDefault(); openDetails(link.dataset.unitRef, activationPoint(event));
+    event.preventDefault(); openDetails(link.dataset.unitRef, activationPoint(event), link);
   }, true);
   document.addEventListener("pointerdown", (event) => { if (!inside(event.target)) close(); }, true);
   document.addEventListener("keydown", (event) => {

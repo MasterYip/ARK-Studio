@@ -57,12 +57,12 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   const page = h("div", { class: "page topic-page" },
     h("div", { class: "page-head" },
       h("div", null,
-        h("div", { class: "eyebrow" }, `${t("nav.research")} · ${t("nav.topic")}`),
+        h("div", { class: "eyebrow" }, t("nav.research")),
         h("h1", { class: "page-title" }, t("plan.topic.title")),
         h("p", { class: "page-sub" }, t("plan.topic.subtitle"))),
       h("div", { class: "head-actions" },
         search,
-        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("sparkles", "sm"), t("assistant.title")),
+        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")),
         h("button", { class: "primary-btn", "data-topic-new": "1", onclick: () => openNewTopic(ctx) }, icon("plus", "sm"), t("topic.new")))),
     h("div", { class: "topic-layout" },
       h("div", { class: "topic-bar" }, listHost),
@@ -155,6 +155,18 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
     }, 120);
   });
 
+  state.onMissing = (missing) => {
+    if (S.topicRef !== missing) return false;
+    if (rememberedTopic(ctx) === missing) rememberTopic(ctx, "");
+    const next = topics.find((topic) => topic.uid !== missing);
+    S.topicRef = next?.uid || "";
+    paintList();
+    if (next) { open(next, { push: false }); return true; }
+    clear(mainHost);
+    mainHost.appendChild(emptyState(t("topic.empty_title"), t("topic.empty_hint"),
+      h("button", { class: "btn primary", onclick: () => openNewTopic(ctx) }, t("topic.new"))));
+    return true;
+  };
   const load = async () => {
     try {
       topics = (await api.topics()).items || [];
@@ -252,6 +264,9 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
       data = await api.topic(ref, { full: needsBody });
     } catch (err) {
       if (seq !== state.seq) return;
+      // A remembered topic that no longer exists (deleted, or a demo that
+      // was rebuilt): forget it and fall back to the first topic or the list.
+      if ((err.status === 404 || /not found/i.test(err.message || "")) && state.onMissing?.(ref)) return;
       clear(host);
       host.appendChild(emptyState(t("topic.missing"), err.message));
       return;
@@ -418,11 +433,11 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
       },
       nodeMenuExtras: (nodes, node) => memberMenu(ctx, state, nodes, node, design, base.nodeMenuExtras),
       // Del / "Remove from topic" keeps the node in the project (undoable);
-      // "Delete node" archives it everywhere, as on the Map.
+      // "Delete node" moves it to the recycle bin, as on the Map.
       deleteMenuItems: (nodes, { edit, removeSelected }) => [
         { label: t("topic.remove_from"), icon: "x", onClick: edit(() => removeSelected()) },
         {
-          label: t("topic.delete_node"), icon: "trash", danger: true,
+          label: t("topic.delete_node"), icon: "trash",
           onClick: edit(async () => {
             if (await base.onDelete?.(nodes)) ctx.topicPage?.reload();
           }),

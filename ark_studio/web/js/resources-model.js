@@ -465,3 +465,31 @@ export function cardsInBox(cards, box, toScreen, contain = false) {
       : b.x >= x1 && a.x <= x2 && b.y >= y1 && a.y <= y2;
   }).map((card) => card.id);
 }
+
+
+// After a fold/expand (card heights change) or with hand-placed cards, cards
+// may overlap.  Push overlapping cards apart vertically (the one lower down,
+// or the one not placed by hand, moves), at least `gap` px between them.
+// `cards` are { id, x, y (centre), w, h }; `pinned` holds hand-placed ids.
+// Returns a new Map id -> { x, y }.  Pure, bounded.
+export function separateCards(cards, pinned = new Set(), gap = 24) {
+  const boxes = cards.map((c) => ({ id: c.id, x: c.x, y: c.y, w: c.w, h: c.h, pinned: pinned.has(c.id) }));
+  const overlapX = (a, b) => Math.abs(a.x - b.x) < (a.w + b.w) / 2 + gap / 2;
+  for (let round = 0; round < 200; round += 1) {
+    let moved = false;
+    boxes.sort((a, b) => (a.y - a.h / 2) - (b.y - b.h / 2));
+    for (let i = 0; i < boxes.length; i += 1) {
+      for (let j = i + 1; j < boxes.length; j += 1) {
+        const a = boxes[i], b = boxes[j];
+        if (!overlapX(a, b)) continue;
+        const need = (a.y + a.h / 2 + gap) - (b.y - b.h / 2);
+        if (need <= 0) continue;
+        // Move the lower card down, unless it is pinned and the upper is not.
+        if (b.pinned && !a.pinned) a.y -= need; else b.y += need;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+  return new Map(boxes.map((b) => [b.id, { x: b.x, y: b.y }]));
+}

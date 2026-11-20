@@ -27,6 +27,7 @@ import android.widget.ProgressBar;
 import android.widget.Toast;
 
 import com.masteryip.arkstudio.api.ApiException;
+import com.masteryip.arkstudio.data.LinkPolicy;
 import com.masteryip.arkstudio.data.PairingLink;
 import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.platform.Accounts;
@@ -93,7 +94,9 @@ public class WebActivity extends BaseActivity {
         settings.setAllowFileAccess(false);
         settings.setAllowContentAccess(false);
         settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
-        settings.setSupportMultipleWindows(false);
+        // target=_blank and window.open() reach onCreateWindow (openPopupUrl)
+        // instead of replacing the ARK page.
+        settings.setSupportMultipleWindows(true);
         settings.setJavaScriptCanOpenWindowsAutomatically(false);
         settings.setUserAgentString(settings.getUserAgentString() + " ARKAndroid/3.0");
         CookieManager.getInstance().setAcceptCookie(true);
@@ -103,7 +106,7 @@ public class WebActivity extends BaseActivity {
         web.setWebViewClient(new WebViewClient() {
             @Override
             public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
-                return intercept(request.getUrl());
+                return intercept(request.getUrl(), request.isForMainFrame());
             }
 
             @Override
@@ -150,6 +153,12 @@ public class WebActivity extends BaseActivity {
         });
         web.setWebChromeClient(new WebChromeClient() {
             @Override
+            public boolean onCreateWindow(WebView view, boolean isDialog, boolean isUserGesture,
+                                          android.os.Message resultMsg) {
+                return ExternalLinks.catchPopup(WebActivity.this, resultMsg, WebActivity.this::openPopupUrl);
+            }
+
+            @Override
             public boolean onShowFileChooser(WebView view, ValueCallback<Uri[]> callback, FileChooserParams params) {
                 if (pendingFiles != null) pendingFiles.onReceiveValue(null);
                 pendingFiles = callback;
@@ -181,13 +190,16 @@ public class WebActivity extends BaseActivity {
         });
     }
 
-    /** Same-origin http(s) stays; everything else leaves the WebView. */
-    private boolean intercept(Uri uri) {
+    /** Same-origin http(s) stays; everything else leaves the WebView (LinkPolicy). */
+    private boolean intercept(Uri uri, boolean mainFrame) {
         if (uri == null) return true;
         String url = uri.toString();
-        if (PairingLink.sameOrigin(session.serverUrl, url)) return false;
-        Links.external(this, url);
-        return true;
+        return ExternalLinks.handle(this, url, LinkPolicy.decide(url, mainFrame, session.serverUrl));
+    }
+
+    /** target=_blank and window.open(): ARK pages load here, the rest leaves. */
+    private void openPopupUrl(String url) {
+        if (!ExternalLinks.handle(this, url, LinkPolicy.decide(url, true, session.serverUrl))) web.loadUrl(url);
     }
 
     private void download() {

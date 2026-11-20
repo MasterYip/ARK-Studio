@@ -2,12 +2,15 @@ import { h, clear, fmtDate, fmtDateTime, relativeTime, typeColor, statusColor, r
 import { t, typeLabel, statusLabel, impLabel, relLabel, originLabel, logLabel, nsLabel } from "./i18n.js";
 import { icon } from "./icons.js";
 import { createImageViewer, openImageLightbox } from "./image-viewer.js";
+import { attachImageContextMenu } from "./image-copy.js";
 import { api, mediaUrl } from "./api.js";
-import { confirmDialog, openLinkModal, openDispatchModal, openModal, toast, actorLabel } from "./components.js";
+import { confirmDialog, openLinkModal, openDispatchModal, openModal, toast, actorLabel, canRunWithAgent } from "./components.js";
 import { mediaSource, mediaPreviewable } from "./editor-media.js";
 import { draftFromUnit, mediaKinds } from "./node-model.js";
 import { assigneePicker, assigneeLabel } from "./assignee.js";
 import { commentsSection } from "./comments.js";
+import { acceptUnit, reviewPanel, sendBackUnit } from "./needs-ui.js";
+import { canDecideReview } from "./review-model.js";
 import { openNodeHistory } from "./node-history.js";
 import { openAddToTopic, topicSettings } from "./topic-actions.js";
 import { floatingPosition } from "./floating-position.js";
@@ -16,6 +19,7 @@ import {
   UNIT_SAVED_EVENT, UNIT_RESTORE_CHECK_EVENT, saveUnitDraft, compressImage, fileToBase64, openMediaExternal,
 } from "./unit-edit.js";
 import { shellActive, viewHost, revealView, render as renderWorkbench } from "./workbench.js";
+import { presenceDetailsLine } from "./presence-ui.js";
 
 // With the workbench shell the docked inspector is the "Details" view and
 // lives in whichever sidebar/panel holds it; floating drawers and the
@@ -24,11 +28,11 @@ function overlayRoot() {
   return document.getElementById("overlay-root");
 }
 
-function dockRoot() {
+export function dockRoot() {
   return (shellActive() && viewHost("details")) || overlayRoot();
 }
 
-function drawerRoots() {
+export function drawerRoots() {
   return [overlayRoot(), viewHost("details")].filter(Boolean);
 }
 
@@ -37,6 +41,16 @@ function drawerRoots() {
 // will win and notify the Editor in turn.
 let liveInspector = null;   // { ctx, unitId, isDirty }
 let inspectorRequest = 0;
+
+/**
+ * The multi-selection inspector (inspector-multi.js) shares the request
+ * counter: whichever panel was asked for last wins.
+ */
+export function claimInspector() {
+  liveInspector = null;
+  return ++inspectorRequest;
+}
+export function inspectorClaimed(request) { return request === inspectorRequest; }
 window.addEventListener(UNIT_RESTORE_CHECK_EVENT, (event) => {
   if (liveInspector?.projectId === event.detail?.project && liveInspector?.unitId === event.detail?.id
       && liveInspector.isDirty()) event.preventDefault();
@@ -87,6 +101,7 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
   if (sameUnit && !options.revealPane && options.forceFloating === undefined) options = { ...options, forceFloating: ctx.S.drawerFloating };
   const request = ++inspectorRequest;
   anchor = anchor && { ...anchor };
+  ctx.S.multi = null;
   let data;
   try {
     data = await api.unit(ref);
@@ -112,22 +127,26 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
   const graph = editableGraphs.find((item) => item.selectedNodes?.has(unit.id))
     || editableGraphs.find((item) => item.byId?.has(unit.id))
     || null;
-  const readOnly = options.readOnly ?? (ctx.S.graphMode
-    ? ctx.S.graphMode === "read"
-    : (docked ? graph?.mode === "read" : true));
+  // Read / Edit: the person's one remembered choice (the graphs share it);
+  // Read until they switch, also on pages without a graph.
+  const savedMode = (() => { try { return localStorage.getItem("ark.graphMode") === "edit" ? "edit" : "read"; } catch { return "read"; } })();
+  const mode = ctx.S.graphMode || (graph ? graph.mode : savedMode);
+  const readOnly = options.readOnly ?? (mode !== "edit");
   ctx.S.drawerFloating = Boolean(options.forceFloating);
   document.body.classList.toggle("inspector-pinned", docked);
   renderInspector(ctx, unit, {
     docked, anchor: ctx.S.drawerAnchor, readOnly, graph,
     mobileSheet: isPhone,
   });
-  if (docked && shellActive()) revealView("details", { unless: ["localgraph"] });
+  // A chat in the Sessions view keeps its place: the node waits in the Details tab.
+  if (docked && shellActive()) revealView("details", { unless: ["localgraph", "sessions"] });
   renderWorkbench();
   window.dispatchEvent(new CustomEvent("ark:selection"));
 }
 
 export function closeInspector(ctx) {
   inspectorRequest++;
+  ctx.S.multi = null;
   ctx.S.drawerOpen = false;
   ctx.S.detail = null;
   ctx.S.selectedId = null;
@@ -139,7 +158,7 @@ export function closeInspector(ctx) {
 }
 
 /** Edge handle for the docked pane; shared by the placeholder and a unit. */
-function inspectorResizer(ctx) {
+export function inspectorResizer(ctx) {
   const handle = h("div", { class: "drawer-resizer", title: t("inspector.resize_docked") });
   handle.addEventListener("pointerdown", (e) => {
     e.preventDefault();
@@ -359,8 +378,10 @@ function renderInspector(ctx, unit, {
     if (!media.length) { mediaList.appendChild(h("div", { class: "muted", style: { fontSize: "10.5px" } }, t("inspector.no_media"))); return; }
     for (const item of media) {
       const isImg = item.is_image || isImageUrl(item.url);
+      const thumb = h("div", { class: "thumb", onclick: (event) => activateMedia(item, event) }, isImg ? h("img", { src: mediaUrl(item), alt: item.caption || "" }) : icon("file", "sm"));
+      if (isImg) attachImageContextMenu(thumb, () => ({ src: mediaUrl(item), kind: "image", caption: item.caption }));
       mediaList.appendChild(h("div", { class: "media-item" },
-        h("div", { class: "thumb", onclick: (event) => activateMedia(item, event) }, isImg ? h("img", { src: mediaUrl(item), alt: item.caption || "" }) : icon("file", "sm")),
+        thumb,
         h("div", { class: "txt" },
           h("button", { class: "t media-preview-trigger", type: "button", title: item.caption || item.kind || item.url,
             onclick: (event) => activateMedia(item, event) }, item.caption || item.kind || t("inspector.media")),
@@ -685,12 +706,25 @@ function renderInspector(ctx, unit, {
       class: "icon-btn inspector-open-editor", type: "button",
       title: t("editor.open_in_editor"), "aria-label": t("editor.open_in_editor"),
       onclick: () => ctx.openUnitInEditor(unit),
-    }, icon("edit", "sm")) : null,
+    }, icon("file", "sm")) : null,
     pinBtn,
-    h("button", { class: "icon-btn", title: t("inspector.open_map"), onclick: () => { if (preview) onClose?.(); else closeInspector(ctx); ctx.navigate("map"); } }, icon("map", "sm")),
+    // On the Map the node is already in view; elsewhere this opens the Map
+    // with the node selected and centred.
+    ctx.S.tab === "map" ? null : h("button", {
+      class: "icon-btn", title: t("inspector.open_map"), "aria-label": t("inspector.open_map"),
+      onclick: () => { if (preview) onClose?.(); else closeInspector(ctx); ctx.showOnMap ? ctx.showOnMap(unit.uid) : ctx.navigate("map"); },
+    }, icon("map", "sm")),
     h("button", { class: "icon-btn drawer-close", title: t("action.close"), onclick: () => close(false) }, icon("x"))));
+  // Accept / Send back under the comment box for a unit in review.
+  let mobilePermission = "";
+  try { mobilePermission = localStorage.getItem("ark.mobile.permission") || ""; } catch { /* storage unavailable */ }
+  const reopen = () => ctx.openUnit?.(unit.uid, null, { readOnly });
+  const review = canDecideReview(unit, { permission: ctx.S.project?.permission, mobilePermission }) ? {
+    accept: (text, clearInput) => acceptUnit(ctx, unit, { initial: text, onDone: () => { clearInput(); reopen(); } }),
+    sendBack: (text, clearInput) => sendBackUnit(ctx, unit, { initial: text, onDone: () => { clearInput(); reopen(); } }),
+  } : null;
   const comments = commentsSection(unit, {
-    heading: "h4", className: readOnly ? "read-section" : "link-section", ctx,
+    heading: "h4", className: readOnly ? "read-section" : "link-section", ctx, review,
     onChange: (list) => { if (ctx.S.detail?.id === unit.id) ctx.S.detail.comments = list; },
   });
   const readSection = (heading, content) => h("section", { class: "read-section" },
@@ -708,6 +742,7 @@ function renderInspector(ctx, unit, {
     h("span", null, label), h("b", null, value));
   const readBody = h("div", { class: "drawer-body read-view" },
     h("div", { class: "read-title" }, unit.title),
+    reviewPanel(ctx, unit),
     h("div", { class: "read-facts" },
       readFact(t("common.type"), typeLabel(unit.type)),
       readFact(t("common.status"), statusLabel(unit.status)),
@@ -736,7 +771,7 @@ function renderInspector(ctx, unit, {
   const foot = readOnly
     ? null
     : h("div", { class: "drawer-foot" },
-      h("button", { class: "btn ghost danger", onclick: archive }, icon("trash", "sm"), t("action.archive")),
+      h("button", { class: "btn ghost", onclick: archive, title: t("action.move_to_trash") }, icon("trash", "sm"), t("action.delete")),
       h("div", { class: "spacer" }),
       h("button", { class: "btn ghost drawer-close", onclick: () => close(false) }, t("action.close")),
       saveState);
@@ -756,6 +791,7 @@ function renderInspector(ctx, unit, {
       h("summary", null, t("inspector.rendered_report")),
       inspectorRichBody(unit)) : null,
     field(t("inspector.body"), body, t("inspector.body_hint")),
+    readOnly ? null : reviewPanel(ctx, unit),
     readOnly ? null : comments,
     field(t("inspector.tags"), tagWrap, t("inspector.tags_hint")),
     h("div", { class: "field-row" },
@@ -782,9 +818,9 @@ function renderInspector(ctx, unit, {
     h("div", { class: "link-section" },
       h("h4", null, t("inspector.activity")),
       act),
-    unit.type === "task" ? h("div", { style: { marginTop: "10px" } },
+    canRunWithAgent(unit) ? h("div", { style: { marginTop: "10px" } },
       h("button", { class: "btn", onclick: () => (ctx.dispatchTaskSession ? ctx.dispatchTaskSession(unit) : openDispatchModal(ctx, unit)) }, icon("send", "sm"), t("inspector.dispatch"))) : null);
-  drawer.append(...[head, bodyEl, foot].filter(Boolean));
+  drawer.append(...[head, presenceDetailsLine(unit), bodyEl, foot].filter(Boolean));
   if (!docked) {
     head.addEventListener("pointerdown", (event) => {
       if (event.button !== 0 || event.target.closest("button,input,textarea,select,a")) return;
@@ -823,13 +859,14 @@ function renderInspector(ctx, unit, {
   return drawer;
 
   async function archive() {
-    const ok = await confirmDialog(t("inspector.archive_confirm"), { title: t("action.archive"), danger: true, confirmLabel: t("action.archive") });
+    const ok = await confirmDialog(t("inspector.archive_confirm"), { title: t("mind.delete"), confirmLabel: t("action.move_to_trash") });
     if (!ok) return;
     try {
       await api.archiveUnit(unit.id);
-      toast(t("toast.archived"), "ok");
+      toast(t("mind.deleted"), "ok");
       closeInspector(ctx);
-      ctx.refresh();
+      // A graph keeps its camera and positions; the node leaves in place.
+      if (ctx.refreshData) ctx.refreshData(); else ctx.refresh();
     } catch (err) { toast(err.message, "err"); }
   }
 }
@@ -887,7 +924,11 @@ function inspectorRichBody(unit) {
       title, "aria-label": `${title}: ${label}`, onclick: open,
     }, image ? null : icon("maximize", "sm"));
     media.replaceWith(wrap);
-    if (image) { trigger.appendChild(media); wrap.appendChild(trigger); }
+    if (image) {
+      trigger.appendChild(media);
+      wrap.appendChild(trigger);
+      attachImageContextMenu(trigger, () => ({ src: media.currentSrc || media.src, kind: "image", caption: media.alt }));
+    }
     else wrap.append(media, trigger);
   }
   return content;
@@ -910,7 +951,7 @@ function linkRow(ctx, unit, link, other, direction, readOnly = false) {
           await api.deleteLink(link.id);
           toast(t("toast.unlinked"), "ok");
           await ctx.reloadDetail();
-          ctx.refresh();
+          if (ctx.refreshData) ctx.refreshData(); else ctx.refresh();
         } catch (err) { toast(err.message, "err"); }
       },
     }, icon("x", "sm")));

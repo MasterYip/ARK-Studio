@@ -43,10 +43,19 @@ node scripts/release/version.mjs --check       # CI runs this
 4. Download a few artifacts, check them (install, first run, local and remote
    mode), then **publish** the draft. Publishing is what makes the updater's
    `latest.json` (served from `releases/latest/download/latest.json`) visible
-   to installed apps.
+   to installed apps, and runs **Updater manifest**
+   (`.github/workflows/updater-manifest.yml`), which copies it to the fixed
+   `updater` release (see [Updater](#updater)).
 
 `workflow_dispatch` (Actions > Release > Run workflow) builds the same files
 as workflow artifacts without creating a release, for testing a branch.
+
+**Which versions are built.** Only minor versions get release builds: tags
+`v<major>.<minor>.0` and their pre-releases (`v2.1.0`, `v2.1.0-rc.1`). Patch
+versions (`v2.0.1`) are tagged but not built; their fixes ship in the next
+minor release, or run the workflow by hand if a patch must ship packages.
+To check a desktop (Tauri) change without the full matrix, run **Desktop check**
+(`desktop-check.yml`, one Linux runner: sidecar build and `cargo test --lib`).
 
 ## CI workflow
 
@@ -55,7 +64,8 @@ as workflow artifacts without creating a release, for testing a branch.
 | `version` | ubuntu-22.04 | `version.mjs --check`; on tags `--tag` |
 | `server` | ubuntu-22.04 | `go vet`, desktop-gate tests, `build-server.sh` (all five targets, web UI and agent docs embedded), `go test ./internal/agentdocs/` with `ARK_REQUIRE_EMBEDDED_DOCS=1`, `build-server-deb.sh` (amd64, arm64), smoke test of the linux binary (`docs-check`, `/api/health`, `GET /api/agent/v1/docs` with the agent token); artifact `ark-server` |
 | `desktop` | windows-latest, macos-15 (aarch64 native, x86_64 cross-built), ubuntu-22.04 | Go sidecar for the target triple (`ark_studio/desktop/src-tauri/binaries/ark-server-<triple>`) and `docs-check` on it (native targets), Linux deps (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, ...), optional signing setup, `tauri-action` with `--target <triple>`; Windows portable zip; artifact `desktop-<name>` |
-| `checksums` | ubuntu-22.04 | `SHA256SUMS.txt` over all artifacts; on tags uploads server packages, portable zip and checksums to the draft release |
+| `android` | ubuntu-22.04 | both Android apps (`:app`, `:webapp`, debug-signed) as `ARK-Studio-<version>-android.apk` and `-android-web.apk`; artifact `android`. Keep these names: the server finds the APKs of the latest release by them (`ARK-Studio-*-android.apk`, `ARK-Studio-*-android-web.apk`; `ark_studio/server/internal/server/app_release.go`, [mobile guide](../guide/mobile.md#android-app)) |
+| `checksums` | ubuntu-22.04 | `SHA256SUMS.txt` over all artifacts; on tags uploads server packages, portable zip, APKs and checksums to the draft release |
 
 Actions are pinned by commit SHA (the tag is in a comment). To bump one, look
 up the new tag's commit (`git ls-remote --tags https://github.com/<owner>/<repo>`)
@@ -150,25 +160,57 @@ The sidecar is signed together with the app.
 ### Updater
 
 The Tauri updater only installs updates signed with the project's updater
-key. Until the key exists the updater is compiled out and Settings says
-"Automatic updates are not enabled in this build".
+key. The public key is committed in `tauri.conf.json`
+(`plugins.updater.pubkey`); a build-time `ARK_UPDATER_PUBKEY` overrides it.
+CI also needs the private key to sign the update bundles:
 
-```sh
-cd desktop && npx tauri signer generate -w ~/.tauri/ark-studio.key
-```
+| Name | Kind | Value |
+|---|---|---|
+| `TAURI_SIGNING_PRIVATE_KEY` | secret | the private key file (`npx tauri signer generate -w <file>`) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | secret | its password |
+| `ARK_UPDATER_PUBKEY` | variable | the public key (same as in `tauri.conf.json`) |
 
-Store the private key as secret `TAURI_SIGNING_PRIVATE_KEY` (and its password
-as `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`) and the public key as variable
-`ARK_UPDATER_PUBKEY`. With both set, CI builds the updater into the app
-(`ARK_UPDATER_PUBKEY` at compile time), signs the update bundles
-(`createUpdaterArtifacts`) and `tauri-action` uploads `latest.json` to the
-release. Apps check
-`https://github.com/MasterYip/ARK-Studio/releases/latest/download/latest.json`
-(`plugins.updater.endpoints` in `tauri.conf.json`). That URL must be publicly
-readable: if you build from a private fork, publish releases to a public
-repository and change the endpoint.
-Keep the private key backed up: losing it means installed apps can no longer
-update automatically.
+Set them on every repository that runs `release.yml`. With all three, the
+desktop jobs sign their update bundles (`createUpdaterArtifacts`, via
+`scripts/release/ci-tauri-config.mjs`) and the `checksums` job writes one
+`latest.json` for every platform from the `.sig` files
+(`scripts/release/updater-json.mjs`: Windows NSIS and MSI, macOS arm64 and
+x64, Linux AppImage and .deb) and attaches it to the draft release. A
+missing platform fails the job.
+
+Apps check two addresses in order (`plugins.updater.endpoints`):
+
+1. `https://github.com/MasterYip/ARK-Studio/releases/latest/download/latest.json`,
+   the latest published release;
+2. `https://github.com/MasterYip/ARK-Studio/releases/download/updater/latest.json`,
+   a fixed release with the tag `updater` that holds a copy of the newest
+   published `latest.json`.
+
+The updater takes the first address that answers with a manifest; a 404
+moves on to the next. The second address covers a newer release published
+without `latest.json` (for example a patch release built by hand), which
+would otherwise make every check fail.
+
+**Updater manifest** (`.github/workflows/updater-manifest.yml`) keeps the
+copy current: when a release is published it copies that release's
+`latest.json` to the `updater` release, creating it when missing. It skips
+pre-releases, releases without `latest.json`, a manifest whose version does
+not match the tag and versions older than the current copy
+(`scripts/release/updater-mirror.mjs`, `tests/js/updater_mirror.test.mjs`).
+The `updater` release is a pre-release, so `releases/latest` never resolves
+to it; leave it in place. To refresh the copy by hand, run the workflow with
+the tag of a published release.
+
+Apps check at start, at most once a day (Settings > About, can be switched
+off), and on "Check for updates". When a newer version is found, the local
+Home shows a banner (**Update** / **Later**, dismissed per version).
+Installer builds download, verify and install the update and restart; the
+Windows portable build opens the release page instead. Both addresses must
+be publicly readable and only see *published* releases.
+
+Keep the private key backed up outside the repository: losing it means
+installed apps can no longer update automatically, and a new key needs a
+release carrying the new public key that users install by hand.
 
 ## Platform notes
 

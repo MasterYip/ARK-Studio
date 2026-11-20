@@ -1,0 +1,170 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Assistant example</title>
+<!--
+  Example ARK view plugin: a minimal assistant (docs/guide/plugins.md,
+  docs/development/plugin-api.md).  It reads the selected node
+  (selection:read), asks the AI model the user set up for the ARK Assistant
+  (ai:chat; the API key never reaches the plugin), shows what the model
+  proposes, and applies it through node:write, so ARK asks the user before
+  anything is written.  Import it in Settings > Personal > Plugins ("Add the
+  assistant example").
+-->
+<script type="application/ark-plugin+json">
+{
+  "id": "assistant-example",
+  "name": "Assistant example",
+  "version": "1.0.0",
+  "icon": "sparkles",
+  "location": "right",
+  "titles": { "en": "Assistant (plugin)", "zh": "助手（插件）" },
+  "description": "Reads the selected node, asks your AI model for a summary claim, and adds it (linked to the node) after you confirm.",
+  "entry": "assistant-plugin.html",
+  "permissions": ["selection:read", "ai:chat", "node:write", "node:open", "notify"]
+}
+</script>
+<style>
+  body { padding: 12px 14px; }
+  h1 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+  .uid { color: var(--ark-sub); font-size: 11px; margin-bottom: 10px; }
+  textarea { box-sizing: border-box; width: 100%; min-height: 64px; padding: 6px 8px; border: 1px solid var(--ark-line); border-radius: 6px;
+    background: var(--ark-bg2); color: var(--ark-ink); font: inherit; resize: vertical; }
+  button { margin: 8px 6px 0 0; padding: 5px 10px; border: 1px solid var(--ark-line); border-radius: 6px; background: var(--ark-bg2);
+    color: var(--ark-ink); font: inherit; cursor: pointer; }
+  button.primary { background: var(--ark-accent); border-color: var(--ark-accent); color: #fff; }
+  button:disabled { opacity: .55; cursor: default; }
+  .answer { margin-top: 12px; white-space: pre-wrap; line-height: 1.5; }
+  .proposals { margin: 10px 0 0; padding: 8px 10px 8px 26px; border: 1px dashed var(--ark-line); border-radius: 8px; background: var(--ark-bg2); }
+  .proposals li { margin: 2px 0; overflow-wrap: anywhere; }
+  .muted, .empty { color: var(--ark-sub); }
+  .error { color: #dc2626; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  var TEXT = {
+    en: {
+      empty: "Select a node, then ask the assistant about it.",
+      prompt: "Summarise this node into one claim and link the claim to it.",
+      ask: "Ask", asking: "Thinking…", apply: "Apply {n} changes", applied: "Added {uid}", open: "Open {uid}",
+      none: "The model proposed no changes.", proposals: "Proposed changes (ARK asks you before writing):",
+      create: "Create {type} “{title}”", update: "Change {uid}", link: "Link {source} —{relation}→ {target}", unlink: "Remove link #{id}",
+      not_configured: "No AI model is set up. Add one in Settings › Assistant.", declined: "Not applied.",
+      rate_limited: "Too many requests; wait a moment.", failed: "Something went wrong: {message}"
+    },
+    zh: {
+      empty: "选中一个节点，然后向助手提问。",
+      prompt: "把这个节点总结成一个论点，并把论点连到它。",
+      ask: "提问", asking: "思考中……", apply: "应用 {n} 项修改", applied: "已添加 {uid}", open: "打开 {uid}",
+      none: "模型没有建议任何修改。", proposals: "建议的修改（写入前 ARK 会询问你）：",
+      create: "新建 {type}“{title}”", update: "修改 {uid}", link: "连线 {source} —{relation}→ {target}", unlink: "删除连线 #{id}",
+      not_configured: "尚未设置 AI 模型，请在 设置 › 助手 中添加。", declined: "未应用。",
+      rate_limited: "请求过于频繁，请稍候。", failed: "出错了：{message}"
+    }
+  };
+  // What the plugin tells the model (its "system" instructions).
+  var SYSTEM = "You help the user condense ARK nodes. When asked to summarise the selected node, call create_unit exactly once " +
+    "with type \"claim\", a one-sentence title and a body of at most three sentences, then call link_units with source \"$n1\", " +
+    "the selected node's UID as target and relation \"derived_from\". Then reply with one short sentence.";
+
+  var lang = "en", api = null, root = null, node = null, lastUid = null;
+  var proposals = [], busy = false;
+
+  function tr(key, vars) {
+    var table = TEXT[lang] || TEXT.en;
+    return String(table[key] || TEXT.en[key]).replace(/\{(\w+)\}/g, function (_, k) { return vars && vars[k] !== undefined ? vars[k] : ""; });
+  }
+  function el(tag, attrs, children) {
+    var n = document.createElement(tag);
+    for (var k in attrs || {}) n.setAttribute(k, attrs[k]);
+    (children || []).forEach(function (c) { if (c) n.append(c); });
+    return n;
+  }
+  function describe(op) {
+    if (op.op === "create") return tr("create", { type: op.type || "note", title: op.title });
+    if (op.op === "update") return tr("update", { uid: op.uid });
+    if (op.op === "link") return tr("link", { source: op.source === "$n1" ? "(new)" : op.source, relation: op.relation, target: op.target });
+    return tr("unlink", { id: op.id });
+  }
+  function errorText(err) {
+    var code = err && err.code;
+    if (code === "not_configured" || code === "rate_limited" || code === "declined") return tr(code);
+    return tr("failed", { message: (err && err.message) || code || "" });
+  }
+
+  var prompt, askBtn, out;
+  function paint() {
+    if (!root) return;
+    root.textContent = "";
+    if (!node) { root.append(el("p", { class: "empty" }, [tr("empty")])); return; }
+    prompt = el("textarea", { "aria-label": tr("ask") });
+    prompt.value = tr("prompt");
+    askBtn = el("button", { type: "button", class: "primary" }, [tr("ask")]);
+    askBtn.addEventListener("click", ask);
+    out = el("div", { class: "result" });
+    root.append(el("h1", {}, [node.title || node.uid]), el("div", { class: "uid" }, [node.uid + " · " + node.type]), prompt, askBtn, out);
+  }
+
+  function ask() {
+    if (busy || !node) return;
+    busy = true;
+    askBtn.disabled = true;
+    askBtn.textContent = tr("asking");
+    out.textContent = "";
+    proposals = [];
+    var context = "Selected node " + node.uid + " (" + node.type + "): " + node.title + "\n\n" + String(node.body || "").slice(0, 6000);
+    api.chat([{ role: "user", content: context + "\n\n---\n" + prompt.value }], { system: SYSTEM })
+      .then(function (reply) {
+        proposals = reply.proposals || [];
+        out.append(el("div", { class: "answer" }, [reply.message || ""]));
+        if (!proposals.length) { out.append(el("p", { class: "muted" }, [tr("none")])); return; }
+        out.append(el("p", { class: "muted" }, [tr("proposals")]),
+          el("ul", { class: "proposals" }, proposals.map(function (op) { return el("li", {}, [describe(op)]); })));
+        var apply = el("button", { type: "button", class: "primary" }, [tr("apply", { n: proposals.length })]);
+        apply.addEventListener("click", function () { write(apply); });
+        out.append(apply);
+      })
+      .catch(function (err) { out.append(el("p", { class: "error" }, [errorText(err)])); })
+      .then(function () { busy = false; askBtn.disabled = false; askBtn.textContent = tr("ask"); });
+  }
+
+  // node:write: ARK shows the summary and asks "Allow once" / "Allow for
+  // this session" before anything is written.
+  function write(button) {
+    button.disabled = true;
+    api.writeNodes(proposals).then(function (result) {
+      var created = (result.results || []).filter(function (r) { return r.op === "create" && r.ok; });
+      created.forEach(function (r) {
+        var open = el("button", { type: "button" }, [tr("open", { uid: r.uid })]);
+        open.addEventListener("click", function () { api.openNode(r.uid); });
+        out.append(el("p", {}, [tr("applied", { uid: r.uid })]), open);
+      });
+      if (!result.ok) out.append(el("p", { class: "error" }, [tr("failed", { message: (result.results.slice(-1)[0] || {}).error || "" })]));
+      if (created.length) api.notify(tr("applied", { uid: created.map(function (r) { return r.uid; }).join(", ") }), "ok");
+    }).catch(function (err) {
+      button.disabled = false;
+      out.append(el("p", { class: "error" }, [errorText(err)]));
+    });
+  }
+
+  window.ark.view({
+    mount: function (container, hostApi) { root = container; api = hostApi; },
+    update: function (state) {
+      lang = String(state.lang || "en").slice(0, 2);
+      if (!state.visible) return;
+      var uid = state.selection ? state.selection.uid : null;
+      if (uid === lastUid && root.firstChild) return;
+      lastUid = uid;
+      if (!uid) { node = null; paint(); return; }
+      api.getSelectedNode().then(function (n) { node = n; paint(); }).catch(function () { node = null; paint(); });
+    },
+    unmount: function () { root = null; }
+  });
+})();
+</script>
+</body>
+</html>

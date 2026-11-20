@@ -110,6 +110,9 @@ func (c *reqCtx) doGet() error {
 	if handled, err := c.handleAuthGet(); handled || err != nil {
 		return err
 	}
+	if c.serveWatcherScript() { // public: no secrets, so no token on the download's command line
+		return nil
+	}
 	if err := c.guardPublicAuth(); err != nil {
 		return err
 	}
@@ -347,6 +350,9 @@ func (c *reqCtx) doPost() error {
 	if handled, err := c.handleAuthPost(); handled || err != nil {
 		return err
 	}
+	if handled, err := c.handleInvitePost(); handled || err != nil { // Go only (routes_invites.go)
+		return err
+	}
 	if err := c.guardPublicAuth(); err != nil {
 		return err
 	}
@@ -504,11 +510,11 @@ func (c *reqCtx) doPatchDelete() error {
 }
 
 // deleteChat is App.chat_clear: this user's Assistant history in this
-// project only.
+// project only (local mode: with the pre-v10 rows; T-0028).
 func (c *reqCtx) deleteChat() error {
 	p := c.routeProject
 	who := c.actor()
-	n, err := p.Store.ClearChat(c.ctx, who)
+	n, err := p.Store.ClearChat(c.ctx, who, c.app.Auth == nil)
 	if err != nil {
 		return err
 	}

@@ -120,10 +120,36 @@ func (c *reqCtx) sendProjectArchive(p *project.Project, name string) error {
 		return err
 	}
 	defer os.RemoveAll(snapshot)
-	_, err = project.WriteArchiveSessions(c.ctx, p, f, snapshot, include)
+	chatUser, err := c.archiveChatUser(p)
+	if err != nil {
+		f.Close()
+		return err
+	}
+	_, err = project.WriteArchiveChat(c.ctx, p, f, snapshot, include, chatUser)
 	f.Close()
 	if err != nil {
 		return apiErr(400, "Could not export project: "+err.Error(), "")
 	}
 	return c.streamZip(archive, name+".ark.zip")
+}
+
+// archiveChatUser is whose Assistant chat a project archive keeps (T-0028):
+// nil (everyone's) in local mode and for a project admin signed in through
+// the browser; otherwise only the requester's own thread: members, agent
+// tokens (even an admin's), task-agent sessions and paired devices.
+func (c *reqCtx) archiveChatUser(p *project.Project) (*string, error) {
+	if c.app.Auth == nil {
+		return nil, nil
+	}
+	who := c.actor()
+	if c.session != nil && c.token == nil && c.task == nil && c.mobileSession == nil && who != "" {
+		perm, err := c.app.Org.ProjectPermission(c.ctx, who, p.ID())
+		if err != nil {
+			return nil, err
+		}
+		if perm == "admin" {
+			return nil, nil
+		}
+	}
+	return &who, nil
 }

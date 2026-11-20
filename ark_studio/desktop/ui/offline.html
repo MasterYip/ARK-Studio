@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>ARK Studio</title>
-  <link rel="stylesheet" href="chooser.css">
+  <link rel="stylesheet" href="desktop.css">
   <script type="module" src="offline.js"></script>
 </head>
 <body>
@@ -22,9 +22,11 @@
       <h1 id="title"></h1>
       <p id="message" class="lead"></p>
       <pre id="log" class="log hidden"></pre>
-      <div class="row end">
+      <div id="actions" class="row end">
         <button type="button" id="show-log" class="btn hidden" data-i18n="log.show">Show server log</button>
-        <button type="button" id="switch" class="btn" data-i18n="offline.switch">Choose another server</button>
+        <button type="button" id="settings" class="btn" data-i18n="offline.settings">Settings</button>
+        <button type="button" id="home" class="btn hidden" data-i18n="offline.home">Back to this computer</button>
+        <button type="button" id="open-anyway" class="btn hidden" data-i18n="remote.open_anyway">Open anyway</button>
         <button type="button" id="retry" class="btn primary" data-i18n="offline.retry">Try again</button>
       </div>
     </section>

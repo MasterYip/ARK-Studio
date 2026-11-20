@@ -127,3 +127,24 @@ test("Home backdrop keeps the best-connected nodes of a large project and their 
   const bound = edges.map((edge) => ({ source: { id: edge.source }, target: { id: edge.target } }));
   assert.equal(backdropSample(nodes, bound).edges.length, links.length);
 });
+
+test("graphDeleteTarget: Delete/Backspace act on the selected link, nodes only with Delete in Edit mode", async () => {
+  const { graphDeleteTarget: target } = (await loadGraphCore(vm.createContext({}))).namespace;
+  const edge = { id: 7, source: 1, target: 2, relation: "supports" };
+  const base = { canDeleteEdge: true, canDeleteNodes: true };
+  for (const key of ["Delete", "Backspace"]) {
+    for (const mode of ["read", "edit"]) {
+      assert.equal(target({ ...base, key, mode, selectedEdge: edge }), "edge", `${key} ${mode}`);
+    }
+    assert.equal(target({ ...base, key, selectedEdge: edge, typing: true }), null, `${key} while typing`);
+    assert.equal(target({ ...base, key, selectedEdge: edge, readOnly: true }), "none", `${key} read-only graph`);
+    assert.equal(target({ ...base, key, selectedEdge: edge, canDeleteEdge: false }), "none", `${key} no handler`);
+  }
+  assert.equal(target({ ...base, key: "Delete", mode: "edit", nodeCount: 2 }), "nodes");
+  assert.equal(target({ ...base, key: "Delete", mode: "read", nodeCount: 2 }), "none", "nodes need Edit mode");
+  assert.equal(target({ ...base, key: "Backspace", mode: "edit", nodeCount: 2 }), "none", "Backspace never deletes nodes");
+  // A selected link wins over stale node state (selecting a link clears the nodes).
+  assert.equal(target({ ...base, key: "Delete", mode: "edit", nodeCount: 1, selectedEdge: edge }), "edge");
+  assert.equal(target({ ...base, key: "Enter", selectedEdge: edge }), null);
+  assert.equal(target(), null);
+});

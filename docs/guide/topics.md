@@ -48,8 +48,9 @@ members = (nodes matching the rule + nodes added by hand) - excluded nodes
 
 Nothing in a topic changes the member nodes. Drawing a link on a topic canvas
 creates a real link. On a topic canvas, Del and **Remove from topic** only take
-the node out of the topic; **Delete node** in the right-click menu archives it
-in the project. Archived members are hidden and come back when restored.
+the node out of the topic; **Delete node** in the right-click menu moves it to
+the project's recycle bin (Settings > Project > Recycle bin). Members in the
+recycle bin are hidden and come back when restored.
 
 Storage: membership, order, outline parents, positions and captions are rows in the
 `topic_members` table (schema v6, created automatically); the rule and link
@@ -279,7 +280,7 @@ Node graph behaviour (Topic canvas and the Map's *Node graph* layout):
   relation names appear at each input port.
 - Cards are the same as Mind cards: the title wraps (up to six lines; the card
   grows and ports follow the real height), the footer shows the status dot,
-  markers (Settings › Appearance › markers apply) and "UID · type", and image
+  markers (Settings › Appearance › Graphs › Mind applies) and "UID · type", and image
   media appear as thumbnails. Right-click a thumbnail to **pin it as the main
   media** (a larger image on a chosen side; drag it to another side or by a
   corner to resize), unpin it or open it. A pinned image can be large; use

@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
-import { loadGraphCore, loadNodeGraphLayout, loadNodeCard, loadGraphSprites, loadMindLayout } from "./load_graph_core.mjs";
+import { loadGraphCore, loadNodeGraphLayout, loadNodeCard, loadGraphSprites, loadMindLayout, loadGraphChange } from "./load_graph_core.mjs";
 
 class Surface {
   listeners = new Map();
@@ -44,17 +44,21 @@ async function fixture() {
     "./shortcuts.js": ["getTagShortcuts", "shortcutMatches"],
     "./markers.js": ["MARKERS", "markersFor", "markerArc"],
     "./context-menu.js": ["openContextMenu"],
+    "./image-copy.js": ["imageCopyMenuItems"],
     "./api.js": ["authenticatedUrl"],
     "./graph-force.js": ["applyRepulsion"],
     "./assign-menu.js": ["assignMenuItem"],
     "./export-menu.js": ["exportBundleMenuItem"],
     "./node-history.js": ["historyMenuItem"],
+    "./presence-ui.js": ["attachPresenceOverlay", "createPresenceChip"],
+    "./selection-model.js": ["siblingGroup", "groupDefaults"],
   };
   const nodeLayout = await loadNodeGraphLayout(context);
   const nodeCard = await loadNodeCard(context);
   const graphSprites = await loadGraphSprites(context);
   const mindLayoutModule = await loadMindLayout(context, nodeCard);
-  await graphModule.link((specifier) => specifier === "./graph-core.js" ? core : specifier === "./node-graph-layout.js" ? nodeLayout : specifier === "./node-card.js" ? nodeCard : specifier === "./graph-sprites.js" ? graphSprites : specifier === "./mind-layout.js" ? mindLayoutModule : new vm.SyntheticModule(imports[specifier], function () {
+  const graphChange = await loadGraphChange(context);
+  await graphModule.link((specifier) => specifier === "./graph-change.js" ? graphChange : specifier === "./graph-core.js" ? core : specifier === "./node-graph-layout.js" ? nodeLayout : specifier === "./node-card.js" ? nodeCard : specifier === "./graph-sprites.js" ? graphSprites : specifier === "./mind-layout.js" ? mindLayoutModule : new vm.SyntheticModule(imports[specifier], function () {
     for (const name of imports[specifier]) this.setExport(name, () => ({}));
   }, { context }));
   await graphModule.evaluate();

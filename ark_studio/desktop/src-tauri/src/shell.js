@@ -1,7 +1,12 @@
 // ARK Studio desktop shell: injected into every page of the app's windows
 // (bundled pages and ARK server pages, local or remote, any ARK version).
 //
-// * window.__ARK_DESKTOP__: shell info, window controls, local-open bridge.
+// * window.__ARK_DESKTOP__: shell info, window controls, local-open bridge
+//   and the desktop hub (`hub`). The app's capabilities decide what a page
+//   may actually call: the hub's server list, "open server" and the linked
+//   servers' projects work on the local ARK page only; remote pages get
+//   context(), goLocal() (the project switcher's "This computer") and linkServer(code) for
+//   their own server; everything else is refused there.
 // * Window controls (ARK style, top right) for the borderless windows on
 //   Windows/Linux; on macOS the native traffic lights sit over the page
 //   (Overlay title bar) and no controls are drawn.
@@ -35,7 +40,55 @@
       controls: Object.freeze(CFG.controls.slice()),
       insetLeft: CFG.insetLeft,
       window: win,
-      openLocal: function (path) { return invoke("open_local_path", { path: String(path || "") }); }
+      openLocal: function (path) { return invoke("open_local_path", { path: String(path || "") }); },
+      // PNG bytes (Uint8Array) to the system clipboard, for pages whose
+      // WebView refuses navigator.clipboard.write (web/js/image-copy.js).
+      copyImage: function (bytes) { return invoke("copy_image_png", bytes); },
+      // Resource location sizes (web/js/location-size.js): this computer's
+      // device id and the sizes of its registered paths.
+      deviceId: function () { return invoke("device_id"); },
+      measurePaths: function (paths) {
+        return invoke("measure_paths", { paths: (paths || []).map(function (p) { return String(p || ""); }) });
+      },
+      hub: Object.freeze({
+        // {role: "local" | "remote" | "bundled", version, server?}
+        context: function () { return invoke("desktop_context"); },
+        goLocal: function () { return invoke("go_local_home"); },
+        servers: function () { return invoke("desktop_servers"); },
+        // Updates (local page): {current, available, selfInstall, enabled, ...};
+        // installUpdate downloads, installs and restarts like Settings > About;
+        // openReleases(version) opens the release page (portable builds).
+        update: function () { return invoke("update_state"); },
+        installUpdate: function () { return invoke("check_update", { install: true }); },
+        openReleases: function (version) { return invoke("open_releases", { version: version ? String(version) : null }); },
+        status: function (url) { return invoke("server_status", { url: String(url || "") }); },
+        openServer: function (url, opts) {
+          opts = opts || {};
+          return invoke("open_server", {
+            url: String(url || ""),
+            project: opts.project ? String(opts.project) : null,
+            newProject: !!opts.newProject,
+            link: !!opts.link,
+            force: !!opts.force
+          });
+        },
+        openSettings: function (view) { return invoke("open_settings", { view: view ? String(view) : null }); },
+        // Desktop links: a server page hands over its one-time code
+        // (remote pages); the local page reads and creates projects through
+        // the app, which keeps the device token to itself.
+        linkServer: function (code) { return invoke("link_server", { code: String(code || "") }); },
+        serverProjects: function (url) { return invoke("server_projects", { url: String(url || "") }); },
+        createServerProject: function (url, data) {
+          data = data || {};
+          return invoke("create_server_project", {
+            url: String(url || ""),
+            name: String(data.name || ""),
+            description: data.description ? String(data.description) : null,
+            template: data.template ? String(data.template) : null
+          });
+        },
+        unlinkServer: function (url) { return invoke("unlink_server", { url: String(url || "") }); }
+      })
     })
   });
 
@@ -62,9 +115,9 @@
     var style = document.createElement("style");
     style.id = "ark-desktop-fallback-style";
     style.textContent =
-      "html:not([data-desktop-shell])[data-desktop-chrome=custom] #topbar .top-actions{margin-right:104px !important}" +
+      "html:not([data-desktop-shell])[data-desktop-chrome=custom] #topbar .top-actions{margin-right:max(var(--ark-desktop-controls-space,104px),calc(var(--ark-desktop-controls-reserve,0px) - 9px)) !important}" +
       "html:not([data-desktop-shell])[data-desktop-chrome=overlay] #topbar{padding-left:var(--ark-desktop-inset-left,80px) !important}" +
-      "#ark-desktop-dragstrip{position:fixed;left:0;right:110px;top:0;height:30px;z-index:2147483646}";
+      "#ark-desktop-dragstrip{position:fixed;left:0;right:var(--ark-desktop-controls-reserve,110px);top:0;height:30px;z-index:2147483646}";
     document.head.appendChild(style);
     if (!marked) {
       // Unknown page (error text, foreign page): a thin strip to move the window by.
@@ -88,8 +141,8 @@
     ? { minimize: "最小化", maximize: "最大化", restore: "还原", close: "关闭" }
     : { minimize: "Minimize", maximize: "Maximize", restore: "Restore", close: "Close" };
 
-  function controls() {
-    if (!CFG.controls.length || document.getElementById("ark-desktop-controls")) return;
+  function controlsStyle() {
+    if (document.getElementById("ark-desktop-controls-style")) return;
     var style = document.createElement("style");
     style.id = "ark-desktop-controls-style";
     style.textContent =
@@ -102,6 +155,30 @@
       "#ark-desktop-controls button:focus-visible{outline:2px solid var(--accent,#2563eb);outline-offset:1px}" +
       "@media print{#ark-desktop-controls{display:none}}";
     document.head.appendChild(style);
+  }
+
+  // --ark-desktop-controls-reserve: the width from the controls' left edge to
+  // the window's right edge plus an 8 px gap, measured from the drawn bar, so
+  // pages (top bar, sign-in and startup screens) keep their buttons clear of
+  // it however many buttons it holds and at every zoom or display scaling.
+  var GAP = 8;
+  function reserve() {
+    var bar = document.getElementById("ark-desktop-controls");
+    var root = document.documentElement;
+    if (!bar || !root) return;
+    var left = bar.getBoundingClientRect().left;
+    var space = Math.ceil(root.clientWidth - left) + GAP;
+    if (space > GAP) root.style.setProperty("--ark-desktop-controls-reserve", space + "px");
+  }
+  function watchReserve(bar) {
+    reserve();
+    if (typeof ResizeObserver === "function") new ResizeObserver(reserve).observe(bar);
+    window.addEventListener("resize", reserve);
+  }
+
+  function controls() {
+    if (!CFG.controls.length || document.getElementById("ark-desktop-controls")) return;
+    controlsStyle();
     var bar = document.createElement("div");
     bar.id = "ark-desktop-controls";
     bar.setAttribute(DRAG, "false");
@@ -125,6 +202,7 @@
       bar.appendChild(b);
     });
     document.body.appendChild(bar);
+    watchReserve(bar);
     if (maxBtn) {
       var sync = function () {
         win.isMaximized().then(function (max) {
@@ -139,6 +217,43 @@
       window.addEventListener("resize", function () { clearTimeout(timer); timer = setTimeout(sync, 80); });
       sync();
     }
+  }
+
+  // Links. target=_blank links and window.open() reach the main window's
+  // on_new_window (src/lib.rs), which hands http(s) and mailto: to the
+  // system. A plain link to another site would instead replace the ARK page
+  // inside the app (no address bar, no way back to a browser): it takes the
+  // same new-window path. Links within the ARK server (#/ routes, same
+  // origin) and every other scheme are left to the page.
+  // link-target:begin
+  function externalTarget(href, base, target) {
+    var t = String(target || "").toLowerCase();
+    if (t && t !== "_self" && t !== "_top" && t !== "_parent") return "";
+    var url;
+    try { url = new URL(String(href || ""), base); } catch (e) { return ""; }
+    if (url.protocol === "mailto:") return url.href;
+    if (url.protocol !== "http:" && url.protocol !== "https:") return "";
+    var page;
+    try { page = new URL(base).origin; } catch (e) { page = ""; }
+    return url.origin === page ? "" : url.href;
+  }
+  // link-target:end
+  function attr(el, name) {
+    var v = el.getAttribute(name);
+    return v == null ? "" : v;
+  }
+  if (CFG.label === "main") {
+    // Bubble phase on window: the page's own handlers (file links, unit
+    // references, routers) run first and may claim the click.
+    window.addEventListener("click", function (e) {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+      var a = e.target && e.target.closest ? e.target.closest("a[href], area[href]") : null;
+      if (!a || a.hasAttribute("download")) return;
+      var href = externalTarget(attr(a, "href") || attr(a, "xlink:href"), document.baseURI, attr(a, "target"));
+      if (!href) return;
+      e.preventDefault();
+      window.open(href, "_blank", "noopener");
+    });
   }
 
   function ready() {

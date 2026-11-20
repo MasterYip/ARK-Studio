@@ -4,8 +4,10 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
+	"time"
 
 	"arkstudio/go/internal/platform/clock"
 	"arkstudio/go/internal/platform/textfile"
@@ -40,6 +42,9 @@ func logActivity(ctx context.Context, q sqlitedb.Querier, actor, action string, 
 	_, err := q.ExecContext(ctx, "INSERT INTO activity(at,actor,action,unit_id,detail_json) VALUES(?,?,?,?,?)",
 		at, actor, action, unitID, string(pyjson.Dumps(detail)))
 	line := pyjson.Dumps(pyjson.NewObject("at", at, "actor", actor, "action", action, "unit_id", unitID, "detail", detail))
+	if err == nil {
+		observeActivity(ctx, actor, action, unitID, detail) // activityobs.go (Go only)
+	}
 	return logLine(line), err
 }
 
@@ -94,7 +99,11 @@ func (s *Store) writeManifestNow() {
 	s.Manifest.mu.Lock()
 	data := pyjson.DumpsIndent(s.Manifest.obj, 2)
 	s.Manifest.mu.Unlock()
-	WriteManifest(s.Path, data) //nolint:errcheck // Python ignores OSError
+	if WriteManifest(s.Path, data) != nil {
+		// Python ignores OSError; keep the rewrite pending so the next write,
+		// a flush or Close tries again instead of leaving the file stale.
+		s.manifestDirty.Store(true)
+	}
 }
 
 // manifestFlusher writes a deferred project.json once the writers queued
@@ -134,7 +143,26 @@ func WriteManifest(folder string, encoded []byte) error {
 	if err := os.WriteFile(tmp, textfile.Encode(string(encoded)+"\n"), 0o644); err != nil {
 		return err
 	}
-	return os.Rename(tmp, filepath.Join(folder, "project.json"))
+	return renameReplacing(tmp, filepath.Join(folder, "project.json"))
+}
+
+// renameReplacing is os.Rename, retried for a short while on Windows: there
+// a rename onto a file that someone has open (a reader of project.json, the
+// Python CLI, a virus scanner) fails with "Access is denied" until the
+// handle is closed.
+func renameReplacing(from, to string) error {
+	err := os.Rename(from, to)
+	if err == nil || runtime.GOOS != "windows" {
+		return err
+	}
+	deadline := time.Now().Add(2 * time.Second)
+	for wait := time.Millisecond; time.Now().Before(deadline); wait = min(2*wait, 50*time.Millisecond) {
+		time.Sleep(wait)
+		if err = os.Rename(from, to); err == nil {
+			return nil
+		}
+	}
+	return err
 }
 
 func isAgent(actor string) bool { return strings.HasPrefix(actor, "agent:") }

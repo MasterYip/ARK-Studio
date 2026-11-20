@@ -170,17 +170,21 @@ Both prompts share their beginning, in this order:
    `GET /api/agent/v1/docs/<path>` on demand; on an older server that answers
    404, `GET /api/agent/v1/interface` and `/skills` instead.  The prompts
    stay short and leave detail to the docs;
-2. **standing rules** (R1-R9) that hold for the whole session: read context
-   and the relevant units before work; after every meaningful step write to
-   ARK unasked; plan in a task node first, linked to exactly one
-   `derived_from` parent, with an honest status; dated progress lines in the
-   task body and resource paths on the task and in the setup register; each
-   result as its own `review` node with its own media attached and embedded
-   beside the claim it supports; every user decision as a `decision` node,
-   and replies to user comments; a summary comment at the end of each work
-   session; if ARK is unreachable, say so and keep `ark-sync-notes.md` to
-   sync later; secrets only as `env:NAME`. The rules point to
-   [Recommended agent working mode](../agents/working-mode.md) for detail;
+2. **core rules** (C1-C10 and a self-check) that hold for the whole
+   conversation: read context, setup and the whole working mode before the
+   first write; one request is one task node with the plan, linked to
+   exactly one `derived_from` parent; dated progress lines in the task body,
+   never in comments; each result as its own `review` node with its own
+   media; every hand-off (result, plan to approve, choice, question) in
+   **Needs you** as a `review` node or an open decision; every user decision
+   as a `decision` node; check updates and reply to comments; presence while
+   working; the task folder as an openable `file:` link on the node; no
+   setup-register writes during task work; one summary comment when the
+   session ends. Agents follow these rules more consistently when they are in
+   the prompt itself than when they sit only in the docs (an evaluation
+   with Claude Code and Codex found agents read only part of long docs). The
+   rules point to [Recommended agent working mode](../agents/working-mode.md)
+   for detail;
 
 then their own steps, and last the session block (ARK session id, optional
 JSONL upload).
@@ -222,3 +226,39 @@ live node/link data, avoiding a separate graph request.
 about 26 ms on the server in account mode (members come from one org query;
 runs from `SessionManager.brief()`); the payload's `timing` field shows the
 split.
+
+## Home shows (large projects)
+
+The header graph draws the nodes of the person's **Home shows** filter for
+the project: the newest N nodes by update time (200 / 500 / 1,000 / 2,000 /
+all; default 500), optionally only some types and statuses and only nodes
+updated in the last 7 / 30 / 90 days.  The filter is saved on the account
+(`prefs.home_filter[project id]`, `PATCH /api/me`; `null` restores the
+default) and applied by the server, so `graph` holds only those nodes:
+
+```
+graph: {nodes: [{id, type, status, degree}] newest first, edges, total, matched, limit,
+        filter: {limit, types, statuses, days}}
+```
+
+`graph_limit`, `graph_types`, `graph_statuses` and `graph_days` query
+parameters override the saved filter (a read-only device keeps its filter in
+the browser and sends them).  The header simulates at most 1,000 nodes (the
+newest); when it leaves nodes out, the line under the title says so
+("Showing the newest 500 nodes · 12,340 in total · Change").  The same
+fields are in Settings › Display.  The numbers and lists on Home always cover
+the whole project.
+
+The overview is cached per project revision, day, members and filter;
+a limited graph reads only its own nodes' links.  Needs you builds four rows
+and, after "Show all", 20 more each time the list end comes near the screen;
+a row whose item did not change is reused by the next render.  Previews are
+small JPEGs from `GET /api/media/{id}/thumb` (images; video poster frames
+when ffmpeg is installed), and a `<video>` element is only made for a video
+without a poster once it is on screen.  Home does not load the project's
+graph snapshot for a project over 3,000 nodes (the Map loads it), nor does
+the Local graph panel while nothing is selected.
+
+Measured in headless Edge on a 30,000-node synthetic project (2,154 items
+waiting in Needs you): first render 11.5 s → 2.3 s, the longest task 5.2 s →
+0.25 s, none after the first render; the overview reply 6.4 MB → 80 KB.

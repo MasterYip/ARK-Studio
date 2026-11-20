@@ -477,7 +477,8 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 	if body == nil {
 		body = pyjson.NewObject()
 	}
-	known := map[string]bool{"graph": true, "arrows": true, "assistant": true, "agents": true, "palette": true, "sessions": true}
+	known := map[string]bool{"graph": true, "arrows": true, "assistant": true, "agents": true, "palette": true, "sessions": true,
+		"graph_display": true}
 	hasSection := false
 	for k := range known {
 		if body.Has(k) {
@@ -536,6 +537,19 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 		}
 		current.Set("palette", pl)
 	}
+	if body.Has("graph_display") {
+		// Go-only (T-0036): the project's graph display defaults; the value
+		// replaces the stored one, null or {} clears it.
+		d, err := GraphDisplay(body.Value("graph_display"), true)
+		if err != nil {
+			return nil, err
+		}
+		if d.Len() > 0 {
+			current.Set("graph_display", d)
+		} else {
+			current.Delete("graph_display")
+		}
+	}
 	if body.Has("sessions") {
 		s, err := UpdateSessions(current.Value("sessions"), body.Value("sessions"))
 		if err != nil {
@@ -549,7 +563,12 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 // NormalizeSessions is normalize_sessions: session-context upload consent.
 func NormalizeSessions(value any) *pyjson.Object {
 	src, _ := value.(*pyjson.Object)
-	return pyjson.NewObject("accept_uploads", src.Value("accept_uploads") == true)
+	out := pyjson.NewObject("accept_uploads", src.Value("accept_uploads") == true)
+	// Go only (T-0053): nudge idle ARK-launched sessions; absent = on.
+	if v, ok := src.Value("nudge_idle").(bool); ok {
+		out.Set("nudge_idle", v)
+	}
+	return out
 }
 
 // UpdateSessions is update_sessions(base, patch).
@@ -560,7 +579,7 @@ func UpdateSessions(base, patch any) (*pyjson.Object, error) {
 	}
 	var unknown []string
 	for _, k := range p.Keys() {
-		if k != "accept_uploads" {
+		if k != "accept_uploads" && k != "nudge_idle" {
 			unknown = append(unknown, k)
 		}
 	}
@@ -575,6 +594,13 @@ func UpdateSessions(base, patch any) (*pyjson.Object, error) {
 			return nil, &Error{"sessions.accept_uploads must be true or false"}
 		}
 		current.Set("accept_uploads", b)
+	}
+	if v, has := p.Get("nudge_idle"); has {
+		b, ok := v.(bool)
+		if !ok {
+			return nil, &Error{"sessions.nudge_idle must be true or false"}
+		}
+		current.Set("nudge_idle", b)
 	}
 	return current, nil
 }

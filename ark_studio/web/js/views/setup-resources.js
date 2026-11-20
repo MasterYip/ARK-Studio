@@ -2,18 +2,23 @@
 // One project may be maintained by several people: each registers their own
 // resources and machine paths. Every project member sees the full register.
 import { h, clear, richText } from "../dom.js";
-import { t, localizeServer } from "../i18n.js";
+import { t, hasKey, localizeServer } from "../i18n.js";
 import { icon } from "../icons.js";
 import { api } from "../api.js";
 import { openModal, toast, confirmDialog } from "../components.js";
 import { userBadge } from "../users.js";
 import { foldSection } from "../fold-section.js";
-import { reviewPages, firstPage, stepLabel, nextIndex, reviewOutcome } from "../setup-review-model.js";
+import { deviceRows, since } from "../setup-devices-model.js";
+import { sizeBadge, refreshLocationSize, desktopDeviceId, measureOnDesktop } from "../location-size.js";
+import { duePaths, isLocalPath } from "../location-size-model.js";
+import { reviewPages, visiblePages, stepLabel, reviewOutcome, plainSummary, confirmPlan, confirmLabelKey,
+  changeGroups } from "../setup-review-model.js";
 
 const KINDS = ["repository", "task_space", "compute", "environment", "storage", "command", "secret"];
 const KIND_ICON = { repository: "git", task_space: "tasks", compute: "cpu", environment: "layers",
   storage: "database", command: "terminal", secret: "shield" };
 const NO_LOCATION = new Set(["command", "secret", "environment"]);
+const autoMeasured = new Set();
 const PROPOSED = "proposed";
 const REVIEWABLE = new Set(["proposed", "draft", "stale"]);
 const PROPOSABLE = new Set(["draft", "stale"]);
@@ -48,6 +53,107 @@ function kindLabel(kind) { return t(`setupres.kind.${kind}`); }
 
 /* ---------------------------------------------------------------- review */
 
+// Why a layer in the review needs nothing from this user, or cannot be
+// confirmed here; a proposed layer this user may confirm has no note.
+function layerNote(group, confirmedNow) {
+  if (confirmedNow) return ["check", "setupreview.mode.confirmed_now"];
+  if (group.mode === "done") return ["check", "setupreview.mode.done"];
+  if (group.mode === "readonly") return ["info", "setupreview.admin_only"];
+  if (group.mode === "draft") return ["info", `setupreview.mode.${group.state === "stale" ? "stale" : "draft"}`];
+  if (group.mode === "pending") return ["info", "setupreview.mode.pending"];
+  return null;
+}
+
+// A policy key in plain words ("push to a remote"); unknown keys as written.
+function policyWords(key) {
+  const text = t(`setupreview.do.${key}`);
+  return text === `setupreview.do.${key}` ? key.replaceAll("_", " ") : text;
+}
+
+// The plain-language summary of a layer on the overview page
+// (setup-review-model plainSummary).
+function plainSummaryView(state, layer) {
+  const sum = plainSummary(state, layer);
+  const row = (key, value, extra = {}) => h("div", { class: "setup-plain-row", ...extra },
+    h("dt", null, t(key)), h("dd", null, value));
+  const words = (keys) => keys.map(policyWords).join(t("setupreview.list_sep"));
+  const rows = [
+    sum.objective ? row("setupreview.plain.goal", sum.objective) : null,
+    sum.allow.length ? row("setupreview.plain.allow", words(sum.allow), { "data-plain": "allow" }) : null,
+    sum.ask.length ? row(layer === "user" ? "setupreview.plain.ask_mine" : "setupreview.plain.ask", words(sum.ask), { "data-plain": "ask" }) : null,
+    sum.deny.length ? row("setupreview.plain.deny", words(sum.deny), { "data-plain": "deny" }) : null,
+    sum.resources.length ? row(layer === "user" ? "setupreview.plain.mine" : "setupreview.plain.uses",
+      sum.resources.map(({ kind, names }) => `${kindLabel(kind)}: ${names.join(", ")}`).join(" · ")) : null,
+    sum.questions ? row("setupreview.plain.open", t("setupreview.plain.open_n", { n: sum.questions })) : null,
+  ].filter(Boolean);
+  if (!rows.length) return h("p", { class: "muted setup-plain-empty" }, t("setupreview.plain.empty"));
+  return h("dl", { class: "setup-plain", "data-plain-summary": layer }, ...rows);
+}
+
+// Field names in the change list: resource detail fields, project fields
+// and policies, each in its own words where ARK has them.
+function fieldLabel(type, field) {
+  if (type === "policy") {
+    return hasKey(`setupres.policy_key.${field}`) ? t(`setupres.policy_key.${field}`) : field.replaceAll("_", " ");
+  }
+  for (const key of [`setupreview.field.${field}`, `setupres.field.${field}`]) {
+    if (hasKey(key)) return t(key);
+  }
+  return field.replaceAll("_", " ");
+}
+
+function policyValue(value) {
+  return value && hasKey(`setupres.policy.${value}`) ? t(`setupres.policy.${value}`) : value;
+}
+
+function changeMark(change) {
+  return h("span", { class: `setup-mark ${change}`, "data-mark": change }, t(`setupreview.mark.${change}`));
+}
+
+// "old -> new" with the old value struck through; an added value alone; a
+// removed value struck through alone.
+function valueChange(old, value) {
+  return h("span", { class: "setup-values" },
+    old ? h("del", { class: "setup-old" }, old) : null,
+    old && value ? h("span", { class: "setup-arrow", "aria-hidden": "true" }, "→") : null,
+    value ? h("ins", { class: "setup-new" }, value) : null);
+}
+
+function locationValue(loc) {
+  return loc.change === "removed" ? valueChange(loc.path, "") : valueChange("", loc.path);
+}
+
+function changeRowView(row) {
+  if (row.type === "resource") {
+    return h("li", { class: "setup-change", "data-change": row.change, "data-change-key": row.key },
+      h("div", { class: "setup-change-head" },
+        changeMark(row.change),
+        h("span", { class: "setup-change-ic" }, icon(KIND_ICON[row.kind] || "layers", "sm")),
+        h("b", { class: "setup-change-name" }, row.name),
+        h("span", { class: "muted" }, kindLabel(row.kind))),
+      row.fields.length || row.locations.length ? h("ul", { class: "setup-change-fields" },
+        ...row.fields.map((f) => h("li", { "data-field": f.field },
+          h("span", { class: "setup-field" }, fieldLabel("field", f.field)), valueChange(f.old, f.new))),
+        ...row.locations.map((loc) => h("li", { "data-location-change": loc.change },
+          h("span", { class: "setup-field" }, t("setupreview.location_on", { host: loc.host })), locationValue(loc))))
+        : null);
+  }
+  if (row.type === "location") {
+    return h("li", { class: "setup-change", "data-change": row.change, "data-change-key": row.resource },
+      h("div", { class: "setup-change-head" },
+        changeMark(row.change),
+        h("span", { class: "setup-change-ic" }, icon("folder", "sm")),
+        h("b", { class: "setup-change-name" }, row.name),
+        h("span", { class: "muted" }, t("setupreview.location_on", { host: row.host }))),
+      h("ul", { class: "setup-change-fields" }, h("li", null, locationValue(row))));
+  }
+  const show = row.type === "policy" ? policyValue : (v) => v;
+  return h("li", { class: "setup-change", "data-change": row.change, "data-change-field": row.field },
+    h("div", { class: "setup-change-head" }, changeMark(row.change),
+      h("b", { class: "setup-change-name" }, fieldLabel(row.type, row.field)),
+      valueChange(show(row.old), show(row.new))));
+}
+
 function layerSummary(state, layer) {
   const markdown = layer === "user" ? state.user_summary_markdown : state.summary_markdown;
   return String(markdown || "").split("\n")
@@ -56,29 +162,33 @@ function layerSummary(state, layer) {
       : localizeServer(line, "server.setup."))).join("\n");
 }
 
-const MODE_NOTE = {
-  done: ["check", "setupreview.mode.done"],
-  readonly: ["info", "setupres.admin_confirms"],
-  pending: ["info", "setupreview.mode.pending"],
-  none: ["info", "setupreview.mode.none"],
-};
+function layerHead(group, extra = null) {
+  return h("div", { class: "setup-layer-head" },
+    h("h4", null, t(`setupreview.layer.${group.layer}`)), statePill(group.state), extra);
+}
+
+function notice(iconName, text, attrs = {}) {
+  return h("div", { class: "notice", ...attrs }, icon(iconName), h("div", null, text));
+}
 
 /**
- * "Review & confirm": one paged dialog, page 1 the project layer (admins
- * confirm; others read it), page 2 my own layer, then the combined result.
- * `layer` picks the first page ("project" / "user"; "" = first confirmable).
+ * "Review & confirm": page 1 an overview of the project layer and my own
+ * layer, page 2 what changed in each since its last confirmation with the
+ * full setup below it, and one Confirm that covers every proposed layer
+ * this user may confirm (sent in one request).  A layer only a project
+ * admin may confirm, or one that was not sent for confirmation, says so.
  */
-export function openSetupReview(initialState, layer = "", reload) {
+export function openSetupReview(initialState, reload) {
   let state = initialState;
-  let pages = reviewPages(state);
-  let index = firstPage(pages, layer);
-  const confirmed = new Set();
+  let step = 0; // 0 overview, 1 changes, 2 result
+  let confirmed = new Set();
+  let outcome = [];
   let busy = false;
   const steps = h("div", { class: "setup-steps", "data-setup-steps": "" });
   const content = h("div", { class: "setup-review" });
   const hint = h("span", { class: "hint" });
   const back = h("button", { class: "btn ghost", "data-review-back": "" }, t("setupreview.back"));
-  const confirm = h("button", { class: "btn primary", "data-review-confirm": "" }, t("start.confirm"));
+  const confirm = h("button", { class: "btn primary", "data-review-confirm": "" });
   const next = h("button", { class: "btn", "data-review-next": "" });
   const foot = h("div", { class: "modal-foot" }, hint, h("div", { class: "spacer" }), back, confirm, next);
   const dialog = openModal({
@@ -89,75 +199,116 @@ export function openSetupReview(initialState, layer = "", reload) {
   });
   dialog.modal.classList.add("setup-review-dialog");
   dialog.modal.appendChild(foot);
+  const scroller = dialog.modal.querySelector(".modal-body");
+  const go = (to) => { step = to; render(); if (scroller) scroller.scrollTop = 0; };
+
+  const overview = (groups) => [
+    h("p", { class: "muted" }, t("setupreview.overview_lead")),
+    ...groups.map((group) => {
+      const note = layerNote(group, confirmed.has(group.layer));
+      const count = group.rows.length;
+      return h("section", { class: "setup-layer", "data-review-layer": group.layer },
+        layerHead(group, count ? h("span", { class: "setup-count" }, t("setupreview.changes_n", { n: count })) : null),
+        note ? notice(note[0], t(note[1]), { "data-review-mode": group.mode }) : null,
+        group.mode === "pending" ? null : plainSummaryView(state, group.layer));
+    }),
+  ];
+
+  const changesPage = (groups) => {
+    const blocked = (state.readiness?.blocked || []).map((b) => `${b.capability}: ${localizeServer(b.reason)}`);
+    return [
+      h("p", { class: "muted" }, t("setupreview.changes_lead")),
+      ...groups.map((group) => {
+        const note = layerNote(group, confirmed.has(group.layer));
+        const empty = group.baseline === "none"
+          ? (group.mode === "pending" ? null : t("setupreview.first_time"))
+          : group.rows.length ? null : t("setupreview.no_changes");
+        const info = state.layers?.[group.layer] || {};
+        return h("section", { class: "setup-layer", "data-review-layer": group.layer },
+          layerHead(group),
+          note ? notice(note[0], t(note[1]), { "data-review-mode": group.mode }) : null,
+          info.needs_reconfirmation ? notice("info", t("setupres.reconfirm")) : null,
+          group.rows.length ? h("ul", { class: "setup-changes", "data-changes": group.layer }, ...group.rows.map(changeRowView))
+            : empty ? h("p", { class: "muted setup-changes-empty" }, empty) : null,
+          group.mode === "pending" ? null : h("div", { class: "setup-full", "data-review-details": group.layer },
+            h("div", { class: "setup-sub" }, t("setupreview.full")),
+            h("div", { class: "setup-summary" }, richText(layerSummary(state, group.layer)))),
+          blocked.length && group.layer === "project" ? notice("info", blocked.join(" · ")) : null);
+      }),
+    ];
+  };
 
   const render = () => {
-    const total = pages.length;
-    const result = index >= total;
+    const groups = changeGroups(state);
+    const plan = confirmPlan(state);
     clear(steps);
-    pages.forEach((page, i) => {
+    ["overview", "changes"].forEach((name, i) => {
       if (i) steps.appendChild(h("span", { class: "setup-steps-sep" }, "·"));
-      steps.appendChild(h("span", {
-        class: `setup-step ${i === index ? "active" : ""} ${confirmed.has(page.layer) || page.mode === "done" ? "done" : ""}`.trim(),
-        "data-step": page.layer,
-      }, `${stepLabel(i, total)} · ${t(`setupreview.layer.${page.layer}`)}`));
+      steps.appendChild(h("button", {
+        type: "button",
+        class: `setup-step ${i === step ? "active" : ""} ${step === 2 || i < step ? "done" : ""}`.trim(),
+        "data-step": name, disabled: step === 2 || busy,
+        onclick: () => go(i),
+      }, `${stepLabel(i, 2)} · ${t(`setupreview.step.${name}`)}`));
     });
     clear(content);
-    if (result) {
+    if (step === 2) {
       content.append(h("p", { class: "muted" }, t("setupreview.result_lead")),
-        h("ul", { class: "setup-review-result" }, ...reviewOutcome(pages, confirmed).map((row) =>
+        h("ul", { class: "setup-review-result" }, ...outcome.map((row) =>
           h("li", { "data-result": `${row.layer}:${row.result}` },
             h("b", null, t(`setupreview.layer.${row.layer}`)), " ",
-            h("span", { class: `pill ${row.result === "confirmed" || row.result === "already" ? "ok" : "warn"}` },
+            h("span", { class: `pill ${row.result === "confirmed" || row.result === "already" ? "ok" : ""}`.trim() },
               t(`setupreview.result.${row.result}`))))));
       hint.textContent = "";
-      back.hidden = false;
+      back.hidden = true;
       confirm.hidden = true;
+      next.hidden = false;
       next.textContent = t("action.close");
       next.className = "btn primary";
       return;
     }
-    const page = pages[index];
-    const info = state.layers?.[page.layer] || {};
-    const blocked = (state.readiness?.blocked || []).map((b) => `${b.capability}: ${localizeServer(b.reason)}`);
-    const note = confirmed.has(page.layer) ? ["check", "setupreview.mode.confirmed_now"] : MODE_NOTE[page.mode];
-    content.append(...[
-      h("p", { class: "muted" }, t(page.layer === "user" ? "setupres.review_user_hint" : "start.review_hint")),
-      info.needs_reconfirmation ? h("div", { class: "notice" }, icon("alert"), h("div", null, t("setupres.reconfirm"))) : null,
-      note ? h("div", { class: "notice", "data-review-mode": page.mode }, icon(note[0]), h("div", null, t(note[1]))) : null,
-      page.mode === "none" ? null : h("div", { class: "setup-summary" }, richText(layerSummary(state, page.layer))),
-      blocked.length && page.layer === "project" ? h("div", { class: "notice" }, icon("alert"), h("div", null, blocked.join(" · "))) : null,
-    ].filter(Boolean));
-    hint.textContent = page.digest ? t("start.digest_hint", { digest: page.digest }) : "";
-    back.hidden = index === 0;
-    confirm.hidden = false;
-    confirm.disabled = busy || !page.canConfirm || confirmed.has(page.layer);
-    next.textContent = index === total - 1 ? t("setupreview.finish") : t("setupreview.next");
-    next.className = "btn";
+    content.append(...(step === 0 ? overview(groups) : changesPage(groups)).filter(Boolean));
+    if (step === 1 && !plan.confirm.length) {
+      content.appendChild(notice("info", t(plan.admin.length ? "setupreview.admin_only" : "setupreview.nothing_to_confirm"),
+        { "data-review-nothing": "" }));
+    }
+    hint.textContent = step === 1 && plan.confirm.length
+      ? t("start.digest_hint", { digest: plan.confirm.map((item) => item.digest).join(" · ") }) : "";
+    back.hidden = step === 0;
+    // One Confirm, on the changes page only.
+    const label = confirmLabelKey(plan);
+    confirm.hidden = step !== 1 || !label;
+    confirm.disabled = busy;
+    confirm.textContent = label ? t(label) : "";
+    next.hidden = step !== 0;
+    next.textContent = t("setupreview.next");
+    next.className = plan.confirm.length ? "btn primary" : "btn";
   };
 
-  back.addEventListener("click", () => { index = Math.max(0, index - 1); render(); });
+  back.addEventListener("click", () => go(Math.max(0, step - 1)));
   next.addEventListener("click", () => {
-    if (index >= pages.length) { dialog.close(true); return; }
-    index = nextIndex(index, pages.length);
-    render();
+    if (step === 2) { dialog.close(true); return; }
+    go(1);
   });
   confirm.addEventListener("click", async () => {
-    const page = pages[index];
-    if (!page?.canConfirm || busy) return;
+    const plan = confirmPlan(state);
+    if (!plan.confirm.length || busy) return;
     busy = true;
     render();
+    let to = step;
     try {
-      await api.setupConfirm({ layer: page.layer, digest: page.digest });
-      confirmed.add(page.layer);
+      const data = await api.setupConfirm({ layers: plan.confirm });
+      confirmed = new Set(plan.confirm.map((item) => item.layer));
+      outcome = reviewOutcome(visiblePages(reviewPages(state)), confirmed);
       toast(t("start.confirmed"), "ok");
-      try { state = await api.setupState(); } catch { /* keep the old state */ }
-      pages = reviewPages(state);
-      index = nextIndex(index, pages.length);
+      if (data && data.layers) state = data;
+      to = 2;
     } catch (err) {
       toast(err.message, "err");
+      try { state = await api.setupState(); } catch { /* keep the old state */ }
     } finally {
       busy = false;
-      render();
+      go(to);
     }
   });
   render();
@@ -246,14 +397,17 @@ async function openResourceForm(state, { layer = "user", item = null, reload }) 
   });
 }
 
-function openLocationForm(state, item, reload) {
-  const path = h("input", { class: "input", maxlength: 500, value: item.location?.path_or_ref || "",
-    placeholder: t("setupres.ph.path") });
-  const label = h("input", { class: "input", maxlength: 60, value: state.host?.label || "" });
+// device: one of the person's devices (Devices panel); default: the device
+// this page talks for (state.host).
+function openLocationForm(state, item, reload, device = null) {
+  const host = device ? { id: device.id, label: device.label } : state.host || {};
+  const path = h("input", { class: "input", maxlength: 500,
+    value: (device ? item.path_or_ref : item.location?.path_or_ref) || "", placeholder: t("setupres.ph.path") });
+  const label = h("input", { class: "input", maxlength: 60, value: host.label || "" });
   openModal({
     title: t("setupres.location_title", { name: item.name }),
     body: h("div", { class: "stack" },
-      h("p", { class: "settings-lead" }, t("setupres.location_lead", { id: state.host?.id || "" })),
+      h("p", { class: "settings-lead" }, t("setupres.location_lead", { id: host.id || "" })),
       field(t("setupres.host_label"), label),
       field(t("setupres.path_or_ref"), path, true)),
     actions: [
@@ -265,7 +419,8 @@ function openLocationForm(state, item, reload) {
           if (!path.value.trim()) { toast(t("setupres.path_required"), "err"); return false; }
           try {
             const data = await api.setupAction("location", {
-              resource: item.key, path_or_ref: path.value.trim(), host_label: label.value.trim() });
+              resource: item.key, path_or_ref: path.value.trim(), host_label: label.value.trim(),
+              ...(device ? { host_id: device.id } : {}) });
             toast(t("setupres.saved"), "ok");
             reload?.(data);
           } catch (err) { toast(err.message, "err"); return false; }
@@ -277,7 +432,7 @@ function openLocationForm(state, item, reload) {
 
 /* ------------------------------------------------------------------ rows */
 
-function resourceRow(item, { actions = [], showOwner = true, reason = "" } = {}) {
+function resourceRow(item, { actions = [], showOwner = true, reason = "", sizeRefresh = null } = {}) {
   const needsLoc = item.details && !NO_LOCATION.has(item.kind) && !item.location
     && !(item.kind === "compute" && item.details?.kind !== "local");
   return h("div", { class: "setupres-row", "data-resource-key": item.key, "data-reason": reason || item.reason || "" },
@@ -295,6 +450,8 @@ function resourceRow(item, { actions = [], showOwner = true, reason = "" } = {})
         h("div", { class: "setupres-meta" },
           h("span", { class: "muted" }, loc.host_label),
           h("code", { class: "setupres-loc" }, loc.path_or_ref),
+          isLocalPath(loc.path_or_ref) ? sizeBadge(loc.stats, {
+            onRefresh: sizeRefresh ? (button) => sizeRefresh(item, loc, button) : null }) : null,
           loc.added_by ? userBadge(loc.added_by) : null)))),
     h("div", { class: "setupres-actions" }, ...actions));
 }
@@ -309,6 +466,7 @@ export function setupResourcesPanels(ctx) {
   const projectPanel = h("section", { class: "panel settings-panel setupres-panel", "data-setup-panel": "project" });
   const minePanel = h("section", { class: "panel settings-panel setupres-panel", "data-setup-panel": "mine" });
   const othersPanel = h("section", { class: "panel settings-panel setupres-panel", "data-setup-panel": "others" });
+  const devicesPanel = h("section", { class: "panel settings-panel setupres-panel", "data-setup-panel": "devices" });
   let state = null;
 
   const reload = async (data) => {
@@ -320,7 +478,37 @@ export function setupResourcesPanels(ctx) {
     }
     renderProject();
     renderMine();
+    renderDevices();
     renderOthers();
+  };
+
+  // ↻ next to a size: the device that holds the path measures it.
+  const refreshSize = async (target, button) => {
+    button.disabled = true;
+    try {
+      const r = await refreshLocationSize(target);
+      toast(r.message, r.done || r.queued ? "ok" : "");
+      if (r.done) reload();
+      else if (r.queued) setTimeout(() => reload(), 4000);
+    } catch (err) { toast(err.message, "err"); }
+    finally { button.disabled = false; }
+  };
+  const sizeRefresh = (item, loc, button) => refreshSize({ resource: item.key, path: loc.path_or_ref,
+    hostId: loc.host_id, deviceLabel: loc.host_label }, button);
+
+  // In the desktop app: measure this computer's paths whose size is missing
+  // or older than a day, once per page.
+  const autoMeasure = async (rows) => {
+    if (!state.layers?.user?.can_edit) return;
+    const mine = await desktopDeviceId();
+    const row = mine && !autoMeasured.has(mine) ? rows.find((d) => d.id === mine) : null;
+    if (!row) return;
+    autoMeasured.add(mine);
+    const due = duePaths(row.paths).slice(0, 20);
+    if (!due.length) return;
+    try {
+      if (await measureOnDesktop(due.map((p) => ({ resource: p.resource, path: p.path_or_ref })), mine)) reload();
+    } catch { /* a size is optional; the ↻ button shows errors */ }
   };
 
   const byKey = () => {
@@ -337,7 +525,7 @@ export function setupResourcesPanels(ctx) {
       h("h3", null, t("setupres.project_title")), statePill(info.state),
       h("span", { class: "spacer" }),
       info.can_confirm && REVIEWABLE.has(info.state)
-        ? btn(t("start.review"), "check", () => openSetupReview(state, "project", reload), "primary-btn sm") : null);
+        ? btn(t("start.review"), "check", () => openSetupReview(state, reload), "primary-btn sm") : null);
     const objective = h("textarea", { class: "input", rows: 2, maxlength: 4000, value: profile.objective || "",
       disabled: !info.can_confirm });
     objective.value = profile.objective || "";
@@ -346,13 +534,14 @@ export function setupResourcesPanels(ctx) {
       ...Object.entries(policies).map(([key, value]) => h("span", {
         class: `pill ${value === "allow" ? "ok" : value === "deny" ? "bad" : "warn"}`,
         title: t("setupres.policy_hint", { project: state.policies.project?.[key] || "", mine: state.policies.user?.[key] || "—" }),
-      }, `${key}: ${t(`setupres.policy.${value}`)}`)));
+      }, `${hasKey(`setupres.policy_key.${key}`) ? t(`setupres.policy_key.${key}`) : key}: ${t(`setupres.policy.${value}`)}`)));
     const items = (state.project_layer?.profile?.resources || []).map((resource) => {
       const key = `project/${resource.id}`;
       return byKey().get(key) || { ...resource, key };
     });
     const list = h("div", { class: "setupres-list" },
       ...(items.length ? items.map((item) => resourceRow(item, {
+        sizeRefresh,
         reason: item.reason === "no_location_on_host" ? "no_location_on_host" : "",
         actions: [
           state.layers?.user?.can_edit && item.details && !NO_LOCATION.has(item.kind)
@@ -400,7 +589,7 @@ export function setupResourcesPanels(ctx) {
       h("h3", null, t("setupres.mine_title")), statePill(info.state),
       h("span", { class: "spacer" }),
       info.state === PROPOSED
-        ? btn(t("start.review"), "check", () => openSetupReview(state, "user", reload), "primary-btn sm") : null);
+        ? btn(t("start.review"), "check", () => openSetupReview(state, reload), "primary-btn sm") : null);
     const hostRow = h("div", { class: "setupres-host" },
       icon("cpu", "sm"),
       h("span", null, t("setupres.this_machine")),
@@ -423,6 +612,7 @@ export function setupResourcesPanels(ctx) {
     const list = h("div", { class: "setupres-list" },
       ...(items.length ? items.map((item) => resourceRow(item, {
         showOwner: false,
+        sizeRefresh,
         actions: [
           !NO_LOCATION.has(item.kind) ? btn(t("setupres.add_location"), "plus", () => openLocationForm(state, item, reload)) : null,
           btn(t("setupres.edit"), "edit", () => openResourceForm(state, { layer: "user", item, reload })),
@@ -465,6 +655,7 @@ export function setupResourcesPanels(ctx) {
     const list = h("div", { class: "setupres-list" },
       ...(others.length ? others.map((item) => {
         return resourceRow(item, {
+          sizeRefresh,
           reason: item.usable_here ? "" : "no_location_on_host",
           actions: [
             state.layers?.user?.can_edit && !NO_LOCATION.has(item.kind)
@@ -482,6 +673,43 @@ export function setupResourcesPanels(ctx) {
         summary: t("settings.fold.count", { n: others.length }), body: list }).el);
   }
 
+  // Each of the person's devices with its own paths: a new computer shows
+  // what it still needs, and its paths are added without touching anyone's
+  // confirmation.
+  function renderDevices() {
+    clear(devicesPanel);
+    const rows = deviceRows(state);
+    devicesPanel.hidden = !rows.length;
+    if (!rows.length) return;
+    const canEdit = Boolean(state.layers?.user?.can_edit);
+    const list = h("div", { class: "setupres-list" }, ...rows.map((device) => h("div", {
+      class: "setupres-device", "data-device": device.id },
+    h("div", { class: "setupres-host" },
+      icon("cpu", "sm"),
+      h("b", null, device.label),
+      h("code", { class: "muted" }, device.id),
+      device.current ? h("span", { class: "pill ok" }, t("setupres.device_current")) : null,
+      since(device.lastSeen) ? h("span", { class: "muted" }, t(`setupres.device_seen_${since(device.lastSeen).unit}`,
+        { n: since(device.lastSeen).n })) : null,
+      h("span", { class: `pill ${device.missing ? "warn" : "ok"}` },
+        device.missing ? t("setupres.device_missing", { n: device.missing }) : t("setupres.device_complete"))),
+    h("div", { class: "stack tight" }, ...device.paths.map((p) => h("div", { class: "row tight setupres-device-path",
+      "data-device-path": p.resource },
+    h("span", null, p.name), h("span", { class: "muted" }, kindLabel(p.kind)),
+    p.path_or_ref ? h("code", null, p.path_or_ref)
+      : h("span", { class: p.missing ? "bad" : "muted" }, t("setupres.device_no_path")),
+    isLocalPath(p.path_or_ref) ? sizeBadge(p.stats, { onRefresh: (button) => refreshSize({
+      resource: p.resource, path: p.path_or_ref, hostId: device.id, deviceLabel: device.label }, button) }) : null,
+    canEdit ? btn(p.path_or_ref ? t("setupres.edit_location") : t("setupres.add_path"), p.path_or_ref ? "edit" : "plus",
+      () => openLocationForm(state, { key: p.resource, name: p.name, path_or_ref: p.path_or_ref }, reload, device)) : null))))));
+    devicesPanel.append(
+      h("div", { class: "panel-head" }, h("h3", null, t("setupres.devices_title")),
+        h("span", { class: "pill" }, String(rows.length))),
+      h("p", { class: "settings-lead" }, t("setupres.devices_lead")),
+      list);
+    autoMeasure(rows);
+  }
+
   reload();
-  return [projectPanel, minePanel, othersPanel];
+  return [projectPanel, minePanel, devicesPanel, othersPanel];
 }

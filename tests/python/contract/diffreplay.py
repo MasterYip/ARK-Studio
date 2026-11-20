@@ -352,6 +352,8 @@ def combine(step, a: dict, b: dict, go_extra: bool = False) -> list[str]:
     untouched = a["untouched"] and b["untouched"]  # N3-N7 change lengths legitimately
     if step[1] == "HEAD" and step[2].startswith(("/api/providers",) + SESSION_LIKE):
         untouched = False  # N14: the HEAD reply's length counts the echo path and probe_ms
+    if step[1] == "HEAD" and step[2].startswith(HEAD_TIMING_PATHS):
+        untouched = False  # N7: the GET body has timing fields whose digit count varies
     if a["content_encoding"] != "gzip" and a["content_length"] != b["content_length"]             and not problems and untouched and not a["status"] == b["status"] == 204:
         problems.append(f"content-length {a['content_length']} != {b['content_length']}")
     if ba != bb:
@@ -776,6 +778,9 @@ def remember(memory: dict, path: str, resp) -> None:
 
 
 N7_FIELDS = ("store_ms", "generated_ms", "elapsed_ms", "timing", "latency_ms")
+# Routes whose GET body carries N7 timing fields: the length of their HEAD
+# reply (no body to mask) changes with the number of digits in those values.
+HEAD_TIMING_PATHS = ("/api/project/overview",)
 
 
 def head_via_get(step, a, b, na, nb, clients, dirs) -> list[str]:

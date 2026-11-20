@@ -12,8 +12,9 @@
 // Which files agents get is decided here, in one place, for both sources:
 //
 //   - every *.md directly in docs/guide, docs/agents and docs/operations;
-//   - from docs/development only design.md (architecture) and
-//     development.md (running and testing ARK);
+//   - from docs/development only design.md (architecture),
+//     development.md (running and testing ARK) and agent-messaging.md
+//     (the update feed and experimental messages);
 //   - never: docs/development/archive, docs/development/go-port (port
 //     bookkeeping, contract.json), the performance investigations,
 //     release.md, docs/screenshots, docs/README.md (the index endpoint
@@ -34,8 +35,9 @@ var sectionWide = map[string]bool{"agents": true, "guide": true, "operations": t
 
 // extraFiles are single files included from the other sections.
 var extraFiles = map[string]bool{
-	"development/design.md":      true,
-	"development/development.md": true,
+	"development/design.md":          true,
+	"development/development.md":     true,
+	"development/agent-messaging.md": true,
 }
 
 // excludedFiles are left out of otherwise included sections.
@@ -60,7 +62,7 @@ func Included(rel string) bool {
 var StartHere = []struct{ Path, Why string }{
 	{"agents/agent-interface.md", "The contract: discovery, setup gate, tokens, task manifests, evidence and conformance levels."},
 	{"agents/external-agent.md", "How an external coordinator (Claude Code, Codex, DSH) reads and writes an ARK project."},
-	{"agents/working-mode.md", "The recommended working mode: plan in a task node, progress lines, review nodes with media, decision nodes."},
+	{"agents/working-mode.md", "The recommended working mode: plan in a task node, progress lines, review nodes with media, decision nodes, watching for replies."},
 	{"agents/skills.md", "The setup, agent-team, rrsi and design skills and their HTTP endpoints."},
 	{"guide/home-overview.md", "What the Home screen shows a person, and the starter prompts."},
 	{"guide/topics.md", "Topics: curated subgraphs that tell one storyline."},

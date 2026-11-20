@@ -224,6 +224,9 @@ func (c *reqCtx) static() error {
 	if origRel == "viz-frame.html" {
 		headers = append(headers, [2]string{"Content-Security-Policy", VizCSP}, [2]string{"X-Frame-Options", "SAMEORIGIN"})
 	}
+	if origRel == "plugin-frame.html" {
+		headers = append(headers, [2]string{"Content-Security-Policy", PluginCSP}, [2]string{"X-Frame-Options", "SAMEORIGIN"})
+	}
 	c.send(200, data, ctype, headers, false)
 	return nil
 }

@@ -123,11 +123,20 @@ async function mount({ payload, dashboard = null } = {}) {
   const model = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/resources-model.js", import.meta.url), "utf8"), { context });
   await model.link(() => { throw new Error("resources-model.js must remain dependency-free"); });
+  const sizeModel = new vm.SourceTextModule(
+    await readFile(new URL("../../ark_studio/web/js/location-size-model.js", import.meta.url), "utf8"), { context });
+  await sizeModel.link((specifier) => (specifier === "./resources-model.js" ? model
+    : (() => { throw new Error(`unexpected import ${specifier}`); })()));
+  const sizeDom = new vm.SyntheticModule(["sizeBadge", "refreshLocationSize"], function () {
+    this.setExport("sizeBadge", () => new El("span"));
+    this.setExport("refreshLocationSize", async () => ({ queued: true, message: "queued" }));
+  }, { context });
   const layout = await loadNodeGraphLayout(context);
   const view = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/resources-view.js", import.meta.url), "utf8"), { context });
   const modules = { "./dom.js": domModule, "./i18n.js": i18n, "./icons.js": icons, "./api.js": api,
-    "./context-menu.js": menu, "./node-graph-layout.js": layout, "./resources-model.js": model };
+    "./context-menu.js": menu, "./node-graph-layout.js": layout, "./resources-model.js": model,
+    "./location-size-model.js": sizeModel, "./location-size.js": sizeDom };
   await view.link((specifier) => modules[specifier] || (() => { throw new Error(`unexpected import ${specifier}`); })());
   await view.evaluate();
   const panel = view.namespace.resourcesGraphPanel({ toast() {}, navigateWorkspace() {} });

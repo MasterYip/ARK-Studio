@@ -71,6 +71,15 @@ fn port_free(port: u16) -> bool {
     TcpListener::bind(("127.0.0.1", port)).is_ok()
 }
 
+/// The port to bind: the preferred one, else the one used the last time the
+/// preferred port was taken (`fallback`), else none (a new free port). The
+/// local page's origin includes the port, and the browser storage behind it
+/// (theme, language, layout) is per origin: a new port on every start would
+/// make those settings look lost after a restart or an update.
+pub fn pick_port(preferred: u16, fallback: u16, free: impl Fn(u16) -> bool) -> Option<u16> {
+    [preferred, fallback].into_iter().find(|&p| p != 0 && free(p))
+}
+
 fn any_free_port() -> Result<u16, String> {
     TcpListener::bind(("127.0.0.1", 0))
         .and_then(|l| l.local_addr())
@@ -144,11 +153,16 @@ pub fn health_ok(port: u16) -> bool {
     text.starts_with("HTTP/1.") && text.lines().next().is_some_and(|l| l.contains(" 200")) && text.contains("arkstudio")
 }
 
-pub fn start(root: &Path, preferred: u16) -> Result<Sidecar, String> {
+/// Starts ark-server on `preferred`, else on `fallback` (see [`pick_port`]),
+/// else on a free port.
+pub fn start(root: &Path, preferred: u16, fallback: u16) -> Result<Sidecar, String> {
     let exe = server_exe()?;
     std::fs::create_dir_all(root).map_err(|e| format!("Cannot create the project folder {}: {e}", root.display()))?;
     paths::ensure_private_dir(&paths::private_dir()).map_err(|e| e.to_string())?;
-    let port = if preferred != 0 && port_free(preferred) { preferred } else { any_free_port()? };
+    let port = match pick_port(preferred, fallback, port_free) {
+        Some(p) => p,
+        None => any_free_port()?,
+    };
     let secret = random_hex(32);
     let log = open_log()?;
     let log2 = log.try_clone().map_err(|e| e.to_string())?;
@@ -467,5 +481,22 @@ mod win {
             }
             CloseHandle(h);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pick_port;
+
+    #[test]
+    fn port_choice_keeps_the_origin_stable() {
+        let all_free = |_| true;
+        assert_eq!(pick_port(18890, 51384, all_free), Some(18890));
+        // the preferred port is taken: the one used last time, not a new one
+        assert_eq!(pick_port(18890, 51384, |p| p != 18890), Some(51384));
+        // both taken (or no earlier fallback): the caller picks a free port
+        assert_eq!(pick_port(18890, 51384, |p| p != 18890 && p != 51384), None);
+        assert_eq!(pick_port(18890, 0, |p| p != 18890), None);
+        assert_eq!(pick_port(0, 0, all_free), None);
     }
 }

@@ -148,7 +148,7 @@ the session keeps its normal permission mode (`read_only`, `plan`, `ask`,
 `accept_edits`, or `full_access`). Plan mode explicitly forbids worktree edits;
 approval modes keep their approval protocol and may write only in the session
 workspace or the selected worktree; only `full_access` receives ARK's project
-write token.
+write token (see the next section for account mode).
 
 Only worktrees under the managed root are accepted. A second active session in
 the same worktree is refused with `409` unless the request sends
@@ -158,6 +158,40 @@ their payload, in `GET /api/agent-sessions/groups`, and in the worktree listing.
 counts. The session rail shows a parallel-group summary and can group all
 sessions by worktree; the session header and **Overview** show the branch, path,
 HEAD and clean-at-launch state.
+
+## Session token and environment
+
+A session gets `ARK_URL` (the server root), `ARK_PROJECT` (the project id) and,
+when it may call the agent API, the same token in `ARK_AGENT_TOKEN` and
+`ARK_TOKEN`. The agent calls `$ARK_URL/api/agent/v1/...` with
+`X-ARK-Project: $ARK_PROJECT`.
+
+- Without accounts, `full_access` sessions get the server's write token and the
+  other modes get no agent token.
+- With accounts, ARK issues a personal token for each run, bound to the user who
+  launched it: write access for `full_access`, read access for every other
+  mode. Writes count as that user's and follow their project permissions. The
+  token is labelled `ARK session <id>`, does not count against the user's token
+  limit, expires after 24 hours and is revoked when the run finishes or is
+  deleted. It is kept only in the run's memory and environment; output lines
+  that contain it are redacted before they reach the session log.
+
+## Codex sandbox
+
+ARK starts Codex with a sandbox that matches the session's permission mode and
+always allows network access, because the agent reaches ARK over HTTP. The
+filesystem is never widened beyond the mode:
+
+| Mode | Codex 0.166 or newer (permission profile) | Older Codex |
+|---|---|---|
+| `full_access`, `accept_edits`, `ask` | `permissions.ark_session` extends `:workspace`, `network.enabled=true` | `-s workspace-write -c sandbox_workspace_write.network_access=true` |
+| `read_only`, `plan` | `permissions.ark_session` extends `:read-only`, `network.enabled=true` | `-s read-only` |
+
+ARK reads the version from `codex --version` once per binary. A preset or
+command that already chooses a sandbox (`-s`, `--sandbox`, `--full-auto`,
+`--dangerously-bypass-approvals-and-sandbox`, `default_permissions` or
+`sandbox_mode`) is left as it is. Older Codex has no network switch for the
+read-only sandbox, so read-only sessions there cannot reach ARK; update Codex.
 
 ## Limitations
 

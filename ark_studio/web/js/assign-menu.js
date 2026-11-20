@@ -42,7 +42,9 @@ export async function assignUnits(ctx, units, name) {
   }
   if (saved.length) {
     ctx?.toast?.(name ? t("assign.done", { n: saved.length, name: displayName(name) }) : t("assign.cleared", { n: saved.length }), "ok");
-    await ctx?.refresh?.();
+    // In place on a graph (no rebuild, relayout or refit); lists re-render.
+    if (ctx?.unitsChanged) await ctx.unitsChanged(saved);
+    else await ctx?.refresh?.();
   }
   return saved;
 }

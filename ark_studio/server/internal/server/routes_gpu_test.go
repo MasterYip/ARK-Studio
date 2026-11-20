@@ -187,8 +187,8 @@ func TestGPULocalModeScope(t *testing.T) {
 		t.Errorf("registered graph: %s", g.raw)
 	}
 
-	// The web's one-click registration (api.gpuRegister): compute resources in
-	// the viewer's own setup layer register "b" too.
+	// Compute resources (kind ssh, gpu_server) saved in the viewer's own setup
+	// layer register "b" too.
 	d = gpuCall(t, app, "POST", "/api/skills/setup/draft", map[string]any{"layer": "user", "resources": []any{
 		map[string]any{"id": "gpu-b", "kind": "compute", "name": "b",
 			"details": map[string]any{"kind": "ssh", "gpu_server": "b", "use": "ask"}}}}, nil)

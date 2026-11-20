@@ -3,6 +3,7 @@ package project
 import (
 	"archive/zip"
 	"context"
+	"database/sql"
 	"io"
 	"os"
 	"path/filepath"
@@ -86,6 +87,18 @@ func internalFiles(root string, includeSessions bool) []archiveFile {
 // sessions/ adds uploaded external transcripts and the redacted mirrors of
 // ARK task sessions (sessions/internal/<id>/).
 func WriteArchiveSessions(ctx context.Context, p *Project, w io.Writer, scratch string, includeSessions bool) (*pyjson.Object, error) {
+	return WriteArchiveChat(ctx, p, w, scratch, includeSessions, nil)
+}
+
+// ArchiveChatExcluded is the manifest "excluded" entry of an archive whose
+// database keeps only the exporter's own Assistant chat.
+const ArchiveChatExcluded = "other users' Assistant chat"
+
+// WriteArchiveChat is WriteArchiveSessions whose database copy, when
+// chatUser is not nil, keeps only that user's Assistant chat (T-0028: a
+// non-admin export must not carry other members' threads).  nil keeps
+// every row (local mode, project admins).
+func WriteArchiveChat(ctx context.Context, p *Project, w io.Writer, scratch string, includeSessions bool, chatUser *string) (*pyjson.Object, error) {
 	root := Resolve(p.Path)
 	folder := filepath.Base(root)
 	if folder == "" || folder == "." || folder == ".." || strings.Contains(folder, `\`) {
@@ -98,6 +111,9 @@ func WriteArchiveSessions(ctx context.Context, p *Project, w io.Writer, scratch 
 	excluded := []any{"external files and symlinks", "exports/", "development caches"}
 	if !includeSessions {
 		excluded = append(excluded, "sessions/ (agent session transcripts)")
+	}
+	if chatUser != nil {
+		excluded = append(excluded, ArchiveChatExcluded)
 	}
 	manifest := pyjson.NewObject("format", "ark-studio-project-archive", "version", int64(1), "folder", folder,
 		"exported_at", clock.UTCNow(),
@@ -129,6 +145,11 @@ func WriteArchiveSessions(ctx context.Context, p *Project, w io.Writer, scratch 
 	err := p.Store.DB.Write(ctx, func(q sqlitedb.Querier) error {
 		if err := sqlitedb.BackupFile(ctx, filepath.Join(root, "ark.sqlite3"), database); err != nil {
 			return err
+		}
+		if chatUser != nil {
+			if err := keepOwnChat(ctx, database, *chatUser); err != nil {
+				return err
+			}
 		}
 		if err := addFile(database, folder+"/ark.sqlite3"); err != nil {
 			return err
@@ -170,4 +191,29 @@ func WriteArchiveSessions(ctx context.Context, p *Project, w io.Writer, scratch 
 		return nil, err
 	}
 	return manifest, zw.Close()
+}
+
+// keepOwnChat removes every Assistant chat row but user's from the database
+// copy at path (pre-v10 rows with an empty user included), and the other
+// users' clear marks, then VACUUMs so no deleted page keeps their text.
+func keepOwnChat(ctx context.Context, path, user string) error {
+	db, err := sql.Open("sqlite", "file:"+filepath.ToSlash(path)+"?_pragma=busy_timeout(10000)")
+	if err != nil {
+		return err
+	}
+	defer db.Close()
+	db.SetMaxOpenConns(1)
+	for _, stmt := range []struct {
+		sql  string
+		args []any
+	}{
+		{"DELETE FROM chat_messages WHERE user<>? OR user=''", []any{user}},
+		{"DELETE FROM meta WHERE key LIKE 'chat_cleared:%' AND substr(key,1,13)='chat_cleared:' AND key<>?", []any{"chat_cleared:" + user}},
+		{"VACUUM", nil},
+	} {
+		if _, err := db.ExecContext(ctx, stmt.sql, stmt.args...); err != nil {
+			return err
+		}
+	}
+	return db.Close()
 }

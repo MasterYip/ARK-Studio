@@ -6,6 +6,7 @@ import { getMindSettings } from "./mind-settings.js";
 import { getTagShortcuts, shortcutMatches } from "./shortcuts.js";
 import { MARKERS, markersFor, markerArc } from "./markers.js";
 import { openContextMenu } from "./context-menu.js";
+import { imageCopyMenuItems } from "./image-copy.js";
 import { assignMenuItem } from "./assign-menu.js";
 import { exportBundleMenuItem } from "./export-menu.js";
 import { historyMenuItem } from "./node-history.js";
@@ -13,12 +14,15 @@ import { authenticatedUrl } from "./api.js";
 import { applyRepulsion } from "./graph-force.js";
 import {
   stepForce, forceSettleStep, FORCE_SETTLE, forceNodeRadius, drawForceNode, focusNeighborhood, arrowSize, addArrowhead, arrowInset,
-  paintArrowheads, arrowResolver, normalizeArrowSettings, ARROW_HEADS,
+  paintArrowheads, arrowResolver, normalizeArrowSettings, ARROW_HEADS, graphDeleteTarget,
 } from "./graph-core.js";
 import { layeredLayout, placeNewNodes, routeNodeEdges, cubicAt, NODE_W, NODE_H } from "./node-graph-layout.js";
 import { cardMetrics, applyCardMetrics, cleanCardWidth, CARD_KINDS, THUMB } from "./node-card.js";
 import { SpriteCache, spriteBucket } from "./graph-sprites.js";
 import { mindHierarchy, mindLayout, TREE_GAP } from "./mind-layout.js";
+import { assignNodeData, classifyGraphUpdate, classifyNodeChange, DRAWN_NODE_FIELDS, edgeKey } from "./graph-change.js";
+import { attachPresenceOverlay, createPresenceChip } from "./presence-ui.js";
+import { siblingGroup, groupDefaults } from "./selection-model.js";
 
 const POS_CACHE = new Map(); // graphId -> Map(nodeId -> {x,y})
 const GRAPH_INSTANCES = new Set();
@@ -32,6 +36,19 @@ const ALL_RELATIONS = [
   "runs_on", "supersedes", "uses", "relates_to", "unset",
 ];
 const MIND_IMAGE_CACHE = new Map();
+// "Show pressed keys" (graph help): keys and clicks on a graph appear in its
+// corner for a moment.
+const SHOW_KEYS_KEY = "ark.graph.showKeys";
+const SHOW_KEYS_MS = 1500;
+function showKeysEnabled() {
+  try { return localStorage.getItem(SHOW_KEYS_KEY) === "1"; } catch { return false; }
+}
+// Key names and labels (graph-demo-script.js), loaded once the option is on.
+let DEMO_SCRIPT = null;
+function demoScript() {
+  DEMO_SCRIPT ||= import("./graph-demo-script.js");
+  return DEMO_SCRIPT;
+}
 const ARROW_BUDGET = 2500;
 // Cards are drawn in world units (see _paintCard); fonts are world px.
 const CARD_TITLE_FONT = "600 12px system-ui, 'Segoe UI', 'Microsoft YaHei'";
@@ -54,10 +71,40 @@ const SCENE_TILE_SETTLE_MS = 150;
 // 48 tiles x 1 MB: about two screens of 1920 x 1080 at dpr 2.
 const SCENE_TILE_MAX = 48;
 
-// Marker/label settings live in localStorage; their raw text is part of the
-// scene signature.
-function localStorageSig() {
-  try { return localStorage.getItem("ark.mind.v1") || ""; } catch { return ""; }
+// Marker/label display settings (Settings › Appearance › Graphs) are part
+// of the scene signature; getMindSettings() returns a new object per change.
+let DISPLAY_SIG_SOURCE = null;
+let DISPLAY_SIG = "";
+function displaySig() {
+  const settings = getMindSettings();
+  if (settings !== DISPLAY_SIG_SOURCE) {
+    DISPLAY_SIG_SOURCE = settings;
+    try { DISPLAY_SIG = JSON.stringify(settings) || ""; } catch { DISPLAY_SIG = ""; }
+  }
+  return DISPLAY_SIG;
+}
+
+// Mind card widths and pinned images, per project for the person
+// (mind-node-state.js; app.js installs the account-backed store).  The
+// default keeps them in memory only.
+const MEMORY_MIND_NODES = (() => {
+  const state = { widths: {}, pinned: {} };
+  return {
+    get: () => state,
+    update(patch) {
+      for (const key of ["widths", "pinned"]) {
+        for (const [uid, value] of Object.entries(patch?.[key] || {})) {
+          if (value === null || value === undefined) delete state[key][uid];
+          else state[key][uid] = value;
+        }
+      }
+      return state;
+    },
+  };
+})();
+let MIND_NODE_STORE = MEMORY_MIND_NODES;
+export function setMindNodeStore(store) {
+  MIND_NODE_STORE = store || MEMORY_MIND_NODES;
 }
 
 const IMAGE_MEDIA_RE = /\.(png|jpe?g|gif|svg|webp|avif)(?:[?#]|$)/i;
@@ -309,6 +356,19 @@ function addViewCubic(ctx, seg, view, whole, limit, sx, sy, state, depth = 0) {
 // `parents` (optional Map child id -> parent id) replaces the primary
 // relation: the Local graph roots its Mind layout at the focused node and
 // uses the breadth-first parents of its neighbourhood.
+// Read / Edit is one choice for every graph layout (and the Node details
+// panel follows it): remembered once, Read until the person switches.
+const GRAPH_MODE_KEY = "ark.graphMode";
+export function savedGraphMode() {
+  try {
+    const saved = localStorage.getItem(GRAPH_MODE_KEY);
+    return saved === "edit" ? "edit" : "read";
+  } catch { return "read"; }
+}
+
+// Largest scale of the decorative Home backdrop graph.
+const BACKDROP_MAX_ZOOM = 1.6;
+
 export class GraphView {
   constructor(host, opts = {}) {
     this.host = host;
@@ -326,10 +386,6 @@ export class GraphView {
     this.history = [];
     this._undoing = false;
     this._restoring = false;
-    this.pinnedMedia = new Set((() => { try { return JSON.parse(localStorage.getItem("ark.mindPinnedMedia") || "[]"); } catch { return []; } })());
-    this.imageSizes = (() => { try { return JSON.parse(localStorage.getItem("ark.mindImageSizes") || "{}"); } catch { return {}; } })();
-    this.mindWidths = (() => { try { return JSON.parse(localStorage.getItem("ark.mindWidths") || "{}"); } catch { return {}; } })();
-    this.mindPinnedImages = (() => { try { return JSON.parse(localStorage.getItem("ark.mindPinnedImages") || "{}"); } catch { return {}; } })();
     this.nodes = [];
     this.edges = [];
     this.byId = new Map();
@@ -375,8 +431,7 @@ export class GraphView {
     this.pinch = null;
     this.physics = normalizeGraphPhysics(this.opts.physics || ACTIVE_PHYSICS);
     this.arrowSettings = this.opts.arrows ? normalizeArrowSettings(this.opts.arrows) : null;
-    const savedMode = (() => { try { return localStorage.getItem(`ark.graphMode.${this.layout}`); } catch { return null; } })();
-    this.mode = this.readOnly ? "read" : (opts.mode || ((savedMode === "read" || savedMode === "edit") ? savedMode : (this.layout === "mind" ? "edit" : "read")));
+    this.mode = this.readOnly ? "read" : (opts.mode || savedGraphMode());
     this.showLabels = true;
     this.connectMode = false;
     this.connectSource = null;
@@ -406,9 +461,16 @@ export class GraphView {
     this.canvas.style.display = "block";
     this.host.appendChild(this.canvas);
     this.ctx = this.canvas.getContext("2d");
+    // Agent presence: its own canvas over this one (graph-presence.js);
+    // it never redraws or relayouts the graph.
+    if (!this.opts.backdrop) this._presence = attachPresenceOverlay(this);
     if (this.opts.compact) {
       this.host.classList.add("compact");
       if (this.opts.sidebarToolbar) this._buildSidebarTools();
+      if (this.opts.localGraph) {
+        this._presenceChip = createPresenceChip(this, { local: true });
+        this.host.append(h("div", { class: "local-graph-presence" }, this._presenceChip.el));
+      }
       return;
     }
     this.countEl = h("span", { class: "graph-count" }, "—");
@@ -446,6 +508,10 @@ export class GraphView {
       h("button", { title: t("graph.zoom_in"), "aria-label": t("graph.zoom_in"), onclick: () => this.zoomBy(1.2) }, icon("zoomIn", "sm")),
       h("button", { title: t("graph.zoom_out"), "aria-label": t("graph.zoom_out"), onclick: () => this.zoomBy(1 / 1.2) }, icon("zoomOut", "sm")),
       h("button", { title: t("graph.fit"), "aria-label": t("graph.fit"), onclick: () => this.fit({ animate: true }) }, icon("fit", "sm")),
+      this.fullscreenBtn = h("button", {
+        class: "graph-fullscreen-btn", type: "button", title: t("graph.fullscreen"), "aria-label": t("graph.fullscreen"),
+        hidden: document.fullscreenEnabled ? undefined : true, onclick: () => this.toggleFullscreen(),
+      }, icon("expand", "sm")),
       h("button", {
         class: "graph-help-btn", title: t("graph.help.title"), "aria-label": t("graph.help.title"),
         "aria-expanded": "false", onclick: () => this._toggleHelp(),
@@ -457,8 +523,9 @@ export class GraphView {
     this.tooltip = h("div", { class: "graph-tooltip hidden" });
     this.emptyEl = h("div", { class: "graph-empty hidden" });
     this.connectBar = h("div", { class: "graph-connect hidden" });
+    this._presenceChip = createPresenceChip(this);
     this.host.append(
-      h("div", { class: "graph-top" }, this.countEl),
+      h("div", { class: "graph-top" }, this._presenceChip?.el, this.countEl),
       this.tools, this.legendEl, this.hintEl, this.helpEl, this.edgeFilterEl, this.tooltip, this.emptyEl, this.connectBar);
   }
 
@@ -501,8 +568,28 @@ export class GraphView {
     this._onResize = () => this._resize();
     this._resizeObserver = new ResizeObserver(this._onResize);
     this._resizeObserver.observe(this.host);
+    if (this.opts.localGraph) {
+      this._resumeCanvas = () => {
+        if (document.hidden || this._resumeFrame) return;
+        this._resumeFrame = requestAnimationFrame(() => {
+          this._resumeFrame = 0;
+          if (document.hidden || !this.canvas.getClientRects().length) return;
+          this.ctx = this.canvas.getContext("2d");
+          if (!this.ctx || this.ctx.isContextLost?.()) return;
+          this._sceneTiles = null;
+          this._sceneTilesPrev = null;
+          this._presence?.realign();
+          if (!this._resize({ preserveCamera: true })) this._draw();
+        });
+      };
+      document.addEventListener("visibilitychange", this._resumeCanvas);
+      this.canvas.addEventListener("contextrestored", this._resumeCanvas);
+    }
     if (this.opts.backdrop) {
       this.host.tabIndex = -1;
+      this._onBackdropWake = () => this.wakeBackdrop();
+      document.addEventListener("visibilitychange", this._onBackdropWake);
+      window.addEventListener("ark:modal-close", this._onBackdropWake);
       return;
     }
     this.canvas.addEventListener("pointerdown", (e) => this._pointerDown(e));
@@ -611,9 +698,20 @@ export class GraphView {
       if (this.mode === "edit" && this.opts.onAddOrphan) this._addOrphanNode(e);
     });
     this.host.addEventListener("keydown", (e) => this._onKeyDown(e));
+    if (!this.opts.sandbox) {
+      this.host.addEventListener("keydown", (e) => this._flashKeys((m) => m.eventKeyTokens(e)), true);
+      this.canvas.addEventListener("pointerdown", (e) => this._flashKeys((m) => m.eventPointerTokens(e)), true);
+      this.canvas.addEventListener("dblclick", () => this._flashKeys(() => ["input.dblclick"]), true);
+      this.canvas.addEventListener("wheel", (e) => this._flashKeys(() => (e.ctrlKey || e.metaKey ? ["Ctrl", "input.wheel"]
+        : e.shiftKey ? ["Shift", "input.wheel"] : ["input.wheel"])), { capture: true, passive: true });
+    }
     this._pasteImageHandler = async (event) => {
       if (!this.opts.onAttachImage) return;
       if (event.target?.closest?.(".modal-backdrop, .palette-backdrop")) return;
+      // A paste into a text field elsewhere (a session composer, a form)
+      // belongs to that field, not to the selected node.
+      const field = event.target?.closest?.("textarea, input, [contenteditable=''], [contenteditable='true']");
+      if (field && !this.host?.contains(field)) return;
       const data = event.clipboardData;
       let file = [...(data?.files || [])].find((item) => item.type.startsWith("image/"));
       if (!file) {
@@ -664,9 +762,67 @@ export class GraphView {
       return;
     }
     const node = this._hit(event);
+    const edge = node || this.readOnly || !this.opts.onDeleteEdge ? null : this._hitEdge(event);
+    if (edge) {
+      this._setSelection([], false);
+      this.selectedEdge = edge;
+      this._draw();
+      this._openEdgeContextMenu(edge, event);
+      return;
+    }
     if (node && !this.selectedNodes.has(node.id)) this._setSelection([node], false);
     this._draw();
     this._openGraphContextMenu(node, event);
+  }
+
+  _openEdgeContextMenu(edge, event) {
+    const source = this.byId.get(edge.source), target = this.byId.get(edge.target);
+    const items = [];
+    if (this.opts.onEdgeClick) {
+      items.push({ label: t("edge.change_relation"), icon: "link", onClick: () => this.opts.onEdgeClick(edge, source, target) });
+    }
+    items.push({ label: t("edge.delete"), icon: "trash", shortcut: "Delete", onClick: () => this._deleteSelectedEdge(edge) });
+    openContextMenu({ x: event.clientX, y: event.clientY, items, returnFocus: this.host });
+  }
+
+  // Delete one link (the selected one by default) through opts.onDeleteEdge,
+  // which confirms and calls the API; Ctrl+Z recreates it.
+  async _deleteSelectedEdge(edge = this.selectedEdge) {
+    if (!edge || !this.opts.onDeleteEdge || this.readOnly) return false;
+    const source = this.byId.get(edge.source), target = this.byId.get(edge.target);
+    const ok = await this.opts.onDeleteEdge(edge, source, target);
+    // The confirmation took the focus: give it back so Delete / Ctrl+Z go on.
+    const active = typeof document !== "undefined" ? document.activeElement : null;
+    if (this.host?.isConnected && (!active || active === document.body)) this.host.focus?.({ preventScroll: true });
+    if (!ok) return false;
+    const removed = { ...edge };
+    this.removeEdge(edge.id);
+    this._pushHistory({
+      undo: async () => {
+        const created = await this.opts.onRestoreLinks?.([removed]);
+        const id = Array.isArray(created) && created[0]?.id != null ? created[0].id : removed.id;
+        if (!this.edges.some((item) => item.id === id)) this.edges.push({ ...removed, id });
+        this._edgesChanged();
+      },
+    });
+    return true;
+  }
+
+  // Remove one link from the view (after it was deleted on the server).
+  removeEdge(edgeId) {
+    const before = this.edges.length;
+    this.edges = this.edges.filter((edge) => edge.id !== edgeId);
+    if (this.selectedEdge?.id === edgeId) this.selectedEdge = null;
+    if (this.hoverEdge?.id === edgeId) this.hoverEdge = null;
+    if (this.edges.length !== before) this._edgesChanged();
+  }
+
+  _edgesChanged() {
+    this._dataGen = (this._dataGen || 0) + 1;
+    this.countEl && (this.countEl.textContent = `${this.nodes.length} ${t("overview.stats.total")} · ${this.edges.length} ${t("common.links")}`);
+    if (this.layout === "node") this._layoutNodeGraph(false);
+    else if (this.layout === "mind") this._applyLayout(false);
+    this._draw();
   }
 
   _toggleHelp(force = null) {
@@ -676,6 +832,40 @@ export class GraphView {
     this.helpEl.classList.toggle("hidden", !show);
     if (show && this.tools) this.helpEl.style.top = `${this.tools.offsetTop + this.tools.offsetHeight + 6}px`;
     this.tools?.querySelector(".graph-help-btn")?.setAttribute("aria-expanded", String(show));
+  }
+
+  // The walkthrough for this layout (graph-demo.js, loaded on first use).
+  openDemo() {
+    this._toggleHelp(false);
+    return import("./graph-demo.js").then(({ openGraphDemo }) => openGraphDemo({ layout: this.layout }))
+      .catch((err) => this.opts.onError?.(err));
+  }
+
+  // `tokensOf(module)` gives the input's tokens (see graph-demo-script.js).
+  _flashKeys(tokensOf) {
+    if (!showKeysEnabled()) return;
+    demoScript().then((module) => {
+      const tokens = tokensOf(module);
+      if (tokens && this.host.isConnected) this._showKeyChip(module.formatKeys(tokens, t));
+    }).catch(() => {});
+  }
+
+  _showKeyChip(text) {
+    if (!this.keysEl) {
+      this.keysEl = h("div", { class: "graph-keys-overlay", "aria-hidden": "true" });
+      this.host.appendChild(this.keysEl);
+    }
+    const last = this.keysEl.lastElementChild;
+    // A wheel turn sends many events: one chip, kept alive.
+    if (last && last.textContent === text && !last.classList.contains("fade")) {
+      clearTimeout(last._fade);
+      last._fade = setTimeout(() => { last.classList.add("fade"); setTimeout(() => last.remove(), 300); }, SHOW_KEYS_MS);
+      return;
+    }
+    const chip = h("kbd", { class: "graph-keys-chip" }, text);
+    this.keysEl.appendChild(chip);
+    while (this.keysEl.children.length > 3) this.keysEl.firstElementChild.remove();
+    chip._fade = setTimeout(() => { chip.classList.add("fade"); setTimeout(() => chip.remove(), 300); }, SHOW_KEYS_MS);
   }
 
   _renderHelp() {
@@ -688,6 +878,19 @@ export class GraphView {
       h("div", { class: "graph-help-head" },
         h("b", null, t(readMode ? "graph.help.title_read" : "graph.help.title_edit")),
         h("button", { class: "icon-btn", title: t("action.close"), onclick: () => this._toggleHelp(false) }, icon("x", "sm"))),
+      h("div", { class: "graph-help-demo" },
+        h("button", {
+          type: "button", class: "btn sm primary graph-help-demo-btn",
+          onclick: () => this.openDemo(),
+        }, icon("play", "sm"), t("graph.demo.show_me")),
+        h("label", { class: "graph-help-showkeys" },
+          h("input", {
+            type: "checkbox", checked: showKeysEnabled(),
+            onchange: (event) => {
+              try { localStorage.setItem(SHOW_KEYS_KEY, event.target.checked ? "1" : "0"); } catch { /* storage unavailable */ }
+            },
+          }),
+          h("span", null, t("graph.demo.show_keys")))),
       h("div", { class: "graph-help-group" }, h("h5", null, t("graph.help.navigation")),
         row("← → ↑ ↓", t("graph.help.move_selection")),
         row("R / E", t("graph.help.read_edit_mode")),
@@ -1319,7 +1522,10 @@ export class GraphView {
     if ((event.ctrlKey || event.metaKey) && event.key === "Enter") {
       if (this.layout !== "mind" || this.mode !== "edit") return;
       event.preventDefault();
-      this._insertBetween();
+      // One node: a new parent between it and its parent.  Several siblings:
+      // one new parent for all of them.
+      if (this.selectedNodes.size > 1) this._groupSelection();
+      else this._insertBetween();
       return;
     }
     if (event.key === "Enter") {
@@ -1333,14 +1539,17 @@ export class GraphView {
       }
       return;
     }
-    if (event.key === "Backspace") {
-      // Backspace is deliberately not a delete shortcut on graph focus.
+    const deleteTarget = graphDeleteTarget({
+      key: event.key, mode: this.mode, readOnly: this.readOnly, selectedEdge: this.selectedEdge,
+      nodeCount: this.selectedNodes.size, canDeleteEdge: Boolean(this.opts.onDeleteEdge),
+      canDeleteNodes: Boolean(this.opts.onDelete),
+    });
+    if (deleteTarget) {
+      // Backspace is not a node delete shortcut on graph focus; on a selected
+      // link both keys delete that link (after a confirmation).
       event.preventDefault();
-      return;
-    }
-    if (event.key === "Delete") {
-      event.preventDefault();
-      if (this.mode === "edit") this._deleteSelected();
+      if (deleteTarget === "edge") this._deleteSelectedEdge();
+      else if (deleteTarget === "nodes") this._deleteSelected();
       return;
     }
     if (event.key === "Escape") {
@@ -1521,9 +1730,10 @@ export class GraphView {
             if (pinned) {
               delete node.pinnedImage;
             } else {
+              const size = getMindSettings().imageSize || 260;
               node.pinnedImage = {
                 mediaId: item.id, side: "right",
-                w: 260, h: 260 / Math.max(0.2, aspect), aspect,
+                w: size, h: size / Math.max(0.2, aspect), aspect,
               };
             }
             this._saveMindPinnedImages();
@@ -1535,15 +1745,18 @@ export class GraphView {
           icon: "refresh",
           onClick: edit(() => {
             if (node.pinnedImage) {
+              const size = getMindSettings().imageSize || 260;
               node.pinnedImage = {
                 ...node.pinnedImage,
-                w: 260, h: 260 / Math.max(0.2, aspect), aspect,
+                w: size, h: size / Math.max(0.2, aspect), aspect,
               };
               this._saveMindPinnedImages();
               this._applyLayout(false);
             }
           }),
         },
+        { separator: true },
+        ...imageCopyMenuItems({ src: imageMediaSrc(item), kind: "image", caption: item.caption }),
         { separator: true },
         { label: t("graph.menu.open_image"), icon: "external", onClick: () => this.opts.onMediaOpen?.(item) },
         this.opts.onMediaEditor ? { label: t("editor.open_in_editor"), icon: "edit", onClick: () => this.opts.onMediaEditor(item, node) } : null,
@@ -1570,6 +1783,9 @@ export class GraphView {
       items.push({ label: t("graph.menu.copy_subtree"), icon: "copy", shortcut: "Ctrl+Shift+C", onClick: () => this._copySelection(true) });
       items.push({ separator: true });
       items.push({ label: t("graph.menu.edit_title"), icon: "pen", shortcut: "Space", onClick: edit(() => this.startEdit(node)) });
+      if (this.opts.onGroupNodes && this.layout === "mind" && nodes.length > 1) {
+        items.push({ label: t("graph.menu.group_parent"), icon: "layers", shortcut: "Ctrl+Enter", onClick: edit(() => this._groupSelection()) });
+      }
       if (this.opts.onAddNode) {
         items.push({ label: t("graph.menu.add_child"), icon: "plus", shortcut: "Tab", onClick: edit(() => this._addMindNode("child")) });
         items.push({ label: t("graph.menu.add_sibling_below"), icon: "plus", shortcut: "Enter", onClick: edit(() => this._addMindNode("below")) });
@@ -1608,7 +1824,7 @@ export class GraphView {
       items.push({ separator: true });
       const deleteItems = this.opts.deleteMenuItems?.(nodes, { edit, removeSelected: () => this._deleteSelected() });
       if (deleteItems) items.push(...deleteItems);
-      else items.push({ label: t("action.delete"), icon: "trash", danger: true, onClick: edit(() => this._deleteSelected()) });
+      else items.push({ label: t("mind.delete"), icon: "trash", onClick: edit(() => this._deleteSelected()) });
     } else {
       items.push({ label: t("graph.menu.fit_graph"), icon: "fit", shortcut: "F", onClick: () => this.fit({ animate: true }) });
       items.push({ label: t("graph.menu.shortcuts"), icon: "info", shortcut: "?", onClick: () => this._toggleHelp(true) });
@@ -1622,7 +1838,7 @@ export class GraphView {
     openContextMenu({ x: event.clientX, y: event.clientY, items });
   }
 
-  _resize() {
+  _resize({ preserveCamera = false } = {}) {
     // The host's content box, floored to whole device pixels, so the canvas
     // never comes out larger than its container (no overflow, no scrollbar
     // that would change the width and resize it back: a feedback loop).
@@ -1671,8 +1887,9 @@ export class GraphView {
       this.alpha = Math.max(this.alpha, 0.35);
       if (this.layout === "force") this._start();
     }
-    if (this.nodes.length && !this._userInteracted) this.fit();
+    if (this.nodes.length && !this._userInteracted && !preserveCamera) this.fit();
     else this._draw();
+    return true;
   }
 
   /**
@@ -1683,6 +1900,12 @@ export class GraphView {
    */
   setData(nodes, edges, { selected = null, layout = null, preserveCamera = false, animate = false, warm = !animate, remote = false } = {}) {
     if (remote) preserveCamera = true;
+    this._tally("setData");
+    // Same nodes and links as shown (an assignee, a date, a title, a status
+    // changed): update in place.  No relayout, no refit, no reheat; the
+    // camera and every position stay (graph-change.js).
+    if (preserveCamera && this._fitted && this.nodes.length && (!layout || layout === this.layout)
+        && this.patchData(nodes, edges, { selected })) return;
     animate = animate && getMindSettings().nodeTransitions !== false;
     // A remote/revision update must not call fit(): fit() changes the camera
     // and resets the user-interaction flag.  Capture first, then restore after
@@ -1727,12 +1950,11 @@ export class GraphView {
     });
     this.byId = new Map(this.nodes.map((n) => [n.id, n]));
     this.history = [];
+    const nodeState = MIND_NODE_STORE.get(this.nodes.map((node) => node.uid).filter(Boolean)) || {};
     for (const node of this.nodes) {
-      const savedSize = this.imageSizes?.[node.uid];
-      if (savedSize && Number.isFinite(savedSize.w) && Number.isFinite(savedSize.h)) node.imageSize = { ...savedSize };
-      const savedWidth = Number(this.mindWidths?.[node.uid]);
+      const savedWidth = Number(nodeState.widths?.[node.uid]);
       if (Number.isFinite(savedWidth) && savedWidth >= 126) node.customW = savedWidth;
-      const pinned = this.mindPinnedImages?.[node.uid];
+      const pinned = nodeState.pinned?.[node.uid];
       if (pinned && pinned.mediaId != null) node.pinnedImage = { ...pinned };
     }
     this.collapsed = new Set([...this.collapsed].filter((id) => this.byId.has(id)));
@@ -1826,6 +2048,92 @@ export class GraphView {
     if (animate && (entered || this._ghosts.length)) this._animateTransition();
   }
 
+  /**
+   * Apply `nodes`/`edges` in place when they hold the same nodes and links
+   * as the graph (graph-change.js classifyGraphUpdate): attribute-only
+   * changes update the node objects, drawn ones (title, type, status, tags,
+   * an edge's relation, ...) redraw just that node or edge.  Never moves a
+   * node or the camera and never restarts the simulation.  Returns the
+   * change kind, or null when nodes or links were added or removed (the
+   * caller then needs setData).
+   */
+  patchData(nodes, edges, { selected = undefined } = {}) {
+    const treeLike = this.layout === "mind" || this.layout === "tree";
+    const change = classifyGraphUpdate({ nodes: this.nodes, edges: this.edges }, { nodes, edges }, {
+      // Mind/tree parents come from link relations: a relation change re-shapes the tree.
+      structuralRelations: treeLike ? () => true : null,
+    });
+    if (change.kind === "structure") return null;
+    this._tally("patch");
+    const incoming = new Map(nodes.map((node) => [node.id, node]));
+    for (const item of change.nodes) this._patchNode(this.byId.get(item.id), incoming.get(item.id), item);
+    if (change.edges.length) {
+      const changed = new Set(change.edges.map((item) => item.key));
+      const byKey = new Map(edges.map((edge) => [edgeKey(edge), edge]));
+      for (const edge of this.edges) {
+        if (changed.has(edgeKey(edge))) assignNodeData(edge, byKey.get(edgeKey(edge)));
+      }
+      this._nodeRouteCache = null;
+    }
+    let redraw = change.kind === "visual";
+    if (selected != null && this.byId.has(selected) && !this.selectedNodes.has(selected)) {
+      this.selected = selected;
+      this.selectedNodes = new Set([selected]);
+      redraw = true;
+    }
+    if (redraw) this._draw();
+    return change.kind;
+  }
+
+  /**
+   * One saved unit (inspector, assignee picker, Assign to): patch its node
+   * in place.  Only fields the node already carries (plus drawn ones) are
+   * taken, so a full unit's links/history do not land on the node.
+   * Returns "none" | "data" | "visual", or null when the node is not shown.
+   */
+  patchNode(unit) {
+    const node = unit ? this.byId?.get(unit.id) : null;
+    if (!node) return null;
+    const next = {};
+    for (const key of Object.keys(unit)) {
+      if (key in node || DRAWN_NODE_FIELDS.has(key)) next[key] = unit[key];
+    }
+    // Unit rows carry media; snapshot nodes may not.  Never add media to a
+    // node that had none (it would only resize the card).
+    if (!("media" in node)) delete next.media;
+    const change = classifyNodeChange(node, next);
+    if (change.kind === "none") return "none";
+    this._tally("patch");
+    this._patchNode(node, next, change);
+    if (change.kind === "visual") this._draw();
+    return change.kind;
+  }
+
+  _patchNode(node, next, { kind, fields }) {
+    if (!node || !next) return;
+    assignNodeData(node, next);
+    if (kind !== "visual") return;
+    this._dataGen = (this._dataGen || 0) + 1;
+    node._cardMemo = null;
+    node._wrap = null;
+    node._forceLabelLayout = null;
+    if (fields.includes("type") || fields.includes("customColor")) node.color = null;
+    // Cards (Mind, Node) are re-measured where they stand; the layout is not re-run.
+    if ((this.layout === "mind" || this.layout === "node") && Number.isFinite(node.w)
+        && (fields.includes("title") || fields.includes("media"))) {
+      const showImages = getMindSettings().showMindImages !== false;
+      const kind = this.layout === "node" ? "node" : "mind";
+      applyCardMetrics(node, cardMetrics(node, { kind, showImages, customW: kind === "node" ? node.nodeW : node.customW }));
+      this._nodeRouteCache = null;
+    }
+  }
+
+  // Counters for tests and the headless checks (window.__ARK__.graphs[i].counts).
+  _tally(key) {
+    const counts = this.counts ||= { setData: 0, patch: 0, start: 0, fit: 0 };
+    counts[key] = (counts[key] || 0) + 1;
+  }
+
   _animateTransition() {
     if (this._transitionFrame) cancelAnimationFrame(this._transitionFrame);
     const born = performance.now();
@@ -1873,7 +2181,11 @@ export class GraphView {
   }
 
   setPhysics(value) {
-    this.physics = normalizeGraphPhysics(value);
+    const physics = normalizeGraphPhysics(value);
+    // Settings re-applied unchanged (every bootstrap / remote refresh) must
+    // not reheat the simulation.
+    if (this.physics && JSON.stringify(physics) === JSON.stringify(this.physics)) return;
+    this.physics = physics;
     this.alpha = 1;
     if (this.layout === "force") this._start();
     this._draw();
@@ -2095,7 +2407,7 @@ export class GraphView {
     this.modeReadBtn?.classList.toggle("on", this.mode === "read");
     this.modeEditBtn?.classList.toggle("on", this.mode === "edit");
     if (persist && this.opts.persistMode !== false) {
-      try { localStorage.setItem(`ark.graphMode.${this.layout}`, this.mode); } catch { /* ignore */ }
+      try { localStorage.setItem(GRAPH_MODE_KEY, this.mode); } catch { /* ignore */ }
     }
     if (this.mode === "read") {
       this._closeEditor(true);
@@ -2113,9 +2425,7 @@ export class GraphView {
     if (!this.opts.compact && this.opts.persistLayout !== false) localStorage.setItem("ark.graphLayout", layout);
     this._closeEditor();
     if (this.opts.compact) return;
-    const savedMode = (() => { try { return localStorage.getItem(`ark.graphMode.${layout}`); } catch { return null; } })();
-    this.setMode(savedMode === "read" || savedMode === "edit" ? savedMode
-      : (layout === "mind" ? "edit" : "read"), { persist: false });
+    this.setMode(savedGraphMode(), { persist: false });
     this._syncEdgeFilter();
     this._syncNodeTools();
     this.hintEl && (this.hintEl.textContent = layout === "mind" ? t("graph.mind_hint") : t("graph.hint"));
@@ -2169,6 +2479,7 @@ export class GraphView {
 
   _start() {
     if (!this.nodes.length) return;
+    this._tally("start");
     for (const node of this.nodes) {
       if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) {
         node.x = (Math.random() - 0.5) * Math.max(120, this.width * 0.6);
@@ -2185,6 +2496,15 @@ export class GraphView {
     this.running = true;
     const step = () => {
       if (!this.running) return;
+      // A decorative backdrop (Home header) does no work nobody sees: off
+      // the page, in a hidden tab or under a dialog it parks and wakes on
+      // the matching event (wakeBackdrop).
+      if (this.opts.backdrop && this.backdropParked()) {
+        this.running = false;
+        this._parkedRun = true;
+        this.frame = 0;
+        return;
+      }
       // Run until the nodes have settled (FORCE_SETTLE), not for a fixed
       // number of ticks; scene tiles wait for the same signal (`running`).
       let verdict = "stop";
@@ -2255,7 +2575,26 @@ export class GraphView {
     return { x: (px - tr.x) / tr.z, y: (py - tr.y) / tr.z };
   }
 
+  // Node size follows the number of links.  The server sends `degree` on
+  // load, but nodes and links created in the graph (new node, child, link
+  // drag, paste) only patched their own count, so a parent with many new
+  // children stayed the smallest.  Recount whenever the link list changes.
+  _syncDegrees() {
+    const edges = this.edges || [];
+    const sig = `${edges.length}:${(this.nodes || []).length}:${edges.length ? edges[edges.length - 1].id : ""}:${edges.length ? edges[0].id : ""}`;
+    if (sig === this._degreeSig) return;
+    this._degreeSig = sig;
+    const count = new Map();
+    for (const edge of edges) {
+      count.set(edge.source, (count.get(edge.source) || 0) + 1);
+      count.set(edge.target, (count.get(edge.target) || 0) + 1);
+    }
+    for (const node of this.nodes || []) node.degree = count.get(node.id) || 0;
+  }
+
   _draw() {
+    this._noteSelection();
+    this._syncDegrees();
     const ctx = this.ctx;
     if (!ctx) return;
     if (this.layout === "mind") { this._drawMind(); return; }
@@ -2616,8 +2955,8 @@ export class GraphView {
     const pal = this._palette();
     const sel = this.selectedNodes?.size ? [...this.selectedNodes].join(",") : "";
     const rings = this.rings?.size ? [...this.rings].join(",") : "";
-    return [sum, this.selected, sel, rings, this.hover?.id ?? "", this.hoverEdge?.id ?? "", this.selectedEdge?.id ?? "",
-      this.showLabels ? 1 : 0, [...this.visibleRelations].join(","), pal.key, localStorageSig(),
+    return [sum, this._dataGen || 0, this.selected, sel, rings, this.hover?.id ?? "", this.hoverEdge?.id ?? "", this.selectedEdge?.id ?? "",
+      this.showLabels ? 1 : 0, [...this.visibleRelations].join(","), pal.key, displaySig(),
       this._arrowGeneration(), this._reverseCache?.overrides ? JSON.stringify(this._reverseCache.overrides) : "",
       this.width, this.height].join("|");
   }
@@ -2634,9 +2973,9 @@ export class GraphView {
     for (const edge of this.edges) if (edge.hidden) hidden += 1;
     const sel = this.selectedNodes?.size ? [...this.selectedNodes].join(",") : "";
     const rings = this.rings?.size ? [...this.rings].join(",") : "";
-    return ["node", this._nodeRouteCache?.key, routes.size, this._cardMemoGen || 0,
+    return ["node", this._nodeRouteCache?.key, routes.size, this._cardMemoGen || 0, this._dataGen || 0,
       hidden, this.selected, sel, rings, this.hover?.id ?? "", this.hoverEdge?.id ?? "", this.selectedEdge?.id ?? "",
-      [...this.visibleRelations].join(","), pal.key, localStorageSig(), this.opts.showSteps ? 1 : 0, this.mode,
+      [...this.visibleRelations].join(","), pal.key, displaySig(), this.opts.showSteps ? 1 : 0, this.mode,
       this._arrowGeneration(), this._reverseCache?.overrides ? JSON.stringify(this._reverseCache.overrides) : "",
       this.width, this.height].join("|");
   }
@@ -3504,6 +3843,9 @@ export class GraphView {
     const selected = this.selectedNodes;
     const { hidden, children: mindChildren, parentOf } = this._mindTree();
     this.hiddenIds = hidden;
+    // The overlay (graph-presence.js) moves a hidden node's agent badge to its
+    // nearest shown ancestor.
+    this.mindParentOf = parentOf;
     const shownEdges = this._shownEdges();
     const arrowOf = this._arrows();
     const treeArrows = arrowOf.mindTree ? new Map() : null;
@@ -3802,8 +4144,9 @@ export class GraphView {
     return [spec.minW + imageW, spec.maxW + imageW];
   }
 
-  // Store a new card width: Mind keeps widths per node in this browser, the
-  // node graph in its layout store (topics: on the member).
+  // Store a new card width: Mind keeps widths per node for the person (per
+  // project, mind-node-state.js), the node graph in its layout store
+  // (topics: on the member).
   _setCardWidth(node, width) {
     if (this.layout === "node") {
       node.nodeW = width === null ? null : cleanCardWidth(width);
@@ -3814,8 +4157,7 @@ export class GraphView {
     }
     if (width === null) {
       delete node.customW;
-      if (node.uid && this.mindWidths) delete this.mindWidths[node.uid];
-      try { localStorage.setItem("ark.mindWidths", JSON.stringify(this.mindWidths || {})); } catch { /* storage */ }
+      if (node.uid) MIND_NODE_STORE.update({ widths: { [node.uid]: null } });
     } else {
       node.customW = width;
       this._saveMindWidths();
@@ -3897,38 +4239,19 @@ export class GraphView {
   }
 
   _saveMindPinnedImages() {
-    try {
-      const state = { ...(this.mindPinnedImages || {}) };
-      for (const node of this.nodes) {
-        if (node.uid && node.pinnedImage) state[node.uid] = { ...node.pinnedImage };
-        else if (node.uid) delete state[node.uid];
-      }
-      this.mindPinnedImages = state;
-      localStorage.setItem("ark.mindPinnedImages", JSON.stringify(state));
-    } catch { /* storage can be unavailable */ }
+    const pinned = {};
+    for (const node of this.nodes) {
+      if (node.uid) pinned[node.uid] = node.pinnedImage ? { ...node.pinnedImage } : null;
+    }
+    MIND_NODE_STORE.update({ pinned });
   }
 
   _saveMindWidths() {
-    try {
-      const widths = { ...(this.mindWidths || {}) };
-      for (const node of this.nodes) {
-        if (node.uid && node.customW) widths[node.uid] = Math.round(node.customW);
-      }
-      this.mindWidths = widths;
-      localStorage.setItem("ark.mindWidths", JSON.stringify(widths));
-    } catch { /* storage can be unavailable */ }
-  }
-
-  _saveMindImagePrefs() {
-    try {
-      const sizes = { ...(this.imageSizes || {}) };
-      for (const node of this.nodes) {
-        if (node.uid && node.imageSize) sizes[node.uid] = { ...node.imageSize };
-      }
-      this.imageSizes = sizes;
-      localStorage.setItem("ark.mindImageSizes", JSON.stringify(sizes));
-      localStorage.setItem("ark.mindPinnedMedia", JSON.stringify([...this.pinnedMedia]));
-    } catch { /* storage can be unavailable */ }
+    const widths = {};
+    for (const node of this.nodes) {
+      if (node.uid && node.customW) widths[node.uid] = Math.round(node.customW);
+    }
+    MIND_NODE_STORE.update({ widths });
   }
 
   _hit(event) {
@@ -4253,6 +4576,26 @@ export class GraphView {
     this._draw();
   }
 
+  // Selection listeners (the multi-selection inspector) hear about a changed
+  // selection once it settles.  Every selection change ends in a redraw, so
+  // the check sits in _draw: it compares the set object, its size and the
+  // primary node, which every add/remove/replace changes.
+  _noteSelection() {
+    const listener = this.onSelectionChange || this.opts.onSelectionChange;
+    if (!listener) return;
+    const set = this.selectedNodes;
+    if (this._seenSelection === set && this._seenSelectionSize === set.size
+      && this._seenSelectionPrimary === this.selected) return;
+    this._seenSelection = set;
+    this._seenSelectionSize = set.size;
+    this._seenSelectionPrimary = this.selected;
+    clearTimeout(this._selectionTimer);
+    this._selectionTimer = setTimeout(() => {
+      this._selectionTimer = 0;
+      (this.onSelectionChange || this.opts.onSelectionChange)?.(this._selectedNodeObjects(), this);
+    }, 90);
+  }
+
   _selectedNodeObjects() {
     return [...this.selectedNodes].map((id) => this.byId.get(id)).filter(Boolean);
   }
@@ -4446,7 +4789,9 @@ export class GraphView {
     const edge = node ? null : this._hitEdge(event);
     if (node !== this.hover || (edge?.id || null) !== (this.hoverEdge?.id || null)) {
       // Hover intent prefetches the node's details (app.js).
-      if (node !== this.hover && !this.opts?.backdrop && typeof CustomEvent === "function") {
+      // Not for a graph of another source (Ideas › Import): its node ids
+      // belong to another project.
+      if (node !== this.hover && !this.opts?.foreign && !this.opts?.backdrop && !this.opts?.sandbox && typeof CustomEvent === "function") {
         globalThis.dispatchEvent?.(new CustomEvent("ark:graph-hover", { detail: { id: node?.id ?? null } }));
       }
       this.hover = node;
@@ -4716,7 +5061,9 @@ export class GraphView {
     if (drag.node && !drag.moved) {
       if (this.connectMode) this._connectClick(drag.node);
       else {
-        if (!drag.keepMulti) this._setSelection([drag.node], false);
+        // A click (no drag) on a node of a multi-selection selects only that
+        // node, so the graph and the inspector show the same selection.
+        this._setSelection([drag.node], false);
         this._draw();
         if (this.mode === "read" || this.opts.isInspectorOpen?.()) {
           this.opts.onSelect?.(drag.node, false, event);
@@ -4973,12 +5320,15 @@ export class GraphView {
       }
     }
     // The node envelope is 40% tighter than the initial 2H composition.
-    this.zoom = this.nodes.length > 1 ? (1.2 * this.height) / radius : 1;
+    // Capped: a small project (few nodes, small radius) was blown up 4-5x,
+    // which made markers and rings look soft; it now stays near Map size.
+    this.zoom = this.nodes.length > 1 ? Math.min(BACKDROP_MAX_ZOOM, (1.2 * this.height) / radius) : 1;
     this.pan = { x: this.width * 0.5, y: 0 };
   }
 
   fit({ animate = false } = {}) {
     if (!this.nodes.length) return;
+    this._tally("fit");
     if (this.opts.backdrop) {
       this._fitBackdrop();
       this._draw();
@@ -5272,6 +5622,82 @@ export class GraphView {
     } catch (err) {
       this.opts.onError?.(err);
     }
+  }
+
+  // Ctrl+Enter with several siblings selected: one new parent node between
+  // them and their common parent (top-level siblings get a new top-level
+  // parent).  The selection must share one parent in the mind tree; else a
+  // short hint and nothing changes.  Undo (Ctrl+Z) dissolves the new node in
+  // one step.
+  async _groupSelection() {
+    if (this._grouping || !this.opts.onGroupNodes || this.layout !== "mind") return;
+    const nodes = this._selectedNodeObjects();
+    if (this._mindParents()) {
+      this.opts.onNotice?.(t("graph.toast.group_unsupported"));
+      return;
+    }
+    if (nodes.some((node) => node._pendingCreate)) return;
+    const { parentOf } = this._mindTree();
+    const check = siblingGroup(nodes.map((node) => node.id), parentOf);
+    if (!check.ok) {
+      if (check.reason === "not_siblings") this.opts.onNotice?.(t("graph.toast.group_not_siblings"));
+      return;
+    }
+    const parent = check.parent === null ? null : this.byId.get(check.parent) || null;
+    const relation = this.primaryRelation || "part_of";
+    this._grouping = true;
+    try {
+      const result = await this.opts.onGroupNodes(nodes, parent, { relation, ...groupDefaults(nodes, parent) });
+      if (!result?.unit) return;
+      const created = this._applyGroupResult(result, nodes, relation);
+      this._pushHistory({
+        undo: async () => {
+          const undone = await this.opts.onUngroup?.(created, { relation });
+          if (undone) this._applyUngroupResult(created, undone, nodes, relation);
+        },
+      });
+      setTimeout(() => this.startEdit(created), 40);
+      this.opts.onNotice?.(t("graph.toast.grouped", { n: nodes.length }));
+    } catch (err) {
+      this.opts.onError?.(err);
+    } finally {
+      this._grouping = false;
+    }
+  }
+
+  _applyGroupResult(result, nodes, relation) {
+    const removed = new Set((result.removed_links || []).map(String));
+    this.edges = this.edges.filter((edge) => !removed.has(String(edge.id)));
+    const ys = nodes.map((node) => node.y).filter(Number.isFinite);
+    const xs = nodes.map((node) => node.x).filter(Number.isFinite);
+    const created = {
+      ...result.unit,
+      x: xs.length ? Math.min(...xs) - 60 : 0,
+      y: ys.length ? ys.reduce((sum, y) => sum + y, 0) / ys.length : 0,
+      vx: 0, vy: 0, w: 170, h: 46,
+    };
+    this.nodes.push(created);
+    this.byId.set(created.id, created);
+    for (const link of result.links || []) {
+      if (this.edges.some((edge) => String(edge.id) === String(link.id))) continue;
+      this.edges.push({ id: link.id, source: link.source, target: link.target, relation: link.relation || relation });
+    }
+    this._setSelection([created], false);
+    this._applyLayout(false);
+    return created;
+  }
+
+  _applyUngroupResult(created, result, nodes, relation) {
+    this._closeEditor(true);
+    this.nodes = this.nodes.filter((node) => node.id !== created.id);
+    this.byId.delete(created.id);
+    this.edges = this.edges.filter((edge) => edge.source !== created.id && edge.target !== created.id);
+    for (const link of result.links || []) {
+      if (this.edges.some((edge) => String(edge.id) === String(link.id))) continue;
+      this.edges.push({ id: link.id, source: link.source, target: link.target, relation: link.relation || relation });
+    }
+    this._setSelection(nodes.filter((node) => this.byId.has(node.id)), false);
+    this._applyLayout(false);
   }
 
   _reconcileLocalNode(temp, result) {
@@ -5629,7 +6055,51 @@ export class GraphView {
     }
   }
 
+  // Full screen for the whole graph (toolbar, legend and help stay inside).
+  toggleFullscreen() {
+    if (document.fullscreenElement === this.host) { document.exitFullscreen?.(); return; }
+    if (!this._onFullscreen) {
+      this._onFullscreen = () => {
+        const on = document.fullscreenElement === this.host;
+        this.host.classList.toggle("graph-is-fullscreen", on);
+        if (this.fullscreenBtn) {
+          const label = t(on ? "graph.exit_fullscreen" : "graph.fullscreen");
+          this.fullscreenBtn.title = label;
+          this.fullscreenBtn.setAttribute("aria-label", label);
+          this.fullscreenBtn.replaceChildren(icon(on ? "shrink" : "expand", "sm"));
+        }
+        requestAnimationFrame(() => { this.repairView?.(); this._draw?.(); });
+      };
+      document.addEventListener("fullscreenchange", this._onFullscreen);
+    }
+    this.host.requestFullscreen?.().catch(() => { /* not allowed here */ });
+  }
+
+  backdropParked() {
+    if (!this.host?.isConnected) return true;
+    if (typeof document === "undefined") return false;
+    return document.hidden || Boolean(document.querySelector(".modal-backdrop"));
+  }
+
+  /** Continue a parked backdrop simulation (shown again, dialog closed). */
+  wakeBackdrop() {
+    if (!this.opts.backdrop || !this._parkedRun || this.backdropParked()) return;
+    this._parkedRun = false;
+    this._start();
+  }
+
   destroy() {
+    if (this._resumeCanvas) {
+      document.removeEventListener("visibilitychange", this._resumeCanvas);
+      this.canvas.removeEventListener("contextrestored", this._resumeCanvas);
+      if (this._resumeFrame) cancelAnimationFrame(this._resumeFrame);
+    }
+    if (this._onBackdropWake) {
+      document.removeEventListener("visibilitychange", this._onBackdropWake);
+      window.removeEventListener("ark:modal-close", this._onBackdropWake);
+      this._onBackdropWake = null;
+    }
+    if (this._onFullscreen) document.removeEventListener("fullscreenchange", this._onFullscreen);
     if (this._pasteImageHandler) {
       document.removeEventListener("paste", this._pasteImageHandler, true);
       this._pasteImageHandler = null;
@@ -5651,6 +6121,8 @@ export class GraphView {
     // Leave the host empty: a view rebuilt in the same host must not find
     // the old canvas (a stale frame, a double image) or toolbar behind it.
     this.canvas?.remove();
+    this._presence?.destroy?.();
+    this._presenceChip?.destroy?.();
     this.tools?.remove();
     this.helpEl?.remove();
     if (this._helpOutside) document.removeEventListener("pointerdown", this._helpOutside, true);

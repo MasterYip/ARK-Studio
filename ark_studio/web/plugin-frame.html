@@ -1,0 +1,206 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>ARK plugin sandbox</title><!-- i18n-ignore: hidden iframe title -->
+<!--
+  Host document for user view plugins (docs/development/plugin-api.md).
+  ARK loads it in <iframe sandbox="allow-scripts"> (no allow-same-origin) and
+  the server adds a "sandbox allow-scripts" CSP with connect-src 'none', so
+  the plugin runs in an opaque origin: no access to ARK's DOM, cookies,
+  storage, tokens or API, and no network.  The parent posts one
+  {type:"ark-plugin-load"} message; this page replaces itself with the
+  plugin's document, preceded by the small `window.ark` SDK below.  The SDK
+  only talks to the parent through postMessage, echoing the per-load
+  channel id; the parent checks every call against the permissions the
+  user granted.
+-->
+<style>html,body{margin:0;background:transparent}</style>
+</head>
+<body>
+<script>
+(function () {
+  var loaded = false;
+
+  // Runs inside the plugin's document (serialised with toString()).
+  function sdk(init) {
+    var channel = init.channel;
+    var seq = 0;
+    var pending = {};
+    var impl = null;
+    var mounted = false;
+    var state = init.state || {};
+    function post(message) {
+      message.channel = channel;
+      window.parent.postMessage(message, "*");
+    }
+    function call(method, params) {
+      return new Promise(function (resolve, reject) {
+        seq += 1;
+        pending[seq] = { resolve: resolve, reject: reject };
+        post({ type: "ark-plugin-call", id: seq, method: method, params: params || {} });
+      });
+    }
+    function applyTheme() {
+      var root = document.documentElement;
+      var dark = state.theme === "dark";
+      root.setAttribute("data-theme", dark ? "dark" : "light");
+      root.style.colorScheme = dark ? "dark" : "light";
+      root.lang = state.lang || "en";
+    }
+    var listeners = {};
+    var mediaUrls = {};
+    function str(value) { return String(value); }
+    function nodeRef(ref) { return typeof ref === "number" ? { id: ref } : { uid: str(ref) }; }
+    var api = {
+      manifest: init.manifest,
+      permissions: (init.granted || []).slice(),
+      // selection:read
+      getSelectedNode: function () { return call("selection.get"); },
+      // A blob: URL (made in this frame's own origin) for a media item of the node.
+      getMediaUrl: function (id) {
+        if (mediaUrls[id]) return Promise.resolve(mediaUrls[id]);
+        return call("media.get", { id: Number(id) }).then(function (r) { mediaUrls[id] = URL.createObjectURL(r.blob); return mediaUrls[id]; });
+      },
+      // graph:read
+      getGraph: function () { return call("graph.snapshot"); },
+      getNode: function (ref) { return call("node.get", nodeRef(ref)); },
+      searchNodes: function (q, options) {
+        var o = options || {};
+        var params = { q: str(q) };
+        if (o.limit !== undefined) params.limit = Number(o.limit);
+        if (o.type) params.type = str(o.type);
+        return call("nodes.search", params);
+      },
+      listTopics: function () { return call("topics.list"); },
+      getTopicMembers: function (uid) { return call("topic.members", { uid: str(uid) }); },
+      // events: "selection", "graph", "project"; returns a function that unsubscribes.
+      on: function (event, fn) {
+        var first = !listeners[event];
+        (listeners[event] = listeners[event] || []).push(fn);
+        var ready = first ? call("events.subscribe", { events: [event] }) : Promise.resolve();
+        ready.catch(function (e) { console.error(e); });
+        return function () { api.off(event, fn); };
+      },
+      off: function (event, fn) {
+        if (!listeners[event]) return Promise.resolve();
+        listeners[event] = fn ? listeners[event].filter(function (x) { return x !== fn; }) : [];
+        if (listeners[event].length) return Promise.resolve();
+        delete listeners[event];
+        return call("events.unsubscribe", { events: [event] });
+      },
+      // project:read
+      getProject: function () { return call("project.get"); },
+      // Copy ARK's palette (getProject().theme.vars) onto this document.
+      applyPalette: function (theme) {
+        var vars = (theme && theme.vars) || {};
+        for (var name in vars) if (/^--[a-z0-9-]+$/.test(name)) document.documentElement.style.setProperty(name, vars[name]);
+      },
+      // storage: JSON values, this plugin and project only, about 1 MB in all.
+      storage: {
+        get: function (key) { return call("storage.get", { key: str(key) }); },
+        set: function (key, value) { return call("storage.set", { key: str(key), value: value }); },
+        remove: function (key) { return call("storage.remove", { key: str(key) }); },
+        keys: function () { return call("storage.keys"); },
+        clear: function () { return call("storage.clear"); }
+      },
+      // node:open: target "details" (default), "map" or "editor".
+      openNode: function (uid, options) { return call("node.open", { uid: str(uid), target: (options && options.target) || "details" }); },
+      notify: function (message, kind) { return call("notify", { message: str(message), kind: kind || "info" }); },
+      // clipboard:write
+      copyText: function (text) { return call("clipboard.write", { text: str(text) }); },
+      // comment:write (the user confirms every comment)
+      createComment: function (uid, body) { return call("comment.create", { uid: str(uid), body: str(body) }); },
+      // node:write: one batch, confirmed by the user (once, or for the session).
+      writeNodes: function (ops) { return call("nodes.write", { ops: ops }); },
+      createNode: function (fields) { var op = { op: "create" }; for (var k in fields || {}) op[k] = fields[k]; return call("nodes.write", { ops: [op] }); },
+      updateNode: function (uid, fields) { var op = { op: "update", uid: str(uid) }; for (var k in fields || {}) op[k] = fields[k]; return call("nodes.write", { ops: [op] }); },
+      addLink: function (source, target, relation, note) {
+        var op = { op: "link", source: str(source), target: str(target), relation: str(relation) };
+        if (note) op.note = str(note);
+        return call("nodes.write", { ops: [op] });
+      },
+      removeLink: function (id) { return call("nodes.write", { ops: [{ op: "unlink", id: Number(id) }] }); },
+      // link:open: http(s) only; the user confirms the destination.
+      openLink: function (url) { return call("link.open", { url: str(url) }); },
+      // ai:chat: messages [{ role, content }] or one string.  Resolves
+      // { message, proposals, reads, model }; proposals are node:write ops.
+      chat: function (messages, options) {
+        var o = options || {};
+        var list = typeof messages === "string" ? [{ role: "user", content: messages }] : messages;
+        var params = { messages: list, tools: o.tools !== false };
+        if (o.system) params.system = str(o.system);
+        return call("ai.chat", params);
+      }
+    };
+    Object.defineProperty(api, "state", { get: function () { return state; } });
+    window.addEventListener("message", function (event) {
+      if (event.source !== window.parent) return;
+      var data = event.data;
+      if (!data || data.channel !== channel) return;
+      if (data.type === "ark-plugin-reply" && pending[data.id]) {
+        var waiting = pending[data.id];
+        delete pending[data.id];
+        if (data.ok) waiting.resolve(data.result);
+        else {
+          var error = new Error(String(data.message || data.error || "error"));
+          error.code = data.error;
+          waiting.reject(error);
+        }
+      } else if (data.type === "ark-plugin-event" && listeners[data.event]) {
+        listeners[data.event].slice().forEach(function (fn) { try { fn(data.data || {}); } catch (e) { console.error(e); } });
+      } else if (data.type === "ark-plugin-update") {
+        state = data.state || {};
+        applyTheme();
+        if (impl && impl.update) { try { impl.update(state); } catch (e) { console.error(e); } }
+      } else if (data.type === "ark-plugin-unmount") {
+        if (impl && impl.unmount) { try { impl.unmount(); } catch (e) { console.error(e); } }
+        impl = null;
+      }
+    });
+    window.ark = {
+      apiVersion: 1,
+      api: api,
+      // ark.view({ mount(container, api), update(state), unmount() })
+      view: function (definition) {
+        impl = definition || {};
+        var start = function () {
+          if (mounted || !impl) return;
+          mounted = true;
+          var container = document.getElementById("app") || document.body;
+          try { if (impl.mount) impl.mount(container, api); } catch (e) { console.error(e); }
+          try { if (impl.update) impl.update(state); } catch (e) { console.error(e); }
+        };
+        if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start);
+        else start();
+      }
+    };
+    applyTheme();
+    post({ type: "ark-plugin-ready" });
+  }
+
+  // Theme variables plugins may use to look like ARK.
+  var BASE_STYLE = "<style>:root{--ark-bg:#ffffff;--ark-bg2:#f6f7f9;--ark-ink:#1f2430;--ark-sub:#5b6474;--ark-line:#e3e6eb;--ark-accent:#2563eb}"
+    + "[data-theme=dark]{--ark-bg:#16181d;--ark-bg2:#1e2128;--ark-ink:#e7e9ee;--ark-sub:#9aa3b2;--ark-line:#2c313a;--ark-accent:#60a5fa}"
+    + "html,body{margin:0;background:var(--ark-bg);color:var(--ark-ink);font:13px/1.45 system-ui,-apple-system,'Segoe UI',sans-serif}</style>";
+
+  window.addEventListener("message", function (event) {
+    if (loaded || event.source !== window.parent) return;
+    var data = event.data;
+    if (!data || data.type !== "ark-plugin-load" || typeof data.html !== "string" || typeof data.channel !== "string") return;
+    loaded = true;
+    var init = JSON.stringify({ channel: data.channel, manifest: data.manifest || {}, state: data.state || {}, granted: data.granted || [] })
+      .replace(/</g, "\\u003c");
+    var boot = "<script>(" + sdk.toString() + ")(" + init + ");<\/script>" + BASE_STYLE;
+    var html = data.html.replace(/^\s*<!doctype[^>]*>/i, "");
+    var head = /<head\b[^>]*>/i.exec(html);
+    html = head ? html.slice(0, head.index + head[0].length) + boot + html.slice(head.index + head[0].length) : boot + html;
+    document.open();
+    document.write("<!doctype html>" + html);
+    document.close();
+  });
+  window.parent.postMessage({ type: "ark-plugin-frame" }, "*");
+})();
+</script>
+</body>
+</html>

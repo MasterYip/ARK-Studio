@@ -13,6 +13,7 @@ import com.masteryip.arkstudio.model.Markdown;
 import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.ui.Async;
 import com.masteryip.arkstudio.ui.Fmt;
+import com.masteryip.arkstudio.ui.Labels;
 import com.masteryip.arkstudio.ui.Images;
 import com.masteryip.arkstudio.ui.MarkdownView;
 import com.masteryip.arkstudio.ui.Ui;
@@ -55,7 +56,7 @@ public class NodeActivity extends BaseActivity {
 
     protected void render() {
         titleView.setText(unit.optString("title", uid));
-        setSubtitle(unit.optString("uid") + " · " + Fmt.human(unit.optString("type")));
+        setSubtitle(unit.optString("uid") + " · " + Labels.of(this, unit.optString("type")));
         header(this, content, unit);
         body(this, content, unit);
         media(this, content, unit);
@@ -70,7 +71,7 @@ public class NodeActivity extends BaseActivity {
         content.addView(title);
         LinearLayout chips = Ui.row(a);
         chips.setPadding(0, Ui.dp(a, 8), 0, Ui.dp(a, 4));
-        chips.addView(Ui.chip(a, Fmt.human(unit.optString("type")), Ui.muted(a), Ui.codeBg(a)));
+        chips.addView(Ui.chip(a, Labels.of(a, unit.optString("type")), Ui.muted(a), Ui.codeBg(a)));
         String status = unit.optString("status", "");
         if (!status.isEmpty()) {
             chips.addView(Ui.chip(a, TasksPage.statusLabel(a, status), Ui.statusColor(a, status),
@@ -147,7 +148,7 @@ public class NodeActivity extends BaseActivity {
                 Images.load(a, a.api, url, 1080, view);
             } else {
                 card.addView(Ui.label(a, "▶  " + (MediaActivity.isVideo(kind, url)
-                        ? a.getString(R.string.video) : Fmt.human(kind.isEmpty() ? "file" : kind)), 15,
+                        ? a.getString(R.string.video) : Labels.of(a, kind.isEmpty() ? "file" : kind)), 15,
                         Ui.text(a), true));
                 card.addView(Ui.oneLine(Ui.small(a, item.optString("url"))));
             }
@@ -181,8 +182,8 @@ public class NodeActivity extends BaseActivity {
             LinearLayout row = Ui.column(a);
             row.setPadding(0, Ui.dp(a, 8), 0, Ui.dp(a, 8));
             row.addView(Ui.oneLine(Ui.body(a, arrow + "  " + other.optString("title"))));
-            row.addView(Ui.oneLine(Ui.small(a, Fmt.human(link.optString("relation")) + " · "
-                    + other.optString("uid") + " · " + Fmt.human(other.optString("type")))));
+            row.addView(Ui.oneLine(Ui.small(a, Labels.of(a, link.optString("relation")) + " · "
+                    + other.optString("uid") + " · " + Labels.of(a, other.optString("type")))));
             String uid = other.optString("uid");
             String type = other.optString("type");
             Ui.clickable(row, v -> a.startActivity("task".equals(type) ? TaskActivity.intent(a, uid)

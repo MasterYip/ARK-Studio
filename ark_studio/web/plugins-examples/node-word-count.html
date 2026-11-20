@@ -1,0 +1,115 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Node word count</title>
+<!--
+  Example ARK view plugin (docs/guide/plugins.md, docs/development/plugin-api.md).
+  Import it in Settings > Personal > Plugins ("Add the example plugin", or
+  import this file).  It runs in ARK's plugin sandbox: no network, no access
+  to ARK's page; it reads the selected node through window.ark.
+-->
+<script type="application/ark-plugin+json">
+{
+  "id": "node-word-count",
+  "name": "Node word count",
+  "version": "1.0.0",
+  "icon": "list",
+  "location": "right",
+  "titles": { "en": "Word count", "zh": "字数统计" },
+  "description": "Counts the words, characters and reading time of the selected node.",
+  "entry": "node-word-count.html",
+  "permissions": ["selection:read", "notify"]
+}
+</script>
+<style>
+  body { padding: 12px 14px; }
+  h1 { margin: 0 0 2px; font-size: 13px; font-weight: 600; }
+  .uid { color: var(--ark-sub); font-size: 11px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .cell { padding: 8px 10px; border: 1px solid var(--ark-line); border-radius: 8px; background: var(--ark-bg2); }
+  .cell b { display: block; font-size: 18px; }
+  .cell span { color: var(--ark-sub); font-size: 11px; }
+  .empty { color: var(--ark-sub); }
+  button { margin-top: 12px; padding: 5px 10px; border: 1px solid var(--ark-line); border-radius: 6px; background: var(--ark-bg2); color: var(--ark-ink); font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--ark-accent); }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script>
+(function () {
+  var TEXT = {
+    en: { empty: "Select a node to count its words.", words: "words", chars: "characters", cjk: "CJK characters",
+          minutes: "min read", share: "Show as notification", summary: "{title}: {words} words, {minutes} min read" },
+    zh: { empty: "选中一个节点即可统计字数。", words: "词", chars: "字符", cjk: "中日韩字符",
+          minutes: "分钟阅读", share: "显示为通知", summary: "{title}：{words} 词，约 {minutes} 分钟阅读" }
+  };
+  var lang = "en";
+  var last = null;
+  var root = null;
+  var api = null;
+
+  function tr(key, vars) {
+    var table = TEXT[lang] || TEXT.en;
+    return String(table[key] || TEXT.en[key]).replace(/\{(\w+)\}/g, function (_, name) { return vars && vars[name] !== undefined ? vars[name] : ""; });
+  }
+
+  // Words: runs of letters/digits outside CJK; every CJK character counts as one.
+  function count(text) {
+    var plain = String(text || "").replace(/```[\s\S]*?```/g, " ").replace(/!\[[^\]]*\]\([^)]*\)/g, " ")
+      .replace(/\[([^\]]*)\]\([^)]*\)/g, "$1").replace(/[#>*_`~|-]/g, " ");
+    var cjk = (plain.match(/[㐀-鿿豈-﫿぀-ヿ가-힯]/g) || []).length;
+    var rest = plain.replace(/[㐀-鿿豈-﫿぀-ヿ가-힯]/g, " ");
+    var words = (rest.match(/[\p{L}\p{N}][\p{L}\p{N}'’-]*/gu) || []).length;
+    var chars = plain.replace(/\s/g, "").length;
+    return { words: words + cjk, cjk: cjk, chars: chars, minutes: Math.max(1, Math.round((words / 220) + (cjk / 400))) };
+  }
+
+  function el(tag, attrs, children) {
+    var node = document.createElement(tag);
+    for (var key in attrs || {}) node.setAttribute(key, attrs[key]);
+    (children || []).forEach(function (child) { node.append(child); });
+    return node;
+  }
+
+  function cell(value, label) { return el("div", { class: "cell" }, [el("b", {}, [String(value)]), el("span", {}, [label])]); }
+
+  function paint(node) {
+    if (!root) return;
+    root.textContent = "";
+    if (!node) { root.append(el("p", { class: "empty" }, [tr("empty")])); return; }
+    var stats = count([node.title, node.body].join("\n"));
+    var share = el("button", { type: "button" }, [tr("share")]);
+    share.addEventListener("click", function () {
+      api.notify(tr("summary", { title: node.title, words: stats.words, minutes: stats.minutes }), "info");
+    });
+    root.append(
+      el("h1", {}, [node.title || node.uid]),
+      el("div", { class: "uid" }, [node.uid + " · " + node.type]),
+      el("div", { class: "grid" }, [cell(stats.words, tr("words")), cell(stats.chars, tr("chars")),
+        cell(stats.cjk, tr("cjk")), cell(stats.minutes, tr("minutes"))]),
+      share);
+  }
+
+  function refresh() {
+    api.getSelectedNode().then(paint).catch(function () { paint(null); });
+  }
+
+  window.ark.view({
+    mount: function (container, hostApi) {
+      root = container;
+      api = hostApi;
+    },
+    update: function (state) {
+      lang = String(state.lang || "en").slice(0, 2);
+      var uid = state.selection ? state.selection.uid : null;
+      if (!state.visible) return;
+      if (uid !== last || !root.firstChild) { last = uid; refresh(); }
+    },
+    unmount: function () { root = null; }
+  });
+})();
+</script>
+</body>
+</html>

@@ -18,7 +18,9 @@ import { userAvatar, userName } from "./users.js";
  * @param {object} opts  `heading` "h3" | "h4", `className` for the section
  *   frame, `onChange(comments)` after a write, `ctx` to refresh Home counts.
  */
-export function commentsSection(unit, { heading = "h4", className = "link-section", onChange = null, ctx = null } = {}) {
+export function commentsSection(unit, {
+  heading = "h4", className = "link-section", onChange = null, ctx = null, review = null,
+} = {}) {
   let comments = Array.isArray(unit.comments) ? unit.comments : [];
   const count = h("span", { class: "count comments-count" });
   const openBadge = h("span", { class: "comments-open-badge" });
@@ -27,7 +29,7 @@ export function commentsSection(unit, { heading = "h4", className = "link-sectio
     class: "textarea comments-input", rows: "2",
     placeholder: t("comments.placeholder"), "aria-label": t("comments.add"),
   });
-  const addBtn = h("button", { class: "btn sm primary", type: "button" }, icon("message", "sm"), t("comments.add"));
+  const addBtn = h("button", { class: "btn sm primary", type: "button", dataset: { commentAction: "add" } }, icon("message", "sm"), t("comments.add"));
 
   const changed = (fresh) => {
     comments = fresh;
@@ -122,7 +124,23 @@ export function commentsSection(unit, { heading = "h4", className = "link-sectio
     list,
     h("div", { class: "comments-add" },
       input,
-      h("div", { class: "comments-add-row" },
-        h("span", { class: "muted comments-hint" }, t("comments.hint")),
-        addBtn)));
+      h("span", { class: "muted comments-hint" }, t("comments.hint")),
+      // One row: Accept / Send back (a unit in review) and Add comment.  The
+      // text typed above is the accept note, the send-back reason or the
+      // comment (`review`: { accept(text, clear), sendBack(text, clear) }).
+      h("div", { class: "comments-actions", dataset: review ? { reviewActions: unit.uid } : {} },
+        ...commentActionButtons(review, addBtn, () => input.value.trim(), () => { input.value = ""; }))));
+}
+
+/** The buttons of the comment row, in order (Accept, Send back, Add comment). */
+export function commentActionButtons(review, addBtn, text = () => "", clearInput = () => {}) {
+  addBtn.className = review ? "btn sm" : "btn sm primary";
+  if (!review) return [addBtn];
+  return [
+    h("button", { class: "btn sm primary", type: "button", dataset: { reviewAction: "accept" },
+      onclick: () => review.accept(text(), clearInput) }, icon("check", "sm"), t("needs.accept")),
+    h("button", { class: "btn sm", type: "button", dataset: { reviewAction: "send-back" },
+      onclick: () => review.sendBack(text(), clearInput) }, icon("arrowLeft", "sm"), t("needs.send_back")),
+    addBtn,
+  ];
 }

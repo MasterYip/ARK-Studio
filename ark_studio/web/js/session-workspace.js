@@ -24,10 +24,25 @@ import {
   permissionModeDescription as permissionModeDescriptionEn,
   permissionModeLabel as permissionModeLabelEn, queuedSteerItems, sessionAccessMode, sessionPermissionModes,
   sessionSupportsApproval, steerMoveOrder,
-  blockSignature, liveActivity, threadBlocks, toolCommand, toolGroupSummary, toolKind, toolPaths,
-  CUSTOM_MODEL_VALUE, defaultModelOption, modelEfforts, modelOptions, modelPickerGroups,
-  modelSourceSummary,
+  blockSignature, liveActivity, threadBlocks, sessionPhase, shownStatus, toolCommand, toolGroupSummary, toolKind, toolPaths,
+  CUSTOM_MODEL_VALUE, defaultModelOption, modelEfforts, modelOptionLabel as modelOptionLabelEn, modelOptions,
+  modelPickerGroups, modelSourceSummary,
 } from "./session-model.js";
+import {
+  sessionStream, attachSessionContext, sendSessionMessage, stopAgentSession, sendQueuedNow, fullToolItem, sessionImages, toolImage,
+  renameAgentSession,
+} from "./session-stream.js";
+import { TRANSCRIPT_SHARE_MS, transcriptKey } from "./session-stream-model.js";
+import { capFirst, fmtDuration, textValue, renderToolGroup as renderToolGroupRow, inlineRename } from "./session-thread-parts.js";
+import { createActivityChips, activityRow } from "./session-activity.js";
+import { activityList, blockKeyFor } from "./session-activity-model.js";
+import {
+  composerKeyAction, composerHintKey, sendNowMode, imageContext, windowBlocks, drawLimit, turnRunning, stopLabelKey,
+  loadAgentTabs, saveAgentTabs, openAgentTab as openAgentTabIn, closeAgentTab, activateAgentTab,
+} from "./session-sidebar-model.js";
+import { readImages, releaseImages, imageTray, bindImageInput, imagePicker, turnImages } from "./session-images.js";
+import { openContextMenu, contextMenuOpen } from "./context-menu.js";
+import { delegateImageContextMenu } from "./image-copy.js";
 
 // session-model.js is dependency-free; inject the app translator here.
 const withT = { t };
@@ -50,6 +65,7 @@ const GROUPS = [["status", "filters.status"], ["worktree", "session.group_by.wor
 const RAIL_TABS = [
   ["overview", "nav.overview", null],
   ["subagents", "session.filter.subagents", "count"],
+  ["background", "session.activity.background_title", "count"],
   ["media", "inspector.media", "count"],
   ["docs", "session.tab.docs", "count"],
   ["artifacts", "tasks.session_artifacts", null],
@@ -87,30 +103,10 @@ function sessionTime(value) {
   return relativeTime(value);
 }
 
-function fmtDuration(start, end) {
-  if (!start) return "—";
-  const from = new Date(start).getTime();
-  const to = end ? new Date(end).getTime() : Date.now();
-  if (!Number.isFinite(from) || !Number.isFinite(to)) return "—";
-  const seconds = Math.max(0, Math.round((to - from) / 1000));
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${seconds % 60}s`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h ${minutes % 60}m`;
-}
 
-function textValue(value) {
-  if (value === null || value === undefined) return "";
-  if (typeof value === "string") return value;
-  try { return JSON.stringify(value, null, 2); } catch { return String(value); }
-}
 
-function toolStatusLabel(status) {
-  return t(status === "running" ? "tasks.status.running" : status === "error" ? "session.tool.failed" : "session.tool.ok");
-}
 
-export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: relatedNode = null } = {}) {
+export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: relatedNode = null, library = null, docked = false } = {}) {
   const S = ctx.S;
   const bootQuery = new URLSearchParams(location.search);
   let sessions = sortSessions(S.taskSessions || []);
@@ -119,7 +115,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   let query = S.sessionQuery || "";
   let filter = S.sessionFilter || "all";
   let groupBy = S.sessionGroupBy || "status";
-  let railTab = ["overview", "subagents", "media", "docs", "artifacts"].includes(bootQuery.get("rail"))
+  let railTab = ["overview", "subagents", "background", "media", "docs", "artifacts"].includes(bootQuery.get("rail"))
     ? bootQuery.get("rail") : (S.sessionRailTab || "overview");
   let threadMode = S.sessionThreadMode || "thread";
   let pendingFiles = bootQuery.getAll("file").filter(Boolean);
@@ -163,7 +159,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   let presetsLoaded = false;
   let presetsError = "";
   let draftBySession = {};
-  const contextBySession = new Map();
+  // Shared with the Sessions sidebar view: context attached there shows here.
+  const contextBySession = sessionStream.contexts;
   const composerChoices = new Map();
   let contextPickerOpen = false;
   let composerConfigOpen = false;
@@ -280,7 +277,15 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   jumpButton.classList.add("hidden");
   const threadWrap = h("div", { class: "sw-thread-wrap" }, thread, jumpButton);
   const composerHost = h("div", { class: "sw-composer" });
-  const main = h("section", { class: "sw-main" }, mainHeader, mainBar, threadWrap, composerHost);
+  // Sub-agents and background tasks of the open session (Paseo-style chips).
+  const activityChips = createActivityChips({
+    onOpenItem: (itemId) => revealThreadItem(itemId),
+    onOpenSession: (id) => select(id),
+    onOpenAgent: (entry) => openAgent(entry.itemId, entry.label),
+  });
+  // Main conversation and the sub-agents opened from it, as tabs.
+  const tabStrip = h("div", { class: "sw-tabs", role: "tablist", hidden: true });
+  const main = h("section", { class: "sw-main" }, mainHeader, mainBar, tabStrip, threadWrap, activityChips.el, composerHost);
 
   const sideHead = h("div", { class: "sw-side-head" });
   const sideTabs = h("div", { class: "sw-side-tabs", role: "tablist" });
@@ -309,7 +314,16 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     mobileScrim.classList.toggle("hidden", !panel);
   }
 
-  const root = h("div", { class: "sw-workspace" }, rail, main, side);
+  // Stored session contexts (ARK and uploaded) sit under the session list.
+  if (library) rail.appendChild(library);
+  const root = h("div", { class: `sw-workspace ${docked ? "sw-docked" : ""}`.trim() }, rail, main, side);
+  // Wide window: the list goes to the Sessions view, the details to the
+  // Session properties view; the conversation takes the page.
+  if (docked) {
+    rail.classList.add("sw-docked-part");
+    side.classList.add("sw-docked-part");
+    ctx.sessionPage?.mount({ list: rail, props: side });
+  }
   const resizer = h("div", {
     class: "sw-resizer", role: "separator", "aria-orientation": "horizontal",
     title: t("session.resize_hint"),
@@ -379,6 +393,10 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     artifactState = { path: "", for: "", data: null, loading: false, error: "", preview: null, previewLoading: false };
     rawState = { stream: "stdout", offsets: { stdout: 0, stderr: 0 }, entries: [], following: true, loading: false, error: "", for: id };
     openTools.clear();
+    activityCount = "";
+    mainData = null;
+    pageLimit = PAGE_BLOCKS;
+    activityChips.update([], { session: null });
     paintList();
     paintMain();
     paintSide();
@@ -461,6 +479,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       paintMain();
       syncComposer();
       if (railTab === "overview") paintSide();
+      if (mainData) refreshActivity(mainData.activity || mainData.items || [], current());
     }
     ctx.updateTopbar?.();
     if (selectedId) {
@@ -473,14 +492,14 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
 
   function sessionSignature(items) {
     return items.map((session) => [
-      session.id, session.status, session.last_activity_at,
+      session.id, session.status, session.title || "", session.last_activity_at,
       session.exit_code, session.error, session.counts?.stdout || 0, session.counts?.stderr || 0,
     ].join(":")).join("|");
   }
 
   async function refreshSessions() {
     try {
-      const data = await api.agentSessions({ fresh: true });
+      const data = await sessionStream.refreshSessions();
       applySessions(data.sessions || [], data.groups || []);
     } catch (err) { ctx.toast(err.message, "err"); }
   }
@@ -544,12 +563,11 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const session = current();
     if (!session) return;
     try {
-      await api.stopSession(session.id);
+      await stopAgentSession(session.id);
       session.status = "stopping";
       paintList();
       paintMain();
       ctx.toast(t("tasks.status.stopping"), "ok");
-      setTimeout(refreshSessions, 350);
     } catch (err) { ctx.toast(err.message, "err"); }
   }
 
@@ -620,7 +638,27 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     }
   }
 
+  // Polls repaint the list and the header; not while a menu or a rename is
+  // open on them (the repaint would close or drop it).
+  let renaming = false;
+  let heldPaint = false;
+  function held() {
+    if (!renaming && !contextMenuOpen()) return false;
+    if (!heldPaint) {
+      heldPaint = true;
+      const retry = setInterval(() => {
+        if (renaming || contextMenuOpen()) return;
+        clearInterval(retry);
+        heldPaint = false;
+        paintList();
+        paintMain();
+      }, 250);
+    }
+    return true;
+  }
+
   function paintList() {
+    if (held()) return;
     clear(listBody);
     const visible = filterSessions(sessions, { query, filter });
     listCount.textContent = visible.length === sessions.length
@@ -655,6 +693,32 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     }
   }
 
+  async function saveTitle(session, title) {
+    try {
+      await renameAgentSession(session.id, title);
+      const local = sessions.find((item) => item.id === session.id);
+      if (local) local.title = title;
+      paintList();
+      paintMain();
+    } catch (err) { ctx.toast(err.message, "err"); }
+  }
+
+  function startRename(host, session) {
+    if (!host) return;
+    renaming = true;
+    const input = inlineRename(host, session.title || "", (title) => saveTitle(session, title), { label: t("session.menu.rename") });
+    input.addEventListener("blur", () => { renaming = false; });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter" || event.key === "Escape") renaming = false; });
+  }
+
+  function renameRow(session) {
+    startRename(listBody.querySelector(`[data-session-row="${CSS.escape(session.id)}"] .sw-session-title`), session);
+  }
+
+  function renameHeader(session) {
+    startRename(mainHeader.querySelector("h2"), session);
+  }
+
   function sessionRow(session) {
     const active = isActiveSession(session);
     const depth = Math.max(0, Number(session.depth || 0));
@@ -664,10 +728,21 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       "aria-current": session.id === selectedId ? "true" : undefined,
       style: depth ? { paddingLeft: `${9 + depth * 11}px` } : undefined,
       title: session.title || session.id,
+      dataset: { sessionRow: session.id },
       onclick: () => select(session.id),
+      oncontextmenu: (event) => {
+        event.preventDefault();
+        openContextMenu({ x: event.clientX, y: event.clientY, returnFocus: event.currentTarget, items: [
+          { label: t("session.menu.rename"), icon: "edit", onClick: () => renameRow(session) },
+          { label: t("session.copy_id"), icon: "copy", onClick: () => copyText(session.id) },
+        ] });
+      },
+      onkeydown: (event) => {
+        if (event.key === "F2") { event.preventDefault(); renameRow(session); }
+      },
     },
       h("div", { class: "sw-session-top" },
-        statusDot(session.status),
+        statusDot(shownStatus(session)),
         h("span", { class: "sw-session-title" }, sessionTitle(session)),
         h("span", { class: "sw-session-time", title: session.last_activity_at || "" }, sessionTime(session.last_activity_at))),
       h("div", { class: "sw-session-meta" },
@@ -698,6 +773,11 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   }
 
   function paintMain() {
+    if (held()) {
+      paintThread();
+      syncComposer();
+      return;
+    }
     clear(mainHeader);
     clear(mainBar);
     const session = current();
@@ -716,9 +796,9 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const title = sessionTitle(session);
     const pendingCount = pendingApprovals(session).length;
     mainHeader.appendChild(h("div", { class: "sw-title-line" },
-      statusDot(session.status),
+      statusDot(shownStatus(session)),
       h("h2", { title }, title),
-      statusPill(session.status),
+      statusPill(shownStatus(session)),
       session.parent_id ? h("span", { class: "sw-mini-tag sub" }, t("session.tag.subagent")) : null,
       forkRelationLabel(session) ? h("span", { class: "sw-mini-tag side" }, forkRelationLabel(session)) : null,
       h("button", {
@@ -732,37 +812,16 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       }, icon("info", "sm"), pendingCount ? t("session.details.button_count", { n: pendingCount }) : t("session.details.button")),
       h("span", { class: "spacer" }),
       h("div", { class: "sw-main-actions" },
-        session.task_ref ? h("button", {
-          class: "btn sm ghost", title: t("tasks.open_task"),
-          onclick: () => ctx.openUnit(session.task_ref),
-        }, icon("target", "sm"), t("tasks.open_task")) : null,
+        active ? h("button", { class: "btn sm danger", title: t(`${stopLabelKey(session)}_hint`), onclick: stopSession },
+          icon("x", "sm"), t(stopLabelKey(session))) : null,
         h("button", {
-          class: "btn sm ghost", title: t("session.side_chat.start_hint"),
-          onclick: () => openSideChat(session),
-        }, icon("git", "sm"), t("session.side_chat.button")),
-        h("button", {
-          class: "icon-btn", title: t("session.copy_id"),
-          onclick: async () => {
-            const ok = await copyText(session.id);
-            ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
+          class: "icon-btn sw-more", type: "button", title: t("session.menu.more"), "aria-label": t("session.menu.more"),
+          "aria-haspopup": "menu", "data-session-menu": "",
+          onclick: (event) => {
+            const rect = event.currentTarget.getBoundingClientRect();
+            openSessionMenu(rect.left, rect.bottom + 4, event.currentTarget);
           },
-        }, icon("copy", "sm")),
-        h("button", {
-          class: "btn sm ghost", title: t("session.copy_replies_hint"),
-          onclick: async () => {
-            const items = transcript?.items || [];
-            const text = items.filter((item) => item.type === "message" && item.role !== "user")
-              .map((item) => item.text || "").filter(Boolean).join("\n\n");
-            if (!text) { ctx.toast(t("session.toast.no_replies"), "err"); return; }
-            const ok = await copyText(text);
-            ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
-          },
-        }, icon("copy", "sm"), t("session.copy_replies")),
-        active
-          ? h("button", { class: "btn sm danger", onclick: stopSession }, icon("x", "sm"), t("tasks.stop"))
-          : h("button", { class: "btn sm ghost", onclick: relaunchSession }, icon("refresh", "sm"), t("session.relaunch")),
-        !active ? h("button", { class: "btn sm ghost", onclick: archiveSession }, icon("database", "sm"), t("tasks.archive")) : null,
-        !active ? h("button", { class: "btn sm ghost danger sw-delete-session", onclick: deleteSession }, icon("trash", "sm"), t("tasks.delete")) : null)));
+        }, icon("more", "sm")))));
     mainHeader.appendChild(h("div", { class: "sw-title-meta" },
       h("span", { class: "sw-meta-item" }, icon("cpu", "sm"), platformLabel(session)),
       session.model ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), session.model) : null,
@@ -797,9 +856,59 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     mainBar.appendChild(usageBadge());
     mainBar.appendChild(h("span", { class: "sw-session-id sw-mono", title: session.id }, session.id));
     mainBar.appendChild(liveBadge(session));
+    paintTabs();
+    composerHost.classList.toggle("hidden", Boolean(activeTab()));
     paintThread();
     syncComposer();
   }
+
+  // The session's actions: "⋯", right-click on the header or the main tab,
+  // Shift+F10 / the context-menu key on the header.
+  function sessionMenuItems(session) {
+    const active = isActiveSession(session);
+    const copyReplies = async () => {
+      const items = (mainData || transcript)?.items || [];
+      const text = items.filter((item) => item.type === "message" && item.role !== "user")
+        .map((item) => item.text || "").filter(Boolean).join("\n\n");
+      if (!text) { ctx.toast(t("session.toast.no_replies"), "err"); return; }
+      const ok = await copyText(text);
+      ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
+    };
+    return [
+      { label: t("session.menu.rename"), icon: "edit", onClick: () => renameHeader(session) },
+      session.task_ref ? { label: t("tasks.open_task"), icon: "target", onClick: () => ctx.openUnit(session.task_ref) } : null,
+      { label: t("session.side_chat.button"), icon: "git", onClick: () => openSideChat(session) },
+      { label: t("session.copy_id"), icon: "copy", onClick: async () => {
+        const ok = await copyText(session.id);
+        ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
+      } },
+      { label: t("session.copy_replies"), icon: "copy", onClick: copyReplies },
+      active ? { label: t("tasks.stop"), icon: "x", danger: true, onClick: stopSession }
+        : { label: t("session.relaunch"), icon: "refresh", onClick: relaunchSession },
+      !active ? { label: t("tasks.archive"), icon: "database", onClick: archiveSession } : null,
+      !active ? { label: t("tasks.delete"), icon: "trash", danger: true, onClick: deleteSession } : null,
+    ].filter(Boolean);
+  }
+
+  function openSessionMenu(x, y, returnFocus = null) {
+    const session = current();
+    if (!session) return;
+    openContextMenu({ x, y, items: sessionMenuItems(session), returnFocus });
+  }
+
+  mainHeader.tabIndex = -1;
+  mainHeader.addEventListener("contextmenu", (event) => {
+    if (event.target.closest("input, textarea, a")) return;
+    event.preventDefault();
+    openSessionMenu(event.clientX, event.clientY, mainHeader);
+  });
+  mainHeader.addEventListener("keydown", (event) => {
+    if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+      event.preventDefault();
+      const rect = mainHeader.getBoundingClientRect();
+      openSessionMenu(rect.left + 24, rect.top + 32, mainHeader);
+    }
+  });
 
   function usageBadge() {
     const usage = transcript?.usage;
@@ -848,7 +957,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       return h("span", { class: `sw-live ${errored ? "error" : "done"}`.trim() },
         h("i"), errored ? (session.error || statusText("errored")) : t("session.live.completed", { time: sessionTime(session.ended_at) }));
     }
-    const label = t(session.status === "idle" ? "session.live.idle"
+    const label = t(sessionPhase(session) === "waiting" ? "session.live.waiting" : session.status === "idle" ? "session.live.idle"
       : session.status === "starting" ? "session.live.starting"
         : session.status === "stopping" ? "session.live.stopping" : "session.live.running");
     return h("span", { class: "sw-live running" }, h("i"), label,
@@ -866,58 +975,182 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   }
 
   // ---------------------------------------------------------------- transcript
+  // The open tab: the main conversation ("") or a sub-agent (its call id).
+  let agentTabs = loadAgentTabs();
+  function activeTab() {
+    return (selectedId && agentTabs[selectedId]?.active) || "";
+  }
+  function viewKey() {
+    return selectedId ? transcriptKey(selectedId, activeTab()) : "";
+  }
+
+  // Transcripts come from the shared stream (one request per tick for the
+  // page and the sidebar).  The main conversation is always followed (the
+  // activity chips need it); the open sub-agent tab too.
+  let mainData = null;
+  const follows = new Map();   // key -> unsubscribe
+  function follow() {
+    const want = new Set([selectedId, viewKey()].filter(Boolean));
+    for (const [key, off] of follows) if (!want.has(key)) { off(); follows.delete(key); }
+    for (const key of want) {
+      if (follows.has(key)) continue;
+      follows.set(key, sessionStream.subscribeTranscript(key, (data) => onTranscript(key, data)));
+    }
+  }
+
+  function onTranscript(key, data) {
+    if (destroyed || !data) return;
+    if (key === selectedId) {
+      mainData = data;
+      refreshActivity(data.activity || data.items || [], current());
+      refreshUsageBadge();
+      if (railTab === "overview") paintSide();
+    }
+    if (key === viewKey() && data !== transcript) {
+      transcript = data;
+      transcriptFor = selectedId;
+      transcriptError = "";
+      transcriptLoading = false;
+      paintThread();
+    }
+  }
+
   async function loadTranscript(initial = false) {
     const id = selectedId;
     if (!id || destroyed) return;
-    if (pollingTranscript && transcriptFor === id) return;
-    pollingTranscript = true;
-    const seq = ++transcriptSeq;
-    if (initial || transcriptFor !== id) {
-      transcriptLoading = true;
+    follow();
+    const key = viewKey();
+    if (initial) {
+      const cached = sessionStream.cachedTranscript(key);
+      transcript = cached;
+      transcriptFor = cached ? id : "";
+      transcriptLoading = !cached;
       transcriptError = "";
-      paintThread();
+      paintThread(true);
     }
     try {
-      if (initial && transcriptFor !== id) {
-        // The last transcript this account saw shows at once while the
-        // server is asked for the current one.
-        const cached = await peekCached(`/api/agent-sessions/${encodeURIComponent(id)}/transcript`).catch(() => null);
-        if (cached && !destroyed && seq === transcriptSeq && selectedId === id) {
-          transcript = cached;
-          transcriptFor = id;
-          transcriptLoading = false;
-          paintThread(true);
-          requestAnimationFrame(() => scrollThread(true));
-        }
-      }
-      const data = await api.sessionTranscript(id, { fresh: true });
-      if (destroyed || seq !== transcriptSeq || selectedId !== id) return;
-      const changed = data.signature !== transcript?.signature;
-      transcript = data;
-      transcriptFor = id;
-      transcriptError = "";
-      transcriptLoading = false;
-      if (changed || initial) {
-        paintThread(initial);
-        if (initial) requestAnimationFrame(() => scrollThread(true));
-        refreshUsageBadge();
-        if (railTab === "overview") paintSide();
-      }
+      const data = await sessionStream.transcript(key, { maxAge: initial ? 0 : TRANSCRIPT_SHARE_MS });
+      if (destroyed || selectedId !== id || key !== viewKey() || !data) return;
+      if (data !== transcript) onTranscript(key, data);
+      if (initial) requestAnimationFrame(() => scrollThread(true));
     } catch (err) {
-      if (destroyed || seq !== transcriptSeq || selectedId !== id) return;
+      if (destroyed || selectedId !== id || key !== viewKey()) return;
       transcriptLoading = false;
       transcriptError = err.message;
       if (initial || !transcript) paintThread(true);
     } finally {
       transcriptLoading = false;
-      pollingTranscript = false;
     }
+  }
+
+  // ----------------------------------------------------------------- tabs
+  function setTabs(next) {
+    agentTabs = next;
+    saveAgentTabs(next);
+  }
+
+  function openAgent(itemId, label = "") {
+    if (!selectedId || !itemId) return;
+    if (threadMode !== "thread") setThreadMode("thread");
+    setTabs(openAgentTabIn(agentTabs, selectedId, { id: itemId, label }));
+    showConversationTab();
+  }
+
+  function showConversationTab() {
+    openTools.clear();
+    pageLimit = PAGE_BLOCKS;
+    stickToBottom = true;
+    paintTabs();
+    composerHost.classList.toggle("hidden", Boolean(activeTab()));
+    loadTranscript(true);
+  }
+
+  function paintTabs() {
+    clear(tabStrip);
+    const entry = selectedId ? agentTabs[selectedId] : null;
+    tabStrip.hidden = !entry?.tabs?.length || threadMode !== "thread";
+    if (tabStrip.hidden) return;
+    const statusOf = (id) => activityChips.activity.entries.find((item) => item.itemId === id)?.status || "";
+    const tab = (id, label, status) => h("div", {
+      class: `sw-tab ${activeTab() === id ? "on" : ""}`.trim(), role: "tab", tabindex: "0",
+      "aria-selected": activeTab() === id ? "true" : "false", dataset: { sessionTab: id || "main" },
+      onclick: () => { setTabs(activateAgentTab(agentTabs, selectedId, id)); showConversationTab(); },
+      onkeydown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } },
+      oncontextmenu: id ? null : (event) => { event.preventDefault(); openSessionMenu(event.clientX, event.clientY, event.currentTarget); },
+    },
+      status ? h("i", { class: `sa-dot ${status}` }) : icon("message", "sm"),
+      h("span", { class: "sw-tab-label", title: label }, label),
+      id ? h("button", {
+        class: "sw-tab-x", type: "button", title: t("action.close"), "aria-label": t("session.tabs.close", { label }),
+        onclick: (event) => {
+          event.stopPropagation();
+          setTabs(closeAgentTab(agentTabs, selectedId, id));
+          showConversationTab();
+        },
+      }, icon("x", "sm")) : null);
+    tabStrip.append(tab("", t("session.tabs.main"), ""),
+      ...entry.tabs.map((item) => tab(item.id, item.label || t("session.activity.kind_subagent"), statusOf(item.id))));
   }
 
   // The thread is a keyed list: every display block (user turn, assistant
   // reply, grouped tool activity, error, …) keeps its DOM node across polls and
   // is only rebuilt when its own content changes.  A streaming reply is patched
   // in place, so new lines grow the column without re-rendering or jumping it.
+  let activityCount = "";
+  function refreshActivity(items, session) {
+    const activity = activityChips.update(items, { session, sessions });
+    const count = `${activity.subagents.length}:${activity.background.length}:${activity.runningSubagents}:${activity.runningBackground}`;
+    if (count !== activityCount) {
+      activityCount = count;
+      if (session) paintSide();
+      paintTabs();
+    }
+  }
+
+  // Show a transcript item (a sub-agent's call, a background task notice):
+  // open its tool group and scroll it into view.
+  function revealThreadItem(itemId) {
+    if (threadMode !== "thread") setThreadMode("thread");
+    if (activeTab()) {
+      setTabs(activateAgentTab(agentTabs, selectedId, ""));
+      showConversationTab();
+    }
+    const all = threadBlocks(transcript?.items || []);
+    const key = blockKeyFor(all, itemId);
+    const index = all.findIndex((block) => block.key === key);
+    if (index >= 0 && all.length - index > pageLimit) pageLimit = all.length - index + 10;
+    if (!key) return;
+    if (key.startsWith("tools-")) openTools.add(key);
+    blockNodes.delete(key);
+    stickToBottom = false;
+    paintThread();
+    const node = blockNodes.get(key)?.node;
+    if (!node) return;
+    node.scrollIntoView({ block: "center", behavior: "smooth" });
+    node.classList.add("sa-flash");
+    setTimeout(() => node.classList.remove("sa-flash"), 1600);
+  }
+
+  // Long conversations draw their last PAGE_BLOCKS blocks; "Show earlier"
+  // draws more, and asks the server for older items when the page has none.
+  const PAGE_BLOCKS = 120;
+  let pageLimit = PAGE_BLOCKS;
+  let drawn = 0;
+  let drawTimer = null;
+  const earlierButton = h("button", { class: "ssb-earlier sw-earlier", type: "button", onclick: () => showEarlier() });
+  function showEarlier() {
+    const before = thread.scrollHeight;
+    const blocks = threadBlocks(transcript?.items || []);
+    if (blocks.length > pageLimit) pageLimit += PAGE_BLOCKS;
+    else if (transcript?.offset > 0) {
+      pageLimit += PAGE_BLOCKS;
+      sessionStream.setTail(viewKey(), (transcript.items?.length || 0) + 400).catch(() => {});
+    }
+    stickToBottom = false;
+    paintThread();
+    thread.scrollTop += thread.scrollHeight - before;
+  }
+
   function resetThreadDom() {
     blockNodes.clear();
     clear(column);
@@ -938,6 +1171,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       unseen = false;
     }
     if (!session) {
+      refreshActivity([], null);
       showThreadState(null);
       return;
     }
@@ -964,7 +1198,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       return;
     }
     const items = transcript?.items || [];
-    const live = liveActivity(items, session);
+    const live = activeTab() ? null : liveActivity(items, session);
     if (!items.length && !live) {
       showThreadState(h("div", { class: "sw-thread-empty" }, icon("message", "lg"),
         h("b", null, t("tasks.thread.empty")),
@@ -978,7 +1212,15 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const followBottom = stickToBottom;
     const previousHeight = thread.scrollHeight;
     const animate = blockNodes.size > 0;
-    const blocks = threadBlocks(items);
+    // Progressive drawing: a new view starts with the newest blocks.
+    if (!blockNodes.size) drawn = 0;
+    drawn = drawLimit(drawn, pageLimit);
+    const allBlocks = threadBlocks(items);
+    const windowed = windowBlocks(allBlocks, drawn);
+    const more = Math.min(pageLimit, allBlocks.length) > drawn;
+    const blocks = windowed.blocks;
+    const earlier = Math.max(0, allBlocks.length - pageLimit) + Number(transcript?.offset || 0);
+    earlierButton.textContent = earlier ? t("session.sidebar.earlier", { n: earlier }) : "";
     const desired = [];
     const seen = new Set();
     for (const block of blocks) {
@@ -1000,6 +1242,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       if (!seen.has(key)) blockNodes.delete(key);
     }
     paintLiveRow(session, live);
+    if (earlier) desired.unshift(earlierButton);
     desired.push(liveRow);
     let ref = column.firstChild;
     for (const node of desired) {
@@ -1010,6 +1253,17 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       const next = ref.nextSibling;
       column.removeChild(ref);
       ref = next;
+    }
+    if (more && !drawTimer) {
+      drawTimer = setTimeout(() => {
+        drawTimer = null;
+        if (destroyed) return;
+        const height = thread.scrollHeight;
+        const top = thread.scrollTop;
+        const bottom = stickToBottom;
+        paintThread();
+        if (!bottom) thread.scrollTop = top + (thread.scrollHeight - height);
+      }, 16);
     }
     if (followBottom) {
       scrollThread(true);
@@ -1080,6 +1334,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const source = item.source === "prompt" ? t("tasks.thread.initial_prompt")
       : item.source === "stdin" ? t("tasks.thread.steer") : "";
     return h("article", { class: "sw-turn-user", dataset: { itemId: item.id } },
+      turnImages(item.images, (path) => api.sessionArtifactUrl(selectedId, path, true), (src, path) => openImageLightbox(src, path.split("/").pop(), selectedId, path)),
       h("div", { class: "sw-bubble" }, item.text),
       h("div", { class: "sw-msg-actions" },
         source ? h("span", { class: "sw-msg-source" }, source) : null,
@@ -1155,111 +1410,18 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       h("div", { class: "sw-act-body sw-thought-body" }, richText(item.text || "")));
   }
 
-  const TOOL_ICONS = { command: "terminal", edit: "edit", search: "search", read: "file", other: "command" };
-
-  function capFirst(text, lower = false) {
-    const value = String(text || "");
-    if (!value) return value;
-    return (lower ? value.charAt(0).toLowerCase() : value.charAt(0).toUpperCase()) + value.slice(1);
-  }
-
-  function toolSummaryText(summary) {
-    if (summary.running) {
-      return t({
-        command: "tasks.thread.running_command", edit: "tasks.thread.editing_files",
-        search: "tasks.thread.searching", read: "tasks.thread.reading",
-      }[summary.kind] || "tasks.thread.running_tool");
-    }
-    const { counts } = summary;
-    const parts = [];
-    if (counts.edit) {
-      const n = summary.edited;
-      parts.push(t(n === 1 ? "tasks.thread.edited_one" : "tasks.thread.edited_n", { n }));
-    }
-    if (counts.command) parts.push(t(counts.command === 1 ? "tasks.thread.ran_one" : "tasks.thread.ran_n", { n: counts.command }));
-    if (counts.search) parts.push(t(counts.search === 1 ? "tasks.thread.searched_one" : "tasks.thread.searched_n", { n: counts.search }));
-    if (counts.read) parts.push(t(counts.read === 1 ? "tasks.thread.read_one" : "tasks.thread.read_n", { n: counts.read }));
-    if (counts.other) parts.push(t(counts.other === 1 ? "tasks.thread.used_one" : "tasks.thread.used_n", { n: counts.other }));
-    return parts.map((part, index) => capFirst(part, index > 0)).join(", ");
-  }
-
-  function toolPreview(tools) {
-    const last = tools[tools.length - 1] || {};
-    const command = toolCommand(last);
-    if (command) return command.split("\n")[0];
-    const input = last.input && typeof last.input === "object" ? last.input : {};
-    const query = input.pattern ?? input.query ?? input.q;
-    if (toolKind(last) === "search" && typeof query === "string") return query;
-    const paths = toolPaths(last);
-    if (paths.length) return paths.map((path) => tabLabel(path)).join(", ");
-    return last.name || "";
-  }
-
   function renderToolGroup(block) {
-    const summary = toolGroupSummary(block.items);
-    const body = h("div", { class: "sw-act-body" });
-    const fill = () => {
-      if (body.childNodes.length) return;
-      for (const item of block.items) body.appendChild(renderToolEntry(item));
-    };
-    const open = openTools.has(block.key);
-    if (open) fill();
-    const node = h("details", {
-      class: `sw-act ${summary.running ? "running" : ""} ${summary.failed ? "failed" : ""}`.trim(),
-      open: open ? true : undefined,
-      ontoggle: (event) => {
-        if (event.target.open) {
-          openTools.add(block.key);
-          fill();
-        } else openTools.delete(block.key);
+    return renderToolGroupRow(block, {
+      openSet: openTools,
+      summary: toolGroupSummary(block.items),
+      onToggle: () => {
         const entry = blockNodes.get(block.key);
         if (entry) entry.signature = `${blockSignature(block)}#${blockExtraSignature(block)}`;
       },
-    },
-      h("summary", { class: "sw-act-head" },
-        h("span", { class: "sw-act-icon" }, icon(TOOL_ICONS[summary.running ? summary.kind : summary.primary] || "command", "sm")),
-        h("span", { class: "sw-act-label" }, toolSummaryText(summary)),
-        h("span", { class: "sw-act-preview" }, toolPreview(block.items)),
-        summary.failed ? h("span", { class: "sw-act-fail" }, t("tasks.thread.failed_n", { n: summary.failed })) : null,
-        h("span", { class: "sw-act-chev" }, icon("chevronRight", "sm"))),
-      body);
-    return node;
-  }
-
-  function patchLines(text) {
-    const pre = h("pre", { class: "sw-act-out sw-act-diff" });
-    for (const line of String(text || "").split("\n")) {
-      const cls = line.startsWith("+") && !line.startsWith("+++") ? "add"
-        : line.startsWith("-") && !line.startsWith("---") ? "del"
-          : line.startsWith("@@") || line.startsWith("***") ? "hunk" : "";
-      pre.appendChild(h("span", { class: cls }, `${line}\n`));
-    }
-    return pre;
-  }
-
-  function renderToolEntry(item) {
-    const status = item.status || "running";
-    const kind = toolKind(item);
-    const command = toolCommand(item);
-    const paths = toolPaths(item);
-    const input = item.input && typeof item.input === "object" ? item.input : null;
-    let head;
-    if (command) head = h("code", { class: "sw-act-cmd" }, h("span", { class: "sw-act-prompt" }, "$"), command);
-    else head = h("code", { class: "sw-act-cmd" }, h("b", null, item.name || t("session.approval.kind_tool")), paths.length ? ` ${paths.join(", ")}` : "");
-    let detail = null;
-    if (!command && kind === "edit" && typeof input?.patch === "string") detail = patchLines(input.patch);
-    else if (!command && item.input !== null && item.input !== undefined && !paths.length) {
-      detail = h("pre", { class: "sw-act-out sw-act-input" }, textValue(item.input));
-    }
-    const hasOutput = item.output !== null && item.output !== undefined && textValue(item.output) !== "";
-    return h("div", { class: `sw-act-item ${status}`.trim() },
-      h("div", { class: "sw-act-item-head" }, head,
-        h("span", { class: "spacer" }),
-        status !== "ok" ? h("span", { class: `sw-act-status ${status}`.trim() }, toolStatusLabel(status)) : null,
-        item.at && item.completed_at ? h("span", { class: "sw-msg-time" }, fmtDuration(item.at, item.completed_at)) : null),
-      detail,
-      hasOutput ? h("pre", { class: "sw-act-out" }, textValue(item.output))
-        : status === "running" ? h("div", { class: "sw-act-wait" }, t("tasks.thread.waiting_output")) : null);
+      onFull: (itemId) => fullToolItem(selectedId, itemId),
+      onImage: (itemId, n) => toolImage(selectedId, itemId, n),
+      onOpenAgent: activeTab() ? null : (item) => openAgent(item.id, item.input?.description || item.input?.subagent_type || ""),
+    });
   }
 
   function liveLabel(live) {
@@ -1528,6 +1690,9 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const image = event.target.closest?.("img.rich-img");
     if (image) openThreadImage(image);
   });
+  // Right-click on an image in the thread or the side panel: copy / open.
+  delegateImageContextMenu(thread, "img.rich-img");
+  delegateImageContextMenu(sideBody, "img.rich-img, img.sw-file-image");
   sideBody.addEventListener("click", (event) => {
     const image = event.target.closest?.("img.rich-img, img.sw-file-image");
     if (!image) return;
@@ -1598,16 +1763,13 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   }
 
   function modelOptionLabel(item) {
-    const extra = String(item.label || "");
-    const label = !extra || extra === item.id ? item.id
-      : extra.startsWith(item.id) ? extra : `${item.id} — ${extra}`;
-    return item.default ? `${label} · ${t("tasks.models.default_tag")}` : label;
+    return modelOptionLabelEn(item, withT);
   }
 
   function modelStatusText(capabilities) {
     const info = modelSourceSummary(capabilities);
     const when = info.checkedAt ? relativeTime(info.checkedAt) : "";
-    if (info.source === "detected" && info.kind) {
+    if ((info.source === "detected" || info.source === "available") && info.kind) {
       return t(`tasks.models.status.${info.kind}`, { via: info.via, when: when || "—" });
     }
     if (info.source === "configured") return t("tasks.models.status.configured", { when: when || "—" });
@@ -1697,13 +1859,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
 
   async function attachContext(session, attachment) {
     try {
-      const data = await api.sessionValidateContext(session.id, [attachment]);
-      const item = data.items?.[0];
-      if (!item) throw new Error(t("session.context.rejected"));
-      const list = contextItemsFor(session).filter((entry) => entry.label !== item.label
-        || entry.kind !== item.kind);
-      list.push({ ...item, attachment });
-      contextBySession.set(session.id, list);
+      const item = await attachSessionContext(session.id, attachment);
       composerSignature = "";
       syncComposer();
       if (railTab === "overview") paintSide();
@@ -1817,6 +1973,23 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
             onclick: () => moveSteer(session, item, 1),
           }, "↓"));
       }
+      if (item.status === "queued") {
+        const interrupt = sendNowMode(session) === "interrupt" && isActiveSession(session);
+        actions.push(h("button", {
+          class: "btn sm ghost sw-steer-now", type: "button", "data-steer-now": item.id,
+          title: t(interrupt ? "session.steer.send_now_interrupt" : "session.steer.send_now_hint"),
+          onclick: async (event) => {
+            event.currentTarget.disabled = true;
+            try {
+              const data = await sendQueuedNow(session.id, item.id);
+              ctx.toast(t(data.mode === "interrupt" ? "session.toast.sent_now_interrupt" : "session.toast.sent_now"), "ok");
+              stickToBottom = true;
+              await refreshSessions();
+              loadTranscript(false);
+            } catch (err) { ctx.toast(err.message, "err"); }
+          },
+        }, icon("send", "sm"), t(interrupt ? "session.steer.send_now_interrupt_short" : "session.steer.send_now")));
+      }
       actions.push(h("button", {
         class: "sw-chip-x", type: "button", title: t(editable ? "session.steer.remove" : "session.steer.remove_record"),
         "aria-label": t("session.steer.remove"),
@@ -1903,6 +2076,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       (session.steer_queue || []).map((item) => `${item.id}:${item.status}:${String(item.text || "").slice(0, 16)}`).join(","),
       (session.approvals?.items || []).map((item) => `${item.id}:${item.status}`).join(","),
       contextItemsFor(session).map((item) => item.id).join(","),
+      (sessionImages.get(session.id) || []).map((item) => item.id).join(","),
       choices.platform, choices.model, choices.effort, choices.access_mode,
       customModelSessions.has(session.id), modelClock,
       contextPickerOpen, composerConfigOpen, steerEditing?.id || "", String(steerEditing?.text || "").slice(0, 24),
@@ -2034,9 +2208,10 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
 
     const sendButton = h("button", { class: "sw-send", type: "button" });
     let stopMode = false;
+    const images = () => sessionImages.get(session.id) || [];
     const paintSendButton = () => {
-      const hasContent = Boolean(input.value.trim() || contextItemsFor(session).length);
-      stopMode = active && !hasContent;
+      const hasContent = Boolean(input.value.trim() || contextItemsFor(session).length || images().length);
+      stopMode = turnRunning(session) && !hasContent;
       const label = stopMode ? t("tasks.stop")
         : mode.mode === "steer" ? t("tasks.thread.send_steer") : t("tasks.thread.send");
       sendButton.classList.toggle("stop", stopMode);
@@ -2053,29 +2228,22 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     });
     paintSendButton();
     let busy = false;
-    const send = async () => {
+    const send = async (now = false) => {
       const text = input.value.trim();
-      const context = contextPayload(session);
+      const context = [...contextPayload(session), ...imageContext(images())];
       if ((!text && !context.length) || busy) return;
       busy = true;
       sendButton.disabled = true;
       try {
-        let payload = null;
-        if (mode.mode === "steer") {
-          const data = await api.sessionSteer(session.id, text, context);
-          payload = data.session;
+        const data = await sendSessionMessage(session, text, { mode: mode.mode, context, choices, now: now && mode.mode === "steer" });
+        const payload = data.session;
+        if (data.mode) {
+          ctx.toast(t(data.mode === "interrupt" ? "session.toast.sent_now_interrupt" : "session.toast.sent_now"), "ok");
+        } else if (mode.mode === "steer") {
           const status = data.steer?.status;
           ctx.toast(t(status === "delivered" ? "session.toast.steer_delivered"
             : status === "queued" ? "session.toast.steer_queued" : "session.toast.steer_failed"), status === "failed" ? "err" : "ok");
         } else {
-          const data = await api.continueSession(session.id, text, {
-            context,
-            platform: choices.platform,
-            model: choices.model,
-            effort: choices.effort,
-            access_mode: choices.access_mode,
-          });
-          payload = data.session;
           ctx.toast(t("session.toast.continue_started"), "ok");
         }
         if (payload) patchSessionPayload(payload);
@@ -2083,6 +2251,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
         input.value = "";
         stickToBottom = true;
         clearContext(session);
+        releaseImages(images());
+        sessionImages.delete(session.id);
         composerSignature = "";
         syncComposer();
         await loadTranscript(true);
@@ -2098,11 +2268,22 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     };
     sendButton.addEventListener("click", () => (stopMode ? stopSession() : send()));
     input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter" && !event.shiftKey) {
-        event.preventDefault();
-        send();
-      }
+      const action = composerKeyAction(event, { running: turnRunning(session) });
+      if (!action || action === "newline") return;
+      event.preventDefault();
+      send(action === "now");
     });
+    // Images: paste, drop, or the image button.
+    const addImages = async (files) => {
+      const { images: added, errors } = await readImages(files, images().length);
+      for (const message of errors) ctx.toast(message, "err");
+      if (!added.length) return;
+      sessionImages.set(session.id, [...images(), ...added]);
+      composerSignature = "";
+      syncComposer();
+    };
+    const picker = imagePicker(addImages);
+    bindImageInput(input, addImages);
 
     let accessWarning = null;
     if (choices.access_mode === "full_access") {
@@ -2164,12 +2345,20 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     }, icon(choices.access_mode === "full_access" ? "shield" : choices.access_mode === "read_only" ? "eye" : "shield", "sm"),
       accessSelect);
     const box = h("div", { class: "sw-composer-box" },
+      picker.input,
       contextPickerOpen ? renderContextPicker(session) : null,
       approvalBanner(session),
       steerQueuePanel(session),
       configPanel,
       contextChips(session),
+      imageTray(images(), (image) => {
+        releaseImages([image]);
+        sessionImages.set(session.id, images().filter((entry) => entry.id !== image.id));
+        composerSignature = "";
+        syncComposer();
+      }),
       input,
+      h("div", { class: "sw-composer-hint", "data-composer-hint": "" }, t(composerHintKey(turnRunning(session)))),
       h("div", { class: "sw-composer-tools" },
         h("button", {
           class: `sw-chip sw-icon-tool ${contextPickerOpen ? "on" : ""}`.trim(), type: "button",
@@ -2178,6 +2367,10 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
           onclick: () => { contextPickerOpen = !contextPickerOpen; composerConfigOpen = false; composerSignature = ""; syncComposer(); },
         }, icon("plus", "sm"),
           contextItemsFor(session).length ? h("b", null, contextItemsFor(session).length) : null),
+        h("button", {
+          class: "sw-chip sw-icon-tool", type: "button", title: t("session.images.add"), "aria-label": t("session.images.add"),
+          "data-add-image": "", onclick: () => picker.open(),
+        }, icon("image", "sm")),
         h("span", { class: "spacer" }),
         accessChip,
         configButton,
@@ -2385,8 +2578,10 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       return;
     }
     const descendants = sessionDescendants(sessions, session.id);
+    const own = activityChips.activity;
     const counts = {
-      subagents: descendants.length,
+      subagents: descendants.length + own.subagents.filter((entry) => entry.source !== "session").length,
+      background: own.background.length,
       media: mediaFor === session.id ? (media?.media?.length || 0) : null,
       docs: mediaFor === session.id ? (media?.documents?.length || 0) : null,
     };
@@ -2394,7 +2589,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       h("div", { class: "sw-side-title" },
         h("span", { class: "sw-eyebrow" }, t("session.details.title")),
         h("h3", { title: sessionTitle(session) }, sessionTitle(session))),
-      h("div", { class: "sw-side-status" }, statusPill(session.status)),
+      h("div", { class: "sw-side-status" }, statusPill(shownStatus(session))),
       h("button", {
         class: "icon-btn sw-mobile-btn", type: "button", title: t("session.details.close"),
         "aria-label": t("session.details.close_label"), onclick: () => closeMobilePanels(),
@@ -2409,6 +2604,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     }
     if (railTab === "overview") renderOverview(session);
     else if (railTab === "subagents") renderSubagents(session, descendants);
+    else if (railTab === "background") renderBackground();
     else if (railTab === "media") renderMedia(session);
     else if (railTab === "docs") renderDocs(session);
     else if (railTab === "artifacts") renderArtifacts(session);
@@ -2717,10 +2913,19 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
           class: "sw-breadcrumb-item", type: "button", onclick: () => select(parent.id),
         }, index ? icon("chevronRight", "sm") : null, sessionTitle(parent))))));
     }
+    // Sub-agents the agent started itself (from its stream); background
+    // tasks have their own tab.
+    const own = activityList(activityChips.activity, "subagent").filter((entry) => entry.source !== "session");
+    if (own.length) {
+      sideBody.appendChild(sideSection(t("session.activity.from_stream", { n: own.length }),
+        h("div", { class: "sa-side-list" }, own.map((entry) => activityRow(entry, {
+          onOpenItem: revealThreadItem, onOpenSession: select, onOpenAgent: (item) => openAgent(item.itemId, item.label),
+        })))));
+    }
     const tree = h("div", { class: "sw-subagent-tree" });
     if (!descendants.length) {
       tree.appendChild(h("div", { class: "sw-side-empty" },
-        t("session.subagents.empty")));
+        t(own.length ? "session.subagents.empty_sessions" : "session.subagents.empty")));
     } else {
       for (const { session: child, depth } of descendants) {
         tree.appendChild(h("button", {
@@ -2728,7 +2933,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
           style: { paddingLeft: `${8 + (depth - 1) * 13}px` },
           onclick: () => select(child.id),
         },
-          statusDot(child.status),
+          statusDot(shownStatus(child)),
           h("span", { class: "sw-subagent-title" }, sessionTitle(child)),
           h("span", { class: "sw-subagent-meta" }, platformLabel(child),
             child.model ? ` · ${child.model}` : "",
@@ -2739,7 +2944,15 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     sideBody.append(
       sideSection(t("session.subagents.title", { n: descendants.length }), tree,
         h("button", { class: "btn sm ghost", onclick: () => onLaunch({ parent: session }) },
-          icon("plus", "sm"), t("tasks.dispatch"))));
+          icon("plus", "sm"), t("session.subagents.add"))));
+  }
+
+  function renderBackground() {
+    const rows = activityList(activityChips.activity, "background");
+    sideBody.appendChild(sideSection(t("session.activity.background_title"),
+      rows.length
+        ? h("div", { class: "sa-side-list" }, rows.map((entry) => activityRow(entry, { onOpenItem: revealThreadItem })))
+        : h("div", { class: "sw-side-empty" }, t("session.activity.background_empty"))));
   }
 
   function renderMedia(session) {
@@ -3140,6 +3353,14 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     } catch (err) { ctx.toast(err.message, "err"); }
   }
 
+  // Context attached from the Sessions sidebar shows in this composer too.
+  const stopContextWatch = sessionStream.subscribeContext((id) => {
+    if (destroyed || !wrap.isConnected) { stopContextWatch(); return; }
+    if (id !== selectedId) return;
+    composerSignature = "";
+    syncComposer();
+  });
+
   // ------------------------------------------------------------------ boot
   S.selectedSessionId = selectedId || null;
   lastSessionSignature = sessionSignature(sessions);
@@ -3160,7 +3381,13 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     applySessions,
     refreshSessions,
     select,
-    destroy() { destroyed = true; stopLiveTimer(); },
+    destroy() {
+      destroyed = true;
+      stopLiveTimer();
+      stopContextWatch();
+      for (const off of follows.values()) off();
+      follows.clear();
+    },
     get selectedId() { return selectedId; },
   };
 }

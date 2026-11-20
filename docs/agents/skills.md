@@ -48,7 +48,8 @@ GET  /api/agent/v1/setup                      -> state, readiness, questions, su
 POST /api/agent/v1/setup/discover {paths}     -> read-only draft + observations + questions
 POST /api/agent/v1/setup/draft {layer, resources | profile, propose: true}
 POST /api/agent/v1/setup/location {resource, path_or_ref} -> this host's location
-POST /api/skills/setup/confirm {layer, digest} -> human only (agents: 403)
+POST /api/agent/v1/setup/propose {}           -> every changed layer; returns pending
+POST /api/skills/setup/confirm {layers: [{layer, digest}]} -> human only (agents: 403)
 POST /api/agent/v1/setup/verify               -> read-only checks; confirmed -> verified
 ```
 

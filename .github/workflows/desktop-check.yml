@@ -1,0 +1,37 @@
+# Cheap check for desktop (Tauri) changes: one Linux runner builds the
+# sidecar and runs the desktop unit tests. The full multi-platform build only
+# runs for release tags (see release.yml). Run it by hand from the Actions tab.
+name: Desktop check
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  desktop-tests:
+    name: Desktop unit tests (Linux)
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ark_studio/server/go.mod
+          cache-dependency-path: ark_studio/server/go.sum
+      - uses: dtolnay/rust-toolchain@683b588c487a69d01f6c6ddf40f036ff682cc2c8 # v1
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          workspaces: ark_studio/desktop/src-tauri -> target
+          key: x86_64-unknown-linux-gnu
+      - name: Linux build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libxdo-dev libssl-dev
+      - name: Build the ark-server sidecar
+        run: bash scripts/release/build-server.sh --no-archive --out "$RUNNER_TEMP/sidecar" --sidecar ark_studio/desktop/src-tauri/binaries linux/amd64
+      - name: Desktop unit tests
+        working-directory: ark_studio/desktop/src-tauri
+        run: cargo test --lib

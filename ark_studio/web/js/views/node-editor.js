@@ -20,6 +20,7 @@ import {
 } from "../node-model.js";
 import { hashText } from "../rich-model.js";
 import { openImageLightbox } from "../image-viewer.js";
+import { attachImageContextMenu, delegateImageContextMenu } from "../image-copy.js";
 import {
   UNIT_SAVED_EVENT, saveUnitDraft, uploadUnitFile, addUnitMediaUrl, openMediaExternal,
 } from "../unit-edit.js";
@@ -412,6 +413,7 @@ export function renderNodeTab(main, tab, editorHost) {
       source.dispatchEvent(new Event("input"));
     }
   });
+  delegateImageContextMenu(previewPane, "img.rich-img");
   // Clicking a project link in the preview opens it in the Editor.
   previewPane.addEventListener("click", (event) => {
     const link = event.target.closest?.("a[data-ws-path], a[data-media-id]");
@@ -673,6 +675,7 @@ function mediaCard(state, item) {
   if (kind === "image") {
     stage = h("button", { class: "nd-thumb", type: "button", title: t("viewer.open"), onclick: () => openLightbox(src, label) },
       h("img", { src, alt: label, loading: "lazy" }));
+    attachImageContextMenu(stage, () => ({ src, kind: "image", caption: label }));
   } else if (kind === "video") {
     stage = h("video", { class: "nd-video", src, controls: true, preload: "metadata", playsinline: true, dataset: { mediaId: item.id } });
   } else if (kind === "audio") {

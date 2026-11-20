@@ -234,3 +234,19 @@ export function paintArrowheads(ctx, path, head, color, background, lineWidth = 
   if (direct) ctx.stroke(); else ctx.stroke(path);
   ctx.restore();
 }
+
+// What Delete / Backspace act on in a graph view: "edge" (the selected link),
+// "nodes" (the selected nodes, edit mode, Delete only), "none" (the key is
+// the graph's but does nothing) or null (not a delete key, or the user is
+// typing).  Selecting a link clears the node selection and selecting a node
+// clears the link, so the most recent selection wins.  Backspace never
+// deletes nodes; on a selected link it does, after the same confirmation.
+export function graphDeleteTarget({ key, typing = false, mode = "read", readOnly = false,
+  selectedEdge = null, nodeCount = 0, canDeleteEdge = false, canDeleteNodes = false } = {}) {
+  if (key !== "Delete" && key !== "Backspace") return null;
+  if (typing) return null;
+  if (readOnly) return "none";
+  if (selectedEdge && canDeleteEdge) return "edge";
+  if (key === "Delete" && mode === "edit" && nodeCount > 0 && canDeleteNodes) return "nodes";
+  return "none";
+}

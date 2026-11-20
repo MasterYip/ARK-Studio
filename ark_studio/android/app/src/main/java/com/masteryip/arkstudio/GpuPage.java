@@ -10,6 +10,7 @@ import com.masteryip.arkstudio.model.GpuOwnership;
 import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.ui.Async;
 import com.masteryip.arkstudio.ui.Fmt;
+import com.masteryip.arkstudio.ui.Labels;
 import com.masteryip.arkstudio.ui.Ui;
 
 import org.json.JSONArray;
@@ -162,7 +163,7 @@ final class GpuPage extends ShellActivity.Page {
         LinearLayout card = Ui.card(a);
         String status = job.optString("status");
         LinearLayout row = Ui.row(a);
-        row.addView(Ui.chip(a, Fmt.human(status), Ui.statusColor(a, status), Ui.statusSoft(a, status)));
+        row.addView(Ui.chip(a, Labels.of(a, status), Ui.statusColor(a, status), Ui.statusSoft(a, status)));
         String rawLabel = job.optString("job", "");
         final String label = rawLabel.isEmpty() || "null".equals(rawLabel) ? job.optString("id") : rawLabel;
         row.addView(Ui.oneLine(Ui.label(a, label, 14, Ui.text(a), true)), Ui.lp(0, Ui.WRAP, 1));

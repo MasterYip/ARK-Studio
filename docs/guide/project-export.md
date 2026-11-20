@@ -8,7 +8,13 @@ The ZIP contains a restorable `.ark` project folder:
 
 - `project.json`: identity, project settings and display metadata.
 - `ark.sqlite3`: an online SQLite backup, including nodes, links, tags, topics,
-  comments, media records, chat and pending text checkpoints.
+  comments, media records, Assistant chat and pending text checkpoints. A
+  project admin downloading from the browser (and anyone in local mode) gets
+  every member's Assistant conversation; for everyone else, and for every
+  personal agent token or task agent, the copy keeps only the requester's own
+  conversation (the others are deleted from the copy and the file is
+  compacted, so no trace of them remains), and `ARK-EXPORT.json` lists
+  "other users' Assistant chat" under exclusions.
 - `history.git/`: existing Git text history, when enabled.
 - Internal attachments, project-local files and activity logs, retaining their
   relative paths. Attachments are streamed into the ZIP, including large videos.

@@ -2,25 +2,30 @@ import { h, clear, emptyState, statusColor, impDot, tagChip, fmtDate, relativeTi
 import { t, typeLabel, statusLabel } from "../i18n.js";
 import { icon } from "../icons.js";
 import { GanttView, ganttControls } from "../gantt.js";
-import { unitCard, viewToggle, openLinkModal, openDispatchModal, typeLegend, openModal, confirmDialog, gpuRegistrationNote } from "../components.js";
+import { unitCard, viewToggle, openLinkModal, openDispatchModal, typeLegend, openModal, confirmDialog, canRunWithAgent } from "../components.js";
+import { gpuRegistrationNote, openSetupResources } from "../gpu-note.js";
 import { sortUnits } from "./ideas.js";
 import { renderSessionWorkspace } from "../session-workspace.js";
+import { shellActive } from "../workbench.js";
+import { sessionStream } from "../session-stream.js";
+import { rememberSessionChoice } from "../session-sidebar-model.js";
 import { sessionLibraryPanel } from "../session-library.js";
 import { api, cachedThenFresh } from "../api.js";
 import { gpuOwnership } from "../gpu-model.js";
 import { resourcesGraphPanel } from "../resources-view.js";
+import { advancedEnabled } from "../advanced.js";
 import { PERMISSION_MODES, permissionModeLabel, permissionModeDescription } from "../session-model.js";
 import { assigneeChip } from "../assignee.js";
 
 const COLUMNS = ["inbox", "open", "active", "review", "blocked", "done"];
 const SESSION_ACTIVE = ["starting", "running", "idle", "stopping"];
 
-let sessionsTimer = null;
+let sessionsTimer = null;     // unsubscribes the Sessions page from the shared stream
 let gpuTimer = null;
 
 function stopSessionsTimer() {
   if (sessionsTimer) {
-    clearInterval(sessionsTimer);
+    sessionsTimer();
     sessionsTimer = null;
   }
 }
@@ -50,17 +55,21 @@ export function renderTasks(host, ctx) {
   const phone = typeof window.matchMedia === "function"
     && window.matchMedia("(max-width: 760px)").matches;
   const sessionOnly = phone && S.taskView === "sessions";
-  const page = h("div", { class: `page ${sessionOnly ? "mobile-session-page" : ""}`.trim() },
+  // Execute › Runs on a wide window: a compact header, the conversation below.
+  const fullSession = S.taskView === "sessions" && shellActive();
+  const page = h("div", { class: `page ${sessionOnly ? "mobile-session-page" : ""} ${fullSession ? "session-full-page" : ""}`.trim() },
     h("div", { class: "page-head" },
       h("div", null,
-        h("div", { class: "eyebrow" }, `${t("nav.tasks")} · ${t("stage.execute")}`),
-        h("h1", { class: "page-title" }, t("tasks.title")),
+        h("div", { class: "eyebrow" }, t("nav.execute")),
+        h("h1", { class: "page-title" }, executeViewTitle(S.taskView)),
         h("p", { class: "page-sub" }, t("tasks.subtitle"))),
       h("div", { class: "head-actions" },
-        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("sparkles", "sm"), t("assistant.title")),
-        h("button", { class: "ghost-btn", onclick: () => ctx.openImport() }, icon("database", "sm"), t("action.import")),
-        h("button", { class: "ghost-btn", onclick: () => ctx.openCreate({ type: "task", status: "open" }) }, icon("plus", "sm"), t("tasks.add")),
-        h("button", { class: "primary-btn", onclick: () => openLaunchSession(ctx) }, icon("play", "sm"), t("tasks.launch")))),
+        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")),
+        advancedEnabled() ? h("button", { class: "ghost-btn", onclick: () => ctx.openImport() }, icon("database", "sm"), t("palette.cmd.import")) : null,
+        // Advanced: ARK starts and supervises the process; the recommended
+        // path is the user's own agent (Home prompt), so New task leads.
+        h("button", { class: "ghost-btn", "data-launch-agent": "", title: t("tasks.launch_hint"), onclick: () => openLaunchSession(ctx) }, icon("play", "sm"), t("tasks.launch")),
+        h("button", { class: "primary-btn", onclick: () => ctx.openCreate({ type: "task", status: "open" }) }, icon("plus", "sm"), t("tasks.add")))),
     S.taskView === "sessions" ? sessionsView(ctx, S, tasks) :
       S.taskView === "gpu" ? gpuResourcesPanel(ctx, S, tasks) :
       S.taskView === "resources" ? resourcesGraphPanel(ctx) :
@@ -72,6 +81,16 @@ export function renderTasks(host, ctx) {
 }
 
 // --------------------------------------------------------- GPU task monitor
+// The page title names the Execute sub-tab that is open (nav name = title).
+function executeViewTitle(view) {
+  if (view === "sessions") return t("app.subtab.runs");
+  if (view === "gpu") return "GPU"; // i18n-ignore: product term, same in both languages
+  if (view === "resources") return t("resources.tab");
+  if (view === "agents") return t("tasks.agents");
+  if (view === "library") return t("tasks.library");
+  return t("view.board");
+}
+
 function gpuResourcesPanel(ctx, S, tasks) {
   const body = h("div", { class: "task-gpu-body" },
     h("div", { class: "empty sm" }, t("tasks.gpu.loading")));
@@ -132,7 +151,7 @@ function gpuResourcesPanel(ctx, S, tasks) {
     const queued = jobs.filter((job) => job.status === "queued");
     if (!servers.length) {
       // T-0018: no GPU server registered in this project's setup.
-      body.appendChild(gpuRegistrationNote(data.registration, () => refresh(true))
+      body.appendChild(gpuRegistrationNote(data.registration, () => openSetupResources(ctx))
         || h("div", { class: "settings-note" }, icon("alert", "sm"), h("div", null, t("tasks.gpu.no_server"))));
       return;
     }
@@ -262,34 +281,32 @@ function gpuJobStatus(status) {
 
 // ------------------------------------------------------------- agent sessions
 function sessionsView(ctx, S, tasks) {
+  const docked = shellActive() && Boolean(ctx.sessionPage);
   const workspace = renderSessionWorkspace(ctx, {
     tasks,
-    related: h("div", { class: "session-below" }, sessionLibraryPanel(ctx), relatedBoard(ctx, S, tasks)),
+    docked,
+    library: sessionLibraryPanel(ctx, { skip: (item) => item.source !== "external" && (S.taskSessions || []).some((s) => s.id === item.id) }),
+    related: docked ? null : h("div", { class: "session-below" }, relatedBoard(ctx, S, tasks)),
     onLaunch: (prefill) => openLaunchSession(ctx, prefill || {}),
   });
   const wrap = workspace.el;
-  let polling = false;
-
-  async function poll() {
-    if (!wrap.isConnected || S.tab !== "tasks" || S.taskView !== "sessions") {
-      stopSessionsTimer();
+  const showing = () => wrap.isConnected && S.tab === "tasks" && S.taskView === "sessions";
+  // The session list comes from the shared stream: the Sessions sidebar view
+  // and this page make one request per tick between them.
+  let mounted = false;
+  const unsubscribe = sessionStream.subscribeSessions((data) => {
+    if (!mounted && !wrap.isConnected) return;    // not in the page yet
+    mounted = true;
+    if (!showing()) {
+      if (sessionsTimer === unsubscribe) stopSessionsTimer();
+      else unsubscribe();
       return;
     }
-    if (polling) return;
-    polling = true;
-    try {
-      const data = await api.agentSessions({ fresh: true });
-      if (!wrap.isConnected || S.tab !== "tasks" || S.taskView !== "sessions") {
-        stopSessionsTimer();
-        return;
-      }
-      workspace.applySessions(data.sessions || [], data.groups || []);
-    } catch { /* transient; keep polling */ }
-    finally { polling = false; }
-  }
-
-  sessionsTimer = setInterval(poll, 1600);
-  setTimeout(poll, 120);
+    workspace.applySessions(data.sessions || [], data.groups || []);
+  }, { active: showing, immediate: false });
+  stopSessionsTimer();
+  sessionsTimer = unsubscribe;
+  setTimeout(() => { if (showing()) sessionStream.refreshSessions().catch(() => {}); }, 120);
   return wrap;
 }
 
@@ -574,11 +591,6 @@ export async function openLaunchSession(ctx, prefill = {}) {
       try {
         const prompt = promptArea.value.trim();
         const worktree = worktreeSelect.value;
-        if (!prompt && ["dsh", "codex", "claude", "opencode", "cursor", "gemini"].includes(platformSelect.value)) {
-          ctx.toast(t("tasks.launcher.prompt_required"), "err");
-          promptArea.focus();
-          return false;
-        }
         const data = await api.createSession({
           platform: platformSelect.value,
           title: titleInput.value.trim(),
@@ -592,6 +604,7 @@ export async function openLaunchSession(ctx, prefill = {}) {
           prompt,
           parent_id: parent?.id || "",
         });
+        rememberSessionChoice({ platform: platformSelect.value, model: modelInput.value.trim() });
         ctx.S.selectedSessionId = data.session.id;
         ctx.S.taskView = "sessions";
         ctx.S.sessionThreadMode = "thread";
@@ -642,7 +655,10 @@ function boardView(ctx, S, tasks, agents, hosts, artifacts) {
     });
     board.appendChild(col);
   }
-  const support = h("details", { class: "task-support", open: true },
+  // Agent fleet / Hosts / Library: shown when the project has them, or with
+  // advanced features on.
+  const showSupport = advancedEnabled() || agents.length || hosts.length || artifacts.length;
+  const support = !showSupport ? null : h("details", { class: "task-support", open: true },
     h("summary", null,
       h("span", null, icon("layers", "sm"), ` ${t("tasks.support.title")}`),
       h("span", { class: "task-support-meta" },
@@ -671,8 +687,8 @@ function taskCard(ctx, unit) {
     (unit.tags || []).filter((tag) => /^(phase|risk|gate|gpu|task):/.test(tag)).slice(0, 2).length
       ? h("div", { class: "tags" }, (unit.tags || []).filter((tag) => /^(phase|risk|gate|gpu|task):/.test(tag)).slice(0, 2).map((tag) => tagChip(tag)))
       : null,
-    h("div", { class: "row", style: { marginTop: "6px" } },
-      h("button", { class: "btn sm ghost", onclick: (e) => { e.stopPropagation(); (ctx.dispatchTaskSession ? ctx.dispatchTaskSession(unit) : openDispatchModal(ctx, unit)); } }, t("tasks.dispatch"))));
+    canRunWithAgent(unit) ? h("div", { class: "row", style: { marginTop: "6px" } },
+      h("button", { class: "btn sm ghost", "data-run-with-agent": "", onclick: (e) => { e.stopPropagation(); (ctx.dispatchTaskSession ? ctx.dispatchTaskSession(unit) : openDispatchModal(ctx, unit)); } }, t("tasks.dispatch"))) : null);
   return card;
 }
 

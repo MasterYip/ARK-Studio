@@ -12,6 +12,9 @@ applyAppearance();
 document.documentElement.lang = getLang() === "zh" ? "zh-CN" : "en";
 document.documentElement.dataset.lang = getLang();
 
+// The "recent" time filter's choices (days); 14 matches Home's 14-day chart.
+export const RECENT_DAYS = [1, 3, 7, 14, 30];
+
 export const S = {
   booted: false,
   loading: false,
@@ -31,6 +34,7 @@ export const S = {
   sub: "story",
   view: "list",
   taskView: "sessions",
+  reviewView: "waiting", // Research › Review: "waiting" | "history"
   taskSessions: [],
   sessionGroups: [],
   sessionsLoaded: false,
@@ -141,7 +145,7 @@ export function normalizeFilters(raw = {}) {
     ? timeMode
     : (out.from || out.to ? "timeline" : "all");
   const recentDays = Number(raw.recentDays ?? raw.recent_days ?? 7);
-  out.recentDays = [1, 3, 7, 30].includes(recentDays) ? recentDays : 7;
+  out.recentDays = RECENT_DAYS.includes(recentDays) ? recentDays : 7;
   out.roots = Boolean(raw.roots ?? raw.top_level ?? raw.topLevel);
   out.context = Boolean(raw.context ?? raw.linked_context ?? raw.linkedContext);
   out.assignees = normalizeAssigneeValues(raw.assignees ?? raw.assignee);
@@ -156,6 +160,7 @@ export const VIEW_BY_TAB = {
   "plan/method": "list",
   "plan/experiment": "list",
   "plan/topic": "canvas",
+  review: "list",
   map: "graph",
   tasks: "sessions",
   production: "list",
@@ -176,6 +181,7 @@ export const TAB_TYPES = {
   "plan/method": ALL_TYPES,
   "plan/experiment": ALL_TYPES,
   "plan/topic": ALL_TYPES,
+  review: [],
   // The Map is the whole project graph: every type, nothing hidden by
   // default, so its total matches Home's node count.  (A shorter list here
   // hid agents, hosts, notes, outputs, ... while the TYPES filter said "All".)
@@ -319,6 +325,8 @@ export function toggleTheme() {
 
 export function setLanguage(lang, { announce = true } = {}) {
   S.lang = setLang(lang);
+  // A choice in ARK (or the account's saved one): stop following the Android system language.
+  try { localStorage.removeItem("ark.langAuto"); } catch { /* storage unavailable */ }
   if (announce) announcePref({ lang: S.lang });
 }
 
@@ -377,7 +385,7 @@ export function filtersToParams(filters = S.filters, extra = {}) {
     if (filters.to) params.to = filters.to;
   }
   if (filters.timeMode === "recent") {
-    const days = [1, 3, 7, 30].includes(Number(filters.recentDays)) ? Number(filters.recentDays) : 7;
+    const days = RECENT_DAYS.includes(Number(filters.recentDays)) ? Number(filters.recentDays) : 7;
     const since = new Date(Date.now() - days * 86400000).toISOString();
     // Recent is based on when the unit entered ARK.  updated_at is bumped by
     // imports/migrations and made "last 1 day" return the whole project.

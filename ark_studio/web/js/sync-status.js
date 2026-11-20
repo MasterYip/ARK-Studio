@@ -20,7 +20,7 @@ let chip = null;
 let item = null;
 let showTimer = 0;
 let firstRenderDone = false;
-let lastSyncedAt = 0;
+let syncedAt = 0;
 let wasOffline = false;
 
 function ensureChip() {
@@ -34,9 +34,8 @@ function ensureItem() {
   if (item) return item;
   item = h("button", {
     class: "wb-status-item wb-sync", type: "button", "aria-live": "polite",
-    onclick: async () => {
-      if (await checkConnectivity()) window.dispatchEvent(new CustomEvent("ark:manual-sync"));
-    },
+    // Same as the top bar's Sync now (sync-now.js).
+    onclick: () => window.dispatchEvent(new CustomEvent("ark:manual-sync")),
   });
   setStatusItem("sync", item);
   return item;
@@ -52,7 +51,7 @@ function offlineText() {
 
 function paintItem() {
   const el = ensureItem();
-  const last = lastSyncedAt ? fmtDateTime(new Date(lastSyncedAt).toISOString()) : t("cache.never");
+  const last = syncedAt ? fmtDateTime(new Date(syncedAt).toISOString()) : t("cache.never");
   const tip = [t("cache.last_sync", { time: last })];
   if (syncState.syncing > 0) tip.push(t("cache.pending", { n: syncState.syncing }));
   if (syncState.offline) {
@@ -103,7 +102,7 @@ function paintChip() {
 function paint() {
   document.body.classList.toggle("ark-offline", syncState.offline);
   if (!syncState.offline && syncState.syncing === 0) {
-    lastSyncedAt = Date.now();
+    syncedAt = Date.now();
     if (firstRenderDone) perfMark("fresh");
   }
   if (syncState.offline && !wasOffline && shellActive()) {
@@ -113,6 +112,11 @@ function paint() {
   wasOffline = syncState.offline;
   paintItem();
   paintChip();
+}
+
+/** When the data was last known to be in step with the server (0: never). */
+export function lastSyncedAt() {
+  return syncedAt;
 }
 
 /** First view painted (from cache or network); "fresh" follows once synced. */

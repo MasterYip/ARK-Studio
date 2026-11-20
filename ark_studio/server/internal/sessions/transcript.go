@@ -614,10 +614,15 @@ func eventsFromContent(content any, role string) []*pyjson.Object {
 		case toolResultTypes[btype]:
 			callID := or(or(block.Value("tool_use_id"), block.Value("tool_call_id")), block.Value("id"))
 			output := getDefault(block, "content", getDefault(block, "output", block.Value("result")))
+			var images []any
 			if list, ok := output.([]any); ok {
 				var parts []string
 				for _, item := range list {
 					if o, ok := item.(*pyjson.Object); ok {
+						if url := imageBlockURL(o); url != "" {
+							images = append(images, url)
+							continue
+						}
 						parts = append(parts, strOr(o.Value("text")))
 					}
 				}
@@ -627,7 +632,11 @@ func eventsFromContent(content any, role string) []*pyjson.Object {
 			if pyjson.Truthy(block.Value("is_error")) {
 				st = "error"
 			}
-			events = append(events, event("tool_result", "id", callID, "output", safeJSON(output), "status", toolStatus(st, "ok")))
+			ev := event("tool_result", "id", callID, "output", safeJSON(output), "status", toolStatus(st, "ok"))
+			if len(images) > 0 {
+				ev.Set("images", images) // kept by the builder, not sent with the transcript
+			}
+			events = append(events, ev)
 		case reasoningTypes[btype]:
 			events = append(events, event("reasoning", "text", strOr(or(block.Value("text"), block.Value("thinking")))))
 		}
@@ -913,6 +922,9 @@ type TranscriptInput struct {
 	PromptAt                  any
 	Stdout, Stderr            []*pyjson.Object
 	Error, Notice, Platform   string
+	// Waiting: a live process between turns (long-lived Claude Code after a
+	// `result`).  Nothing is streaming then, whatever runs in the background.
+	Waiting bool
 }
 
 type transcriptBuilder struct {
@@ -923,6 +935,16 @@ type transcriptBuilder struct {
 	n             int
 	reported      *pyjson.Object
 	usageEvents   int64
+	childEvents   int64 // sub-agent and background task events (transcript_claude.go)
+	tasks         map[string]*pyjson.Object
+	capped        map[*pyjson.Object]bool // tool items whose output was capped (finished)
+	agent         string                  // a sub-agent's own transcript: its Task call id
+	toolImages    map[string][]string     // image blocks of tool results (data URLs), by tool id
+	imageBytes    int
+
+	// feed state between calls
+	reasoningStream, codexMode, codexUsageNumber, codexDone bool
+	codexSpeaker                                            string
 }
 
 func (b *transcriptBuilder) nextID(prefix string) string {
@@ -1030,6 +1052,10 @@ func (b *transcriptBuilder) addToolResult(result *pyjson.Object) {
 	}
 	item.Set("output", result.Value("output"))
 	item.Set("status", toolStatus(result.Value("status"), "ok"))
+	if images, ok := result.Value("images").([]any); ok && len(images) > 0 {
+		b.keepToolImages(strOr(item.Value("id")), images)
+		item.Set("images", int64(len(b.toolImages[strOr(item.Value("id"))])))
+	}
 	item.Set("completed_at", or(result.Value("at"), item.Value("at")))
 }
 
@@ -1137,23 +1163,28 @@ func stripInputMarker(line string) string {
 
 // BuildTranscript is build_transcript.
 func BuildTranscript(in TranscriptInput) *pyjson.Object {
-	b := &transcriptBuilder{tools: map[string]*pyjson.Object{}, permissions: map[string]*pyjson.Object{}, reported: pyjson.NewObject()}
-	active := in.Status == "starting" || in.Status == "running" || in.Status == "idle" || in.Status == "stopping"
-	if pytext.Strip(in.Prompt) != "" {
-		b.addMessage("user", in.Prompt, in.PromptAt, "prompt", false)
+	b := newTranscriptBuilder(in)
+	b.feed(transcriptRows(in.Stdout, in.Stderr, 0, 0))
+	return b.finalize(in)
+}
+
+// transcriptRow is one log entry in transcript order.
+type transcriptRow struct {
+	stream string
+	index  int
+	entry  *pyjson.Object
+	key    string
+}
+
+// transcriptRows merges stdout and stderr entries by time (stdout first on a
+// tie); indexes start at the given offsets.
+func transcriptRows(stdout, stderr []*pyjson.Object, outBase, errBase int) []transcriptRow {
+	var combined []transcriptRow
+	for i, e := range stdout {
+		combined = append(combined, transcriptRow{"stdout", outBase + i, e, strOr(e.Value("t"))})
 	}
-	type row struct {
-		stream string
-		index  int
-		entry  *pyjson.Object
-		key    string
-	}
-	var combined []row
-	for i, e := range in.Stdout {
-		combined = append(combined, row{"stdout", i, e, strOr(e.Value("t"))})
-	}
-	for i, e := range in.Stderr {
-		combined = append(combined, row{"stderr", i, e, strOr(e.Value("t"))})
+	for i, e := range stderr {
+		combined = append(combined, transcriptRow{"stderr", errBase + i, e, strOr(e.Value("t"))})
 	}
 	sort.SliceStable(combined, func(i, j int) bool {
 		a, c := combined[i], combined[j]
@@ -1165,16 +1196,37 @@ func BuildTranscript(in TranscriptInput) *pyjson.Object {
 		}
 		return a.index < c.index
 	})
-	reasoningStream := false
-	codexMode := pytext.Lower(in.Platform) == "codex"
-	codexSpeaker := ""
-	codexUsageNumber, codexDone := false, false
+	return combined
+}
+
+func newTranscriptBuilder(in TranscriptInput) *transcriptBuilder {
+	b := &transcriptBuilder{tools: map[string]*pyjson.Object{}, permissions: map[string]*pyjson.Object{}, reported: pyjson.NewObject(),
+		codexMode: pytext.Lower(in.Platform) == "codex"}
+	if pytext.Strip(in.Prompt) != "" {
+		b.addMessage("user", in.Prompt, in.PromptAt, "prompt", false)
+	}
+	return b
+}
+
+// feed adds log rows to the transcript.
+func (b *transcriptBuilder) feed(combined []transcriptRow) {
+	reasoningStream := b.reasoningStream
+	codexMode := b.codexMode
+	codexSpeaker := b.codexSpeaker
+	codexUsageNumber, codexDone := b.codexUsageNumber, b.codexDone
+	defer func() {
+		b.reasoningStream, b.codexSpeaker, b.codexUsageNumber, b.codexDone = reasoningStream, codexSpeaker, codexUsageNumber, codexDone
+	}()
 	for _, r := range combined {
 		line := cleanLine(r.entry.Value("line"))
 		if pytext.Strip(line) == "" {
 			continue
 		}
 		at := r.entry.Value("t")
+		if r.entry.Value("kind") == "media" {
+			b.attachMedia(line)
+			continue
+		}
 		if r.entry.Value("kind") == "input" {
 			reasoningStream = false
 			b.addMessage("user", stripInputMarker(line), at, "stdin", false)
@@ -1233,10 +1285,26 @@ func BuildTranscript(in TranscriptInput) *pyjson.Object {
 			continue
 		}
 		reasoningStream = false
+		if b.claudeStreamLine(line, at) {
+			continue
+		}
 		if events := eventsFromLine(line); len(events) > 0 {
 			b.handleEvents(events, at, "stdout")
 		} else {
 			b.addMessage("assistant", line, at, "stdout", true)
+		}
+	}
+}
+
+// finalize returns the transcript of what was fed so far.  The builder can
+// be fed more rows afterwards (the session transcript cache does).
+func (b *transcriptBuilder) finalize(in TranscriptInput) *pyjson.Object {
+	active := (in.Status == "starting" || in.Status == "running" || in.Status == "idle" || in.Status == "stopping") && !in.Waiting
+	keepN, keepItems, keepOpen := b.n, len(b.items), b.openAssistant
+	defer func() { b.n, b.items, b.openAssistant = keepN, b.items[:keepItems], keepOpen }()
+	for _, it := range b.items {
+		if it.Has("streaming") {
+			it.Delete("streaming")
 		}
 	}
 	if in.Error != "" {
@@ -1246,6 +1314,7 @@ func BuildTranscript(in TranscriptInput) *pyjson.Object {
 		b.addNotice(in.Notice, nil, "notice", "meta")
 	}
 	items := b.items
+	b.capToolItems(items)
 	var lastActive *pyjson.Object
 	for _, it := range items {
 		if t := it.Value("type"); t == "message" || t == "tool" {
@@ -1340,6 +1409,9 @@ func BuildTranscript(in TranscriptInput) *pyjson.Object {
 		pyjson.Str(stats.Value("tools")), pyjson.Str(stats.Value("errors")),
 		strOr(last.Value("id")), strOr(last.Value("at")), strOr(last.Value("status")),
 		string(lastText), pyjson.Str(usage.Value("total_tokens")), permissionSignature(items)}, "|")
+	if b.childEvents > 0 {
+		signature += "|c" + b.childSignature()
+	}
 	list := make([]any, len(items))
 	for i, it := range items {
 		list[i] = it

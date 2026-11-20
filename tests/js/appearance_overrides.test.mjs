@@ -27,8 +27,8 @@ test("without overrides every group inherits the project value", () => {
   assert.deepEqual(effective.palette, project.palette);
   assert.deepEqual(effective.graph, project.graph);
   assert.deepEqual(effective.arrows, project.arrows);
-  assert.deepEqual(effective.source, { palette: "project", graph: "project", arrows: "project" });
-  assert.deepEqual(OVERRIDE_GROUPS, ["palette", "graph", "arrows"]);
+  assert.deepEqual(effective.source, { palette: "project", graph: "project", arrows: "project", graph_display: "project" });
+  assert.deepEqual(OVERRIDE_GROUPS, ["palette", "graph", "arrows", "graph_display"]);
 });
 
 test("an override wins for its group and the project value is not applied", () => {
@@ -36,7 +36,7 @@ test("an override wins for its group and the project value is not applied", () =
   assert.equal(effective.palette.light.accent, "#c2410c");
   assert.equal(effective.palette.dark.accent, "#6366f1");
   assert.deepEqual(effective.graph, myGraph);
-  assert.deepEqual(effective.source, { palette: "personal", graph: "personal", arrows: "project" });
+  assert.deepEqual(effective.source, { palette: "personal", graph: "personal", arrows: "project", graph_display: "project" });
   // The project's saved-theme library stays available.
   assert.deepEqual(effective.palette.saved, project.palette.saved);
   // A personal "palette off" beats a project palette that is on.

@@ -1,7 +1,7 @@
 import { icon } from "./icons.js";
 import { t, locale, typeLabel } from "./i18n.js";
 import { authenticatedUrl } from "./api.js";
-import { resolveRichUrl, embedKind, hashText, isVizLang } from "./rich-model.js";
+import { resolveRichUrl, embedKind, hashText, isVizLang, EXPLICIT_ANCHOR_RE, headingAnchors } from "./rich-model.js";
 import { vizBlock } from "./viz.js";
 import { sanitizeRichHtml } from "./rich-html.js";
 import { markdownTokens, markdownInlineTokens } from "./markdown.js";
@@ -675,9 +675,36 @@ export function richText(text = "", opts = {}) {
   };
   const root = h("div", { class: "rich" }, htmlNodes(markup(tokens), opts, slots));
   if (lines) applySourceLines(root);
+  applyAnchors(root);
   typesetMath(root);
   typesetMermaid(root);
   return root;
+}
+
+// Review anchors: headings get data-anchor="<slug>" (rich-model.js
+// anchorSlug), and a heading or paragraph ending in "{#id}" gets that id
+// with the marker hidden.  Review notes link to them (needs-ui.js).
+function takeExplicitAnchor(el) {
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  let last = null;
+  for (let node = walker.nextNode(); node; node = walker.nextNode()) if (node.nodeValue.trim()) last = node;
+  const match = last ? EXPLICIT_ANCHOR_RE.exec(last.nodeValue) : null;
+  if (!match) return "";
+  last.nodeValue = last.nodeValue.slice(0, match.index);
+  return match[1];
+}
+
+function applyAnchors(root) {
+  const headings = [...root.querySelectorAll("h1, h2, h3, h4, h5, h6")];
+  const ids = headingAnchors(headings.map((el) => {
+    const explicit = takeExplicitAnchor(el);
+    return { text: el.textContent, explicit };
+  }));
+  headings.forEach((el, index) => { if (ids[index]) el.dataset.anchor = ids[index]; });
+  for (const el of root.querySelectorAll("p, li")) {
+    const explicit = takeExplicitAnchor(el);
+    if (explicit) el.dataset.anchor = explicit;
+  }
 }
 
 function markdownCodeBlock(source, lang, opts, vizIndex) {

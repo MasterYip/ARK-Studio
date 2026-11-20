@@ -11,8 +11,11 @@ import { openContextMenu } from "./context-menu.js";
 import { openModal, confirmDialog, toast } from "./components.js";
 import {
   BUILTIN_PRESETS, PRESET_STORE_KEY, normalizePresetStore, savePreset, renamePreset, deletePreset, setDefaultPreset,
+  withCurrentLayout, accountLayoutIsNewer, defaultLayout,
 } from "./workbench-model.js";
-import { applyPresetLayout, setPresetStore, currentPresetStore } from "./workbench.js";
+import {
+  applyPresetLayout, setPresetStore, currentPresetStore, setLayoutSync, applyAccountLayout, resetViews,
+} from "./workbench.js";
 
 let persist = false;
 
@@ -23,23 +26,76 @@ function readLocal() {
 export function initLayoutPresets(profile) {
   persist = Boolean(profile && !profile.permissions?.read_only);
   const saved = persist && profile.prefs?.workbench ? profile.prefs.workbench : readLocal();
-  setPresetStore(normalizePresetStore(saved));
+  const clean = normalizePresetStore(saved);
+  setPresetStore(clean);
+  // The arrangement follows the account.  Another account's layout left in
+  // this browser is never inherited: an account without a saved layout
+  // starts from its default preset (built-in Default unless it chose one).
+  const user = String(profile?.username || "");
+  const otherOwner = user && localLayoutOwner() !== user;
+  if (persist && clean.layout && (otherOwner || accountLayoutIsNewer(clean, localLayoutAt()))) {
+    applyAccountLayout(clean.layout);
+    setLocalLayoutAt(clean.layout_at || Date.now());
+  } else if (persist && !clean.layout && otherOwner) {
+    applyAccountLayout(defaultLayout(clean));
+    setLocalLayoutAt(0);
+  }
+  if (user) setLocalLayoutOwner(user);
+  setLayoutSync(persist ? queueLayoutSync : null);
 }
 
-async function store(next) {
+const LAYOUT_AT_KEY = "ark.workbench.layoutAt";
+const LAYOUT_OWNER_KEY = "ark.workbench.owner";
+
+function localLayoutOwner() {
+  try { return localStorage.getItem(LAYOUT_OWNER_KEY) || ""; } catch { return ""; }
+}
+
+function setLocalLayoutOwner(user) {
+  try { localStorage.setItem(LAYOUT_OWNER_KEY, user); } catch { /* storage disabled */ }
+}
+
+function localLayoutAt() {
+  try { return Number(localStorage.getItem(LAYOUT_AT_KEY)) || 0; } catch { return 0; }
+}
+
+function setLocalLayoutAt(at) {
+  try { localStorage.setItem(LAYOUT_AT_KEY, String(at)); } catch { /* storage disabled */ }
+}
+
+// Every layout change (drag & drop, moves, resizes, presets) is saved to
+// the account after a short pause, so one drag sequence is one request.
+const LAYOUT_SYNC_DELAY = 1500;
+let syncTimer = 0;
+let syncLayout = null;
+
+function queueLayoutSync(layout) {
+  syncLayout = layout;
+  const at = Date.now();
+  setLocalLayoutAt(at);
+  clearTimeout(syncTimer);
+  syncTimer = setTimeout(() => {
+    const next = syncLayout;
+    syncLayout = null;
+    if (next) store(withCurrentLayout(currentPresetStore(), next, undefined, at), { quiet: true });
+  }, LAYOUT_SYNC_DELAY);
+}
+
+async function store(next, { quiet = false } = {}) {
   const previous = currentPresetStore();
   const clean = normalizePresetStore(next);
   setPresetStore(clean);
   try { localStorage.setItem(PRESET_STORE_KEY, JSON.stringify(clean)); } catch { /* storage disabled */ }
   if (!persist) return true;
   try {
-    const empty = !clean.presets.length && !clean.default;
+    const empty = !clean.presets.length && !clean.default && !clean.layout;
     const data = await api.updateMe({ prefs: { workbench: empty ? null : clean } });
     setPresetStore(normalizePresetStore(data.profile?.prefs?.workbench || {}));
     return true;
   } catch (err) {
     setPresetStore(previous);
-    toast(err.message, "err");
+    // A failed background layout save keeps the browser copy; no toast.
+    if (!quiet) toast(err.message, "err");
     return false;
   }
 }
@@ -131,7 +187,7 @@ export function openLayoutMenu(anchor) {
       children: [...BUILTIN_PRESETS, ...presets.presets.map((item) => item.id)].map((id) => ({
         label: presetName(id), checked: id === def, onClick: () => makeDefault(id),
       })) },
-    { label: t("workbench.reset_layout"), icon: "refresh", onClick: () => applyPreset(def) });
+    { label: t("workbench.reset_views"), icon: "refresh", onClick: () => resetViews() });
   openContextMenu({ x: rect.right - 240, y: rect.bottom + 4, items, className: "wb-layout-menu" });
 }
 
@@ -142,6 +198,6 @@ export function presetCommands(category) {
     ...BUILTIN_PRESETS.map((id) => ({ id: `layout-${id}`, label: t("workbench.preset.apply_named", { name: presetName(id) }), cat: category, run: () => applyPreset(id) })),
     ...presets.presets.map((item) => ({ id: `layout-${item.id}`, label: t("workbench.preset.apply_named", { name: item.name }), cat: category, run: () => applyPreset(item.id) })),
     { id: "layout-save", label: t("workbench.preset.save_as"), cat: category, run: () => saveCurrentLayoutAs() },
-    { id: "layout-reset", label: t("workbench.reset_layout"), cat: category, run: () => applyPreset(presets.default || "default") },
+    { id: "layout-reset", label: t("workbench.reset_views"), cat: category, run: () => resetViews() },
   ];
 }

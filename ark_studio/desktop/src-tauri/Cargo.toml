@@ -1,7 +1,7 @@
 [package]
 name = "ark-studio"
-version = "2.0.0"
-description = "ARK Studio desktop shell: tray, connection chooser and the bundled ark-server sidecar"
+version = "2.1.0"
+description = "ARK Studio desktop shell: tray, settings, saved servers and the bundled ark-server sidecar"
 authors = ["Raymon Yip"]
 license = "AGPL-3.0-only"
 repository = "https://github.com/MasterYip/ARK-Studio"
@@ -29,9 +29,16 @@ sha2 = "0.10"
 hex = "0.4"
 getrandom = "0.2"
 url = "2"
+# Health checks of saved servers (and, with a desktop link, their project
+# lists); the same reqwest/rustls the updater already brings in.
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "system-proxy"] }
+rustls = { version = "0.23", default-features = false, features = ["ring"] }
+# Image copy bridge for ARK pages (copy_image_png): writes RGBA images to the
+# system clipboard (Windows, macOS, X11/Wayland).
+arboard = "3"
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Graphics_Dwm", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security"] }
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Globalization", "Win32_Graphics_Dwm", "Win32_System_Diagnostics_ToolHelp", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_Security", "Win32_System_Registry", "Win32_Storage_FileSystem"] }
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

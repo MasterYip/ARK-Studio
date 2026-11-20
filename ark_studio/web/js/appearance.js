@@ -84,13 +84,22 @@ export function paletteTokens(colors, highContrast = false) {
   };
 }
 
+// The last inputs applied: a remote refresh re-applies the same palette on
+// every live-sync change, and re-setting every root token restyles the whole
+// page each time.  An unchanged palette, theme and display do nothing.
+let appliedFor = "";
+
 export function applyProjectPalette(value) {
   palette = value;
+  const root = typeof document !== "undefined" ? document.documentElement : null;
+  const key = JSON.stringify([palette || null, root?.dataset.theme || "", display]);
+  if (key === appliedFor) return;
   applyAppearance();
 }
 
 export function applyAppearance() {
   const root = document.documentElement;
+  appliedFor = JSON.stringify([palette || null, root.dataset.theme || "", display]);
   const mode = root.dataset.theme === "dark" ? "dark" : "light";
   for (const key of applied) root.style.removeProperty(key);
   applied = new Set();

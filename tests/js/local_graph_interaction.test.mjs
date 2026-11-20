@@ -106,7 +106,8 @@ test("the Local graph view routes clicks through the model and draws the rings",
   const view = await readFile(new URL("js/local-graph-view.js", root), "utf8");
   assert.match(view, /onSelect: onNodeSelect/);
   assert.match(view, /localGraphClickAction\(taps, node, open, event, now\)/);
-  assert.match(view, /view\.rings = centerRings\(centerHistory, input\.nodes, data\.center\.id\)/);
+  // Rings follow Settings › Appearance › Graphs › Local graph (on by default).
+  assert.match(view, /view\.rings = getMindSettings\(\)\.localRings === false \? new Map\(\) : centerRings\(centerHistory, input\.nodes, data\.center\.id\)/);
   // Double click re-centres; only Alt+Enter (openInEditor) opens the Editor.
   const recenterSrc = view.slice(view.indexOf("function recenter"), view.indexOf("function openInEditor"));
   assert.ok(recenterSrc.length > 0);
@@ -122,4 +123,12 @@ test("Alt+Enter in the Local graph opens the card's node (else the centre) in th
   assert.match(src, /onOpenEditor:\s*openInEditor/);
   assert.match(src, /const node = cardNodeObj \|\| selected;/);
   assert.match(src, /ctx\.openUnitInEditor\(node\)/);
+});
+
+test("Local graph click opens the shared floating inspector preview at page level", async () => {
+  const src = await readFile(new URL("js/local-graph-view.js", root), "utf8");
+  assert.match(src, /createInspectorPreview\(ctx, unit, point, \(\) => closeCard\(\)\)/);
+  assert.match(src, /getElementById\("overlay-root"\)/);
+  assert.doesNotMatch(src, /showNodeCard\(/);
+  assert.match(src, /addEventListener\("focusout"/);
 });

@@ -43,3 +43,11 @@ export async function loadMindLayout(context, nodeCard) {
   await layout.evaluate();
   return layout;
 }
+
+// Graph update classification (pure, dependency-free).
+export async function loadGraphChange(context) {
+  const change = new vm.SourceTextModule(await readFile(new URL("../../ark_studio/web/js/graph-change.js", import.meta.url), "utf8"), { context });
+  await change.link(() => { throw new Error("graph-change.js must remain dependency-free"); });
+  await change.evaluate();
+  return change;
+}

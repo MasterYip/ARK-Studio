@@ -186,12 +186,19 @@ func TestManifestRewriteUnderQueuedWriters(t *testing.T) {
 	for err := range errs {
 		t.Fatal(err)
 	}
-	deadline := time.Now().Add(5 * time.Second)
-	for manifestFile(t, st) != manifestWant(st) {
-		if time.Now().After(deadline) {
-			t.Fatalf("project.json never caught up with the last write")
+	// Poll gently: on Windows each read holds project.json open, and a
+	// rewrite that meets the open handle has to wait for it.  The deadline
+	// is generous for loaded machines; normally this returns at once.
+	deadline := time.Now().Add(30 * time.Second)
+	for {
+		raw, err := os.ReadFile(filepath.Join(st.Path, "project.json"))
+		if err == nil && string(raw) == manifestWant(st) {
+			break
 		}
-		time.Sleep(5 * time.Millisecond)
+		if time.Now().After(deadline) {
+			t.Fatalf("project.json never caught up with the last write (read error: %v)", err)
+		}
+		time.Sleep(20 * time.Millisecond)
 	}
 	// A deferred rewrite pending at Close is written by Close.
 	st.Manifest.Mutate(func(o *pyjson.Object) error { o.Set("updated", "2099-01-01T00:00:00+00:00"); return nil }) //nolint:errcheck

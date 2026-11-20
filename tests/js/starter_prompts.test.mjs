@@ -1,6 +1,6 @@
 // Run: node --experimental-vm-modules --test tests/js/starter_prompts.test.mjs
 // The two Home starter prompts ("setup", "team") exist in English and
-// Chinese; both languages must carry the same steps, standing rules and
+// Chinese; both languages must carry the same steps, core rules and
 // technical tokens.
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
@@ -106,7 +106,7 @@ test("the drift check notices a dropped token", () => {
 });
 
 test("steps, rules and options line up between the languages", () => {
-  const marker = (text) => (text.match(/^\s*(?:R?\d+\.|-)(?=\s)/) || [""])[0];
+  const marker = (text) => (text.match(/^\s*(?:[RCP]?\d+\.|-)(?=\s)/) || [""])[0];
   for (const [where, line] of allLines()) {
     if (typeof line === "string") continue;
     assert.equal(marker(line.zh), marker(line.en), `${where}: step/rule/option marker`);
@@ -118,7 +118,7 @@ test("steps, rules and options line up between the languages", () => {
       assert.deepEqual(markers("zh"), markers("en"), `${prefix}.${part}`);
     }
   }
-  assert.deepEqual(P.rules.map((line) => marker(line.en)).filter(Boolean), ["R1.", "R2.", "R3.", "R4.", "R5.", "R6.", "R7.", "R8.", "R9."]);
+  assert.deepEqual(P.rules.map((line) => marker(line.en)).filter(Boolean), ["C1.", "C2.", "C3.", "C4.", "C5.", "C6.", "C7.", "C8.", "C9.", "C10.", "C11.", "P1.", "P2.", "P3.", "P4."]);
   assert.deepEqual(P.setup.map((line) => marker(line.en)).filter(Boolean), ["1.", "2.", "3.", "4.", "5."]);
   assert.equal(P.next.filter((line) => marker(line.en) === "-").length, 5);
   assert.deepEqual(TEAM.context.map((line) => marker(line.en)).filter(Boolean), ["1.", "2.", "3.", "4.", "5."]);
@@ -130,7 +130,7 @@ const HEADS = {
   team: { en: ["NOW:", "THEN:"], zh: ["现在：", "然后："] },
 };
 
-for (const id of ["setup", "team"]) test(`${id} prompt: docs, standing rules near the top, body, session block last`, () => {
+for (const id of ["setup", "team"]) test(`${id} prompt: docs, core rules near the top, body, session block last`, () => {
   for (const lang of ["en", "zh"]) {
     for (const token of ["", "arka_secret"]) {
       const text = render(lang, token, id);
@@ -140,7 +140,7 @@ for (const id of ["setup", "team"]) test(`${id} prompt: docs, standing rules nea
         return index;
       };
       const docs = at("GET http://ark:9/api/agent/v1/docs");
-      const rules = at(lang === "en" ? "STANDING RULES" : "长期规则");
+      const rules = at(lang === "en" ? "CORE RULES" : "核心规则");
       const setup = at(HEADS[id][lang][0]);
       const next = at(HEADS[id][lang][1]);
       const sessionId = at(lang === "en" ? "ARK session id for this conversation" : "本次对话的 ARK 会话 ID");
@@ -197,40 +197,70 @@ test("documentation: index first, on-demand reads, fallback for older servers", 
   assert.match(docs, /404[^.]*GET \/api\/agent\/v1\/interface and GET \/api\/agent\/v1\/skills/);
 });
 
-test("standing rules cover reading, planning, recording, review nodes, decisions, summaries and offline notes", () => {
+test("core rules cover reading, planning, progress, results, Needs you, decisions, replies and summaries", () => {
   const rules = P.rules.map((line) => line.en).join("\n");
   for (const needed of [
-    "without me reminding you",
+    "for this whole conversation, for every task",
+    "work that is not in ARK did not happen",
+    // Read first, and the whole working mode (T-0053: agents cut it off).
     "GET /api/agent/v1/context",
-    "GET /api/agent/v1/units/<ID>",
-    "straight away, without being asked",
-    "POST /api/agent/v1/units with type: \"task\"",
+    "GET /api/agent/v1/setup",
+    "GET /api/agent/v1/docs/agents/working-mode.md",
+    "the whole of working-mode.md",
+    "do not cut it off with head or a byte limit",
+    // Plan in a node first.
+    "One request is one task unit",
+    "POST /api/agent/v1/units, type: \"task\"",
+    "my request verbatim",
+    "derived_from the question or parent task",
+    "POST /api/agent/v1/links",
     "open → active → review or blocked → done",
-    "POST /api/agent/v1/units/<ID>/comments",
+    // Progress in the body, never in comments.
+    "dated line in the task body",
+    "re-read the body just before each write",
+    "Never post progress, plans or answers as comments",
+    // Results and the research tree.
+    "Each result is its own unit",
+    "part_of and derived_from the task",
     "POST /api/agent/v1/media/upload",
     "POST /api/agent/v1/assets/upload",
-    "POST /api/agent/v1/media ",
-    "POST /api/agent/v1/links",
-    "summary comment",
-    "ARK is unreachable",
-    "ark-sync-notes.md",
-    "env:NAME",
-    "readiness.requires_human",
-    // The recommended working mode (docs/agents/working-mode.md).
-    "GET /api/agent/v1/docs/agents/working-mode.md",
-    "Plan in a node first",
-    "exactly one derived_from parent",
-    "dated line to the task body",
-    "re-read the body just before you write it",
-    "Resource paths",
-    "POST /api/agent/v1/setup/location",
-    "POST /api/agent/v1/setup/resource",
-    "its own unit with status review",
-    "to that unit itself",
+    "\"data\": \"<base64>\"",
     "![caption](media:<id>)",
-    "type: \"decision\"",
+    "No other unit types, sub-tasks or relates_to links unless I ask",
+    // Needs you (user rule 2026-11-18).
+    "set that unit's status to review so it appears in Needs you",
+    "never set a review unit to done yourself",
+    // Decisions, replies, presence.
+    "type: \"decision\", status: \"done\"",
+    "GET /api/agent/v1/updates",
+    "`ark-server agent watch --once`",
+    "POST /api/agent/v1/units/<ID>/comments",
     "\"reply_to\"",
+    "POST /api/agent/v1/presence",
+    // Task folder, openable from the node (user rule 2026-11-18).
+    "YYYYMMDD_<task ID>",
+    "Resource paths",
+    "[Task folder](file:///<absolute path>)",
+    "Do not write the setup register during task work",
+    "never confirm setup yourself",
+    "readiness.requires_human",
+    "ark-sync-notes.md",
+    "one short summary comment on the main task",
+    // Preference defaults (internal/agentrules catalog).
+    "Plans need my approval",
+    "in the language I write to you in",
+    "GET /api/agent/v1/rules returns the current rules",
+    "SELF-CHECK before every reply to me",
   ]) assert.ok(rules.includes(needed), needed);
+  // A background watcher wakes the agent when the user replies in ARK (C8).
+  assert.ok(rules.includes("/api/agent/v1/watcher.sh"));
+  assert.ok(rules.includes("run_in_background"));
+  assert.ok(rules.includes("codex queue"));
+  // Paths are registered per device, from the user's answer, never guessed (C10).
+  assert.ok(rules.includes("check that this device has a path"));
+  assert.ok(rules.includes("never guess a path"));
+  assert.ok(rules.includes("`ark-server agent host-id`"));
+  assert.doesNotMatch(rules, /POST \/api\/agent\/v1\/setup\/resource/);
 });
 
 test("setup keeps its hard rules: the human confirms, no probing", () => {
@@ -239,7 +269,7 @@ test("setup keeps its hard rules: the human confirms, no probing", () => {
     "GET /api/agent/v1/skills/setup", "GET /api/agent/v1/setup", "X-ARK-Host",
     "POST /api/agent/v1/setup/discover", "paths: []", "profile.skipped",
     "POST /api/agent/v1/setup/draft", "{layer: \"project\", profile: {...}, propose: true}",
-    "POST /api/agent/v1/setup/location", "Home → Review & confirm",
+    "POST /api/agent/v1/setup/location", "Home → Review changes", "do not propose layer by layer",
     "never confirm yourself", "POST /api/agent/v1/setup/verify",
     "Never delete another member's records", "do not probe GPU servers",
   ]) assert.ok(setup.includes(needed), needed);
@@ -278,4 +308,18 @@ test("session block in both languages", () => {
   const on = session.sessionPromptBlock({ sessionId: "ark-ses-abcdefghij", url: "http://ark", projectId: "prj_1", uploads: true, lang: "zh" });
   assert.match(on, /--id ark-ses-abcdefghij --server http:\/\/ark --project prj_1 --interval 300/);
   assert.match(on, /每 5 分钟/);
+});
+
+test("composed rules from the server replace the defaults; the rest of the prompt stays", () => {
+  const composed = { version: "r-test0001", lines: { en: ["CORE RULES (rules r-test0001): x", "C1. one", "P1. two", "SELF-CHECK"], zh: ["核心规则（规则 r-test0001）：x", "C1. 一", "P1. 二", "自检"] } };
+  for (const lang of ["en", "zh"]) {
+    const base = prompts.starterPromptText("team", PROJECT, { url: "http://ark:9", sessionId: "ark-ses-abcdefghij", lang });
+    const text = prompts.starterPromptText("team", PROJECT, { url: "http://ark:9", sessionId: "ark-ses-abcdefghij", lang, rules: composed });
+    assert.ok(text.includes(composed.lines[lang].join(String.fromCharCode(10))), lang);
+    assert.ok(!text.includes(lang === "en" ? "C2. One request is one task unit" : "C2. 一个请求就是一个任务节点"), lang);
+    const cut = (s) => s.slice(s.indexOf(lang === "en" ? "NOW:" : "现在："));
+    assert.equal(cut(text), cut(base), lang);
+  }
+  assert.deepEqual(prompts.ruleLines(null, "en"), P.rules.map((line) => line.en));
+  assert.deepEqual(prompts.ruleLines({ lines: { en: [] } }, "en"), P.rules.map((line) => line.en));
 });

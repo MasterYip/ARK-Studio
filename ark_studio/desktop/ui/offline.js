@@ -1,10 +1,11 @@
-// Shown when the local server fails or stops, or a server cannot be reached.
+// The main window's status page: the local server is starting, failed or
+// was stopped ("local"), or a saved server did not answer ("remote").
 import { t, applyI18n } from "./i18n.js";
 
 const invoke = (cmd, args = {}) => window.__TAURI_INTERNALS__.invoke(cmd, args);
 const $ = (id) => document.getElementById(id);
 const params = new URLSearchParams(location.search);
-const kind = params.get("kind") === "remote" ? "remote" : "local";
+const kind = ["starting", "remote"].includes(params.get("kind")) ? params.get("kind") : "local";
 const target = params.get("url") || "";
 
 function show(text) {
@@ -16,27 +17,43 @@ function show(text) {
 }
 
 applyI18n();
-$("title").textContent = kind === "local" ? t("offline.local_title") : t("offline.remote_title");
-show(params.get("message") || target);
+$("title").textContent = t(`offline.${kind}_title`);
+if (kind === "starting") {
+  const spin = document.createElement("span");
+  spin.className = "spinner";
+  spin.setAttribute("aria-hidden", "true");
+  $("title").prepend(spin);
+  show(t("local.starting"));
+  for (const id of ["retry", "show-log", "home", "open-anyway"]) $(id).classList.add("hidden");
+} else {
+  show(params.get("message") || target);
+}
 $("show-log").classList.toggle("hidden", kind !== "local");
+$("home").classList.toggle("hidden", kind !== "remote");
+$("open-anyway").classList.toggle("hidden", kind !== "remote");
 $("show-log").addEventListener("click", () => invoke("open_log").catch(() => {}));
-$("switch").addEventListener("click", () => invoke("open_chooser"));
+$("settings").addEventListener("click", () => invoke("open_settings", { view: kind === "remote" ? "connect" : "local" }));
+$("home").addEventListener("click", () => invoke("go_local_home"));
+
+async function openRemote(force) {
+  const res = await invoke("connect_remote", { url: target, force });
+  if (!res.opened) show(t("remote.unreachable", { url: res.url || target }));
+}
+
+$("open-anyway").addEventListener("click", () => openRemote(true).catch((err) => show(String(err?.message || err))));
 $("retry").addEventListener("click", async () => {
   $("retry").disabled = true;
   try {
-    const state = await invoke("get_state");
     if (kind === "remote") {
-      await invoke("connect_remote", { url: target, autoConnect: !!state.settings.autoConnect });
+      await openRemote(false);
     } else {
       show(t("local.starting"));
-      await invoke("connect_local", {
-        root: state.settings.localRoot || "",
-        port: state.settings.localPort || 0,
-        autoConnect: !!state.settings.autoConnect,
-      });
+      const state = await invoke("get_state");
+      await invoke("connect_local", { root: state.settings.localRoot || "", port: state.settings.localPort || 0 });
     }
   } catch (err) {
     show(String(err?.message || err));
+  } finally {
     $("retry").disabled = false;
   }
 });

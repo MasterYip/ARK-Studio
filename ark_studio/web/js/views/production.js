@@ -2,8 +2,10 @@ import { h, clear, emptyState, typeColor, statusPill, tagChip, typeBadge, fmtDat
 import { t, typeLabel, nsLabel, statusLabel } from "../i18n.js";
 import { icon } from "../icons.js";
 import { openImageLightbox } from "../image-viewer.js";
+import { delegateImageContextMenu } from "../image-copy.js";
 import { unitCard, openModal } from "../components.js";
 import { api, mediaUrl } from "../api.js";
+import { advancedEnabled } from "../advanced.js";
 
 export function renderProduction(host, ctx) {
   const S = ctx.S;
@@ -47,22 +49,25 @@ export function renderProduction(host, ctx) {
         h("div", { class: "d" }, `${statusLabel(unit.status)} · ${relativeTime(unit.updated_at)}`))));
   }
 
+  const showDesign = advancedEnabled() || production.length > 0;
   const page = h("div", { class: "page" },
     h("div", { class: "page-head" },
       h("div", null,
-        h("div", { class: "eyebrow" }, `${t("nav.production")} · ${t("stage.make")}`),
+        h("div", { class: "eyebrow" }, t("nav.output")),
         h("h1", { class: "page-title" }, t("production.title")),
         h("p", { class: "page-sub" }, t("production.subtitle"))),
       h("div", { class: "head-actions" },
-        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("sparkles", "sm"), t("assistant.title")),
+        h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")),
         h("button", { class: "primary-btn", onclick: () => ctx.openCreate({ type: "production" }) }, icon("plus", "sm"), t("production.add")))),
     h("div", { class: "prod-grid" },
       h("div", { class: "stack" },
-        h("section", { class: "panel" },
+        // Palette / Type / Versions are advanced: shown once the project has
+        // production nodes, or with advanced features on.
+        !showDesign ? null : h("section", { class: "panel" },
           h("div", { class: "panel-head" }, h("h3", null, t("production.palette")),
             h("span", { class: "muted", style: { fontSize: "10px" } }, `${colors.length}`)),
           paletteBody),
-        h("div", { class: "style-board" },
+        !showDesign ? null : h("div", { class: "style-board" },
           h("section", { class: "panel" },
             h("div", { class: "panel-head" }, h("h3", null, t("production.type"))),
             fontBody),
@@ -133,6 +138,7 @@ async function openReport(ctx, unit) {
           h("span", null, item.caption || item.url))
         : h("a", { class: "report-media file", href: mediaUrl(item), target: "_blank", rel: "noreferrer noopener" },
           icon("file", "sm"), item.caption || item.url))) : null);
+  delegateImageContextMenu(body, ".report-media:not(.file) img, img.rich-img");
   openModal({
     title: full.title || t("production.report"),
     wide: true,

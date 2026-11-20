@@ -278,6 +278,11 @@ func (m *Manager) publicLocked(s *Session, detail bool) *pyjson.Object {
 			Set("command_preview", or(meta.Value("command_preview"), "")).Set("workspace", s.Workspace()).
 			Set("read_env", objOr(meta.Value("read_env")))
 	}
+	if pyjson.Truthy(meta.Value("stream_input")) {
+		// A long-lived Claude Code process: messages go to its stdin at once.
+		payload.Value("capabilities").(*pyjson.Object).Set("stream_input", true).
+			Set("turn_state", or(meta.Value("turn_state"), ""))
+	}
 	return payload
 }
 

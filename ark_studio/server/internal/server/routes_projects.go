@@ -81,17 +81,30 @@ func (c *reqCtx) replyBootstrap() error {
 
 // createProject is App.create_project.
 func (c *reqCtx) createProject(body *pyjson.Object) error {
+	p, err := c.createProjectRecord(body)
+	if err != nil {
+		return err
+	}
+	if err := c.switchProject(p); err != nil {
+		return err
+	}
+	return c.replyBootstrap()
+}
+
+// createProjectRecord creates and registers a project for the actor (the
+// part of POST /api/projects shared with POST /api/desktop/projects).
+func (c *reqCtx) createProjectRecord(body *pyjson.Object) (*project.Project, error) {
 	name := pytext.Strip(strOrEmpty(body.Value("name")))
 	if name == "" {
-		return apiErr(400, "Project name is required", "")
+		return nil, apiErr(400, "Project name is required", "")
 	}
 	if c.app.Auth != nil {
 		role, _, err := c.app.Org.RoleFor(c.ctx, c.actor())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if role != "owner" && role != "admin" && role != "member" {
-			return apiErr(403, "Only organization members can create projects.", "ORG_FORBIDDEN")
+			return nil, apiErr(403, "Only organization members can create projects.", "ORG_FORBIDDEN")
 		}
 	}
 	template := "blank"
@@ -101,7 +114,7 @@ func (c *reqCtx) createProject(body *pyjson.Object) error {
 	description := pytext.Prefix(pytext.Strip(strOrEmpty(body.Value("description"))), 600)
 	p, err := c.app.Projects.Create(c.ctx, name, description, template, false, "")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	providers := pyjson.NewObject()
 	for _, pid := range settings.PresetIDs() {
@@ -120,45 +133,43 @@ func (c *reqCtx) createProject(body *pyjson.Object) error {
 		return nil
 	})
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := store.WriteManifest(p.Path, encoded); err != nil {
-		return err
+		return nil, err
 	}
 	summary, err := p.Summary()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	actor := c.actor()
 	if err := c.app.Org.RegisterProject(c.ctx, summary, actor, true); err != nil {
-		return err
+		return nil, err
 	}
+	c.app.noteWriter(p.ID(), actor, c.writeActor()) // project_people.go
 	actorID, err := c.app.Org.UserIDFor(c.ctx, actor)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	owners, err := c.app.Org.Owners(c.ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	for _, owner := range owners {
 		granted, err := c.app.Org.ProjectGrantUsers(c.ctx, p.ID())
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if !granted[owner.Str("id")] {
 			if err := c.app.Org.SetProjectGrant(c.ctx, p.ID(), owner.Str("id"), "admin", actorID); err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 	if err := c.app.Org.Log(c.ctx, actorID, "project.create", p.ID(), pyjson.NewObject("name", name)); err != nil {
-		return err
+		return nil, err
 	}
-	if err := c.switchProject(p); err != nil {
-		return err
-	}
-	return c.replyBootstrap()
+	return p, nil
 }
 
 func strOrEmpty(v any) string {

@@ -123,6 +123,13 @@ func run(argv []string) int {
 			return docsCheck(argv[1:])
 		case "demo-agent": // the echo preset's agent (arkstudio/demo_agent.py)
 			return demoagent.Main(argv[1:], os.Stdin, os.Stdout, os.Stderr)
+		case "agent": // Go only: `agent watch` (cli_agentwatch.go); `agent context` is the Python parser's
+			if len(argv) > 1 && argv[1] == "watch" {
+				return agentWatch(argv[2:], stdout, stderr)
+			}
+			if len(argv) > 1 && argv[1] == "host-id" { // this device's id for X-ARK-Host (internal/hostid)
+				return agentHostID(argv[2:], stdout)
+			}
 		case "version", "--version":
 			pyprint("ark-server", version)
 			return 0

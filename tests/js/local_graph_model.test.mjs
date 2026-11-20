@@ -36,16 +36,17 @@ test("levels 1-3 grow the neighbourhood; levels are recorded", () => {
   assert.equal(three.center.id, 1);
   assert.deepEqual(three.edges.map((e) => e.id).sort(), [1, 2, 3, 4, 5]);
   assert.deepEqual(m.neighbourhood(snapshot, 99), { nodes: [], edges: [], parents: new Map(), truncated: false, total: 0, center: null });
-  assert.equal(m.normalizeOptions({ depth: 9 }).depth, 1);
+  assert.equal(m.normalizeOptions({ depth: 9 }).depth, 2);
+  assert.equal(m.normalizeOptions({}).depth, 2); // default: two levels
 });
 
 test("direction, relation and node-type filters", () => {
-  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { direction: "out" })), [1, 2]);
-  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { direction: "in" })), [1, 5, 6]);
-  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { hiddenRelations: ["supports"] })), [1, 5, 6]);
-  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { hiddenTypes: ["task", "claim"] })), [1, 2]);
+  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { depth: 1, direction: "out" })), [1, 2]);
+  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { depth: 1, direction: "in" })), [1, 5, 6]);
+  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { depth: 1, hiddenRelations: ["supports"] })), [1, 5, 6]);
+  assert.deepEqual(ids(m.neighbourhood(snapshot, 1, { depth: 1, hiddenTypes: ["task", "claim"] })), [1, 2]);
   // The centre is kept even when its own type is hidden.
-  assert.deepEqual(ids(m.neighbourhood(snapshot, 6, { hiddenTypes: ["task"] })), [1, 6]);
+  assert.deepEqual(ids(m.neighbourhood(snapshot, 6, { depth: 1, hiddenTypes: ["task"] })), [1, 6]);
   assert.deepEqual(m.relationsIn(snapshot), ["part_of", "relates", "supports"]);
   assert.deepEqual(m.typesIn(snapshot), ["claim", "idea", "task"]);
 });
@@ -129,10 +130,19 @@ test("direction filters follow the shown (display-reversed) direction", async ()
   };
   const ids = (data) => data.nodes.map((node) => node.id).sort();
   // Stored: 1 -> 2 and 1 -> 3, so "out" from 1 reaches both.
-  assert.deepEqual(ids(neighbourhood(snapshot, 1, { direction: "out" })), [1, 2, 3]);
+  assert.deepEqual(ids(neighbourhood(snapshot, 1, { depth: 1, direction: "out" })), [1, 2, 3]);
   // derived_from shown reversed: 2 -> 1, so it is incoming for 1.
   const reversed = (relation) => relation === "derived_from";
-  assert.deepEqual(ids(neighbourhood(snapshot, 1, { direction: "out" }, undefined, reversed)), [1, 3]);
-  assert.deepEqual(ids(neighbourhood(snapshot, 1, { direction: "in" }, undefined, reversed)), [1, 2]);
-  assert.deepEqual(ids(neighbourhood(snapshot, 2, { direction: "out" }, undefined, reversed)), [1, 2]);
+  assert.deepEqual(ids(neighbourhood(snapshot, 1, { depth: 1, direction: "out" }, undefined, reversed)), [1, 3]);
+  assert.deepEqual(ids(neighbourhood(snapshot, 1, { depth: 1, direction: "in" }, undefined, reversed)), [1, 2]);
+  assert.deepEqual(ids(neighbourhood(snapshot, 2, { depth: 1, direction: "out" }, undefined, reversed)), [1, 2]);
+});
+
+test("stored options: v1 settings move to v2 with two levels, other choices kept", () => {
+  assert.equal(m.migrateStoredOptions(null, null).depth, 2);
+  const moved = m.migrateStoredOptions(null, JSON.stringify({ depth: 1, layout: "mind", hiddenTypes: ["task"] }));
+  assert.equal(moved.depth, 2);
+  assert.equal(moved.layout, "mind");
+  assert.deepEqual(moved.hiddenTypes, ["task"]);
+  assert.equal(m.migrateStoredOptions(JSON.stringify({ depth: 1 }), JSON.stringify({ depth: 3 })).depth, 1); // a v2 choice wins
 });

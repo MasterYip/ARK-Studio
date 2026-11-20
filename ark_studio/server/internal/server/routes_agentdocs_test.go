@@ -201,8 +201,20 @@ func TestAgentInterfaceListsDocs(t *testing.T) {
 	json.Unmarshal(agentInterfaceEncoded(), &mine)                  //nolint:errcheck
 	json.Unmarshal([]byte(staticJSON["skills_interface"]), &python) //nolint:errcheck
 	delete(mine, "docs")
+	// The Go-only capabilities (go_only.py GO_ONLY_CAPABILITIES) come last.
 	caps := mine["capabilities"].([]any)
-	mine["capabilities"] = caps[:len(caps)-2]
+	kept := []any{}
+	for _, c := range caps {
+		id, _ := c.(map[string]any)["id"].(string)
+		if !strings.HasPrefix(id, "docs.") && !strings.HasPrefix(id, "watch.") && !strings.HasPrefix(id, "messages.") &&
+			!goOnlyLinkCaps[id] {
+			kept = append(kept, c)
+		}
+	}
+	if len(caps)-len(kept) != 9 || ids["watch.updates"] != "/api/agent/v1/updates" {
+		t.Fatalf("Go-only capabilities: %d, %v", len(caps)-len(kept), ids)
+	}
+	mine["capabilities"] = kept
 	a, _ := json.Marshal(mine)
 	b, _ := json.Marshal(python)
 	if string(a) != string(b) {
@@ -215,3 +227,7 @@ func TestAgentInterfaceListsDocs(t *testing.T) {
 		t.Fatal("/api/skills/interface must stay Python's payload")
 	}
 }
+
+// goOnlyLinkCaps are the Go-only link capabilities (routes_agentlinks.go);
+// Python's links.write stays.
+var goOnlyLinkCaps = map[string]bool{"links.list": true, "links.delete": true, "links.update": true}

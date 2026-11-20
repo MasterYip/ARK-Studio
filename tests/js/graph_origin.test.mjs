@@ -3,16 +3,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import vm from "node:vm";
-import { loadGraphCore } from "./load_graph_core.mjs";
+import { loadGraphChange, loadGraphCore } from "./load_graph_core.mjs";
 
 async function fixture(nodeTransitions = true) {
   const context = vm.createContext({ performance, localStorage: { setItem() {} } });
   const core = await loadGraphCore(context);
+  const graphChange = await loadGraphChange(context);
   const module = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8"), { context },
   );
   await module.link(async (specifier, parent) => {
     if (specifier === "./graph-core.js") return core;
+    if (specifier === "./graph-change.js") return graphChange;
     const source = await readFile(new URL(`../../ark_studio/web/js/${specifier.slice(2)}`, import.meta.url), "utf8");
     const names = [...new Set([...source.matchAll(/export (?:async )?(?:function|class|const|let) (\w+)/g)].map((m) => m[1]))];
     const values = {
@@ -96,7 +98,7 @@ test("an immediate filter update paints all nodes without a synchronous force wa
 test("the title-board composition changes only its camera", async () => {
   const graph = await fixture();
   graph.opts.backdrop = true;
-  graph.nodes = [{ id: 1, x: -120, y: 80 }, { id: 2, x: 260, y: -40 }];
+  graph.nodes = [{ id: 1, x: -1200, y: 800 }, { id: 2, x: 2600, y: -400 }]; // wide enough to stay under the zoom cap
   const physics = JSON.stringify(graph.physics), positions = JSON.stringify(graph.nodes);
   graph._fitBackdrop();
   const zoom = graph.zoom;
@@ -132,4 +134,25 @@ test("disabling node transitions retains immediate filtering without force warm-
   graph.setData([{ id: 2 }], [], { animate: true, preserveCamera: true });
   assert.equal(graph._ghosts.length, 0);
   assert.equal(graph.nodes[0]._appear ?? 1, 1);
+});
+
+test("the Home backdrop never scales a small graph past its cap", async () => {
+  const graph = await fixture();
+  graph.opts.backdrop = true;
+  graph.nodes = [{ id: 1, x: -20, y: 10 }, { id: 2, x: 30, y: -10 }];
+  graph._fitBackdrop();
+  assert.ok(graph.zoom <= 1.6, `zoom ${graph.zoom}`);
+});
+
+test("node size follows the current links: a parent with new children grows", async () => {
+  const graph = await fixture();
+  graph.nodes = [{ id: 1, degree: 0 }, { id: 2, degree: 1 }, { id: 3, degree: 1 }, { id: 4, degree: 1 }];
+  graph.edges = [{ id: "a", source: 2, target: 1 }, { id: "b", source: 3, target: 1 }, { id: "c", source: 4, target: 1 }];
+  graph._syncDegrees();
+  assert.equal(graph.nodes[0].degree, 3);
+  assert.equal(graph.nodes[1].degree, 1);
+  graph.edges.push({ id: "d", source: 1, target: 4 });
+  graph._syncDegrees();
+  assert.equal(graph.nodes[0].degree, 4);
+  assert.equal(graph.nodes[3].degree, 2);
 });

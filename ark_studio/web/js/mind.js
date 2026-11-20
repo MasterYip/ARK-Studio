@@ -1,6 +1,6 @@
 import { topicMenuItems } from "./topic-actions.js";
 import { api } from "./api.js";
-import { t } from "./i18n.js";
+import { t, relLabel } from "./i18n.js";
 import { confirmDialog } from "./components.js";
 import { mediaSource } from "./editor-media.js";
 
@@ -235,6 +235,8 @@ export function mindGraphOptions(ctx) {
   };
 
   return {
+    // A graph of this project's units (multi-selection inspector, app.js).
+    projectUnits: true,
     mode: ctx.S.graphMode || undefined,
     onModeChange: (mode) => ctx.syncInspectorMode?.(mode),
     getSelectedId: () => ctx.S.selectedId,
@@ -246,6 +248,20 @@ export function mindGraphOptions(ctx) {
         return null;
       }
     },
+    // Ctrl+Enter on several siblings: one new parent for them (one
+    // transaction on the server); Ctrl+Z dissolves it again.
+    onGroupNodes: async (nodes, parent, { relation = "part_of", type = "note", tags = [] } = {}) => {
+      try {
+        return await api.groupUnits({
+          units: nodes.map(uidOf), parent: parent ? uidOf(parent) : null, relation,
+          title: t("mind.new_node"), type, tags,
+        });
+      } catch (err) {
+        ctx.toast?.(err.message || String(err), "err");
+        return null;
+      }
+    },
+    onUngroup: async (node, { relation = "part_of" } = {}) => api.ungroupUnit(uidOf(node), { relation }),
     onRename,
     onAddNode,
     onAddOrphan,
@@ -274,15 +290,38 @@ export function mindGraphOptions(ctx) {
     },
     onEdgeClick: (edge, source, target) => ctx.openEdgeRelation?.(edge, source, target),
     onDeleteLink: async (id) => { await api.deleteLink(id); },
+    // Delete / Backspace or the menu on a selected link (graph.js
+    // _deleteSelectedEdge): confirm like the inspector's link rows, then
+    // DELETE /api/links/{id} (activity link.delete).
+    onDeleteEdge: async (edge, source, target) => {
+      if (!/^\d+$/.test(String(edge?.id ?? ""))) return false;
+      const name = (node, id) => (node ? `${node.uid || node.id} · ${node.title || ""}`.trim() : String(id));
+      const ok = await confirmDialog(t("edge.delete_confirm", {
+        relation: relLabel(edge.relation || "unset"), source: name(source, edge.source), target: name(target, edge.target),
+      }), { title: t("edge.delete"), confirmLabel: t("edge.delete"), danger: true });
+      if (!ok) return false;
+      try {
+        await api.deleteLink(edge.id);
+      } catch (err) {
+        ctx.toast?.(err.message || String(err), "err");
+        return false;
+      }
+      ctx.toast?.(t("toast.unlinked"), "ok");
+      for (const graph of ctx.graphs || []) graph.removeEdge?.(edge.id);
+      if (ctx.S?.drawerOpen) ctx.reloadDetail?.();
+      return true;
+    },
     onRestoreNodes: async (nodes) => {
       for (const node of nodes) await api.restoreUnit(uidOf(node));
     },
     onRestoreLinks: async (edges) => {
+      const created = [];
       for (const edge of edges) {
         try {
-          await api.createLink({ source: edge.source, target: edge.target, relation: edge.relation });
-        } catch { /* an equivalent link may already exist */ }
+          created.push(await api.createLink({ source: edge.source, target: edge.target, relation: edge.relation }));
+        } catch { created.push(null); /* an equivalent link may already exist */ }
       }
+      return created;
     },
     onAddTag: async (nodes, tag) => {
       for (const node of nodes) {
@@ -317,7 +356,7 @@ export function mindGraphOptions(ctx) {
           nodes.length === 1
             ? t("mind.delete_confirm", { title: nodes[0].title })
             : t("mind.delete_many", { n: nodes.length }),
-          { title: t("action.delete"), danger: true, confirmLabel: t("action.delete") },
+          { title: t("mind.delete"), confirmLabel: t("action.move_to_trash") },
         );
         if (!ok) return false;
       }
