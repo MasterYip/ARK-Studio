@@ -13,7 +13,7 @@ func newGate(t *testing.T) (*Gate, *time.Time) {
 	t.Helper()
 	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("app")) })
 	now := time.Unix(1_800_000_000, 0)
-	g := New(ok, "s3cret", 18890, func(tok string) bool { return tok == "agent-token" })
+	g := New(ok, "s3cret", 18890, func(_ *http.Request, tok string) bool { return tok == "agent-token" })
 	g.now = func() time.Time { return now }
 	return g, &now
 }
@@ -105,5 +105,26 @@ func TestClaimRejectsStaleForgedAndOpenRedirect(t *testing.T) {
 		if rec.Code != 303 || rec.Header().Get("Location") != "/" {
 			t.Fatalf("next %q -> %q", next, rec.Header().Get("Location"))
 		}
+	}
+}
+
+// The gate asks tokenOK on every request (no caching), so a token the
+// server stops accepting (revoked, expired) is refused on the next request.
+func TestTokenCheckedPerRequest(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("app")) })
+	live := true
+	var seen *http.Request
+	g := New(ok, "s3cret", 18890, func(r *http.Request, tok string) bool {
+		seen = r
+		return live && tok == "arka_personal"
+	})
+	req := httptest.NewRequest("GET", "/api/agent/v1/context", nil)
+	req.Header.Set("Authorization", "Bearer arka_personal")
+	if rec := do(g, req); rec.Code != 200 || seen != req {
+		t.Fatalf("personal token: %d", rec.Code)
+	}
+	live = false
+	if rec := do(g, req); rec.Code != 401 || !strings.Contains(rec.Body.String(), "DESKTOP_ONLY") {
+		t.Fatalf("revoked token admitted: %d", rec.Code)
 	}
 }

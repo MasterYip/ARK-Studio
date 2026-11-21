@@ -81,6 +81,7 @@ func (c *reqCtx) replyBootstrap() error {
 
 // createProject is App.create_project.
 func (c *reqCtx) createProject(body *pyjson.Object) error {
+	_, fallback := c.app.Projects.NewProjectFolder() // routes_storage.go
 	p, err := c.createProjectRecord(body)
 	if err != nil {
 		return err
@@ -88,7 +89,19 @@ func (c *reqCtx) createProject(body *pyjson.Object) error {
 	if err := c.switchProject(p); err != nil {
 		return err
 	}
-	return c.replyBootstrap()
+	if !fallback {
+		return c.replyBootstrap()
+	}
+	payload, err := c.bootstrap()
+	if err != nil {
+		return err
+	}
+	// The chosen folder for new projects is missing (an unplugged drive):
+	// the project went to the server's own folder.
+	payload.Set("storage_notice", pyjson.NewObject("code", "STORAGE_FALLBACK",
+		"configured", c.app.Projects.Storage().Default, "used", filepath.Dir(p.Path)))
+	c.ok(payload)
+	return nil
 }
 
 // createProjectRecord creates and registers a project for the actor (the
@@ -208,7 +221,9 @@ func (c *reqCtx) resolveProjectRef(ref string) (*project.Project, error) {
 		target = filepath.Join(root, text)
 	}
 	target = project.Resolve(target)
-	if target != root && !strings.HasPrefix(target, root+string(filepath.Separator)) {
+	// Inside a listed project folder (routes_storage.go); in local mode an
+	// ARK project anywhere else lists its folder.
+	if !c.app.Projects.InsideFolders(target) && !c.adoptProjectFolder(target) {
 		return nil, apiErr(403, "Project folders must stay inside the configured root.", "PROJECT_PATH_DENIED")
 	}
 	if fi, err := os.Stat(target); err != nil || !fi.IsDir() {

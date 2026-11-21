@@ -32,8 +32,10 @@ public class TaskActivity extends NodeActivity {
         actions.addView(status, Ui.lp(0, Ui.WRAP, 1));
         content.addView(actions);
         if (session.isReadOnly()) content.addView(Ui.small(this, getString(R.string.read_only_hint)));
+        ReviewUi.unitReview(this, content, unit);
         body(this, content, unit);
         media(this, content, unit);
+        ReviewUi.commentBox(this, content, unit, this::changed);
         if (!session.isReadOnly()) noteComposer();
         links(this, content, unit);
     }

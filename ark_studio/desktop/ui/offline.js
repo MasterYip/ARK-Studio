@@ -1,6 +1,7 @@
 // The main window's status page: the local server is starting, failed or
 // was stopped ("local"), or a saved server did not answer ("remote").
 import { t, applyI18n } from "./i18n.js";
+import { unreachableMessage } from "./connect-model.js";
 
 const invoke = (cmd, args = {}) => window.__TAURI_INTERNALS__.invoke(cmd, args);
 const $ = (id) => document.getElementById(id);
@@ -37,7 +38,7 @@ $("home").addEventListener("click", () => invoke("go_local_home"));
 
 async function openRemote(force) {
   const res = await invoke("connect_remote", { url: target, force });
-  if (!res.opened) show(t("remote.unreachable", { url: res.url || target }));
+  if (!res.opened) show(unreachableMessage(res, target, t));
 }
 
 $("open-anyway").addEventListener("click", () => openRemote(true).catch((err) => show(String(err?.message || err))));

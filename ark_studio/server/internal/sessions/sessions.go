@@ -116,6 +116,10 @@ type Hooks struct {
 	// AgentToken issues the agent token for one session run (T-0053): the
 	// secret for ARK_AGENT_TOKEN and its id for revocation; "" = none.
 	AgentToken func(actor, sessionID, access string) (secret, id string, err error)
+	// WakesIdle reports whether ARK wakes the project's idle sessions with
+	// people's updates (internal/sessionnudge); the session then gets
+	// ARK_WAKE=ark and starts no watcher of its own.
+	WakesIdle func(projectID string) bool
 }
 
 // Manager is SessionManager.
@@ -581,6 +585,22 @@ func (m *Manager) AccessibleIDs(projectID, user string, admin bool) map[string]b
 		pid := strOr(objOr(meta.Value("project")).Value("id"))
 		if pid == projectID && CanView(strOr(meta.Value("actor")), pyjson.Truthy(meta.Value("shared")), user, admin) {
 			out[id] = true
+		}
+	}
+	return out
+}
+
+// AgentTokenIDs returns the ids of the agent tokens issued for the
+// session's runs without forgetting them.
+func (m *Manager) AgentTokenIDs(s *Session) []string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	var out []string
+	if ids, ok := s.Meta.Value("agent_token_ids").([]any); ok {
+		for _, id := range ids {
+			if v := strOr(id); v != "" {
+				out = append(out, v)
+			}
 		}
 	}
 	return out

@@ -21,11 +21,11 @@ const LEGACY = {
 test("settings are grouped into a few tabs per scope", () => {
   const count = (scope) => SETTINGS_TABS.filter((tab) => tab.scope === scope).length;
   assert.deepEqual(SETTINGS_TABS.map((tab) => tab.id),
-    ["overview", "appearance", "agents", "data", "trash", "members", "resources", "access", "profile", "display", "personalAI", "plugins", "browser", "about", "admin"]);
+    ["overview", "appearance", "agents", "data", "trash", "members", "resources", "access", "profile", "display", "personalAI", "plugins", "browser", "about", "storage", "admin"]);
   assert.equal(count("overview"), 1);
   assert.equal(count("project"), 7);
   assert.equal(count("personal"), 6);
-  assert.equal(count("admin"), 1);
+  assert.equal(count("admin"), 2);
   // Settings opens on the overview; Resources and Access are listed as Advanced.
   assert.equal(DEFAULT_SETTINGS_TAB, "overview");
   assert.deepEqual(SETTINGS_TABS.filter((tab) => tab.advanced).map((tab) => tab.id), ["resources", "access"]);
@@ -34,7 +34,7 @@ test("settings are grouped into a few tabs per scope", () => {
   // Sections added after the regrouping (no legacy tab id).
   assert.deepEqual([...sections].sort(), [...Object.keys(LEGACY), "appearanceOverride", "sessionUploads",
     "overview", "advanced", "infohubSource", "graphOverride", "plugins", "trash",
-    "agentRules", "personalAgentRules", "members"].sort());
+    "agentRules", "personalAgentRules", "members", "projectStorage"].sort());
   // Browser-local settings no longer sit under the Project scope.
   assert.equal(settingsTabScope(resolveSettingsTab("infohubSource").tab), "personal");
   assert.equal(resolveSettingsTab("sessionUploads").tab, "access");

@@ -116,15 +116,16 @@ func (m *Manager) Create(ctx context.Context, name, description, template string
 	if accent == "" {
 		accent = "#2563eb"
 	}
+	parent, _ := m.NewProjectFolder()
 	base := Slugify(name)
-	folder := filepath.Join(m.Root, base+".ark")
+	folder := filepath.Join(parent, base+".ark")
 	for n := 2; ; n++ {
 		if _, err := os.Lstat(folder); os.IsNotExist(err) {
 			break
 		}
-		folder = filepath.Join(m.Root, fmt.Sprintf("%s-%d.ark", base, n))
+		folder = filepath.Join(parent, fmt.Sprintf("%s-%d.ark", base, n))
 	}
-	if err := os.MkdirAll(m.Root, 0o755); err != nil {
+	if err := os.MkdirAll(parent, 0o755); err != nil {
 		return nil, err
 	}
 	if err := os.Mkdir(folder, 0o755); err != nil {

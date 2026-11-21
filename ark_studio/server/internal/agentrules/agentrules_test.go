@@ -88,7 +88,7 @@ func TestDefaultsCompose(t *testing.T) {
 	for _, want := range []string{
 		"CORE RULES (rules " + got.Version + ")",
 		"C1. Read before your first write",
-		"C8. First thing after setup, start the ARK watcher in the background",
+		"C8. If ARK_SESSION_ID is set and ARK_WAKE=ark, ARK launched you and wakes you itself: start no watcher. Otherwise, first thing after setup, start the ARK watcher in the background",
 		"C10. Before you change files, GET /api/agent/v1/setup with X-ARK-Host",
 		"C11. Do not write the setup register",
 		"P1. Plans need my approval",

@@ -29,6 +29,7 @@ type Session struct {
 	Idle      bool   // running and quiet for a while
 	Accepts   bool   // takes follow-up input
 	Stopped   bool   // finished recently and can be resumed with a new turn
+	Watching  bool   // a watcher of its own is waiting on the update feed
 }
 
 // Batch is the people's updates after a cursor.
@@ -45,6 +46,8 @@ type Deps struct {
 	Top      func(ctx context.Context, projectID string) (epoch string, top int64, err error)
 	Since    func(ctx context.Context, s Session, after int64) (Batch, error)
 	Send     func(s Session, text string) error
+	// ProjectName names the project in the message (optional).
+	ProjectName func(projectID string) string
 }
 
 type cursor struct {
@@ -80,6 +83,12 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 			}
 			continue
 		}
+		if s.Watching { // its own watcher wakes it: one wake-up per update
+			if epoch, top, err := n.D.Top(ctx, s.ProjectID); err == nil {
+				n.cursor[s.ID] = cursor{epoch, top}
+			}
+			continue
+		}
 		if !(s.Idle && s.Accepts) && !s.Stopped {
 			continue // the agent is working: keep the cursor, nudge when it rests
 		}
@@ -95,7 +104,11 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 			n.cursor[s.ID] = cursor{c.epoch, b.Top}
 			continue
 		}
-		if err := n.D.Send(s, Text(b.Items)); err != nil {
+		name := ""
+		if n.D.ProjectName != nil {
+			name = n.D.ProjectName(s.ProjectID)
+		}
+		if err := n.D.Send(s, Text(s, name, b.Items)); err != nil {
 			continue // try again next tick
 		}
 		n.cursor[s.ID] = cursor{c.epoch, b.Top}
@@ -125,10 +138,16 @@ func (n *Nudger) Run(ctx context.Context, every time.Duration) {
 
 const maxListed = 5
 
-// Text is the input turn: what happened, then what to do.
-func Text(items []*pyjson.Object) string {
+// Text is the input turn: what happened, then what to do.  It opens like
+// the watcher's messages: "ARK UPDATE for <agent>, ARK project <name> (<id>)".
+func Text(s Session, projectName string, items []*pyjson.Object) string {
 	var b strings.Builder
-	fmt.Fprintf(&b, "ARK: %d new update(s) from people while you were idle:\n", len(items))
+	project := s.ProjectID
+	if projectName != "" {
+		project = projectName + " (" + s.ProjectID + ")"
+	}
+	fmt.Fprintf(&b, "ARK UPDATE for ARK session %s, ARK project %s: %d new update(s) from people while you were idle:\n",
+		s.ID, project, len(items))
 	for i, it := range items {
 		if i == maxListed {
 			fmt.Fprintf(&b, "- and %d more\n", len(items)-maxListed)
@@ -137,6 +156,7 @@ func Text(items []*pyjson.Object) string {
 		fmt.Fprintf(&b, "- %s\n", pyjson.Str(it.Value("summary")))
 	}
 	b.WriteString("Read GET /api/agent/v1/updates, act on them under the core rules (reply with reply_to, resolve, " +
-		"record decisions, set review for what I must look at), then go on. If you already handled them, say so in one line.")
+		"record decisions, set review for what I must look at), then go on. If you already handled them, say so in one line. " +
+		"If you are not working on ARK project " + project + " in this session, ignore this message.")
 	return b.String()
 }

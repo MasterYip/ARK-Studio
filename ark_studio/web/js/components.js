@@ -11,6 +11,7 @@ import { isArkSource } from "./import-ark-model.js";
 import { displayName } from "./users.js";
 import { withDesktopGroups, newProjectLocation } from "./desktop-hub.js";
 import { liveProjectPicker } from "./project-picker.js";
+import { fallbackNotice } from "./project-storage-model.js";
 
 const KIND_COLORS = {topic: "#3b82f6", todo: "#ef4444", event: "#a855f7", decision: "#f59e0b",
   question: "#eab308", announcement: "#14b8a6", resource: "#10b981", digest: "#64748b", note: "#94a3b8"};
@@ -198,7 +199,8 @@ export async function openProjectModal(ctx, mode = "all") {
           try {
             const data = await api.createProject({ name: title, description: desc.value.trim(), template: template.value });
             ctx.applyBootstrap(data);
-            ctx.toast(t("project.toast.created", { name: title }), "ok");
+            const notice = fallbackNotice(data);
+            ctx.toast(notice ? t(...notice) : t("project.toast.created", { name: title }), notice ? "err" : "ok", notice ? { duration: 8000 } : undefined);
             close();
           } catch (err) { ctx.toast(err.message, "err"); return false; }
         },

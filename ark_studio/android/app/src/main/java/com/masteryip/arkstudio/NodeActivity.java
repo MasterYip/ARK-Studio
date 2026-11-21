@@ -24,11 +24,18 @@ import org.json.JSONObject;
 /** Node (unit) viewer: rendered body, media and links; web editor for the rest. */
 public class NodeActivity extends BaseActivity {
     static final String EXTRA_UID = "uid";
+    /** A heading slug or "{#id}" of the body to scroll to (review anchors). */
+    static final String EXTRA_ANCHOR = "anchor";
     protected String uid;
     protected JSONObject unit;
+    private String pendingAnchor = "";
 
     public static Intent intent(Context c, String uid) {
         return new Intent(c, NodeActivity.class).putExtra(EXTRA_UID, uid);
+    }
+
+    public static Intent intent(Context c, String uid, String anchor) {
+        return intent(c, uid).putExtra(EXTRA_ANCHOR, anchor == null ? "" : anchor);
     }
 
     @Override
@@ -36,6 +43,8 @@ public class NodeActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         if (!ready()) return;
         uid = getIntent().getStringExtra(EXTRA_UID);
+        String anchor = getIntent().getStringExtra(EXTRA_ANCHOR);
+        pendingAnchor = anchor == null ? "" : anchor;
         buildFrame(uid, true);
         addAction(getString(R.string.open_in_web), v -> openWeb(WebRoutes.editorUnit(uid)));
         showLoading();
@@ -51,15 +60,43 @@ public class NodeActivity extends BaseActivity {
                     if (unit == null) return;
                     content.removeAllViews();
                     render();
+                    revealAnchor();
                 }, this::showError);
+    }
+
+    /** Scrolls to the anchored heading or block once, with a short highlight. */
+    private void revealAnchor() {
+        if (pendingAnchor.isEmpty()) return;
+        String id = pendingAnchor;
+        pendingAnchor = "";
+        View target = content.findViewWithTag(MarkdownView.ANCHOR_TAG + id);
+        if (target == null) {
+            toast(getString(R.string.review_anchor_missing));
+            return;
+        }
+        // The review section above the body loads on its own; let it lay out first.
+        scroll.postDelayed(() -> {
+            int y = 0;
+            for (View v = target; v != null && v != content; v = (View) v.getParent()) y += v.getTop();
+            scroll.smoothScrollTo(0, Math.max(0, y - Ui.dp(this, 24)));
+            target.setBackground(Ui.rounded(Ui.warnSoft(this), 0, this, 6));
+            target.postDelayed(() -> target.setBackground(null), 2000);
+        }, 600);
+    }
+
+    /** Called after an action that changes the unit (accept, send back, comment). */
+    protected void changed() {
+        reload();
     }
 
     protected void render() {
         titleView.setText(unit.optString("title", uid));
         setSubtitle(unit.optString("uid") + " · " + Labels.of(this, unit.optString("type")));
         header(this, content, unit);
+        ReviewUi.unitReview(this, content, unit);
         body(this, content, unit);
         media(this, content, unit);
+        ReviewUi.commentBox(this, content, unit, this::changed);
         links(this, content, unit);
     }
 

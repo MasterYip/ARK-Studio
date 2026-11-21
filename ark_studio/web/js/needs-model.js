@@ -337,6 +337,10 @@ function primaryOf(members) {
  */
 export function groupNeeds(items = [], { windowMs = GROUP_WINDOW_MS } = {}) {
   const list = Array.isArray(items) ? items : [];
+  // The server groups the items (store/needsgroups.go, "auto_group" on each
+  // review item) so the web and the Android app show the same cards; the
+  // rules below only run for an older server that does not send it.
+  if (list.some((item) => item && Object.prototype.hasOwnProperty.call(item, "auto_group"))) return serverGroups(list);
   const candidates = list.map((item, index) => ({ item, index }))
     .filter(({ item }) => item?.uid && item.kind !== "review_group" && needsKind(item) === "review");
   const parent = new Map(candidates.map(({ index }) => [index, index]));
@@ -398,6 +402,44 @@ export function groupNeeds(items = [], { windowMs = GROUP_WINDOW_MS } = {}) {
   list.forEach((item, index) => {
     if (groupAt.has(index)) out.push(groupAt.get(index));
     else if (!grouped.has(index)) out.push({ kind: "item", item });
+  });
+  return out;
+}
+
+/**
+ * Cards from the server's `auto_group` (same shape as groupNeeds).  Only the
+ * members present in `list` (after the filters) count; a card with fewer
+ * than two left shows its items on their own.
+ */
+function serverGroups(list) {
+  const byKey = new Map();
+  list.forEach((item, index) => {
+    const card = item?.auto_group;
+    if (!card?.key || !item.uid || item.kind === "review_group") return;
+    if (!byKey.has(card.key)) byKey.set(card.key, { card, first: index, items: new Map() });
+    byKey.get(card.key).items.set(item.uid, item);
+  });
+  const groupAt = new Map();
+  const grouped = new Set();
+  for (const { card, first, items } of byKey.values()) {
+    if (items.size < 2) continue;
+    const order = (card.members || []).filter((uid) => items.has(uid));
+    for (const uid of items.keys()) if (!order.includes(uid)) order.push(uid);
+    const members = order.map((uid) => items.get(uid));
+    const present = new Set(order);
+    groupAt.set(first, {
+      kind: "group", key: card.key, primary: members[0], members,
+      parent: card.parent || null, delivery: card.delivery || "",
+      title: card.title || members[0].title || members[0].uid,
+      span: Number(card.span) || 0,
+      reasons: (card.reasons || []).filter((r) => present.has(r.a) && present.has(r.b)),
+    });
+    for (const item of members) grouped.add(item);
+  }
+  const out = [];
+  list.forEach((item, index) => {
+    if (groupAt.has(index)) out.push(groupAt.get(index));
+    else if (!grouped.has(item)) out.push({ kind: "item", item });
   });
   return out;
 }

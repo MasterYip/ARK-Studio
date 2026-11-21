@@ -97,6 +97,19 @@ func (c *reqCtx) acquireWait() (release func(), ok bool) {
 	}, true
 }
 
+// tokenLongPolling reports whether a request with this personal token is
+// waiting on GET /api/agent/v1/updates now (a watcher is running).
+func (a *App) tokenLongPolling(id string) bool {
+	v, ok := updateWaits.Load(a)
+	if !ok || id == "" {
+		return false
+	}
+	slots := v.(*waitSlots)
+	slots.mu.Lock()
+	defer slots.mu.Unlock()
+	return slots.n["token:"+id] > 0
+}
+
 // ------------------------------------------------------------ viewer
 
 func (c *reqCtx) watchViewer() agentwatch.Viewer {

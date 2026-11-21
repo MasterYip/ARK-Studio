@@ -90,7 +90,40 @@ func TestTextListsAtMostFive(t *testing.T) {
 	for i := 0; i < 7; i++ {
 		items = append(items, pyjson.NewObject("summary", "x"))
 	}
-	if s := Text(items); !strings.Contains(s, "and 2 more") || strings.Count(s, "- x") != 5 {
+	if s := Text(Session{ID: "s1", ProjectID: "p"}, "", items); !strings.Contains(s, "and 2 more") || strings.Count(s, "- x") != 5 {
 		t.Fatal(s)
+	}
+}
+
+// One format for the watcher's messages and ARK's reminders (T-0053).
+func TestTextFormat(t *testing.T) {
+	s := Text(Session{ID: "ses_1", ProjectID: "prj_x"}, "BrainStorm", []*pyjson.Object{pyjson.NewObject("summary", "alice replied")})
+	for _, want := range []string{"ARK UPDATE for ARK session ses_1, ARK project BrainStorm (prj_x): 1 new update(s)",
+		"- alice replied", "If you are not working on ARK project BrainStorm (prj_x) in this session, ignore this message."} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("lacks %q:\n%s", want, s)
+		}
+	}
+}
+
+// A session whose own watcher waits on the feed is not reminded as well;
+// its cursor follows the feed, so it is not reminded of those updates later.
+func TestNudgeSkipsSessionsWithTheirOwnWatcher(t *testing.T) {
+	f := &fake{enabled: true, epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
+	f.sessions = []Session{{ID: "s1", ProjectID: "p", Idle: true, Accepts: true, Watching: true}}
+	n := &Nudger{D: f.deps()}
+	ctx := context.Background()
+	n.Tick(ctx)
+	f.rows = append(f.rows, 2)
+	if got := n.Tick(ctx); len(got) != 0 {
+		t.Fatalf("nudged a session with its own watcher: %v", got)
+	}
+	f.sessions[0].Watching = false
+	if got := n.Tick(ctx); len(got) != 0 {
+		t.Fatal("reminded of updates its watcher already delivered")
+	}
+	f.rows = append(f.rows, 3)
+	if got := n.Tick(ctx); len(got) != 1 {
+		t.Fatalf("after the watcher stopped: %v", got)
 	}
 }

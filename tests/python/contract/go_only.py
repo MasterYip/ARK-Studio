@@ -96,6 +96,13 @@ ROUTES = {
     "goonly:exact:/api/agent/v1/links": "agent: delete a link by {source, target, relation?} (DELETE; POST is Python's)",
     r"goonly:regex:^/api/agent/v1/links/(\d+)$": "agent: delete (DELETE) or change the relation of (PATCH) one link",
     r"goonly:regex:^/api/agent/v1/units/([^/]+)/links$": "agent: list one unit's links, in and out",
+    # ark_studio/server/internal/server/routes_storage.go, ark_studio/server/internal/project/storage.go (tests
+    # project/storage_test.go, internal/server/routes_storage_test.go).  Option "project_storage" in org_options.
+    # With a folder chosen, GET /api/projects lists its projects too, POST /api/projects creates there (and adds
+    # "storage_notice" when that folder is missing), and in local mode POST /api/projects/open {path} lists the
+    # folder of an ARK project outside the listed folders; without one (every replay) nothing changes.
+    "goonly:exact:/api/org/project-storage": "where new projects are stored: show (GET), check / change / unlist a folder (POST); local mode or org admin",
+    "goonly:exact:/api/projects/reveal": "local mode: show a project or listed folder in the file manager",
 }
 
 # Go-only query parameter (no reply difference on any replayed request: the
@@ -188,7 +195,8 @@ def _strip_member(body: bytes, name: str) -> bytes:
 
 
 NEEDS_REVIEW_MEMBERS = ("parents", "links", "delivery", "verdict", "review_round", "review_since", "review_by",
-                        "review_note", "review_anchors", "review_base", "review_changes", "review_focus", "review_prev")
+                        "review_note", "review_anchors", "review_base", "review_changes", "review_focus", "review_prev",
+                        "auto_group")
 
 
 def _strip_needs_review(body: bytes) -> bytes:

@@ -1,6 +1,6 @@
 [package]
 name = "ark-studio"
-version = "2.1.0"
+version = "2.1.1"
 description = "ARK Studio desktop shell: tray, settings, saved servers and the bundled ark-server sidecar"
 authors = ["Raymon Yip"]
 license = "AGPL-3.0-only"
@@ -33,6 +33,12 @@ url = "2"
 # lists); the same reqwest/rustls the updater already brings in.
 reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "system-proxy"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
+# Connect check (probe.rs): the system proxy for an address (the matcher
+# reqwest uses), and racing the proxied and the direct route (both crates
+# are already in the tree).
+hyper-util = { version = "0.1", default-features = false, features = ["client-proxy", "client-proxy-system"] }
+http = "1"
+futures-util = { version = "0.3", default-features = false }
 # Image copy bridge for ARK pages (copy_image_png): writes RGBA images to the
 # system clipboard (Windows, macOS, X11/Wayland).
 arboard = "3"

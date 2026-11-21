@@ -25,6 +25,7 @@ export const SETTINGS_TABS = [
   { id: "plugins", scope: "personal", sections: ["plugins"] },
   { id: "browser", scope: "personal", sections: ["infohubSource", "remote"] },
   { id: "about", scope: "personal", sections: ["about"] },
+  { id: "storage", scope: "admin", sections: ["projectStorage"] },
   { id: "admin", scope: "admin", sections: ["admin"] },
 ];
 

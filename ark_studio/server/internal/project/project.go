@@ -134,6 +134,13 @@ type Manager struct {
 	mu    sync.Mutex
 	cache map[string]*Project // resolved path -> project
 	byRef map[string]*Project // Open(ref) argument -> project
+
+	// Project folders besides Root and the folder for new projects
+	// (storage.go; set from the organization option at start and when an
+	// admin changes it).
+	fmu    sync.RWMutex
+	extra  []string
+	newDir string
 }
 
 // NewManager is ProjectManager.__init__(root, seed_demo=False).
@@ -169,19 +176,21 @@ func (m *Manager) ensureToken() string {
 
 // ListProjects is ProjectManager.list_projects.
 func (m *Manager) ListProjects() []*pyjson.Object {
-	entries, _ := os.ReadDir(m.Root)
 	type item struct {
 		path  string
 		mtime int64
 	}
 	var dirs []item
-	for _, e := range entries {
-		info, err := e.Info()
-		mt := int64(0)
-		if err == nil {
-			mt = info.ModTime().UnixNano()
+	for _, folder := range m.Folders() {
+		entries, _ := os.ReadDir(folder)
+		for _, e := range entries {
+			info, err := e.Info()
+			mt := int64(0)
+			if err == nil {
+				mt = info.ModTime().UnixNano()
+			}
+			dirs = append(dirs, item{filepath.Join(folder, e.Name()), mt})
 		}
-		dirs = append(dirs, item{filepath.Join(m.Root, e.Name()), mt})
 	}
 	sort.SliceStable(dirs, func(i, j int) bool { return dirs[i].mtime > dirs[j].mtime })
 	var out []*pyjson.Object

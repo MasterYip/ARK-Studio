@@ -1,6 +1,7 @@
 // ARK Studio desktop: the Settings page (bundled; tray "Settings…", the
 // local ARK page's "Connect to a server…" and the status page open it).
 import { t, applyI18n } from "./i18n.js";
+import { unreachableMessage } from "./connect-model.js";
 
 const invoke = (cmd, args = {}) => window.__TAURI_INTERNALS__.invoke(cmd, args);
 const $ = (id) => document.getElementById(id);
@@ -178,7 +179,7 @@ async function connectRemote(event, { force = false } = {}) {
       state = await invoke("get_state");
       renderServers();
     } else {
-      showStatus("remote", t("remote.unreachable", { url: res.url }), { error: true, openAnyway: true });
+      showStatus("remote", unreachableMessage(res, raw, t), { error: true, openAnyway: true });
     }
   } catch (err) {
     showStatus("remote", splitError(err).message || t("remote.invalid"), { error: true });

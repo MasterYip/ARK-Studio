@@ -32,6 +32,7 @@ fn main() {
             "copy_image_png",
             "device_id",
             "measure_paths",
+            "choose_project_folder",
             "tray_menu_ready",
             "tray_menu_action",
         ]),

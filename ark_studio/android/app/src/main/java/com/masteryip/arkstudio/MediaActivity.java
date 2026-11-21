@@ -35,6 +35,9 @@ public class MediaActivity extends BaseActivity {
     private static final String EXTRA_URL = "url";
     private static final String EXTRA_CAPTION = "caption";
     private static final String EXTRA_KIND = "kind";
+    /** Review anchors (media:12@0:08-0:12): start the video here, pause at the end (ms, 0 = none). */
+    static final String EXTRA_START_MS = "start_ms";
+    static final String EXTRA_END_MS = "end_ms";
 
     private VideoView video;
     private int position;
@@ -65,7 +68,8 @@ public class MediaActivity extends BaseActivity {
         addAction(getString(R.string.open_externally), v -> Links.external(this, url));
         stage.removeAllViews();
         stage.setBackgroundColor(Color.BLACK);
-        if (savedInstanceState != null) position = savedInstanceState.getInt("position", 0);
+        position = getIntent().getIntExtra(EXTRA_START_MS, 0);
+        if (savedInstanceState != null) position = savedInstanceState.getInt("position", position);
         if ("image".equals(kind) || (kind == null && !isVideo(null, url))) showImage(url);
         else showVideo(url);
     }
@@ -89,10 +93,12 @@ public class MediaActivity extends BaseActivity {
         Map<String, String> headers = new HashMap<>();
         if (PairingLink.sameOrigin(session.serverUrl, url)) headers.put(ArkClient.TOKEN_HEADER, session.token);
         video.setVideoURI(Uri.parse(url), headers);
+        int end = getIntent().getIntExtra(EXTRA_END_MS, 0);
         video.setOnPreparedListener(player -> {
             if (position > 0) video.seekTo(position);
             video.start();
             controller.show(3000);
+            if (end > 0) stopAt(end);
         });
         video.setOnErrorListener((player, what, extra) -> {
             TextView error = Ui.label(this, getString(R.string.video_failed), 15, Color.WHITE, false);
@@ -100,6 +106,21 @@ public class MediaActivity extends BaseActivity {
             stage.addView(error, new FrameLayout.LayoutParams(Ui.MATCH, Ui.WRAP, Gravity.BOTTOM));
             return true;
         });
+    }
+
+    /** Pauses once the video reaches {@code endMs} (checked every 200 ms while it plays). */
+    private void stopAt(int endMs) {
+        video.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                if (video == null || isFinishing()) return;
+                if (video.getCurrentPosition() >= endMs) {
+                    video.pause();
+                    return;
+                }
+                if (video.isPlaying() || video.getCurrentPosition() < endMs) video.postDelayed(this, 200);
+            }
+        }, 200);
     }
 
     @Override

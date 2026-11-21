@@ -723,6 +723,10 @@ export const api = {
     { method: "POST", body: {} }),
   inviteSettings: () => request("/api/org/invite-settings"),
   saveInviteSettings: (body) => request("/api/org/invite-settings", { method: "POST", body }),
+  projectStorage: () => request("/api/org/project-storage"),
+  saveProjectStorage: (body) => request("/api/org/project-storage", { method: "POST", body }),
+  checkProjectStorage: (path) => request("/api/org/project-storage", { method: "POST", body: { check: path }, write: false }),
+  revealProject: (body) => request("/api/projects/reveal", { method: "POST", body, write: false }),
   invitePreview: (token) => request("/api/auth/invite/preview", { method: "POST", body: { token }, write: false }),
   acceptInvite: (token) => request("/api/auth/invite/accept", { method: "POST", body: { token } }),
 

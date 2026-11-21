@@ -36,7 +36,7 @@ func TestNudgeDepsFeedAndSetting(t *testing.T) {
 		t.Fatalf("comment: %d %s", r.code, r.raw)
 	}
 	b, err := d.Since(ctx, sessionnudge.Session{ProjectID: pid, User: org.LocalUsername}, top)
-	if err != nil || b.Epoch != epoch || len(b.Items) == 0 || !strings.Contains(sessionnudge.Text(b.Items), "Nudge me") {
+	if err != nil || b.Epoch != epoch || len(b.Items) == 0 || !strings.Contains(sessionnudge.Text(sessionnudge.Session{ID: "s", ProjectID: pid}, d.ProjectName(pid), b.Items), "Nudge me") {
 		t.Fatalf("since: %v %+v", err, b)
 	}
 	if r = gpuCall(t, app, "PATCH", "/api/project/settings", map[string]any{"sessions": map[string]any{"nudge_idle": false}}, nil); r.code != 200 {

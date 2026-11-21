@@ -18,8 +18,10 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import com.masteryip.arkstudio.model.Markdown;
+import com.masteryip.arkstudio.model.ReviewNote;
 
 import java.util.List;
+import java.util.Map;
 
 /** Renders {@link Markdown} blocks as native views. */
 public final class MarkdownView {
@@ -31,10 +33,29 @@ public final class MarkdownView {
     private MarkdownView() {
     }
 
+    /** Tag prefix of anchorable blocks (headings, "{#id}" paragraphs): {@code findViewWithTag(ANCHOR_TAG + id)}. */
+    public static final String ANCHOR_TAG = "anchor:";
+
     public static LinearLayout render(Context c, String source, LinkHandler links) {
         LinearLayout column = Ui.column(c);
         List<Markdown.Block> blocks = Markdown.parse(source);
-        for (Markdown.Block block : blocks) column.addView(blockView(c, block, links));
+        Map<Integer, String> ids = ReviewNote.blockIds(blocks);
+        for (int i = 0; i < blocks.size(); i++) {
+            View view = blockView(c, blocks.get(i), links);
+            String id = ids.get(i);
+            if (id != null) {
+                view.setTag(ANCHOR_TAG + id);
+                // The "{#id}" marker is for anchors only; the web hides it too.
+                if (view instanceof TextView && !ReviewNote.explicitId(blocks.get(i).inline.text).isEmpty()) {
+                    TextView text = (TextView) view;
+                    CharSequence value = text.getText();
+                    String plain = value.toString();
+                    String kept = ReviewNote.withoutExplicitId(plain);
+                    text.setText(value.subSequence(0, Math.min(kept.length(), value.length())));
+                }
+            }
+            column.addView(view);
+        }
         return column;
     }
 

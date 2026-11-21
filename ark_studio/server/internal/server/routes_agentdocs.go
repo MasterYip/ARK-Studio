@@ -20,7 +20,7 @@ var GoOnlyRoutes = append([]PortedRoute{
 	{"goonly:prefix:/api/agent/v1/docs/", "GET,HEAD"},
 	{"goonly:exact:" + chatapi.PluginChatPath, "POST"}, // routes_chat.go (view plugins' ai:chat)
 }, append(append(append(desktopRoutesGoOnly, presenceRoutesGoOnly...), // routes_desktop.go, routes_presence.go
-	agentWatchGoOnly...), append(append(append(append(trashRoutesGoOnly, agentRulesGoOnly...), inviteRoutesGoOnly...), mediaThumbGoOnly...), append(append(append(reviewRoutesGoOnly, importArkGoOnly...), agentLinksGoOnly...), batchRoutesGoOnly...)...)...)...) // routes_agentwatch.go, routes_trash.go, routes_agentrules.go, routes_invites.go, media_thumb.go, routes_reviews.go, routes_importark.go, routes_agentlinks.go, routes_batch.go
+	agentWatchGoOnly...), append(append(append(append(trashRoutesGoOnly, agentRulesGoOnly...), inviteRoutesGoOnly...), mediaThumbGoOnly...), append(append(append(append(reviewRoutesGoOnly, importArkGoOnly...), agentLinksGoOnly...), batchRoutesGoOnly...), storageRoutesGoOnly...)...)...)...) // routes_agentwatch.go, routes_trash.go, routes_agentrules.go, routes_invites.go, media_thumb.go, routes_reviews.go, routes_importark.go, routes_agentlinks.go, routes_batch.go, routes_storage.go
 
 const markdownType = apidocs.MarkdownType
 

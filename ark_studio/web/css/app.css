@@ -30,9 +30,9 @@
   --grid-line:rgba(30,41,59,.055);
 }
 *{box-sizing:border-box}
-html{height:100%;font-size:calc(16px * var(--font-scale,1));color-scheme:dark}
+html{height:100%;font-size:calc(16px * var(--font-scale,1));color-scheme:dark;overscroll-behavior-y:none}
 html[data-theme="light"]{color-scheme:light}
-body{min-height:100%;margin:0;background:var(--bg);color:var(--ink);font:0.875rem/1.5 var(--font);-webkit-font-smoothing:antialiased}
+body{min-height:100%;margin:0;overscroll-behavior-y:none;background:var(--bg);color:var(--ink);font:0.875rem/1.5 var(--font);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
 button{border:0;background:none;cursor:pointer}
 /* The hidden attribute always wins over component display rules. */
@@ -1050,6 +1050,14 @@ a.rich-unit-link:hover{background:var(--btn-hover);text-decoration:none}
 .settings-note{display:flex;gap:8px;align-items:flex-start;padding:9px 10px;margin-top:12px;border:1px solid var(--line);border-radius:8px;background:var(--bg2);font-size:0.65625rem;line-height:1.6;color:var(--sub)}
 .settings-note .icon{color:var(--accent-2);flex:0 0 auto;margin-top:1px}
 .settings-note b{color:var(--ink)}
+/* Settings > Project storage location (project-storage-panel.js) */
+.storage-path{font-family:var(--mono,ui-monospace,monospace);font-size:0.71875rem;padding:2px 6px;border-radius:5px;background:var(--bg2);border:1px solid var(--line);overflow-wrap:anywhere;word-break:break-all;max-width:100%}
+.storage-folders{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+.storage-folder{display:flex;gap:8px;align-items:center;justify-content:space-between;padding:7px 9px;border:1px solid var(--line);border-radius:8px}
+.storage-folder-main{display:flex;flex-direction:column;gap:3px;min-width:0}
+.settings-note.warn{border-color:color-mix(in srgb,var(--amber) 40%,transparent)}
+.settings-note.warn .icon,.warn-text{color:var(--amber)}
+.err-text{color:var(--red)}
 .gpu-register-note{min-width:0;max-width:100%}
 .gpu-register-body{flex:1 1 auto;min-width:0;overflow-wrap:anywhere}
 .gpu-register-actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}

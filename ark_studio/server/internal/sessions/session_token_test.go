@@ -66,3 +66,31 @@ func TestSessionEnvHasServerRootAndProject(t *testing.T) {
 		t.Fatalf("root or project missing")
 	}
 }
+
+// One wake-up mechanism per session: ARK_SESSION_ID always, ARK_WAKE=ark
+// only where ARK wakes the project's idle sessions; stale wake variables of
+// the server's own environment never reach the agent.
+func TestSessionEnvWakeVariables(t *testing.T) {
+	t.Setenv("CODEX_THREAD_ID", "th-of-the-server")
+	t.Setenv("ARK_WAKE", "codex")
+	m := streamManager(t)
+	s, err := m.Start(nil, pyjson.NewObject("platform", "claude", "prompt", "hi"), "http://127.0.0.1:1", "carol")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { killSession(m, s); waitFor(t, "ended", func() bool { return !m.IsActive(s) }) }()
+	asked := ""
+	on := &Hooks{WakesIdle: func(id string) bool { asked = id; return true }}
+	env := "\n" + strings.Join(m.buildEnv(on, s, pyjson.NewObject("id", "prj_x"), "", "", s.Workspace(), "", "carol"), "\n") + "\n"
+	if !strings.Contains(env, "\nARK_SESSION_ID="+s.ID+"\n") || !strings.Contains(env, "\nARK_WAKE=ark\n") || asked != "prj_x" {
+		t.Fatalf("wake variables missing (asked %q)", asked)
+	}
+	if strings.Contains(env, "th-of-the-server") {
+		t.Fatal("the server's CODEX_THREAD_ID reached the agent")
+	}
+	off := &Hooks{WakesIdle: func(string) bool { return false }}
+	env = "\n" + strings.Join(m.buildEnv(off, s, pyjson.NewObject("id", "prj_x"), "", "", s.Workspace(), "", "carol"), "\n") + "\n"
+	if strings.Contains(env, "\nARK_WAKE=") || !strings.Contains(env, "\nARK_SESSION_ID="+s.ID+"\n") {
+		t.Fatal("with reminders off the agent must use its own watcher")
+	}
+}

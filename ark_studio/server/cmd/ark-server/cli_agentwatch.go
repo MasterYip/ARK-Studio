@@ -37,6 +37,9 @@ type watchOptions struct {
 	Until                                              bool    // exit after the first news (T-0053: a background watcher wakes the agent)
 	Max                                                float64 // with --until-update: seconds to watch before giving up
 	Host                                               string  // X-ARK-Host
+	OwnerPID                                           int     // the agent process; the watcher stops when it is gone
+	Wake, CodexThread                                  string  // --wake codex: queue into this Codex thread
+	codex                                              string  // the codex binary used to wake (set when allowed)
 }
 
 type watchState struct {
@@ -115,6 +118,9 @@ func agentWatchFlags(errw io.Writer) (*flag.FlagSet, *watchOptions, *string) {
 	fs.BoolVar(&o.Until, "until-update", false, "wait until there is news (a person's update on your units or new agent rules), print it and exit; run it in the background so it wakes you")
 	fs.Float64Var(&o.Max, "max", 6900, "with --until-update: give up after this many seconds (prints a line, exit 0)")
 	fs.StringVar(&o.Host, "host", os.Getenv("ARK_HOST"), "this device's id, sent as X-ARK-Host (env ARK_HOST; ark-server agent host-id)")
+	fs.IntVar(&o.OwnerPID, "owner-pid", watchEnvInt("ARK_OWNER_PID"), "your agent's process id: the watcher stops when it is gone (env ARK_OWNER_PID)")
+	fs.StringVar(&o.Wake, "wake", os.Getenv("ARK_WAKE"), "with --until-update: codex = wake your Codex session through `codex queue` (env ARK_WAKE)")
+	fs.StringVar(&o.CodexThread, "codex-thread", os.Getenv("ARK_CODEX_THREAD"), "with --wake codex: your own thread id, $CODEX_THREAD_ID (env ARK_CODEX_THREAD)")
 	fs.Usage = func() {
 		fmt.Fprintln(errw, "usage: ark-server agent watch [--url URL] [--token-file F | --token-env NAME] [--project ID]\n"+
 			"                              [--wait S] [--interval S] [--once] [--json] [--kinds K,..] [--mine]\n\n"+
@@ -158,6 +164,18 @@ func agentWatch(argv []string, out, errw io.Writer) int {
 		fmt.Fprintf(errw, "ark-server agent watch: unexpected argument %q\n", fs.Arg(0))
 		return 2
 	}
+	if o.Until && os.Getenv("ARK_SESSION_ID") != "" && os.Getenv("ARK_WAKE") == "ark" {
+		// One wake-up per session: ARK nudges the sessions it launched.
+		fmt.Fprintf(out, "ARK: ARK launched this session (%s) and wakes it itself when people reply; no watcher needed.\n",
+			os.Getenv("ARK_SESSION_ID"))
+		return 0
+	}
+	maxSet := false
+	fs.Visit(func(f *flag.Flag) { maxSet = maxSet || f.Name == "max" })
+	if o.Token != "" {
+		fmt.Fprintln(errw, "ark-server agent watch: --token puts the token on a command line that other programs can read; "+
+			"use ~/.ark/tokens/<project> or ARK_TOKEN instead")
+	}
 	if o.Token == "" {
 		o.Token = watchTokenFromFile(o.TokenFile, o.Project)
 	}
@@ -177,6 +195,34 @@ func agentWatch(argv []string, out, errw io.Writer) int {
 	o.Wait = min(o.Wait, 60)
 	o.Interval = max(o.Interval, 1)
 	o.URL = strings.TrimRight(o.URL, "/")
+	detached := watchEnvInt(watchDetachedEnv)
+	if detached > 1 {
+		o.OwnerPID = detached
+	}
+	if o.OwnerPID > 1 && !watchProcessAlive(o.OwnerPID) {
+		fmt.Fprintf(errw, "ark-server agent watch: no process %d (--owner-pid)\n", o.OwnerPID)
+		return 2
+	}
+	if o.Until && o.Wake == "codex" {
+		why := codexWakeBlocker(o, o.OwnerPID)
+		if why == "" {
+			if o.codex = findCodexQueue(); o.codex == "" {
+				why = "no codex with `queue` found"
+			}
+		}
+		if why != "" {
+			fmt.Fprintf(out, "ARK: not waking through codex queue (%s); the watcher exits on news instead.\n", why)
+		} else if detached <= 1 {
+			if err := startDetached(o.OwnerPID); err != nil {
+				fmt.Fprintln(errw, "ark-server agent watch: cannot start in the background:", err)
+				return watchExitError
+			}
+			fmt.Fprintln(out, "ARK: the watcher runs in the background and wakes this Codex session through codex queue.")
+			return 0
+		} else if !maxSet {
+			o.Max = 365 * 24 * 3600
+		}
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 	return runWatch(ctx, o, out, errw)
@@ -186,10 +232,16 @@ func runWatch(ctx context.Context, o *watchOptions, out, errw io.Writer) int {
 	state := loadWatchState(o)
 	client := &http.Client{Timeout: time.Duration(o.Wait*float64(time.Second)) + 20*time.Second}
 	started := time.Now()
+	project := ""
 	if o.Until {
 		o.Mine = true
+		project = projectLabel(ctx, o)
 	}
 	for {
+		if o.OwnerPID > 1 && !watchProcessAlive(o.OwnerPID) {
+			fmt.Fprintf(out, "ARK: the agent that started this watcher (pid %d) is gone; the watcher stops.\n", o.OwnerPID)
+			return 0
+		}
 		if o.Until && time.Since(started).Seconds() >= o.Max {
 			fmt.Fprintf(out, "ARK: no updates in %.0fs; start the watcher again.\n", o.Max)
 			return 0
@@ -222,8 +274,14 @@ func runWatch(ctx context.Context, o *watchOptions, out, errw io.Writer) int {
 			if rulesChanged {
 				note = "; the agent rules changed to " + reply.Rules + " (GET /api/agent/v1/rules)"
 			}
-			fmt.Fprintf(out, "ARK UPDATE: %d new update(s)%s. Act on them (the items below, or GET /api/agent/v1/updates), then start this watcher again.\n",
-				len(reply.Items), note)
+			// The format of the watcher scripts and ARK's reminders (T-0053).
+			head := fmt.Sprintf("ARK UPDATE for %s, ARK project %s: %d new update(s)%s.", watchLabel(o), project, len(reply.Items), note)
+			fmt.Fprintln(out, head+" Act on them (the items below, or GET /api/agent/v1/updates), then start this watcher again.")
+			if o.codex != "" {
+				if err := queueCodex(o, head, reply.Items, project); err != nil {
+					fmt.Fprintln(errw, "ark-server agent watch: codex queue failed; read GET /api/agent/v1/updates yourself:", err)
+				}
+			}
 		}
 		for _, raw := range reply.Items {
 			printWatchItem(out, raw, o.JSON)
@@ -273,18 +331,7 @@ func watchOnce(ctx context.Context, client *http.Client, o *watchOptions, cursor
 	if err != nil {
 		return nil, err
 	}
-	req.Header.Set("Authorization", "Bearer "+o.Token)
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("User-Agent", "ark-server-agent-watch/"+version)
-	if o.Project != "" {
-		req.Header.Set("X-ARK-Project", o.Project)
-	}
-	if o.Name != "" {
-		req.Header.Set("X-Agent-Name", o.Name)
-	}
-	if o.Host != "" {
-		req.Header.Set("X-ARK-Host", o.Host)
-	}
+	setWatchHeaders(req, o)
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
@@ -313,6 +360,21 @@ func watchOnce(ctx context.Context, client *http.Client, o *watchOptions, cursor
 		return nil, fmt.Errorf("bad reply from %s: %v", target, jerr)
 	}
 	return &reply, nil
+}
+
+func setWatchHeaders(req *http.Request, o *watchOptions) {
+	req.Header.Set("Authorization", "Bearer "+o.Token)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("User-Agent", "ark-server-agent-watch/"+version)
+	if o.Project != "" {
+		req.Header.Set("X-ARK-Project", o.Project)
+	}
+	if o.Name != "" {
+		req.Header.Set("X-Agent-Name", o.Name)
+	}
+	if o.Host != "" {
+		req.Header.Set("X-ARK-Host", o.Host)
+	}
 }
 
 func printWatchItem(out io.Writer, raw json.RawMessage, asJSON bool) {

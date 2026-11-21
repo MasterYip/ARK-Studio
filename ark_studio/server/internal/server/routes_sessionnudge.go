@@ -69,10 +69,20 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 					continue
 				}
 				owner, _ := a.Sessions.Owner(s)
+				watching := false // a watcher the session started itself (before ARK_WAKE=ark)
+				for _, id := range a.Sessions.AgentTokenIDs(s) {
+					watching = watching || a.tokenLongPolling(id)
+				}
 				out = append(out, sessionnudge.Session{ID: s.ID, ProjectID: a.Sessions.ProjectID(s), User: owner,
-					Idle: status == "idle", Accepts: true, Stopped: stopped})
+					Idle: status == "idle", Accepts: true, Stopped: stopped, Watching: watching})
 			}
 			return out
+		},
+		ProjectName: func(id string) string {
+			if p := a.nudgeProject(context.Background(), id); p != nil {
+				return pyjson.Str(orDefault(p.Manifest.Get("name"), ""))
+			}
+			return ""
 		},
 		Enabled: func(id string) bool {
 			p := a.nudgeProject(context.Background(), id)

@@ -648,7 +648,10 @@ function memberTable(ctx, members, { outcome = false } = {}) {
     const changes = changeSummary(m.review_changes || m.changes);
     const number = keyNumber(m.title);
     const note = m.note || m.review_note || "";
-    return h("div", { class: `needs-member${m.outcome ? ` outcome-${m.outcome}` : ""}`, role: "row", dataset: { unitRef: m.uid } },
+    // The whole row opens the member (a phone has no hover target for the
+    // narrow title button); anchors and buttons inside keep their own action.
+    const onRow = (event) => { if (!event.target.closest?.("button, a, .review-anchor")) open(); };
+    return h("div", { class: `needs-member${m.outcome ? ` outcome-${m.outcome}` : ""}`, role: "row", dataset: { unitRef: m.uid }, onclick: onRow },
       h("button", { class: "needs-member-open", type: "button", onclick: open, title: `${m.uid} · ${m.title}` },
         h("span", { class: "needs-uid" }, m.uid),
         outcome && m.outcome ? h("span", { class: `needs-chip outcome-${m.outcome}` }, t(`needs.value.${m.outcome}`)) : null,

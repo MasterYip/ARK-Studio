@@ -11,8 +11,11 @@
 //   - requests carrying the desktop cookie, which a browser obtains by opening
 //     a one-time claim URL the app signs with the secret
 //     (/__ark_desktop/claim?t=<unix>.<nonce>.<hex hmac>&next=/path);
-//   - requests with a token the server itself issued (agent write token,
-//     task read tokens), so agent CLIs started by ARK keep working;
+//   - requests with a token the server itself issued and would accept (agent
+//     write token, task read tokens, valid personal arka_ tokens including
+//     the per-run tokens of sessions ARK launches), so agent CLIs started by
+//     ARK and agents given a copied prompt keep working; the request is
+//     then authenticated and authorised as usual;
 //   - GET/HEAD /api/health (readiness probe).
 //
 // Without ARK_DESKTOP_SECRET the server behaves exactly as before.
@@ -46,7 +49,7 @@ type Gate struct {
 	key        []byte
 	cookieName string
 	cookieVal  string
-	tokenOK    func(string) bool
+	tokenOK    func(*http.Request, string) bool
 	now        func() time.Time
 
 	mu   sync.Mutex
@@ -62,8 +65,9 @@ func SecretFromEnv() string {
 }
 
 // New returns the gate, or nil when secret is empty. tokenOK reports whether
-// a bearer / X-ARK-Token / X-ARK-Read-Token value is a server-issued token.
-func New(next http.Handler, secret string, port int, tokenOK func(string) bool) *Gate {
+// a bearer / X-ARK-Token / X-ARK-Read-Token value of the request is a token
+// the server issued and would accept.
+func New(next http.Handler, secret string, port int, tokenOK func(*http.Request, string) bool) *Gate {
 	if secret == "" {
 		return nil
 	}
@@ -130,7 +134,7 @@ func (g *Gate) allowed(r *http.Request) bool {
 	}
 	tokens = append(tokens, r.Header.Get("X-ARK-Token"), r.Header.Get("X-ARK-Read-Token"))
 	for _, t := range tokens {
-		if t != "" && g.tokenOK(t) {
+		if t != "" && g.tokenOK(r, t) {
 			return true
 		}
 	}

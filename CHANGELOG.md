@@ -6,6 +6,42 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.1] - 2026-11-21
+
+### Added
+
+- Settings > Admin > Project storage location: shows the folder where new
+  projects are created, its free space and the folders that hold projects,
+  and lets you choose another folder (folder picker in the desktop app).
+  Existing projects are never moved or deleted. Local mode and organization
+  admins only.
+- Needs you on phones and in the Android app follows the review flow:
+  review and decision cards with the "Review this" note and its anchors,
+  rounds, changes since the last review and Accept / Send back. The Android
+  app's Home shows these cards instead of the old "Needs attention" list.
+
+### Changed
+
+- ARK watcher: `ark-server agent watch` is the preferred watcher. The
+  PowerShell and shell scripts are saved as files and run, no longer piped
+  into a shell, which some antivirus programs flagged.
+
+### Fixed
+
+- Desktop app: the local server accepts personal agent tokens again.
+  Tokens created in Settings > Agent tokens or by "Copy prompt", and the
+  token of each session ARK starts when sign-in is enabled, were refused
+  with "This ARK server belongs to the ARK Studio desktop app". Revoked,
+  expired and unknown tokens are still refused, and read-only tokens stay
+  read-only.
+- Desktop app: connecting to a server no longer reports "not responding"
+  for a server that is reachable, and when a connection does fail it says
+  why. The check follows the current proxy settings.
+- Sessions started by ARK are woken by ARK when there is news, so they no
+  longer also run their own ARK watcher.
+- The top bar stays in place when the page is pulled past its top with a
+  trackpad, precision wheel or touch.
+
 ## [2.1.0] - 2026-11-20
 
 ### Desktop app

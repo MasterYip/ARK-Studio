@@ -660,6 +660,50 @@ func (s *Store) enrichReviews(ctx context.Context, q sqlitedb.Querier, rows []sq
 		}
 		item.Set("review_prev", previousRound(st.prev, st.since, comments[id]))
 	}
+	// One card for the units of one delivery (needsgroups.go).
+	cands := make([]*needsCandidate, len(rows))
+	for i, r := range rows {
+		id := r.Int("id")
+		c := &needsCandidate{uid: r.Str("uid"), typ: r.Str("type"), kind: "review", title: r.Str("title")}
+		if c.typ == "decision" {
+			c.kind = "decision"
+		}
+		since := items[i].Value("review_since")
+		if since == nil {
+			since = r.Get("updated_at")
+		}
+		c.since = parseNeedsTime(since)
+		if d, ok := items[i].Value("delivery").(*pyjson.Object); ok {
+			c.branch, _ = d.Value("branch").(string)
+			c.commit, _ = d.Value("commit").(string)
+			c.label, _ = d.Value("label").(string)
+		}
+		for _, p := range parents[id] {
+			o := p.(*pyjson.Object)
+			uid, _ := o.Value("uid").(string)
+			title, _ := o.Value("title").(string)
+			c.parents = append(c.parents, needsRef{uid: uid, title: title})
+		}
+		for _, l := range links[id] {
+			o := l.(*pyjson.Object)
+			uid, _ := o.Value("uid").(string)
+			rel, _ := o.Value("relation").(string)
+			dir, _ := o.Value("dir").(string)
+			c.links = append(c.links, needsLink{uid: uid, relation: rel, dir: dir})
+		}
+		cands[i] = c
+	}
+	cards := needsAutoGroups(cands)
+	for i, c := range cands {
+		if c.kind != "review" {
+			continue
+		}
+		if card, ok := cards[i]; ok {
+			items[i].Set("auto_group", card)
+		} else {
+			items[i].Set("auto_group", nil)
+		}
+	}
 	return nil
 }
 

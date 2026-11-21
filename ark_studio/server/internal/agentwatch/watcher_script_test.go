@@ -294,3 +294,20 @@ func TestWatcherStopsWithItsAgent(t *testing.T) {
 		t.Fatal("the watcher outlived its agent")
 	}
 }
+
+// In a session ARK launched and wakes itself, the watcher does not start.
+func TestWatcherExitsWhereArkWakesTheSession(t *testing.T) {
+	f := newFakeArk(t, 0, true)
+	rg := newRig(t, f)
+	out, code := runWatcher(t, rg, "ARK_SESSION_ID=ses_1", "ARK_WAKE=ark")
+	if code != 0 || !strings.Contains(out, "ARK launched this session (ses_1) and wakes it itself") || strings.Contains(out, "ARK UPDATE") {
+		t.Fatalf("exit %d\n%s", code, out)
+	}
+	if len(f.authsSeen()) != 0 {
+		t.Fatal("it called ARK")
+	}
+	// ARK_SESSION_ID alone (reminders off): the watcher runs.
+	if out, _ := runWatcher(t, rg, "ARK_SESSION_ID=ses_1"); !strings.Contains(out, "ARK UPDATE for tester") {
+		t.Fatalf("reminders off:\n%s", out)
+	}
+}

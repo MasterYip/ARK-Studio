@@ -31,7 +31,8 @@ func TestAgentWatchUntilUpdate(t *testing.T) {
 	watchHTTP(t, srv, app, "POST", "/api/units/"+uid+"/comments", `{"body":"add the seed-2 baseline"}`, false)
 	select {
 	case out := <-done:
-		if !strings.HasPrefix(out, "ARK UPDATE: 1 new update(s)") || !strings.Contains(out, "seed-2 baseline") {
+		if !strings.HasPrefix(out, "ARK UPDATE for the agent that started this watcher, ARK project ") ||
+			!strings.Contains(out, ": 1 new update(s)") || !strings.Contains(out, "seed-2 baseline") {
 			t.Fatalf("%q", out)
 		}
 	case <-time.After(20 * time.Second):
@@ -42,5 +43,16 @@ func TestAgentWatchUntilUpdate(t *testing.T) {
 	agentWatch([]string{"--url", srv.URL, "--state", state, "--until-update", "--wait", "1", "--max", "1"}, &out, &errw)
 	if !strings.Contains(out.String(), "no updates in 1s") {
 		t.Fatalf("%q %q", out.String(), errw.String())
+	}
+}
+
+// In a session ARK launched and wakes itself, --until-update does not start.
+func TestAgentWatchUntilUpdateWhereArkWakes(t *testing.T) {
+	t.Setenv("ARK_SESSION_ID", "ses_1")
+	t.Setenv("ARK_WAKE", "ark")
+	var out, errw bytes.Buffer
+	if code := agentWatch([]string{"--url", "http://127.0.0.1:1", "--until-update"}, &out, &errw); code != 0 ||
+		!strings.Contains(out.String(), "ARK launched this session (ses_1) and wakes it itself") {
+		t.Fatalf("%d %q %q", code, out.String(), errw.String())
 	}
 }

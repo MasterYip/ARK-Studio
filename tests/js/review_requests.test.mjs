@@ -185,3 +185,37 @@ test("comment row: Accept, Send back, Add comment on one row; only Add comment o
   assert.match(css, /\.comments-actions\{display:flex;flex-wrap:wrap;gap:6px;justify-content:flex-start/);
   assert.doesNotMatch(css, /comments-review-actions/);
 });
+
+// The server groups the items (store/needsgroups.go): every member carries
+// the card as auto_group; the client keeps the members still in the list.
+test("server grouping: auto_group cards, filtered members, lone items", () => {
+  const card = {
+    key: "group:E-1,E-2,E-3", primary: "E-2", members: ["E-2", "E-1", "E-3"], parent: { uid: "T-0020", title: "HOI-215 · Large" },
+    delivery: "branch:agent/x", title: "HOI-215 B1", span: 3,
+    reasons: [{ a: "E-1", b: "E-2", link: null, parents: ["T-0020"], delivery: "branch:agent/x", minutes: 1 },
+      { a: "E-1", b: "E-3", link: null, parents: ["T-0020"], delivery: "branch:agent/x", minutes: 3 }],
+  };
+  const items = [
+    { uid: "D-1", kind: "decision", type: "decision" },
+    { uid: "E-1", kind: "review", type: "evidence", auto_group: card },
+    { uid: "X-9", kind: "review", type: "experiment", auto_group: null },
+    { uid: "E-2", kind: "review", type: "claim", auto_group: card },
+    { uid: "E-3", kind: "review", type: "evidence", auto_group: card },
+  ];
+  const cards = groupNeeds(items);
+  assert.deepEqual(cards.map((c) => c.key || c.item.uid), ["D-1", card.key, "X-9"]);
+  const group = cards[1];
+  assert.deepEqual(group.members.map((m) => m.uid), ["E-2", "E-1", "E-3"]);
+  assert.equal(group.primary.uid, "E-2");
+  assert.equal(group.title, "HOI-215 B1");
+  assert.deepEqual(groupExplain(group), { parents: ["T-0020"], linked: false, delivery: "branch:agent/x", minutes: 3 });
+  // A filter that hides one member keeps the card with the other two.
+  const two = groupNeeds(items.filter((i) => i.uid !== "E-2"));
+  assert.deepEqual(two[1].members.map((m) => m.uid), ["E-1", "E-3"]);
+  assert.equal(two[1].reasons.length, 1);
+  // One member left: shown on its own.
+  assert.deepEqual(groupNeeds(items.filter((i) => i.uid === "E-1" || i.uid === "X-9")).map((c) => c.kind), ["item", "item"]);
+  // The server said "not grouped": the local rules do not regroup it.
+  const lone = LIST.filter((i) => i.kind !== "review_group").map((i) => ({ ...i, auto_group: null }));
+  assert.ok(groupNeeds(lone).every((c) => c.kind === "item"));
+});

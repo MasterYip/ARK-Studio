@@ -73,6 +73,9 @@
           });
         },
         openSettings: function (view) { return invoke("open_settings", { view: view ? String(view) : null }); },
+        // Settings > Project storage location: the native folder picker
+        // (the chosen path, or null when cancelled).
+        pickFolder: function (current) { return invoke("choose_project_folder", { current: current ? String(current) : null }); },
         // Desktop links: a server page hands over its one-time code
         // (remote pages); the local page reads and creates projects through
         // the app, which keeps the device token to itself.

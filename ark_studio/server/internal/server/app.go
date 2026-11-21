@@ -168,6 +168,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 	if authMgr != nil {
 		authMgr.SetAccounts(orgAccounts{a.Org})
 	}
+	a.loadProjectStorage(context.Background()) // routes_storage.go
 	ctx := context.Background()
 	if os.Getenv("ARK_REPLAY_CLOCK") == "1" {
 		project.ReplayIDs.Store(true)

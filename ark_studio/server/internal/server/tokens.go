@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"crypto/subtle"
 	"os"
 	"strings"
@@ -86,16 +87,9 @@ func (c *reqCtx) bindPersonalToken() (bool, error) {
 	if err := c.app.failures.check(client); err != nil {
 		return false, err
 	}
-	row, user, ok, err := c.app.Org.AuthenticateToken(c.ctx, secret)
+	row, user, ok, err := c.app.authenticatePersonalToken(c.ctx, secret)
 	if err != nil {
 		return false, err
-	}
-	if ok && c.app.Auth != nil {
-		_, member, err := c.app.Org.Membership(c.ctx, user.Str("id"), c.app.Org.OrgID(c.ctx))
-		if err != nil {
-			return false, err
-		}
-		ok = member
 	}
 	if !ok {
 		c.app.failures.record(client)
@@ -107,6 +101,21 @@ func (c *reqCtx) bindPersonalToken() (bool, error) {
 	c.user = pyjson.Str(user.Get("username"))
 	c.token = &personalToken{row: row, user: user}
 	return true, nil
+}
+
+// authenticatePersonalToken is the check behind a personal arka_ token: a
+// live token of an enabled user who, in account mode, is still a member of
+// the organisation. Shared by the agent API and the desktop gate.
+func (a *App) authenticatePersonalToken(ctx context.Context, secret string) (sqlitedb.Row, sqlitedb.Row, bool, error) {
+	row, user, ok, err := a.Org.AuthenticateToken(ctx, secret)
+	if err != nil || !ok || a.Auth == nil {
+		return row, user, ok, err
+	}
+	_, member, err := a.Org.Membership(ctx, user.Str("id"), a.Org.OrgID(ctx))
+	if err != nil {
+		return row, user, false, err
+	}
+	return row, user, member, nil
 }
 
 // requireAgent is Handler._require_agent (server token or bound personal token).

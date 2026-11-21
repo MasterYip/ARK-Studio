@@ -19,7 +19,7 @@ import com.masteryip.arkstudio.ui.Ui;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** Project overview: switcher, setup status, counts, needs attention, recent activity. */
+/** Project overview: switcher, setup status, counts, Needs you, recent activity. */
 final class HomePage extends ShellActivity.Page {
     HomePage(ShellActivity activity) {
         super(activity);
@@ -69,16 +69,7 @@ final class HomePage extends ShellActivity.Page {
         content.addView(projectCard(summary));
         if (setup != null) content.addView(setupCard(setup));
         if (stats != null) content.addView(counts(stats));
-        content.addView(Ui.heading(a, a.getString(R.string.needs_attention)));
-        JSONArray actions = boot.optJSONArray("next_actions");
-        if (actions == null || actions.length() == 0) {
-            content.addView(Ui.small(a, a.getString(R.string.nothing_needs_attention)));
-        } else {
-            for (int i = 0; i < Math.min(5, actions.length()); i++) {
-                JSONObject action = actions.optJSONObject(i);
-                if (action != null) content.addView(actionRow(action));
-            }
-        }
+        NeedsSection.render(a, content, boot.optJSONArray("needs_you"), () -> load(true));
         content.addView(Ui.heading(a, a.getString(R.string.recent_activity)));
         JSONArray activity = boot.optJSONArray("activity");
         int shown = 0;
@@ -167,38 +158,6 @@ final class HomePage extends ShellActivity.Page {
             grid.addView(row);
         }
         return grid;
-    }
-
-    private View actionRow(JSONObject action) {
-        LinearLayout card = Ui.card(a);
-        LinearLayout row = Ui.row(a);
-        String severity = action.optString("severity", "low");
-        int color = severity.equals("high") ? Ui.danger(a) : severity.equals("medium") ? Ui.warn(a) : Ui.muted(a);
-        int soft = severity.equals("high") ? Ui.dangerSoft(a) : severity.equals("medium") ? Ui.warnSoft(a)
-                : Ui.codeBg(a);
-        row.addView(Ui.chip(a, Labels.of(a, action.optString("kind")), color, soft));
-        row.addView(Ui.oneLine(Ui.label(a, action.optString("title"), 15, Ui.text(a), true)), Ui.lp(0, Ui.WRAP, 1));
-        card.addView(row);
-        String detail = actionDetail(action);
-        if (!detail.isEmpty()) card.addView(Ui.small(a, detail));
-        JSONObject unit = action.optJSONObject("unit");
-        if (unit != null) Ui.clickable(card, v -> openUnit(unit.optString("uid"), unit.optString("type")));
-        return card;
-    }
-
-    /** The server sends English details; the kind says which one, like the web overview. */
-    private String actionDetail(JSONObject action) {
-        String detail = action.optString("detail", "");
-        switch (action.optString("kind")) {
-            case "overdue":
-                return detail.startsWith("Due ")
-                        ? a.getString(R.string.action_overdue, detail.substring(4)) : detail;
-            case "blocked": return a.getString(R.string.action_blocked);
-            case "claim": return a.getString(R.string.action_claim);
-            case "assign": return a.getString(R.string.action_assign);
-            case "idea": return a.getString(R.string.action_idea);
-            default: return detail;
-        }
     }
 
     private View activityRow(JSONObject item) {

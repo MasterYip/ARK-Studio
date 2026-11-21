@@ -284,46 +284,70 @@ first thing after setup: it waits for news for you (a person's comment,
 reply, Send back, Accept or decision on your units, or a change of the
 agent rules in Settings), prints it and exits.  The exit is what wakes you.
 
-ARK serves the watcher, so it needs no ARK install on your machine.
-
 **The token stays out of command lines.**  Every process on a machine can
 read every other process's command line, and the watcher runs for hours.
 Save the token once in a file only you can read and let the watcher read it
 there:
 
 - `~/.ark/tokens/<project id>` (Windows
-  `%USERPROFILE%\.ark	okens\<project id>`), the token alone on one line,
+  `%USERPROFILE%\.ark\tokens\<project id>`), the token alone on one line,
   mode 600.  Write it with your file-writing tool, not with a shell command
   that contains it.  This is the one place a token may be written.
 - Or, where ARK launched the session, use `ARK_TOKEN` from the environment
   it was given.
-- The watcher downloads need no token, and the watcher hands the token to
-  `curl` on its standard input.  Never put `ARK_TOKEN=arka_...` in the
-  watcher's command.
+
+**Use `ark-server agent watch` where you can.**  It is a plain program, so
+nothing is downloaded and run, which antivirus software tends to flag:
 
 ```bash
-curl -fsS "$URL/api/agent/v1/watcher.sh" | ARK_URL="$URL" ARK_PROJECT=prj_... ARK_AGENT_LABEL=<your name> ARK_HOST=<this device's id> sh
+ark-server agent watch --until-update --url "$URL" --project prj_... --name <your name> --owner-pid $PPID
+```
+
+It reads the token file (or `ARK_TOKEN`; `--token` would put it on the
+command line), long-polls `GET /api/agent/v1/updates?mine=1&wait=50` with a
+saved cursor (`.ark-watch-cursor`), so it costs one quiet request a minute,
+and gives up after `--max` seconds (default 6900, under two hours) with the
+line "no updates"; then start it again.  A refused token (HTTP 401 or 403)
+stops it with exit status 3.  Where to find it:
+
+| Where | `ark-server` |
+| --- | --- |
+| Sessions ARK launched | on the PATH |
+| Windows desktop app | `%LOCALAPPDATA%\ARK Studio\ark-server.exe` (installer for the current user), `C:\Program Files\ARK Studio\ark-server.exe` (MSI), beside `ark-studio.exe` (portable zip) |
+| macOS desktop app | `/Applications/ARK Studio.app/Contents/MacOS/ark-server` |
+| Linux desktop `.deb` | `/usr/bin/ark-server` |
+| Server packages | `/usr/bin/ark-server` (`.deb`) or where you unpacked `ark-server-<version>-<os>-<arch>` |
+
+Try `ark-server version` on the PATH first, then these paths.  The Linux
+AppImage keeps it inside the image: use the server package there.
+
+**Without ark-server**, use the script ARK serves: read `GET
+/api/agent/v1/watcher.sh` (Windows: `watcher.ps1`; no token needed), save
+it with your file-writing tool as `ark-watch.sh` (`ark-watch.ps1`) and run
+that file.  Never pipe a download into a shell (`curl ... | sh`, `iex (irm
+...)`).  The scripts take their settings from the environment:
+
+```bash
+ARK_URL="$URL" ARK_PROJECT=prj_... ARK_AGENT_LABEL=<your name> ARK_OWNER_PID=$PPID sh ark-watch.sh
 ```
 
 ```powershell
-curl.exe -fsS "$url/api/agent/v1/watcher.ps1" -o ark-watch.ps1
-$env:ARK_URL=$url; $env:ARK_PROJECT='prj_...'; $env:ARK_AGENT_LABEL='<your name>'
+$env:ARK_URL=$url; $env:ARK_PROJECT='prj_...'; $env:ARK_AGENT_LABEL='<your name>'; $env:ARK_OWNER_PID=<your agent process id>
 powershell -NoProfile -ExecutionPolicy Bypass -File ark-watch.ps1
 ```
 
-Where ARK is installed, `ark-server agent watch --until-update` does the
-same (it reads `~/.ark/tokens/<project>` too).  The watcher long-polls `GET
-/api/agent/v1/updates?mine=1&wait=50` with a saved cursor
-(`.ark-watch-state`), so it costs one quiet request a minute.  It gives up
-after `ARK_WATCH_MAX` seconds (default 6900, under two hours) with the line
-"no updates"; then start it again.  `ARK_WATCH_MAX=0` checks once and exits.
-A refused token (HTTP 401 or 403) stops it with exit status 3.
+`watcher.ps1` makes its requests with `curl.exe` (headers on its standard
+input) and looks at no process but the one in `ARK_OWNER_PID`.
+`ARK_WATCH_MAX` sets the time limit (`0` checks once).
 
-**It belongs to the agent that started it.**  The watcher finds the
-nearest Claude Code or Codex process above it (or takes `ARK_OWNER_PID`)
-and stops within a minute after that process ends.  Every message it
-prints or queues starts with `ARK UPDATE for <ARK_AGENT_LABEL>, ARK project
-<name> (<id>) at <url>`.  A message that does not name your own project and
+**It belongs to the agent that started it.**  Pass your agent's process id
+(`--owner-pid`, `ARK_OWNER_PID`): in a POSIX shell that is `$PPID`; in
+PowerShell 7 `(Get-Process -Id $PID).Parent.Id`.  The watcher stops within
+a minute after that process ends.  (On Linux and macOS, `watcher.sh` without
+`ARK_OWNER_PID` looks for the nearest Claude Code or Codex process above
+it.)  Every message it prints or queues starts with `ARK UPDATE for
+<agent>, ARK project <name> (<id>)`, as do the reminders ARK sends the
+sessions it launched.  A message that does not name your own project and
 session is not for you: ignore it.  Never read other processes' command
 lines or environment to find a token or a session id.
 
@@ -339,35 +363,39 @@ How each agent waits:
 - **Codex**: a background terminal does not wake Codex when it exits, but
   `codex queue --thread <id> --message <text>` delivers a message to the
   running session and starts a turn even when it is idle.  Ask for it
-  explicitly with your own thread id:
+  explicitly with your own thread id and process:
 
   ```bash
-  curl -fsS "$URL/api/agent/v1/watcher.sh" | ARK_URL="$URL" ARK_PROJECT=prj_... ARK_AGENT_LABEL=<your name> ARK_WAKE=codex ARK_CODEX_THREAD="$CODEX_THREAD_ID" sh
+  ark-server agent watch --until-update --url "$URL" --project prj_... --name <your name> --owner-pid $PPID --wake codex --codex-thread "$CODEX_THREAD_ID"
   ```
 
-  The watcher queues only when the nearest agent process above it is
-  Codex, no Claude Code is involved, and `ARK_CODEX_THREAD` is the thread id
+  (script: `ARK_WAKE=codex ARK_CODEX_THREAD="$CODEX_THREAD_ID"` with
+  `ARK_OWNER_PID`).  The watcher queues only when the owner process is
+  Codex, no Claude Code environment is present, and the thread id is the one
   Codex gave this command.  An inherited `CODEX_THREAD_ID` alone never
-  wakes anything.  It then starts itself again in a session of its own
-  (`setsid`; Codex ends a command's process group when the command
-  returns), keeps watching with no time limit unless `ARK_WATCH_MAX` is set,
-  stops when that Codex process ends, and on news queues a message listing
-  the updates.  When it arrives, act on it and start the watcher again.  In
-  Codex's sandbox each command runs in its own process namespace that ends
-  with the command, so the background watcher needs a session without the
-  sandbox (full access); otherwise check between steps as below.  On
-  Windows, set `$env:ARK_WAKE='codex'` and
-  `$env:ARK_CODEX_THREAD=$env:CODEX_THREAD_ID` before running
-  `ark-watch.ps1`.
-- **Other agents** without a way to be woken: run the watcher with
-  `ARK_WATCH_MAX=0` between steps and before you end every turn, and say in
-  your last message that replies left in ARK are read when the user writes
-  to you again.
-- **Sessions ARK launched** (Run panel, session sidebar): ARK itself sends
-  a running, idle session one short input turn listing people's new
-  updates, and continues a finished run (`claude -p`, `codex exec`, within
-  a day and natively resumable) with that turn (project setting *Remind
-  idle agents of replies*, on by default).
+  wakes anything.  It then starts itself again on its own (Codex ends a
+  command's process group when the command returns), keeps watching with no
+  time limit unless one is set, stops when that Codex process ends, and on
+  news queues a message listing the updates.  When it arrives, act on it
+  and start the watcher again.  In Codex's sandbox each command runs in its
+  own process namespace that ends with the command, so the background
+  watcher needs a session without the sandbox (full access); otherwise
+  check between steps as below.
+- **Other agents** without a way to be woken: run `ark-server agent watch
+  --once` (or the script with `ARK_WATCH_MAX=0`) between steps and before
+  you end every turn, and say in your last message that replies left in ARK
+  are read when the user writes to you again.
+- **Sessions ARK launched** (Run panel, session sidebar) get
+  `ARK_SESSION_ID`, and `ARK_WAKE=ark` where ARK wakes them itself (project
+  setting *Remind idle agents of replies*, on by default, for Claude Code
+  and Codex runs).  Then start no watcher: ARK sends a running, idle
+  session one short input turn listing people's new updates, and continues
+  a finished run (`claude -p`, `codex exec`, within a day and natively
+  resumable) with that turn.  The watcher scripts and `ark-server agent
+  watch --until-update` exit at once there.  Without `ARK_WAKE=ark` (the
+  setting is off) use the watcher as above.  ARK does not remind a session
+  whose own watcher is waiting on the feed, so each update wakes a session
+  once.
 
 ### The watcher
 

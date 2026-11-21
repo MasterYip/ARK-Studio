@@ -55,6 +55,7 @@ mod external;
 mod links;
 mod measure;
 mod paths;
+mod probe;
 mod servers;
 mod settings;
 mod sidecar;
@@ -84,7 +85,6 @@ const MAIN: &str = "main";
 const SETTINGS: &str = "settings";
 const TRAY: &str = "ark";
 const READY_TIMEOUT: Duration = Duration::from_secs(45);
-const HEALTH_TIMEOUT: Duration = Duration::from_secs(6);
 /// Set at build time by CI when the updater signing key exists; overrides
 /// `plugins.updater.pubkey` in tauri.conf.json.
 const UPDATER_PUBKEY: Option<&str> = option_env!("ARK_UPDATER_PUBKEY");
@@ -127,6 +127,8 @@ const LOCAL_PERMISSIONS: &[&str] = &[
     "allow-update-state",
     "allow-check-update",
     "allow-open-releases",
+    // Settings > Project storage location: the native folder picker.
+    "allow-choose-project-folder",
 ];
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -152,7 +154,6 @@ struct AppState {
     links: Mutex<Links>,
     tray_items: Mutex<Option<TrayItems>>,
     quitting: AtomicBool,
-    http: OnceLock<reqwest::Client>,
     /// The newer version the last update check found.
     update: Mutex<Option<String>>,
 }
@@ -230,18 +231,19 @@ fn state(app: &AppHandle) -> tauri::State<'_, AppState> {
     app.state::<AppState>()
 }
 
+fn user_agent(app: &AppHandle) -> String {
+    format!("ARK-Studio-Desktop/{}", app.package_info().version)
+}
+
+/// A client for one call to a server. Built per call so that it follows the
+/// current system proxy settings (proxy tools switch them while the app runs).
 fn http(app: &AppHandle) -> reqwest::Client {
-    state(app)
-        .http
-        .get_or_init(|| {
-            reqwest::Client::builder()
-                .user_agent(format!("ARK-Studio-Desktop/{}", app.package_info().version))
-                .connect_timeout(HEALTH_TIMEOUT)
-                .timeout(Duration::from_secs(20))
-                .build()
-                .unwrap_or_default()
-        })
-        .clone()
+    reqwest::Client::builder()
+        .user_agent(user_agent(app))
+        .connect_timeout(Duration::from_secs(12))
+        .timeout(Duration::from_secs(20))
+        .build()
+        .unwrap_or_default()
 }
 
 /// Origin of the bundled pages (`app.windows[].useHttpsScheme` is false).
@@ -622,18 +624,17 @@ fn open_remote(app: &AppHandle, url: &Url) {
     open_main(app, url.clone());
 }
 
-/// GET <server>/api/health: reachable (any HTTP answer) and ARK (200).
+/// GET <server>/api/health: reachable (any HTTP answer) and ARK (2xx); when
+/// unreachable, the reason (see `probe::check`).
 async fn probe(app: &AppHandle, server: &str) -> Value {
     let Ok(base) = settings::normalize_remote(server) else {
-        return json!({ "url": server, "reachable": false, "ark": false, "error": "invalid address" });
+        return json!({ "url": server, "reachable": false, "ark": false, "reason": "invalid", "error": "invalid address" });
     };
-    let Ok(health) = base.join("api/health") else {
-        return json!({ "url": base.as_str(), "reachable": false, "ark": false });
-    };
-    match http(app).get(health).timeout(HEALTH_TIMEOUT).send().await {
-        Ok(r) => json!({ "url": base.as_str(), "reachable": true, "ark": r.status().is_success() }),
-        Err(e) => json!({ "url": base.as_str(), "reachable": false, "ark": false, "error": e.to_string() }),
-    }
+    probe::check(&base, &user_agent(app)).await
+}
+
+fn reachable(check: &Value) -> bool {
+    check["reachable"].as_bool().unwrap_or(false)
 }
 
 /// Saves `url` as the most recent server (and rebuilds the tray menu).
@@ -652,8 +653,13 @@ fn remember_server(app: &AppHandle, url: &str) -> Result<(), String> {
 async fn open_saved(app: &AppHandle, raw: &str, target: Target, force: bool) -> Result<Value, String> {
     let history = settings_snapshot(app).remote_history;
     let entry = servers::find_saved(&history, raw).ok_or("This server is not in the saved list.")?;
-    if !force && !probe(app, &entry.url).await["reachable"].as_bool().unwrap_or(false) {
-        return Ok(json!({ "opened": false, "unreachable": true, "url": entry.url, "label": entry.label }));
+    if !force {
+        let check = probe(app, &entry.url).await;
+        if !reachable(&check) {
+            let mut v = probe::unreachable(&check, &entry.url);
+            v["label"] = json!(entry.label);
+            return Ok(v);
+        }
     }
     let url = servers::target_url(&entry.url, &target)?;
     remember_server(app, &entry.url)?;
@@ -770,6 +776,32 @@ async fn pick_folder(app: AppHandle, current: Option<String>) -> Option<String> 
     dialog.blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.to_string_lossy().to_string())
 }
 
+/// Where the folder picker opens: `current` or its nearest existing parent,
+/// else `fallback` when it exists.
+fn picker_start(current: Option<&str>, fallback: &Path) -> Option<PathBuf> {
+    let mut dir = current.map(str::trim).filter(|c| !c.is_empty()).map(PathBuf::from);
+    while let Some(d) = dir {
+        if d.is_absolute() && d.is_dir() {
+            return Some(d);
+        }
+        dir = d.parent().map(Path::to_path_buf);
+    }
+    fallback.is_dir().then(|| fallback.to_path_buf())
+}
+
+/// Settings > Project storage location (local ARK page): the native folder
+/// picker. The page checks and saves the folder through its own server,
+/// which applies it at once (no restart).
+#[tauri::command]
+async fn choose_project_folder(app: AppHandle, webview: tauri::Webview, current: Option<String>) -> Result<Option<String>, String> {
+    require_hub(&app, &webview)?;
+    let mut dialog = app.dialog().file().set_title(if system_zh() { "选择项目存储位置" } else { "Choose the project storage location" });
+    if let Some(start) = picker_start(current.as_deref(), &paths::default_root()) {
+        dialog = dialog.set_directory(start);
+    }
+    Ok(dialog.blocking_pick_folder().and_then(|p| p.into_path().ok()).map(|p| p.to_string_lossy().to_string()))
+}
+
 /// Saves the local project folder and port, (re)starts the local server
 /// when they changed and opens the local Home.
 #[tauri::command]
@@ -797,8 +829,11 @@ async fn connect_local(app: AppHandle, root: String, port: u16) -> Result<Value,
 #[tauri::command]
 async fn connect_remote(app: AppHandle, url: String, force: bool) -> Result<Value, String> {
     let url = settings::normalize_remote(&url)?;
-    if !force && !probe(&app, url.as_str()).await["reachable"].as_bool().unwrap_or(false) {
-        return Ok(json!({ "opened": false, "unreachable": true, "url": url.as_str() }));
+    if !force {
+        let check = probe(&app, url.as_str()).await;
+        if !reachable(&check) {
+            return Ok(probe::unreachable(&check, url.as_str()));
+        }
     }
     remember_server(&app, url.as_str())?;
     let handle = app.clone();
@@ -1708,6 +1743,7 @@ pub fn run() {
             copy_image_png,
             device_id,
             measure_paths,
+            choose_project_folder,
             tray_menu_ready,
             tray_menu_action,
         ])
@@ -1782,6 +1818,21 @@ mod tests {
             endpoints,
             vec![format!("{RELEASES_URL}/latest/download/latest.json"), format!("{RELEASES_URL}/download/updater/latest.json")]
         );
+    }
+
+    #[test]
+    fn folder_picker_starts_at_the_nearest_existing_folder() {
+        let base = std::env::temp_dir().join(format!("ark-picker-test-{}", std::process::id()));
+        let fallback = base.join("projects");
+        std::fs::create_dir_all(&fallback).unwrap();
+        let deep = base.join("missing").join("deeper");
+        assert_eq!(picker_start(Some(deep.to_str().unwrap()), &fallback), Some(base.clone()));
+        assert_eq!(picker_start(Some(fallback.to_str().unwrap()), &base), Some(fallback.clone()));
+        assert_eq!(picker_start(None, &fallback), Some(fallback.clone()));
+        assert_eq!(picker_start(Some("  "), &fallback), Some(fallback.clone()));
+        assert_eq!(picker_start(Some("relative/dir"), &fallback), Some(fallback.clone()));
+        assert_eq!(picker_start(None, &base.join("gone")), None);
+        std::fs::remove_dir_all(&base).unwrap();
     }
 
     #[test]

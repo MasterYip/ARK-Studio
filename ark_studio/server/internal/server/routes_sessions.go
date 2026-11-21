@@ -354,6 +354,10 @@ func objectList(v any) []*pyjson.Object {
 func (c *reqCtx) sessionHooks() *sessions.Hooks {
 	return &sessions.Hooks{
 		AgentToken: c.app.sessionAgentToken,
+		WakesIdle: func(projectID string) bool {
+			p := c.app.nudgeProject(c.ctx, projectID)
+			return p != nil && NudgeEnabled(p)
+		},
 		Project: func() (*pyjson.Object, error) {
 			p, err := c.require("read")
 			if err != nil {

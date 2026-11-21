@@ -247,7 +247,7 @@ func (m *Manager) Delete(projectID string) error {
 			continue
 		}
 		path := pyjson.Str(summary.Value("path"))
-		if Resolve(filepath.Dir(path)) != Resolve(m.Root) {
+		if !m.InFolders(filepath.Dir(path)) {
 			return &Error{"refusing to delete outside the project root"}
 		}
 		m.Drop(path)

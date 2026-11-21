@@ -52,6 +52,7 @@ import { themePref } from "../profile.js";
 import { userBadge } from "../users.js";
 import { cachePanel } from "../cache-panel.js";
 import { pluginsPanel } from "../plugins-panel.js";
+import { projectStoragePanel } from "../project-storage-panel.js";
 
 const FIELDS = [
   {
@@ -3007,6 +3008,7 @@ export function renderSettings(host, ctx) {
         t(advancedEnabled() ? "settings.overview.on" : "settings.overview.off")),
       overviewShortcut("plugins", "puzzle", t("plugins.title"), t("plugins.hint")),
       overviewShortcut("trash", "trash", t("trash.title"), t("trash.hint")),
+      isOrgAdmin ? overviewShortcut("storage", "folder", t("storage.title"), t("settings.tab.storage_hint")) : null,
       overviewShortcut("guidance", "play", t("tour.title"), t("settings.overview.guide_hint"))));
 
   const sectionPanels = {
@@ -3043,6 +3045,7 @@ export function renderSettings(host, ctx) {
     agentAccess: [agentTokensPanel(ctx)],
     plugins: [pluginsPanel(ctx)],
     about: [aboutPanel],
+    projectStorage: isOrgAdmin ? [projectStoragePanel(ctx)] : [],
     admin: isOrgAdmin ? [adminPanel, ...(ctx.S.session?.local ? [] : [renderInviteSignupSetting(ctx)]), legacyServerTokenPanel()] : [],
     // Invite links need accounts: project admins on a server with sign-in.
     members: canManageInvites(ctx.S.session, ctx.S.project) ? [renderMembersPanel(ctx)] : [],
@@ -3062,6 +3065,7 @@ export function renderSettings(host, ctx) {
     personalAI: { label: t("settings.tab.personal_ai"), icon: "sparkles", hint: t("settings.tab.personal_ai_hint") },
     plugins: { label: t("plugins.title"), icon: "puzzle", hint: t("plugins.hint") },
     about: { label: t("about.title"), icon: "info", hint: t("about.hint") },
+    storage: { label: t("settings.tab.storage"), icon: "folder", hint: t("settings.tab.storage_hint") },
     admin: { label: t("settings.scope_admin"), icon: "shield", hint: t("settings.scope_admin_hint") },
   };
   const tabs = SETTINGS_TABS

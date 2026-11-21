@@ -1,5 +1,8 @@
 #!/bin/sh
 # ARK watcher (GET /api/agent/v1/watcher.sh; downloading it needs no token).
+# Prefer `ark-server agent watch --until-update`, which does the same.  To
+# use this script, save it once with your file-writing tool as ark-watch.sh
+# and run the saved file (sh ark-watch.sh); do not pipe it into a shell.
 # Waits until a person replies in ARK on your units (comments, replies, Send
 # back, decisions, ...) or changes the agent rules, prints what happened and
 # exits.  Handle it, then start the watcher again.
@@ -13,7 +16,13 @@
 #   Codex only: ARK_WAKE=codex ARK_CODEX_THREAD="$CODEX_THREAD_ID".  The
 #        watcher then checks that it runs under that Codex session, detaches,
 #        keeps watching and wakes the session with `codex queue`.
-# The watcher stops when the agent that started it is gone.
+# The watcher stops when the agent that started it is gone, and does not
+# start in a session ARK launched and wakes itself (ARK_SESSION_ID with
+# ARK_WAKE=ark).
+if [ -n "$ARK_SESSION_ID" ] && [ "$ARK_WAKE" = ark ]; then
+  echo "ARK: ARK launched this session ($ARK_SESSION_ID) and wakes it itself when people reply; no watcher needed."
+  exit 0
+fi
 : "${ARK_URL:?set ARK_URL}" "${ARK_PROJECT:?set ARK_PROJECT}"
 ARK_URL=${ARK_URL%/}
 
@@ -115,13 +124,15 @@ fi
 if [ -n "$codex_thread" ] && [ -z "$ARK_WATCH_DETACHED_OWNER" ]; then
   # Codex ends a command's process group when the command returns: start
   # again in a session of its own, tied to this Codex process.
-  script=$(curl -fsS -m 30 "$ARK_URL/api/agent/v1/watcher.sh") || { echo "ARK: could not download the watcher again"; exit 1; }
+  self=$0
+  case "$self" in /*) ;; *) self=$PWD/$self ;; esac
+  [ -f "$self" ] || { echo "ARK: save the watcher as ark-watch.sh and run that file (sh ark-watch.sh)."; exit 2; }
   export ARK_WATCH_DETACHED_OWNER=$owner ARK_URL ARK_PROJECT ARK_WAKE ARK_CODEX_THREAD
   [ -n "$tok_env" ] && export ARK_TOKEN="$tok" # the environment, not the arguments
   if command -v setsid >/dev/null 2>&1; then
-    setsid -f sh -c "$script" </dev/null >/dev/null 2>&1
+    setsid -f sh "$self" </dev/null >/dev/null 2>&1
   else
-    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' sh -c "$script" </dev/null >/dev/null 2>&1 &
+    perl -MPOSIX -e 'POSIX::setsid(); exec @ARGV' sh "$self" </dev/null >/dev/null 2>&1 &
   fi
   echo "ARK: the watcher runs in the background and wakes this Codex session through codex queue."
   exit 0
@@ -169,7 +180,7 @@ while :; do
   [ -n "$rv" ] && rules=$rv
   printf '%s\n%s\n' "$cursor" "$rules" > "$state"
   if [ "${count:-0}" -gt 0 ] || [ -n "$changed" ]; then
-    head="ARK UPDATE for $label, ARK project $project_name at $ARK_URL: ${count:-0} new update(s)${changed:+; the agent rules changed to $rv (GET /api/agent/v1/rules)}."
+    head="ARK UPDATE for $label, ARK project $project_name: ${count:-0} new update(s)${changed:+; the agent rules changed to $rv (GET /api/agent/v1/rules)}."
     echo "$head Act on them (the items below, or GET /api/agent/v1/updates), then start this watcher again."
     printf '%s\n' "$body"
     if [ -n "$codex_thread" ]; then

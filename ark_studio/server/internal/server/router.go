@@ -143,6 +143,8 @@ func init() {
 		// Go only (routes_invites.go: project invite links).
 		match(reProjectInvites, (*reqCtx).projectInvitesGet),
 		exact(inviteSettingsPath, (*reqCtx).inviteSettingsGet),
+		// Go only (routes_storage.go: where new projects are stored).
+		exact(projectStoragePath, (*reqCtx).projectStorageGet),
 		sub(func(c *reqCtx, _ string) (bool, error) {
 			ok, err := c.apiGetViews()
 			return ok || err != nil, err
@@ -221,6 +223,9 @@ func init() {
 		match(reProjectInvites, (*reqCtx).projectInvitesPost),
 		match(reInviteRevoke, (*reqCtx).projectInviteRevoke),
 		exact(inviteSettingsPath, func(c *reqCtx) error { return c.inviteSettingsPost() }),
+		// Go only (routes_storage.go).
+		exact(projectStoragePath, (*reqCtx).projectStoragePost),
+		exact(projectRevealPath, (*reqCtx).projectReveal),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.orgPost(path, c.body) }, orgPorted...),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.personalSettingsPost(path, c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.mobilePost(path, c.body) }, mobilePorted...),

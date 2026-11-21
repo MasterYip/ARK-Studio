@@ -632,6 +632,11 @@ func isCredentialEnv(name string) bool {
 	return false
 }
 
+// inheritedWakeEnv are not passed on from the server's own environment:
+// they name the session to wake, and a stale value would wake another one.
+var inheritedWakeEnv = map[string]bool{"ARK_WAKE": true, "ARK_SESSION_ID": true, "ARK_CODEX_THREAD": true,
+	"CODEX_THREAD_ID": true, "ARK_OWNER_PID": true, "ARK_WATCH_DETACHED_OWNER": true}
+
 type envMap struct {
 	keys []string
 	vals map[string]string
@@ -672,7 +677,7 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 			continue
 		}
 		key, value := kv[:i], kv[i+1:]
-		if isWriteCredential(key) || isCredentialEnv(key) {
+		if isWriteCredential(key) || isCredentialEnv(key) || inheritedWakeEnv[strings.ToUpper(key)] {
 			continue
 		}
 		skip := false
@@ -759,6 +764,14 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 		}
 	} else if access == "full_access" {
 		token = m.WriteToken
+	}
+	// One wake-up mechanism per session (T-0053): where ARK nudges idle
+	// sessions of this project and can continue this platform's runs, the
+	// agent is told so (ARK_WAKE=ark) and starts no watcher.
+	env.set("ARK_SESSION_ID", s.ID)
+	if h != nil && h.WakesIdle != nil && contains(NativeResumePlatforms, platform) &&
+		h.WakesIdle(strOr(projectRef.Value("id"))) {
+		env.set("ARK_WAKE", "ark")
 	}
 	if token != "" {
 		env.set("ARK_AGENT_TOKEN", token)

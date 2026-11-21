@@ -212,6 +212,13 @@ export function projectPicker(ctx, { beforeOpen = null, label = "" } = {}) {
           onClick: () => change(project, togglePinned) },
         { label: t(isHidden ? "project.picker.unhide" : "project.picker.hide"), icon: isHidden ? "eye" : "eyeOff",
           onClick: () => change(project, toggleHidden) },
+        // ARK runs on this computer (desktop app, local server): the project folder.
+        ...(ctx.S?.session?.local && project.id !== "ark-demo" ? [
+          { separator: true },
+          { label: t("project.reveal"), icon: "external", onClick: () => {
+            api.revealProject({ id: project.id }).catch((err) => ctx.toast?.(err.message, "err"));
+          } },
+        ] : []),
       ],
     });
   }

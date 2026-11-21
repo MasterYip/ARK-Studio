@@ -25,11 +25,11 @@ target changed; its `ServerStoreTest` still runs.
 | Native | Web app (WebView, deep links) |
 | --- | --- |
 | **Servers**: saved servers, account / permission / transport chips, sign-in, sign-out, delete | Map `#/map` |
-| **Home**: project switcher, setup status, counts, needs attention, recent activity | Editor `#/editor/unit%3A<uid>` |
+| **Home**: project switcher, setup status, counts, Needs you (the web's review cards: "Review this" note with anchors, round and previous round, changes since the last review, one card per delivery with a member table, review groups; Accept / Send back / Comment, Accept all with a checklist), recent activity | Editor `#/editor/unit%3A<uid>` |
 | **Tasks**: board by status (inbox, open, active, review, blocked, done); task detail, status change, notes linked to the task | Research · Ideas / Plan |
 | **Runs**: sessions list (5 s refresh); thread with Markdown, collapsible tool groups and outputs, steer / continue composer, stop (2 s polling while active) | Output, Assistant, Files |
 | **GPU**: servers, per-GPU util and memory bars with the project-owned share (port of `gpu-model.js`), queue (read-only) | Settings |
-| **Node viewer**: Markdown body, web fallback for Mermaid / math / HTML, zoomable images, video player streaming `/api/media/{id}/raw` with Range seeking, links | |
+| **Node viewer**: review section (note, round, changes) and Accept / Send back / Add comment under the comment box; review anchors scroll to the heading; Markdown body, web fallback for Mermaid / math / HTML, zoomable images, video player streaming `/api/media/{id}/raw` with Range seeking, links | |
 | **Share to ARK**: text, link or image → idea or note with the image attached | |
 
 The UI has pull-to-refresh, offline / error states with Retry, and light and dark themes
@@ -91,6 +91,7 @@ JVM tests (`app/src/test`) cover:
 - the session vault (no plaintext token stored, key loss forgets the session);
 - GPU ownership (the six `tests/js/gpu_model.test.mjs` cases);
 - the transcript → blocks port of `session_model.test.mjs`;
+- review notes (anchors, chips, headline numbers, heading ids) and Needs you cards from the server's `auto_group` (`ReviewModelTest`);
 - board columns and importance, deep links, Markdown blocks and spans, the web-render
   fallback and notification diffs;
 - the existing `ServerStoreTest`.

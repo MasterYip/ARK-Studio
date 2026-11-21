@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"arkstudio/go/internal/compat/pyjson"
 )
@@ -59,5 +60,37 @@ func TestSessionAgentTokens(t *testing.T) {
 	}
 	if s, _, _ := local.sessionAgentToken("local", "s_x", "read_only"); s != "" {
 		t.Fatal("local read-only gets no token")
+	}
+}
+
+// The nudger's safety net: a watcher waiting on /updates with a session's
+// token marks that token as long-polling while it waits (T-0053).
+func TestSessionTokenLongPollIsSeen(t *testing.T) {
+	app, projectID := authDesktopApp(t)
+	secret, id, err := app.sessionAgentToken("owner", "s_poll", "full_access")
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := map[string]string{"X-ARK-Project": projectID, "Authorization": "Bearer " + secret}
+	first := gpuCall(t, app, "GET", "/api/agent/v1/updates", nil, h)
+	cursor, _ := first.body["cursor"].(string)
+	if first.code != 200 || cursor == "" {
+		t.Fatalf("first: %d %s", first.code, first.raw)
+	}
+	if app.tokenLongPolling(id) {
+		t.Fatal("nothing waits yet")
+	}
+	done := make(chan int, 1)
+	go func() { done <- gpuCall(t, app, "GET", "/api/agent/v1/updates?wait=2&since="+cursor, nil, h).code }()
+	seen := false
+	for i := 0; i < 30 && !seen; i++ {
+		time.Sleep(50 * time.Millisecond)
+		seen = app.tokenLongPolling(id)
+	}
+	if code := <-done; code != 200 || !seen {
+		t.Fatalf("long poll %d, seen %v", code, seen)
+	}
+	if app.tokenLongPolling(id) {
+		t.Fatal("still marked after the poll returned")
 	}
 }
