@@ -130,6 +130,28 @@ func (m *Manager) cachedTranscriptFor(s *Session, in TranscriptInput, item, agen
 	c := m.transcriptCacheFor(cacheID)
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	m.syncCacheLocked(c, s, in, agent)
+	finalKey := strings.Join([]string{in.Status, in.Error, in.Notice, pyjson.Str(in.Waiting)}, "\x00")
+	if c.last == nil || c.lastKey != finalKey {
+		c.last, c.lastKey = c.b.finalize(in), finalKey
+	}
+	var found *pyjson.Object
+	if item != "" && c.b.tools[item] != nil {
+		found = c.b.tools[item].Copy()
+		if urls := c.b.toolImages[item]; len(urls) > 0 {
+			list := make([]any, len(urls))
+			for i, u := range urls {
+				list[i] = u
+			}
+			found.Set("image_data", list)
+		}
+	}
+	return c.last, found
+}
+
+// syncCacheLocked feeds the cached builder the log lines appended since
+// the last look (c.mu held).
+func (m *Manager) syncCacheLocked(c *transcriptCache, s *Session, in TranscriptInput, agent string) {
 	key := strings.Join([]string{in.SessionID, in.Prompt, pyjson.Str(in.PromptAt), in.Platform}, "\x00")
 	for attempt := 0; attempt < 2; attempt++ {
 		if c.b == nil || c.key != key {
@@ -155,22 +177,10 @@ func (m *Manager) cachedTranscriptFor(s *Session, in TranscriptInput, item, agen
 		c.outOff, c.errOff = outOff, errOff
 		break
 	}
-	finalKey := strings.Join([]string{in.Status, in.Error, in.Notice, pyjson.Str(in.Waiting)}, "\x00")
-	if c.last == nil || c.lastKey != finalKey {
-		c.last, c.lastKey = c.b.finalize(in), finalKey
+	if c.b == nil { // both attempts saw a replaced log
+		c.b, c.key = newTranscriptBuilder(in), key
+		c.b.agent = agent
 	}
-	var found *pyjson.Object
-	if item != "" && c.b.tools[item] != nil {
-		found = c.b.tools[item].Copy()
-		if urls := c.b.toolImages[item]; len(urls) > 0 {
-			list := make([]any, len(urls))
-			for i, u := range urls {
-				list[i] = u
-			}
-			found.Set("image_data", list)
-		}
-	}
-	return c.last, found
 }
 
 // TranscriptOptions shape a transcript reply for the web client.

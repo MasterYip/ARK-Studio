@@ -101,12 +101,10 @@ func TestMobileAppsResolveTheLatestRelease(t *testing.T) {
 		t.Fatalf("release: %q %q", out.Version, out.ReleaseURL)
 	}
 	base := "https://github.com/fork/ark/releases/download/v2.1.0/"
-	for key, file := range map[string]string{"native": "ARK-Studio-v2.1.0-android.apk", "webapp": "ARK-Studio-v2.1.0-android-web.apk"} {
-		got := out.Apps[key]
-		if !got.Available || !got.Direct || got.URL != base+file || got.File != file ||
-			!strings.HasPrefix(got.QR, "<svg") || got.Local || got.LocalURL == "" {
-			t.Fatalf("%s = %+v", key, got)
-		}
+	file := "ARK-Studio-v2.1.0-android.apk"
+	if got := out.Apps["native"]; len(out.Apps) != 1 || !got.Available || !got.Direct || got.URL != base+file ||
+		got.File != file || !strings.HasPrefix(got.QR, "<svg") || got.Local || got.LocalURL == "" {
+		t.Fatalf("apps = %+v", out.Apps)
 	}
 
 	// Cached: the next calls and the /download redirect do not ask GitHub again.
@@ -116,7 +114,7 @@ func TestMobileAppsResolveTheLatestRelease(t *testing.T) {
 		t.Fatalf("redirect: %d %q", w.Code, w.Header().Get("Location"))
 	}
 	w = docsGet(app, "HEAD", "/download/ARK-Studio-webapp.apk", nil)
-	if w.Code != 302 || w.Header().Get("Location") != base+"ARK-Studio-v2.1.0-android-web.apk" {
+	if w.Code != 302 || w.Header().Get("Location") != base+"ARK-Studio-v2.1.0-android.apk" {
 		t.Fatalf("redirect web: %d %q", w.Code, w.Header().Get("Location"))
 	}
 	if n := hits.Load(); n != 1 {
@@ -147,7 +145,7 @@ func TestMobileAppsResolveTheLatestRelease(t *testing.T) {
 		w.Header().Get("Content-Type") != "application/vnd.android.package-archive" {
 		t.Fatalf("dist: %d %q %s", w.Code, w.Body, w.Header().Get("Content-Type"))
 	}
-	if out = getMobileApps(t, app); !out.Apps["native"].Local || out.Apps["native"].Size != 6 || out.Apps["webapp"].Local {
+	if out = getMobileApps(t, app); !out.Apps["native"].Local || out.Apps["native"].Size != 6 {
 		t.Fatalf("local flags: %+v", out.Apps)
 	}
 }
@@ -163,10 +161,8 @@ func TestMobileAppsFallBackToTheReleasePage(t *testing.T) {
 	if out.ReleaseURL != page || out.Version != "" {
 		t.Fatalf("release: %q %q", out.ReleaseURL, out.Version)
 	}
-	for _, key := range []string{"native", "webapp"} {
-		if got := out.Apps[key]; !got.Available || got.Direct || got.URL != page || got.File != "" {
-			t.Fatalf("%s = %+v", key, got)
-		}
+	if got := out.Apps["native"]; !got.Available || got.Direct || got.URL != page || got.File != "" {
+		t.Fatalf("native = %+v", got)
 	}
 	w := docsGet(app, "GET", "/download/ARK-Studio-android.apk", nil)
 	if w.Code != 302 || w.Header().Get("Location") != page {
@@ -185,7 +181,7 @@ func TestMobileAppsReplayNeverAsksGitHub(t *testing.T) {
 	app, _ := apkApp(t)
 	out := getMobileApps(t, app)
 	page := "https://github.com/MasterYip/ARK-Studio/releases/latest"
-	if out.ReleaseURL != page || out.Apps["native"].URL != page || out.Apps["webapp"].URL != page {
+	if out.ReleaseURL != page || out.Apps["native"].URL != page {
 		t.Fatalf("replay: %+v", out)
 	}
 }

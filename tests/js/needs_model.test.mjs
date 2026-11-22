@@ -112,3 +112,20 @@ test("Needs-you thumbnails open the graph's media lightbox, not a second viewer"
   const graph = await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8");
   assert.match(graph, /openMediaLightbox\(\{/);
 });
+
+test("isOpenDecision and inNeedsYou leave out closed statuses, as the server does", async () => {
+  const go = await readFile(new URL("../../ark_studio/server/internal/store/needsopen.go", import.meta.url), "utf8");
+  const server = JSON.parse(`[${go.match(/ClosedStatuses = \[\]string\{([^}]*)\}/)[1]}]`);
+  assert.deepEqual([...m.CLOSED_STATUSES], server);
+  const statuses = ["inbox", "open", "active", "review", "blocked", "done", "abandoned", "archived"];
+  for (const status of statuses) {
+    const closed = ["done", "abandoned", "archived"].includes(status);
+    assert.equal(m.isOpenDecision({ type: "decision", status }), !closed, status);
+    assert.equal(m.inNeedsYou({ uid: "D-1", type: "decision", status }), !closed, status);
+    assert.equal(m.inNeedsYou({ uid: "E-1", type: "evidence", status }), status === "review", status);
+    assert.equal(m.needsUnitKey({ uid: "D-1", type: "decision", status }), closed ? "" : "u:D-1", status);
+  }
+  assert.equal(m.isOpenDecision({ type: "task", status: "open" }), false);
+  assert.equal(m.inNeedsYou({ uid: "D-1", type: "decision", status: "open", archived: 1 }), false);
+  assert.equal(m.needsUnitKey({ type: "decision", status: "open" }), "");
+});

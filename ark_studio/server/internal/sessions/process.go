@@ -23,22 +23,55 @@ import (
 	"arkstudio/go/internal/platform/procx"
 )
 
-// process is the subprocess.Popen of one turn.
+// process is the subprocess.Popen of one turn.  A relayed process (relay
+// set, relay.go) runs under `ark-server session-relay` and outlives the
+// server; cmd and the pipes are nil then.
 type process struct {
 	cmd            *exec.Cmd
 	stdin          *os.File
 	stdout, stderr *os.File
+	relay          *relayClient
+	childPID       int
 	exited         atomic.Bool
 	stdinClosed    atomic.Bool
 	done           chan struct{} // closed once the monitor has finished the session
 }
 
 func (p *process) running() bool { return !p.exited.Load() }
-func (p *process) pid() int      { return p.cmd.Process.Pid }
+
+func (p *process) pid() int {
+	if p.relay != nil {
+		return p.childPID
+	}
+	return p.cmd.Process.Pid
+}
 
 func (p *process) closeStdin() {
 	if p.stdinClosed.CompareAndSwap(false, true) {
+		if p.relay != nil {
+			_, _ = p.relay.call(relayRequest{Op: "close"}, relayCallTimeout)
+			return
+		}
 		_ = p.stdin.Close()
+	}
+}
+
+func (p *process) writeStdin(payload []byte) error {
+	if p.relay != nil {
+		return p.relay.write(payload)
+	}
+	_, err := p.stdin.Write(payload)
+	return err
+}
+
+// killTree ends the process and its descendants.
+func (p *process) killTree() {
+	if p.relay != nil {
+		p.relay.kill(p.childPID)
+		return
+	}
+	if err := procx.KillTree(p.cmd); err != nil {
+		_ = p.cmd.Process.Kill()
 	}
 }
 
@@ -128,8 +161,28 @@ func decodeLine(raw []byte) string {
 	return pyurl.DecodeReplace(raw)
 }
 
+// startProcess starts one turn's process: relayed (it survives a server
+// restart) when the manager runs relays, else with pipes owned by the server.
+func (m *Manager) startProcess(s *Session, argv []string, dir string, env []string) (*process, error) {
+	if m.Relay {
+		return startRelay(s.Folder, s.ID, argv, dir, env)
+	}
+	return startProcess(argv, dir, env)
+}
+
 func (m *Manager) startReaders(s *Session, p *process) {
 	var wg sync.WaitGroup
+	if p.relay != nil {
+		for _, name := range []string{"stdout", "stderr"} {
+			wg.Add(1)
+			go func(name string) {
+				defer wg.Done()
+				m.tailStream(s, name, func() bool { return !p.running() })
+			}(name)
+		}
+		go m.monitorRelay(s, p, &wg)
+		return
+	}
 	for _, item := range []struct {
 		name string
 		f    *os.File
@@ -148,27 +201,32 @@ func (m *Manager) readStream(s *Session, name string, f *os.File) {
 	for {
 		raw, err := r.ReadBytes('\n')
 		if len(raw) > 0 {
-			text := decodeLine(raw)
-			m.appendEvent(s, name, text, "")
-			m.touch(s, len(raw))
-			func() {
-				defer func() { _ = recover() }()
-				m.observeNativeID(s, text)
-			}()
-			if name == "stdout" {
-				func() {
-					defer func() { _ = recover() }()
-					m.observeOutputLine(s, text)
-				}()
-				func() {
-					defer func() { _ = recover() }()
-					m.observeStreamLine(s, text)
-				}()
-			}
+			m.handleLine(s, name, raw)
 		}
 		if err != nil {
 			return
 		}
+	}
+}
+
+// handleLine records one output line and follows what it reports.
+func (m *Manager) handleLine(s *Session, name string, raw []byte) {
+	text := decodeLine(raw)
+	m.appendEvent(s, name, text, "")
+	m.touch(s, len(raw))
+	func() {
+		defer func() { _ = recover() }()
+		m.observeNativeID(s, text)
+	}()
+	if name == "stdout" {
+		func() {
+			defer func() { _ = recover() }()
+			m.observeOutputLine(s, text)
+		}()
+		func() {
+			defer func() { _ = recover() }()
+			m.observeStreamLine(s, text)
+		}()
 	}
 }
 
@@ -265,7 +323,7 @@ func (m *Manager) writeInput(s *Session, text string, record bool, display *stri
 	}
 	payload := []byte(strings.TrimRight(text, "\r\n") + "\n")
 	s.stdinMu.Lock()
-	_, err := p.stdin.Write(payload)
+	err := p.writeStdin(payload)
 	s.stdinMu.Unlock()
 	if err != nil {
 		return serr("session stdin is closed", 409, "")
@@ -349,14 +407,16 @@ func (m *Manager) terminate(p *process) {
 	if !p.running() {
 		return
 	}
-	if err := procx.KillTree(p.cmd); err != nil {
-		_ = p.cmd.Process.Kill()
-	}
+	p.killTree()
 	deadline := time.Now().Add(6 * time.Second)
 	for p.running() && time.Now().Before(deadline) {
 		time.Sleep(20 * time.Millisecond)
 	}
 	if p.running() {
-		_ = p.cmd.Process.Kill()
+		if p.relay != nil {
+			p.relay.kill(p.childPID)
+		} else {
+			_ = p.cmd.Process.Kill()
+		}
 	}
 }

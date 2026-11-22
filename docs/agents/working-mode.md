@@ -22,8 +22,8 @@ Read this whole page before your first write. It is about 35 KB: fetch it in
 parts if your tools limit output, but do not stop at the first part.
 
 1. **Plan in a node first.** One request is one task node with the plan in
-   its body, linked to exactly one `derived_from` parent (the question or
-   parent task). Create it when the work starts; if the user asked to see
+   its body, `part_of` the line, topic or parent task it belongs to (and
+   `derived_from` the question it comes from). Create it when the work starts; if the user asked to see
    the plan first, put it in the task with status `review` and wait.
 2. **Progress goes in the task body.** A dated line per step, written with
    the read, compare, write procedure. Never post progress, plans or answers
@@ -90,6 +90,7 @@ and `GET /api/agent/v1/context`.
 | Ask for a review | `POST /api/agent/v1/units/<uid>` `{status: "review", review_note}` ([Review requests](#review-requests)) |
 | Review a delivery of several units | `POST /api/agent/v1/reviews` `{title, summary, review_note, members}` ([Review groups](#review-groups)) |
 | Review rounds and changes | `GET /api/agent/v1/units/<uid>/review` |
+| Save a prompt for the person | `POST /api/agent/v1/prompts` `{title, description, body}` (personal; `scope: "project"` only for a project admin); `GET /api/agent/v1/prompts` lists them ([Prompt library](../guide/home-overview.md#more-prompts-the-prompt-library)) |
 | Link two units | `POST /api/agent/v1/links` `{source, target, relation, note?}` |
 | List a unit's links | `GET /api/agent/v1/units/<uid>/links` (`?direction=in\|out&relation=`): each with its `id` |
 | Remove a link | `DELETE /api/agent/v1/links` `{source, target, relation?}`, or `DELETE /api/agent/v1/links/<id>` |
@@ -174,10 +175,13 @@ steps:
    - decision gates (what result changes the plan);
    - the timeline against any deadline: what lands before it, what after;
    - risks.
-2. **Link it.** Exactly one `derived_from` parent: the core problem or parent
-   task it comes from. This keeps the research lineage a tree that a person
-   can follow back: question → task → the task's results and decisions
-   (each `part_of` and `derived_from` the task). Add a `claim` node only for
+2. **Link it.** Exactly one `part_of` parent: the line, topic or parent task
+   the new task belongs to. The Mind and tree views follow `part_of` only, so
+   a task without it shows up on its own (Graph checks list it as "Task has
+   no parent"). Add `derived_from` the question or idea it comes from, for
+   provenance. This keeps the research lineage a tree that a person can
+   follow back: line → task → the task's results and decisions (each
+   `part_of` and `derived_from` the task). Add a `claim` node only for
    a statement that results support or contradict (the claim `derived_from`
    the question, the result linked to it with `supports` or `contradicts`).
    Add `part_of` the storyline it belongs to when the project has one. When branches change, update the
@@ -509,6 +513,7 @@ tokens (yours and other agents') are left out.
 | `comment_reopened` | a resolved comment was reopened | the user is not satisfied: read it again and act |
 | `status`, `assignee`, `importance` | a person changed one of your units (`change` has from and to) | follow the change: stop work on a unit set `blocked` or `abandoned`, pick up a unit set `active`, re-plan by importance |
 | `archived` | a person deleted one of your units | stop work on it; ask if the reason is unclear |
+| `moved` | one of your units moved to another project (`moved_to`: project, uid) | continue there with that project's id; see [Moving project content](project-content.md) |
 | `assigned` | a task was assigned to your user | read it; start it when the current work allows, or say when you will |
 | `decision` | a person created a decision node | if it concerns your work, give it the facts it needs, and wait for the answer before the step it decides |
 | `setup_confirmed` | a setup layer was confirmed (`layer`) | read `GET /api/agent/v1/setup` again; work that waited for setup can start |
@@ -608,6 +613,12 @@ results of one run), submit one review group instead of setting each unit to
 review. A group is only for that: a single unit is set to review with a
 `review_note`; a group of one member is rejected.
 
+Create a group only when it is needed: one delivery, one review.  Do not
+also set the members to `review` (the group is the review request), and do
+not create a group for a plan or a single result.  This is the project
+preference *One delivery, one review*, on by default; with it off, set each
+unit to review with its own anchored `review_note`.
+
 ```
 POST /api/agent/v1/reviews
 {"title": "HOI-215 B2: GPU simulation results",
@@ -677,6 +688,10 @@ changes on servers and pushing. The setup register's
 `readiness.requires_human` lists the actions this project's policy marks
 `ask`. Record an approval given in chat in ARK, as a decision node or a
 progress line.
+
+Copying nodes from another project, splitting a project or merging two is
+always approved in ARK: read [Moving project content](project-content.md)
+and follow its inspect, plan, approve, apply, report flow.
 
 ## Known gaps
 

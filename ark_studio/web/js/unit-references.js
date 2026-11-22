@@ -35,7 +35,7 @@ export function installUnitReferences(ctx) {
   // a chain of links (the tutorial's next-chapter links) stays readable.
   function openDetails(ref, point = null, link = null) {
     close();
-    // [[prj_xxx/T-0042]]: a node in another project (the source of an import).
+    // [[prj_xxx/T-0042]]: a node in another project (an import's source, or where a moved node went).
     const cross = parseCrossRef(ref);
     if (cross) {
       if (cross.project === ctx.S.project?.id) ctx.openUnit?.(cross.uid, point, { revealPane: true });

@@ -104,7 +104,7 @@ export function arrangeProjects(projects, prefs) {
 }
 
 // Go-only members of GET /api/projects (server project_people.go).
-const PEOPLE_KEYS = ["creator", "created_by_me", "last_actor"];
+const PEOPLE_KEYS = ["creator", "created_by_me", "last_actor", "review_new", "review_total"];
 // last_actor names the change behind "updated" when its time is at most this
 // much before it, or LAST_ACTOR_LAG_MS after it (same tolerance as the server).
 const LAST_ACTOR_LEAD_MS = 60_000;
@@ -164,7 +164,7 @@ export function cardPeopleText(project, { t, when, me = "", name = (user, fallba
  */
 export function withKnownActivity(next, previous) {
   if (!Array.isArray(next)) return next;
-  // Bootstrap lists also lack creator / last_actor (GET /api/projects only).
+  // Bootstrap lists also lack creator / last_actor and the review badges (GET /api/projects only).
   const known = new Map((previous || []).filter((p) => p && "my_activity" in p).map((p) => [p.id, p]));
   return next.map((p) => {
     const old = p && !("my_activity" in p) ? known.get(p.id) : null;
@@ -183,7 +183,8 @@ export function withKnownActivity(next, previous) {
  */
 export function refreshedProjectRows(shown, fresh) {
   const key = (items) => JSON.stringify((items || []).map((p) => [p.id, p.name, p.description, p.path, p.demo,
-    p.my_last_active_at || null, p.updated || null, p.creator || null, p.last_actor || null, p.created_by_me === true]));
+    p.my_last_active_at || null, p.updated || null, p.creator || null, p.last_actor || null, p.created_by_me === true,
+    p.review_new ?? null, p.review_total ?? null]));
   const place = new Map((shown || []).map((p, index) => [p.id, index]));
   const ordered = [...(fresh || [])].map((p, index) => ({ p, index }))
     .sort((a, b) => (place.get(a.p.id) ?? Infinity) - (place.get(b.p.id) ?? Infinity) || a.index - b.index)
@@ -270,4 +271,28 @@ export function createProjectPrefsStore({ storage = null, save = null, onError =
       }
     },
   };
+}
+
+// ------------------------------------------------------- review badges
+// GET /api/projects review_new / review_total (server project_reviews.go):
+// Needs you cards with something the person has not seen, and all cards.
+
+/** {fresh, total} of one listed project (0 when the server sent none). */
+export function reviewBadge(project = {}) {
+  const fresh = Math.max(0, Math.floor(Number(project?.review_new) || 0));
+  const total = Math.max(fresh, Math.floor(Number(project?.review_total) || 0));
+  return { fresh, total };
+}
+
+/** New review cards in every listed project except `currentId`. */
+export function otherProjectsNew(projects = [], currentId = "") {
+  return (Array.isArray(projects) ? projects : [])
+    .filter((p) => p && p.id !== currentId)
+    .reduce((sum, p) => sum + reviewBadge(p).fresh, 0);
+}
+
+/** The list with one project's badge replaced (after POST /api/needs/seen). */
+export function withReviewBadge(projects = [], id = "", { review_new: fresh, review_total: total } = {}) {
+  if (!Array.isArray(projects) || !id || !Number.isFinite(Number(fresh))) return projects;
+  return projects.map((p) => (p?.id === id ? { ...p, review_new: Number(fresh), review_total: Number(total) || 0 } : p));
 }

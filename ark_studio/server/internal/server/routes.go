@@ -128,6 +128,9 @@ func (c *reqCtx) doGet() error {
 	if apk, ok := apkByPath[c.path]; ok {
 		return c.sendAPK(apk)
 	}
+	if c.path == appManifestPath { // Go only (app_manifest.go)
+		return c.getAppManifest()
+	}
 	return c.static()
 }
 

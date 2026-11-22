@@ -102,15 +102,22 @@ func (c *reqCtx) desktopProjectsGet() error {
 	if err != nil {
 		return err
 	}
+	c.withNewReviews(visible) // project_reviews.go (Go only)
 	projects := []any{}
 	for _, item := range visible {
 		o := item.(*pyjson.Object)
 		if o.Value("id") == demoID {
 			continue
 		}
-		projects = append(projects, pyjson.NewObject("id", o.Value("id"), "name", o.Value("name"),
+		row := pyjson.NewObject("id", o.Value("id"), "name", o.Value("name"),
 			"description", o.Value("description"), "created", o.Value("created"), "updated", o.Value("updated"),
-			"permission", o.Value("permission")))
+			"permission", o.Value("permission"))
+		for _, key := range []string{"review_new", "review_total"} {
+			if v, ok := o.Get(key); ok {
+				row.Set(key, v)
+			}
+		}
+		projects = append(projects, row)
 	}
 	c.withProjectPeople(projects) // project_people.go (Go only)
 	canCreate, err := c.desktopCanCreate(s.User)

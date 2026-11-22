@@ -1,7 +1,8 @@
 // Sync state of cached data (docs/development/client-cache.md).
 //
 // Desktop (workbench shell, body.wb-on): one status-bar item, always shown —
-// "Synced" (muted check), "Syncing…" (spinner) or "Offline · read-only" /
+// "Synced" (muted check), "Syncing…" (spinner, once a request has been
+// pending for 0.4 s) or "Offline · read-only" /
 // "Server unreachable · read-only" in the warning colour.  The always-on
 // "Synced" item answers "is this current?" without hunting for a chip, and
 // the bar has room on the right.  Its tooltip shows the last successful sync
@@ -22,6 +23,11 @@ let showTimer = 0;
 let firstRenderDone = false;
 let syncedAt = 0;
 let wasOffline = false;
+// A background check (a 304 most of the time) takes a few ms; the status
+// item says "Syncing…" only once one has been pending this long.
+const SLOW_SYNC_MS = 400;
+let slowTimer = 0;
+let slowSync = false;
 
 function ensureChip() {
   if (chip?.isConnected) return chip;
@@ -59,7 +65,7 @@ function paintItem() {
     el.className = "wb-status-item wb-sync offline";
     el.replaceChildren(icon("alert", "sm"), `${title} · ${t("cache.read_only")}`);
     tip.unshift(banner);
-  } else if (syncState.syncing > 0) {
+  } else if (syncState.syncing > 0 && slowSync) {
     el.className = "wb-status-item wb-sync syncing";
     el.replaceChildren(h("span", { class: "spinner" }), t("cache.syncing"));
   } else {
@@ -99,7 +105,24 @@ function paintChip() {
   el.replaceChildren();
 }
 
+function trackSlowSync() {
+  if (syncState.syncing > 0) {
+    if (!slowTimer && !slowSync) {
+      slowTimer = setTimeout(() => {
+        slowTimer = 0;
+        slowSync = syncState.syncing > 0;
+        if (slowSync) paintItem();
+      }, SLOW_SYNC_MS);
+    }
+    return;
+  }
+  clearTimeout(slowTimer);
+  slowTimer = 0;
+  slowSync = false;
+}
+
 function paint() {
+  trackSlowSync();
   document.body.classList.toggle("ark-offline", syncState.offline);
   if (!syncState.offline && syncState.syncing === 0) {
     syncedAt = Date.now();

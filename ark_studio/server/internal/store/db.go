@@ -307,8 +307,7 @@ func migrateBodyNotes(ctx context.Context, q sqlitedb.Querier) error {
 
 func backfillNeedsTags(ctx context.Context, q sqlitedb.Querier) error {
 	rows, err := sqlitedb.Query(ctx, q, `SELECT id, uid, title, CASE WHEN status='review' THEN 'review' ELSE 'decision' END AS need
-           FROM units u WHERE archived=0
-             AND (status='review' OR (type='decision' AND status NOT IN ('done','abandoned','archived')))
+           FROM units u WHERE `+needsYouCond("u.")+`
              AND NOT EXISTS (SELECT 1 FROM unit_tags t WHERE t.unit_id=u.id
                              AND substr(t.tag,1,6)='needs:')`)
 	if err != nil {

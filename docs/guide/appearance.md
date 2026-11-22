@@ -186,6 +186,34 @@ Keys and ranges: `general.transitions`, `general.agent_presence` (bool); `force.
 rejected on save and ignored when read. `mind_layout` keeps the 30 most
 recently saved projects and at most 500 nodes per map.
 
+## Node markers
+
+Markers are the small icons next to a node: stars, flags, priority,
+progress and symbols. Right-click a node (or several selected nodes) and
+open **Markers**, or use the **Markers** row in the inspector:
+
+- A check shows the markers the node already has. Choosing one of them
+  again removes it, so a node never shows the same marker twice.
+- Stars, flags, priority and progress are **one per node**: choosing a red
+  star on a node with a yellow star replaces the yellow one. Symbols (check,
+  question, important) can be combined.
+- **Remove marker** removes one marker, **Clear markers** removes all of
+  them. In the inspector, click a marker chip to remove it.
+- A tag shortcut set to a marker tag (Settings › Personal › Appearance & input, for
+  example `marker:star-yellow`) toggles that marker the same way.
+- Every change is one undo step (Ctrl+Z on the graph) and appears in the
+  activity of each node.
+
+**Settings > Project > Appearance > Node markers** (project admins) lists the
+marker groups the project uses. Each group has a name, a **One per node**
+switch and its markers (symbol, colour, label). You can add, reorder and
+remove groups and markers; an empty name or label shows the built-in text.
+**Restore defaults** goes back to the built-in groups. A marker is stored on
+the node as the tag `marker:<id>`; agents read the groups with
+`GET /api/agent/v1/markers` and ARK applies the same rules to their writes.
+Nodes that got several markers of one group before these rules existed show
+one of them, and keep only that one the next time they are saved.
+
 ## Personal overrides
 
 Some project appearance settings can be overridden for yourself in

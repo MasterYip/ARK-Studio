@@ -7,6 +7,15 @@ import (
 	"arkstudio/go/internal/resources"
 )
 
+// resourcesConnectPath is GET /api/resources/connect (Go only).
+const resourcesConnectPath = resapi.ConnectPath
+
+// resourcesRoutesGoOnly are the Go-only ids of this file (GoOnlyRoutes).
+var resourcesRoutesGoOnly = []PortedRoute{
+	{"goonly:exact:" + resapi.ConnectPath, "GET,HEAD"},
+	{"goonly:fullmatch:" + resapi.ConnectPath + "/([^/]+)", "POST"},
+}
+
 // resourcesHandlers is the Resources handler package bound to this server.
 func (c *reqCtx) resourcesHandlers() resapi.Handlers {
 	return resapi.Handlers{Deps: resources.Deps{Org: c.app.Org, Mobile: c.app.Mobile,

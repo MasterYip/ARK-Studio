@@ -58,6 +58,8 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         Notifications.sync(this);
+        Notifications.checkSoon(this);
+        com.masteryip.arkstudio.update.UpdateWorker.sync(this);
         String message = getIntent().getStringExtra(EXTRA_MESSAGE);
         if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
         boolean setup = ACTION_SETUP.equals(getIntent().getAction()) || message != null

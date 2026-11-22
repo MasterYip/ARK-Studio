@@ -89,10 +89,10 @@ func moduleGraph(assets *webui.Assets, entry string) []string {
 	return order
 }
 
-// indexHTML is server._index_html.
-func indexHTML(assets *webui.Assets) func(string, string) string {
+// indexHTML is server._index_html, plus (Go only) the release version.
+func indexHTML(assets *webui.Assets, release string) func(string, string) string {
 	return func(text, version string) string {
-		text = VersionedHTML(text, version)
+		text = ReleaseMeta(VersionedHTML(text, version), release)
 		if !strings.Contains(text, preloadMark) {
 			return text
 		}

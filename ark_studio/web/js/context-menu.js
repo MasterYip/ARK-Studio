@@ -62,7 +62,7 @@ function itemButton(item, close) {
   const button = h("button", {
     class: `graph-menu-item ${item.danger ? "danger" : ""}`.trim(),
     type: "button", role: item.checked !== undefined ? "menuitemradio" : "menuitem", disabled: item.disabled,
-    title: item.title || undefined,
+    title: item.title || undefined, "data-menu-id": item.id || undefined,
     "aria-checked": item.checked !== undefined ? String(Boolean(item.checked)) : undefined,
     onclick: (event) => {
       event.stopPropagation();

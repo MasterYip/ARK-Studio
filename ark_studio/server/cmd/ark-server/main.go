@@ -168,6 +168,9 @@ func serve(o *options) (int, error) {
 		DetectPublicIP: o.detectPublicIP, TrustProxy: o.trustProxy, WebRoot: o.webRoot,
 		ReadPool: o.readPool, RequestTimeout: o.requestTimeout, HeavyLimit: o.heavyLimit,
 		SubprocessMax: o.maxSubprocesses, MaxInFlight: o.maxInFlight,
+		ReleaseVersion: releaseVersion(),
+		// The desktop app's sessions end with the app, as before.
+		SessionRelay: desktopSecret == "",
 	}, authMgr)
 	if err != nil {
 		return 0, err

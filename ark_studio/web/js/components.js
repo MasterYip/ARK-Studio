@@ -5,6 +5,7 @@ import { api } from "./api.js";
 import { sortNeedsValues } from "./needs-model.js";
 import { S, baseTypes, selectedTypes, typeChips, selectedStatuses, selectedImportance, activeFilterCount, filterDiffFromDefault, hasFilterDefault } from "./state.js";
 import { openContextMenu } from "./context-menu.js";
+import { railChip } from "./filter-chip-menu.js";
 import { assigneeChip, assigneeFilterSection } from "./assignee.js";
 import { renderArkImportRail } from "./import-ark.js";
 import { isArkSource } from "./import-ark-model.js";
@@ -769,12 +770,12 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
     const typeWrap = h("div", { class: "type-filter" });
     for (const type of typeChips(typeBase, facets.types, selected, state.tab === "map")) {
       const on = selected.includes(type);
-      typeWrap.appendChild(h("button", {
+      typeWrap.appendChild(railChip(ctx, h("button", {
         class: `type-chip ${on ? "on" : ""}`.trim(),
-        "aria-pressed": String(on),
+        "aria-pressed": String(on), dataset: { filterGroup: "types", value: type },
         onclick: () => ctx.toggleFilterValue("types", type),
       }, h("i", { style: { "--dot": typeColor(type) } }), typeLabel(type),
-        h("span", { class: "n" }, facets.types?.[type] ?? 0)));
+        h("span", { class: "n" }, facets.types?.[type] ?? 0)), "types", typeBase, type));
     }
     host.appendChild(section([
       h("span", null, t("filters.types")),
@@ -800,12 +801,12 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
     const statusWrap = h("div", { class: "type-filter" });
     for (const id of statusBase) {
       const on = selected.includes(id);
-      statusWrap.appendChild(h("button", {
+      statusWrap.appendChild(railChip(ctx, h("button", {
         type: "button", class: `type-chip ${on ? "on" : ""}`.trim(),
-        "aria-pressed": String(on),
+        "aria-pressed": String(on), dataset: { filterGroup: "statuses", value: id },
         onclick: () => ctx.toggleStatus(id, statusBase),
       }, statusLabel(id),
-        h("span", { class: "n" }, facets.statuses?.[id] ?? 0)));
+        h("span", { class: "n" }, facets.statuses?.[id] ?? 0)), "statuses", statusBase, id));
     }
     host.appendChild(section([
       h("span", null, t("filters.status")),
@@ -829,12 +830,12 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
     const importanceWrap = h("div", { class: "type-filter" });
     for (const id of importanceBase) {
       const on = selected.includes(id);
-      importanceWrap.appendChild(h("button", {
+      importanceWrap.appendChild(railChip(ctx, h("button", {
         type: "button", class: `type-chip ${on ? "on" : ""}`.trim(),
-        "aria-pressed": String(on),
+        "aria-pressed": String(on), dataset: { filterGroup: "importance", value: id },
         onclick: () => ctx.toggleImportance(id, importanceBase),
       }, impLabel(id),
-        h("span", { class: "n" }, facets.importance?.[id] ?? 0)));
+        h("span", { class: "n" }, facets.importance?.[id] ?? 0)), "importance", importanceBase, id));
     }
     host.appendChild(section([
       h("span", null, t("filters.importance")),
@@ -894,13 +895,14 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
     if (isNeeds) details.dataset.ns = "needs";
     details.appendChild(h("summary", null, `${isNeeds ? t("needs.group") : nsLabel(ns)} (${values.length})`));
     const list = h("div", { class: "tag-filter-cloud" });
+    const tagBase = values.map((item) => item.tag);
     for (const value of values.slice(0, 20)) {
-      list.appendChild(h("button", {
+      list.appendChild(railChip(ctx, h("button", {
         class: `tag-filter ${state.filters.tags.includes(value.tag) ? "on" : ""}`.trim(),
-        title: value.tag,
+        title: value.tag, dataset: { filterGroup: `tag:${ns}`, value: value.tag },
         onclick: (event) => ctx.toggleFilterValue("tags", value.tag, event.currentTarget),
       }, h("span", { class: "tag-value" }, isNeeds ? t(`needs.value.${value.value}`) : value.value),
-      h("span", { class: "n" }, value.count)));
+      h("span", { class: "n" }, value.count)), `tag:${ns}`, tagBase, value.tag));
     }
     const unsetCount = facets.unset?.[ns] ?? 0;
     list.appendChild(h("button", {

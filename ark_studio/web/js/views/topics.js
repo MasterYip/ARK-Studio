@@ -376,7 +376,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
       ...base,
       layout: view === "graph" ? "force" : "node",
       persistLayout: false,
-      cameraKey: `topic:${topic.uid}`,
+      cameraKey: `${ctx.S.project?.id || ""}:topic:${topic.uid}`,
       edgeFilterKey: `ark.edgeFilter.v1:topic:${topic.uid}`,
       showSteps: true,
       edgeLabels: true,

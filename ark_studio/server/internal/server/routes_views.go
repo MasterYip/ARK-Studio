@@ -140,6 +140,7 @@ func (c *reqCtx) apiGetViews() (bool, error) {
 		// Go-only: the person's own activity per project (project_activity.go).
 		c.withMyActivity(projects)
 		c.withProjectPeople(projects) // project_people.go
+		c.withNewReviews(projects)    // project_reviews.go
 		session, err := c.sessionPayload()
 		if err == nil {
 			c.ok(pyjson.NewObject("projects", projects, "session", session))
@@ -525,11 +526,20 @@ func (c *reqCtx) agentGet() (bool, error) {
 	if handled, err := c.agentSessionsGet(path); handled {
 		return true, err
 	}
+	if rest, ok := strings.CutPrefix(path, agentImportArkBase); ok { // Go only (routes_projectmove.go)
+		return true, c.agentImportArkRoute(rest, false)
+	}
+	if rest, ok := strings.CutPrefix(path, agentProjectMoveBase); ok { // Go only (routes_projectmove.go)
+		return true, c.projectMoveRoute(rest, false)
+	}
 	if handled, err := c.agentWatchGet(path, p); handled { // Go only (routes_agentwatch.go)
 		return true, err
 	}
 	if path == agentRulesAgentPath { // Go only (routes_agentrules.go)
 		return true, c.agentRulesGet(p)
+	}
+	if path == promptsAgentPath { // Go only (routes_prompts.go)
+		return true, c.agentPromptsGet(p)
 	}
 	if handled, err := c.agentReviewsGet(p, path); handled { // Go only (routes_reviews.go)
 		return true, err
@@ -554,6 +564,8 @@ func (c *reqCtx) agentGet() (bool, error) {
 		f := c.filtersFromQuery()
 		f.Limit = c.qInt("limit", 100, 1, 500)
 		return okObj(st.ListUnits(c.ctx, f, false))
+	case agentMarkersPath: // Go only (routes_agentmarkers.go)
+		return okObj(agentMarkers(p), nil)
 	case "/api/agent/v1/insights":
 		items, err := st.Insights(c.ctx)
 		return okObj(pyjson.NewObject("insights", items), err)

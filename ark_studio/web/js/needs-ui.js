@@ -12,6 +12,7 @@ import { attachImageContextMenu } from "./image-copy.js";
 import {
   borrowedSources, decisionOptions, groupExplain, groupNeeds, needsFilterActive, needsKind, needsLightboxItems,
   normalizeNeedsFilter, previewKind, runBatch, setNeedsGroupAll, toggleNeedsValue, NEEDS_FILTER_GROUPS,
+  needsSeenBody,
 } from "./needs-model.js";
 import {
   anchorLabel, anchorUnit, changeSummary, changesText, clockLabel, diffBlocks, keyNumber, noteParts, reviewCardText,
@@ -19,9 +20,60 @@ import {
 import { authorName, threadComments } from "./comments-model.js";
 import { displayName } from "./users.js";
 import { assigneeChip } from "./assignee.js";
+import { attachChipGroupMenu } from "./filter-chip-menu.js";
+import { needsGroupAction } from "./filter-group-model.js";
 
 /** Fired on `document` after the needs list was reloaded (refreshNeeds). */
 export const NEEDS_CHANGED = "ark:needs-changed";
+
+// ------------------------------------------------------------- seen marks
+// What the person has looked at, for the project picker's "new for review"
+// badges (POST /api/needs/seen).  The list counts as seen once it was on
+// screen for SEEN_AFTER_MS; an item once the inspector opened it.
+
+/** Fired on `window` with {project, counts: {review_new, review_total}}. */
+export const REVIEW_SEEN = "ark:review-seen";
+const SEEN_AFTER_MS = 1000;
+const SEEN_REPEAT_MS = 60000;
+const lastSeen = new Map();   // project -> { sent: body last sent, at }
+
+export function markNeedsSeen(ctx, body) {
+  const project = ctx.S.project?.id || "";
+  if (!body || !project) return;
+  // The same list again within a minute (Home redraws on every change): once.
+  const sent = JSON.stringify(body);
+  const last = lastSeen.get(project);
+  if (last?.sent === sent && Date.now() - last.at < SEEN_REPEAT_MS) return;
+  lastSeen.set(project, { sent, at: Date.now() });
+  api.markNeedsSeen(body).then((counts) => {
+    window.dispatchEvent(new CustomEvent(REVIEW_SEEN, { detail: { project, counts } }));
+  }).catch(() => { lastSeen.delete(project); /* read-only member or offline: no badge to clear */ });
+}
+
+/**
+ * Marks the cards of `entries` (groupNeeds output) shown in `list` as seen
+ * once `root` was on screen for a moment, and again when more rows appear.
+ */
+export function watchNeedsSeen(ctx, root, list, entries, { filtered = false } = {}) {
+  if (typeof IntersectionObserver === "undefined") return;
+  let timer = 0;
+  let visible = false;
+  const send = () => {
+    timer = 0;
+    if (!visible || !root.isConnected || document.hidden) return;
+    markNeedsSeen(ctx, needsSeenBody(entries, list ? list.children.length : 0, { filtered }));
+  };
+  const arm = () => { clearTimeout(timer); timer = setTimeout(send, SEEN_AFTER_MS); };
+  const observer = new IntersectionObserver((records) => {
+    if (!root.isConnected) { observer.disconnect(); mutations?.disconnect(); clearTimeout(timer); return; }
+    visible = records.some((record) => record.isIntersecting);
+    if (visible) arm(); else clearTimeout(timer);
+  }, { threshold: 0.1 });
+  observer.observe(root);
+  const mutations = list && typeof MutationObserver !== "undefined"
+    ? new MutationObserver(() => { if (visible) arm(); }) : null;
+  mutations?.observe(list, { childList: true });
+}
 
 export function needsProjectKey(ctx) {
   return String(ctx.S.project?.id || ctx.S.project?.name || "local");
@@ -88,12 +140,21 @@ export function needsFilterBar(facets, filter, onChange) {
     allToggle.indeterminate = hidden.length > 0 && shown > 0;
     const chips = h("div", { class: "type-filter" }, values.map(({ value, n }) => {
       const on = !hidden.includes(value);
-      return h("button", {
+      const chip = h("button", {
         type: "button", class: `type-chip ${on ? "on" : ""}`.trim(), "aria-pressed": String(on),
         dataset: { group, value },
         onclick: () => apply(toggleNeedsValue(filter, group, value)),
       }, group === "type" ? h("i", { style: { "--dot": typeColor(value) } }) : null,
       valueLabel(group, value), h("span", { class: "n" }, String(n)));
+      // Only this / Select all / Invert (right click, long press, Alt+click).
+      const all = values.map((item) => item.value);
+      return attachChipGroupMenu(chip, {
+        can: (action) => {
+          const next = needsGroupAction(filter, group, action, all, value)[group];
+          return next.length !== hidden.length || next.some((item) => !hidden.includes(item));
+        },
+        run: (action) => apply(needsGroupAction(filter, group, action, all, value)),
+      });
     }));
     const details = h("details", {
       class: `needs-filter ${hidden.length ? "active" : ""}`.trim(), dataset: { group },

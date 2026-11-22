@@ -44,6 +44,23 @@ ROUTES = {
     # ark_studio/server/internal/server/routes_desktop.go, ark_studio/server/internal/mobile/desktop.go
     "goonly:exact:/api/desktop/link": "ARK Studio desktop link code (signed-in session; claimed with /api/mobile/pair/claim)",
     "goonly:exact:/api/desktop/projects": "desktop-link token: list (GET) and create (POST) projects",
+    # ark_studio/server/internal/server/project_reviews.go, ark_studio/server/internal/store/needscards.go,
+    # ark_studio/server/internal/org/reviewseen.go (test internal/server/project_reviews_test.go).
+    # Table review_seen (statediff GO_ONLY_TABLES).
+    "goonly:exact:/api/needs/seen": "project picker badges: the person opened the Needs you list or some of its items",
+    # ark_studio/server/internal/server/notifications.go, ark_studio/server/internal/sessions/alerts.go
+    # (test internal/server/notifications_test.go)
+    "goonly:exact:/api/notifications": "Android notifications: what needs the person across their projects since a cursor",
+    # ark_studio/server/internal/server/routes_prompts.go, ark_studio/server/internal/promptlib (tests
+    # promptlib_test.go, internal/server/routes_prompts_test.go): the Home prompt library.
+    "goonly:exact:/api/prompts": "Home prompt library: custom prompts and Home pins (GET), save/delete/import/pins (POST)",
+    "goonly:exact:/api/agent/v1/prompts": "agents list (GET) and save (POST) custom prompts for the token user",
+    # ark_studio/server/internal/server/app_manifest.go, ark_studio/server/internal/apkinfo (tests app_manifest_test.go,
+    # apkinfo_test.go)
+    "goonly:exact:/download/android-apps.json": "Android update check: version, size and SHA-256 of each APK (public)",
+    # ark_studio/server/internal/server/routes_agentmarkers.go, ark_studio/server/internal/store/markers (tests markers_test.go,
+    # internal/store/markers_test.go, internal/server/markers_test.go)
+    "goonly:exact:/api/agent/v1/markers": "node marker groups of the project (tag marker:<id>, exclusive groups)",
     # ark_studio/server/internal/api/chat/plugin.go, ark_studio/server/internal/chat/plugin.go (tests plugin_test.go,
     # internal/server/plugin_chat_test.go)
     # ark_studio/server/internal/server/routes_agentwatch.go, ark_studio/server/internal/agentwatch,
@@ -103,6 +120,11 @@ ROUTES = {
     # folder of an ARK project outside the listed folders; without one (every replay) nothing changes.
     "goonly:exact:/api/org/project-storage": "where new projects are stored: show (GET), check / change / unlist a folder (POST); local mode or org admin",
     "goonly:exact:/api/projects/reveal": "local mode: show a project or listed folder in the file manager",
+    # ark_studio/server/internal/server/routes_projectmove.go, ark_studio/server/internal/store/move.go,
+    # moveplans.go, clusters.go (T-0068; tests store/move_test.go, internal/server/routes_projectmove_test.go).
+    # Table unit_aliases (statediff GO_ONLY_TABLES); plans and journals in <project>/moves/.
+    "goonly:prefix:/api/project-move/": "split / merge projects: clusters, move plans, approve / reject (a person), apply, undo",
+    "goonly:prefix:/api/agent/v1/project-move/": "agent: clusters, propose move plans, apply an approved plan, undo",
 }
 
 # Go-only query parameter (no reply difference on any replayed request: the
@@ -130,11 +152,13 @@ def is_go_only(route_id: str) -> bool:
 
 
 # links.list / links.delete / links.update: routes_agentlinks.go (Python's links.write stays).
-GO_ONLY_CAPABILITIES = ("docs.", "watch.", "messages.", "links.list", "links.delete", "links.update")
+# markers.list: routes_agentmarkers.go (node marker groups).
+GO_ONLY_CAPABILITIES = ("docs.", "watch.", "messages.", "links.list", "links.delete", "links.update", "project_move.",
+                        "markers.list")
 
 
 def _strip_interface_docs(body: bytes) -> bytes:
-    """Remove the Go-only docs.*, watch.*, messages.* and link-edit capabilities and the "docs" member."""
+    """Remove the Go-only docs.*, watch.*, messages.* link-edit and project_move.* capabilities and the "docs" member."""
     try:
         payload = json.loads(body)
     except ValueError:
@@ -479,9 +503,10 @@ def _mobile_apps_release(py, go) -> bool:
         return False
     if set(a) != {"ok", "apps"} or set(b) != {"ok", "apps", "version", "release_url"}:
         return False
-    if not str(b["release_url"]).startswith("https://") or set(a["apps"]) != {"native", "webapp"}             or set(b["apps"]) != {"native", "webapp"}:
+    # Go lists only the native app; the WebView app (Python's "webapp") is no longer built.
+    if not str(b["release_url"]).startswith("https://") or set(a["apps"]) != {"native", "webapp"}             or set(b["apps"]) != {"native"}:
         return False
-    for key in ("native", "webapp"):
+    for key in ("native",):
         pa, ga = a["apps"][key], b["apps"][key]
         if set(pa) != _APP_KEYS or set(ga) != _APP_GO_KEYS:
             return False
@@ -893,14 +918,15 @@ FIXES += CHAT_FIXES
 
 # ------------------------------------- UX-18: Home starter-token rotation
 # POST /api/personal/agent-tokens with {"purpose": "starter", "project": <id>}
-# (the Home "Copy prompt" flow) rotates the user's starter tokens for that
-# project: Go labels the new token "Home starter prompt (<id>) – <date>",
-# revokes the older ones except the newest, and lists the revoked ids in a
+# (the Home "Copy prompt" flow) returns the user's one starter token for that
+# project: Go labels it "Home starter prompt (<id>) – <date>", keeps its value
+# sealed and reuses it ("reused"), mints a new one only when there is none or
+# for mode "new" (revoking the previous one), and lists revoked ids in a
 # Go-only "rotated" member.  Python ignores both request members and creates
 # a plain token with the client's label.  Creates without "purpose" (every
 # recorded replay step) are unchanged.
 
-STARTER_TOKEN_FILE = ("ark_studio/server/internal/org/admin.go (starterPurpose, starterTokensToRetire; "
+STARTER_TOKEN_FILE = ("ark_studio/server/internal/org/starter_tokens.go (starterRequest, starterToken; "
                       "test starter_token_test.go)")
 STARTER_LABEL = "Home starter prompt ("
 
@@ -925,13 +951,15 @@ def _starter_rotation(py, go) -> bool:
     if not (isinstance(a.get("token"), str) and isinstance(b.get("token"), str)):
         return False
     rest_a = {k: v for k, v in a.items() if k != "tokens"}
-    rest_b = {k: v for k, v in b.items() if k not in ("tokens", "rotated")}
+    if "reused" in b and not isinstance(b["reused"], bool):
+        return False
+    rest_b = {k: v for k, v in b.items() if k not in ("tokens", "rotated", "reused")}
     return _shape_equal(rest_a, rest_b) and isinstance(b.get("tokens"), list)
 
 
 FIXES.append(Fix("agent-token-starter-rotation", "POST", "/api/personal/agent-tokens", STARTER_TOKEN_FILE,
-                 "UX-18: a Home starter-prompt token (purpose: starter, project) replaces the user's older "
-                 "starter tokens for that project (the newest one stays active) instead of adding up to "
+                 "UX-18: a Home starter-prompt token (purpose: starter, project) is one per user and project, "
+                 "stored sealed and reused by later copies instead of adding up to "
                  "the 10-token limit; Python ignores the members and mints a plain token",
                  _starter_rotation))
 
@@ -952,10 +980,13 @@ PROJECT_ACTIVITY_MEMBERS = ("my_activity", "my_last_active_at")
 # Who created each project and who changed it last
 # (ark_studio/server/internal/server/project_people.go; test project_people_test.go).
 PROJECT_PEOPLE_MEMBERS = ("creator", "created_by_me", "last_actor")
+# New Needs you cards for the project picker badges
+# (ark_studio/server/internal/server/project_reviews.go; test project_reviews_test.go).
+PROJECT_REVIEW_MEMBERS = ("review_new", "review_total")
 
 
 def _strip_my_activity(body: bytes) -> bytes:
-    """Remove the Go-only per-project activity and people members of /api/projects."""
+    """Remove the Go-only per-project activity, people and review badge members of /api/projects."""
     try:
         payload = json.loads(body)
     except ValueError:
@@ -965,7 +996,7 @@ def _strip_my_activity(body: bytes) -> bytes:
         return body
     for item in items:
         if isinstance(item, dict):
-            for key in PROJECT_ACTIVITY_MEMBERS + PROJECT_PEOPLE_MEMBERS:
+            for key in PROJECT_ACTIVITY_MEMBERS + PROJECT_PEOPLE_MEMBERS + PROJECT_REVIEW_MEMBERS:
                 item.pop(key, None)
     return json.dumps(payload, ensure_ascii=False).encode()
 
@@ -1086,6 +1117,45 @@ FIXES += [
 ]
 
 
+# ------------------------------------------------------ node marker groups
+# settings.markers = {"groups": [...]} (ark_studio/server/internal/store/markers,
+# settings.go/writes.go; tests markers_test.go, internal/server/markers_test.go):
+# present only once a project admin has set it, so projects without one
+# answer like Python; Python refuses the section.  Unit writes apply the
+# exclusive groups to marker:* tags (store/markers.go); the replay's units
+# carry no marker tags, so their replies are unchanged.
+
+MARKERS = "markers"
+
+
+def _strip_project_markers(body: bytes) -> bytes:
+    """Remove settings.markers from GET/PATCH /api/project/settings."""
+    payload = _json(body)
+    settings = payload.get("settings") if isinstance(payload, dict) else None
+    if not isinstance(settings, dict) or MARKERS not in settings:
+        return body
+    settings.pop(MARKERS)
+    return json.dumps(payload, ensure_ascii=False).encode()
+
+
+AUGMENTED["/api/project/settings"] = _chain(_strip_project_graph_display, _strip_project_markers)
+
+
+def _project_markers(py, go) -> bool:
+    """PATCH /api/project/settings with markers: Python 400 unknown section, Go 200."""
+    if py.status != 400 or go.status != 200 or b"unknown settings section: markers" not in py.body:
+        return False
+    data = _json(go.body)
+    return isinstance(data, dict) and isinstance(data.get("settings"), dict)
+
+
+FIXES += [
+    Fix("project-markers", "PATCH", "/api/project/settings",
+        "ark_studio/server/internal/store/markers/markers.go (Parse; tests markers_test.go)",
+        "node marker groups (settings.markers); Python refuses the unknown section", _project_markers),
+]
+
+
 def fix_for(method: str, path: str, py, go):
     """The FIXES entry that explains this Python/Go reply pair, or None."""
     method = "GET" if method == "HEAD" else method
@@ -1094,3 +1164,34 @@ def fix_for(method: str, path: str, py, go):
         if fix.method == method and fix.path == path and fix.match(py, go):
             return fix
     return None
+
+
+# ------------------------------------------------- T-0091: units without a parent
+# Graph checks list tasks, results and decisions without a part_of parent
+# (task-no-parent, result-no-parent) and accept an experiment part_of its task
+# (core rule C4) for experiment-no-task.  ark_studio/server/internal/store/assistant.go,
+# test store/assistant_parent_test.go.
+PARENT_CHECKS_FILE = "ark_studio/server/internal/store/assistant.go (test store/assistant_parent_test.go)"
+_PARENT_KINDS = {"task-no-parent", "result-no-parent", "experiment-no-task"}
+
+
+def _insights_parent_checks(py, go) -> bool:
+    if py.status != 200 or go.status != 200:
+        return False
+    try:
+        a, b = json.loads(py.body), json.loads(go.body)
+    except ValueError:
+        return False
+    ka = {i.get("id") for i in a.get("insights", []) if i.get("kind") not in _PARENT_KINDS}
+    kb = {i.get("id") for i in b.get("insights", []) if i.get("kind") not in _PARENT_KINDS}
+    new = any(i.get("kind") in ("task-no-parent", "result-no-parent") for i in b.get("insights", []))
+    old_exp = any(i.get("kind") == "experiment-no-task" for i in a.get("insights", []))
+    return (new or old_exp) and kb <= ka
+
+
+FIXES += [
+    Fix("insights-parent-checks", "GET", path, PARENT_CHECKS_FILE,
+        "T-0091: Graph checks list units without a part_of parent; an experiment part_of its task has a task",
+        _insights_parent_checks)
+    for path in ("/api/assistant/insights", "/api/agent/v1/insights")
+]

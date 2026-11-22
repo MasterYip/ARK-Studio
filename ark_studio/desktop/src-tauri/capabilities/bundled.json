@@ -30,7 +30,9 @@
     "allow-open-settings",
     "allow-server-projects",
     "allow-unlink-server",
+    "allow-open-local-settings",
     "allow-tray-menu-ready",
-    "allow-tray-menu-action"
+    "allow-tray-menu-action",
+    "allow-show-download"
   ]
 }

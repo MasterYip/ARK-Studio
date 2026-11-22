@@ -216,6 +216,9 @@ func (s *Store) AddComment(ctx context.Context, ref string, body any, kind strin
 		if err != nil {
 			return err
 		}
+		if err := refuseMoved(row); err != nil { // move.go
+			return err
+		}
 		var parent any
 		if replyTo != nil && replyTo != "" {
 			parentID, err := PyInt(replyTo)

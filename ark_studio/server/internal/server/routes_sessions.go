@@ -747,7 +747,7 @@ func (c *reqCtx) sessionsPost(path string, body *pyjson.Object, actor string) (b
 		if err := write(g[1]); err != nil {
 			return true, err
 		}
-		s, err := m.RequestStop(g[1])
+		s, err := m.StopByUser(g[1])
 		if err != nil {
 			return true, err
 		}
@@ -758,7 +758,11 @@ func (c *reqCtx) sessionsPost(path string, body *pyjson.Object, actor string) (b
 		if err := write(g[1]); err != nil {
 			return true, err
 		}
-		s, err := m.Archive(g[1])
+		archive := m.Archive
+		if pyjson.Truthy(body.Value("end")) {
+			archive = m.EndAndArchive // remove from the list, keep the transcript: end it first
+		}
+		s, err := archive(g[1])
 		if err != nil {
 			return true, err
 		}
@@ -785,6 +789,24 @@ func (c *reqCtx) sessionsPatch(path string, body *pyjson.Object) (bool, error) {
 	if g := reAgentSession.FindStringSubmatch(path); g != nil {
 		if err := c.guardSessionAccess(g[1], "write"); err != nil {
 			return true, err
+		}
+		if closed, ok := body.Get("closed"); ok {
+			// 关闭 / End: stop the process; ARK leaves the session alone.
+			if !pyjson.Truthy(closed) {
+				s, err := c.app.Sessions.Get(g[1])
+				if err != nil {
+					return true, err
+				}
+				c.app.Sessions.Reopen(s)
+				c.ok(pyjson.NewObject("session", c.app.Sessions.Public(s, true), "closed", false))
+				return true, nil
+			}
+			s, err := c.app.Sessions.Close(g[1])
+			if err != nil {
+				return true, err
+			}
+			c.ok(pyjson.NewObject("session", s, "closed", true))
+			return true, nil
 		}
 		title, ok := body.Get("title")
 		if !ok {
@@ -817,6 +839,10 @@ func (c *reqCtx) sessionsDelete(path string) (bool, error) {
 	if g := reAgentSession.FindStringSubmatch(path); g != nil {
 		if err := c.guardSessionAccess(g[1], "write"); err != nil {
 			return true, err
+		}
+		if c.query.First("end", "") == "1" {
+			// Delete from the session menu: end a running session first.
+			return true, c.okErr(c.app.Sessions.EndAndDelete(g[1]))
 		}
 		return true, c.okErr(c.app.Sessions.Delete(g[1]))
 	}

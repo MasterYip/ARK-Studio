@@ -15,6 +15,7 @@ import {
   INFOHUB_SOURCE, importSources, pickImportSource, isArkSource, importGraphParams, importRequest, importSummaryRows, markImported,
 } from "./import-ark-model.js";
 import { advancedEnabled } from "./advanced.js";
+import { applyRailGroup } from "./filter-group-model.js";
 
 const SOURCE_KEY = "ark.importSource";
 
@@ -253,6 +254,7 @@ export function renderArkImportRail(host, ctx) {
     toggleImportance: (value, base) => { toggleImportanceFilter(state.filters, value, base); changed(); },
     toggleAllImportance: (selected) => { state.filters.importanceLevels = []; state.filters.importanceNone = !selected; changed(); },
     clearFilters: () => { state.filters = emptyFilters(); changed(); },
+    applyFilterGroup: (group, action, base, value) => { applyRailGroup(state.filters, group, action, base, value); changed(); },
     closeFilters: () => ctx.closeFilters?.(),
   };
   renderFilterRail(host, proxy, { embedded: true });

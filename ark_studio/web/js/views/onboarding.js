@@ -6,10 +6,12 @@ import { t, getLang } from "../i18n.js";
 import { icon } from "../icons.js";
 import { api, appUrl } from "../api.js";
 import { copyPromptWithToken } from "./agent-tokens.js";
-import { openModal } from "../components.js";
+import { openModal, toast } from "../components.js";
 import { openSetupReview } from "./setup-resources.js";
 import { newArkSessionId } from "../session-context-model.js";
-import { STARTER_PROMPTS, promptLang, starterPromptText } from "../starter-prompts.js";
+import { BUILTIN_PROMPTS, promptLang, libraryPromptText } from "../starter-prompts.js";
+import { libraryEntries, pinnedEntries, entryTitle, entryDesc, prunePins } from "../prompt-library-model.js";
+import { openPromptLibrary } from "./prompt-library.js";
 import { needsReview, needsConfirm } from "../setup-review-model.js";
 import { connectionStatus } from "./agent-connect.js";
 import { agentMessageButton } from "../agent-messages.js";
@@ -34,9 +36,32 @@ export function loadComposedRules(projectId = "") {
 }
 export function setComposedRules(projectId, rules) { composedRules = { project: projectId, rules }; }
 
-export function promptText(id, project, { token = "", sessionId = "", lang = promptLang(getLang()) } = {}) {
+/** A library entry's text (built-in or custom) with the composed rules. */
+export function entryPromptText(entry, project, { token = "", sessionId = "", unit = "", user = "", lang = promptLang(getLang()) } = {}) {
   const rules = composedRules.project === (project?.id || "") ? composedRules.rules : null;
-  return starterPromptText(id, project, { url: arkBase(), token, sessionId, lang, rules });
+  return libraryPromptText(entry, project, { url: arkBase(), token, sessionId, lang, rules, unit, user });
+}
+
+export function promptText(id, project, options = {}) {
+  return entryPromptText(BUILTIN_PROMPTS.find((p) => p.id === id), project, options);
+}
+
+// The prompt library (Home → More prompts): this person's and the project's
+// custom prompts and the Home pins (GET /api/prompts).  Pins are kept per
+// person and project on the server; an older server keeps them in this
+// browser.
+const PINS_KEY = "ark.prompts.pins";
+function localPins(projectId) {
+  try {
+    const raw = localStorage.getItem(`${PINS_KEY}:${projectId || "local"}`);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function storeLocalPins(projectId, pins) {
+  try {
+    if (pins === null) localStorage.removeItem(`${PINS_KEY}:${projectId || "local"}`);
+    else localStorage.setItem(`${PINS_KEY}:${projectId || "local"}`, JSON.stringify(pins));
+  } catch { /* storage unavailable */ }
 }
 
 // Setup chips are neutral: "not set up yet" or "not applicable" is not a
@@ -58,13 +83,15 @@ export function loadSetupState() {
 // token; only Copy does, after the token confirmation.
 let previewDialog = null;
 
-export function openPromptPreview(id, project, { onCopy } = {}) {
-  const item = STARTER_PROMPTS.find((p) => p.id === id);
+export function openPromptPreview(idOrEntry, project, { onCopy, unit = "", user = "" } = {}) {
+  const item = typeof idOrEntry === "string" ? BUILTIN_PROMPTS.find((p) => p.id === idOrEntry) : idOrEntry;
   if (!item) return null;
+  const id = item.id;
   const sessionId = newArkSessionId();
-  const text = promptText(id, project, { sessionId });
+  const text = entryPromptText(item, project, { sessionId, unit, user });
+  const label = entryTitle(item, promptLang(getLang()));
   if (previewDialog?.isOpen()) {
-    previewDialog.show(id, text, sessionId);
+    previewDialog.show(id, text, sessionId, label);
     return previewDialog;
   }
   const title = h("span");
@@ -91,16 +118,16 @@ export function openPromptPreview(id, project, { onCopy } = {}) {
   const handle = {
     isOpen: () => dialog.backdrop.isConnected,
     close: () => dialog.close(false),
-    show(nextId, nextText, nextSession) {
+    show(nextId, nextText, nextSession, nextTitle) {
       current = nextId;
       dialog.modal.dataset.prompt = nextId;
-      title.textContent = t(`start.${nextId}.title`);
+      title.textContent = nextTitle;
       session.textContent = nextSession;
       pre.textContent = nextText; // plain text: no markdown, no re-render
       pre.scrollTop = 0;
     },
   };
-  handle.show(id, text, sessionId);
+  handle.show(id, text, sessionId, label);
   previewDialog = handle;
   return handle;
 }
@@ -144,22 +171,75 @@ export function startPanel(ctx) {
   // A stored starter token copies inside the click (agent-tokens.js); the
   // connection line starts waiting only after a copy, and only if it is not
   // waiting already (connectionStatus refresh()).
-  const copy = (id) => copyPromptWithToken((token) => promptText(id, project, { token, sessionId: newArkSessionId() }),
+  const user = ctx.S.session?.user || "local";
+  const lang = promptLang(getLang());
+  const copyEntry = (entry, unit = "") => copyPromptWithToken(
+    (token) => entryPromptText(entry, project, { token, sessionId: newArkSessionId(), unit, user }),
     { projectId: project.id || "", user: ctx.S.session?.user || "local" })
     .then((result) => { if (result?.copied) connection.refresh(); });
-  const preview = (id) => openPromptPreview(id, project, { onCopy: (current) => copy(current) });
-  const cards = h("div", { class: "start-grid start-grid-two" }, ...STARTER_PROMPTS.map((item) =>
-    h("div", { class: `start-card start-card-${item.id}`, "data-prompt": item.id },
-      h("div", { class: "start-card-head" },
-        h("span", { class: "start-ic" }, icon(item.icon, "sm")),
-        h("b", null, t(`start.${item.id}.title`))),
-      h("p", { class: "start-desc" }, t(`start.${item.id}.desc`)),
-      h("div", { class: "start-actions" },
-        h("button", { class: "btn sm primary", type: "button", "data-copy-token": item.id, onclick: () => copy(item.id) },
-          icon("copy", "sm"), t("start.copy")),
-        h("button", { class: "btn sm ghost", type: "button", "data-start-preview": item.id, onclick: () => preview(item.id) },
-          t("start.preview"))))));
-  panel.append(cards);
+  const previewEntry = (entry, unit = "") => openPromptPreview(entry, project,
+    { unit, user, onCopy: () => copyEntry(entry, unit) });
+
+  // Home shows the pinned prompts (by default the two starter prompts) and
+  // "More prompts" opens the library.
+  const lib = {
+    projectId: project.id || "",
+    state: null,
+    pins: localPins(project.id),
+    offline: false,
+    copy: copyEntry,
+    preview: previewEntry,
+    async save(body) {
+      const reply = await api.promptsPost(body);
+      lib.state = reply;
+      lib.pins = reply.pins ?? null;
+      if (body.action === "delete") {
+        const pruned = prunePins(lib.pins, libraryEntries(reply));
+        if (pruned && pruned.length !== lib.pins.length) lib.setPins(pruned);
+      }
+      renderCards();
+      return reply;
+    },
+    setPins(pins) {
+      lib.pins = pins;
+      renderCards();
+      if (lib.offline) { storeLocalPins(project.id, pins); return; }
+      api.promptsPost({ action: "pins", pins }).then((reply) => {
+        lib.state = reply;
+      }).catch(() => {
+        storeLocalPins(project.id, pins);
+        toast(t("prompts.pins_local"));
+      });
+    },
+  };
+  const cards = h("div", { class: "start-grid start-grid-two" });
+  const renderCards = () => {
+    clear(cards);
+    for (const item of pinnedEntries(lib.pins, libraryEntries(lib.state || {}))) {
+      cards.appendChild(h("div", { class: `start-card start-card-${item.id}`, "data-prompt": item.id },
+        h("div", { class: "start-card-head" },
+          h("span", { class: "start-ic" }, icon(item.icon || "pen", "sm")),
+          h("b", null, entryTitle(item, lang))),
+        h("p", { class: "start-desc" }, entryDesc(item, lang)),
+        h("div", { class: "start-actions" },
+          h("button", { class: "btn sm primary", type: "button", "data-copy-token": item.id, onclick: () => copyEntry(item) },
+            icon("copy", "sm"), t("start.copy")),
+          h("button", { class: "btn sm ghost", type: "button", "data-start-preview": item.id, onclick: () => previewEntry(item) },
+            t("start.preview")))));
+    }
+    if (!cards.childElementCount) cards.appendChild(h("p", { class: "muted start-none" }, t("prompts.none_pinned")));
+  };
+  renderCards();
+  const more = h("div", { class: "start-more" },
+    h("button", { class: "btn sm ghost", type: "button", "data-more-prompts": "", onclick: () => openPromptLibrary(lib) },
+      icon("book", "sm"), t("prompts.more")));
+  panel.append(cards, more);
+  api.prompts().then((reply) => {
+    lib.state = reply;
+    lib.pins = reply?.pins ?? null;
+    renderCards();
+    lib.rerender?.();
+  }).catch(() => { lib.offline = true; });
 
   const renderStatus = () => {
     clear(status);

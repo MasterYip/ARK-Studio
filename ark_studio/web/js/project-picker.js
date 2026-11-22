@@ -20,7 +20,7 @@ import { currentUsername, displayName, userAvatar, userColor } from "./users.js"
 import { presenceInitials } from "./presence-model.js";
 import {
   arrangeProjects, createProjectPrefsStore, togglePinned, toggleHidden, setOnlyMine, gridMove, columnsFromTops,
-  refreshedProjectRows, cardPeopleText,
+  refreshedProjectRows, cardPeopleText, reviewBadge,
 } from "./project-picker-model.js";
 
 export {
@@ -32,6 +32,9 @@ function browserStorage() {
 }
 
 let reportError = null;
+
+/** Fired on `window` after GET /api/projects refreshed ctx.S.projects. */
+export const PROJECTS_LISTED = "ark:projects-listed";
 
 export const projectPrefs = createProjectPrefsStore({
   storage: typeof window === "undefined" ? null : browserStorage(),
@@ -73,6 +76,19 @@ function personAvatar(person) {
   const el = h("span", { class: "user-avatar xs project-card-agent", "aria-hidden": "true" }, presenceInitials(person.agent.split("/").pop()));
   el.style.setProperty("--user-color", userColor(person.agent));
   return el;
+}
+
+/** "3 new · 7 to review": Needs you cards new for the person, and all (none: nothing waits). */
+export function reviewPill(project) {
+  const { fresh, total } = reviewBadge(project);
+  if (!total) return null;
+  return h("span", {
+    class: `project-card-review ${fresh ? "has-new" : ""}`.trim(),
+    dataset: { reviewNew: String(fresh), reviewTotal: String(total) },
+    title: fresh ? t("project.picker.review_title", { n: fresh, total }) : t("project.picker.review_seen_title", { total }),
+  },
+  fresh ? h("span", { class: "project-card-new" }, t("project.picker.review_new", { n: fresh })) : null,
+  h("span", { class: "project-card-total" }, t("project.picker.review_total", { n: total })));
 }
 
 /**
@@ -128,6 +144,7 @@ export function projectPicker(ctx, { beforeOpen = null, label = "" } = {}) {
       h("span", { class: "project-card-head" },
         h("span", { class: `project-dot ${project.demo ? "demo" : ""}`.trim() }),
         h("span", { class: "project-card-name" }, project.name || project.id),
+        reviewPill(project),
         pinned ? h("span", { class: "project-card-pin", title: t("project.picker.pinned"), "aria-label": t("project.picker.pinned") },
           icon("pin", "sm")) : null),
       h("span", { class: "project-card-desc" }, detail),
@@ -256,9 +273,11 @@ export function liveProjectPicker(ctx, options = {}) {
   const picker = projectPicker(ctx, options);
   picker.fill(ctx.S.projects || []);
   api.projects().then((data) => {
-    if (!picker.el.isConnected || !Array.isArray(data?.projects)) return;
+    if (!Array.isArray(data?.projects)) return;
     ctx.S.projects = data.projects;
-    picker.refresh(data.projects);
+    // The project selector's dot follows the fresh badges (app.js).
+    window.dispatchEvent(new CustomEvent(PROJECTS_LISTED));
+    if (picker.el.isConnected) picker.refresh(data.projects);
   }).catch(() => { /* keep the cached list */ });
   return picker;
 }

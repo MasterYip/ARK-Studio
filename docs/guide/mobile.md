@@ -89,8 +89,9 @@ Equivalent environment configuration:
 | `ARK_DETECT_PUBLIC_IP` | `1` opts into a short public-IP lookup |
 | `ARK_TRUST_PROXY` | `1` trusts `X-Forwarded-For/Proto/Prefix` from your proxy |
 | `ARK_ALLOWED_HOSTS` | extra Host-header allow-list entries |
-| `ARK_APP_RELEASE_REPO` | GitHub `owner/name` whose latest release provides the Android APKs (default `MasterYip/ARK-Studio`; for forks) |
+| `ARK_APP_RELEASE_REPO` | GitHub `owner/name` whose latest release provides the Android APK (default `MasterYip/ARK-Studio`; for forks) |
 | `ARK_APP_RELEASE_API` | GitHub API base for that lookup (default `https://api.github.com`; GitHub Enterprise) |
+| `ARK_DOWNLOAD_DIR` | folder with this server's own `ARK-Studio-android.apk`, served instead of the GitHub release (default: `dist/` beside a web root on disk; a binary with the web UI built in has none) |
 
 The equivalent flags are `--auth-user`, `--auth-password`,
 `--auth-password-file`, `--auth-password-hash`, `--auth-session-ttl`,
@@ -624,20 +625,15 @@ cache stores no project data; offline mode only guarantees the app skeleton.
 
 ## Android app
 
-`ark_studio/android/` builds two apps that install side by side. Both are
-attached to every [GitHub release](https://github.com/MasterYip/ARK-Studio/releases/latest)
-as `ARK-Studio-<version>-android.apk` and `ARK-Studio-<version>-android-web.apk`,
-and Settings → Mobile → Android apps links (with a QR code per app) to the
-APKs of the latest release:
-
-- **ARK Studio** (`:app`, `com.masteryip.arkstudio`, 3.0): the native app below.
-- **ARK Studio Web** (`:webapp`, `com.masteryip.arkstudio.web`, 3.0-web): the
-  lightweight shell that opens the full web app in a WebView and pairs inside the
-  page.
+`ark_studio/android/` builds the app **ARK Studio** (`:app`,
+`com.masteryip.arkstudio`). It is attached to every
+[GitHub release](https://github.com/MasterYip/ARK-Studio/releases/latest)
+as `ARK-Studio-<version>-android.apk`, and Settings → Mobile → Android app
+links (with a QR code) to the APK of the latest release.
 
 The ARK server, not the browser, finds the latest release:
 `GET /api/mobile/apps` asks the GitHub API
-(`/repos/<owner>/<name>/releases/latest`, unauthenticated) for the APK assets
+(`/repos/<owner>/<name>/releases/latest`, unauthenticated) for the APK asset
 by name and caches the answer for an hour; a failed lookup keeps the last good
 answer and is retried after 5 minutes, and with no answer at all the links
 point to the release page. Forks set `ARK_APP_RELEASE_REPO` (and
@@ -646,12 +642,16 @@ release `version`, `release_url` and, per app, `qr_svg` and whether a local
 build exists (`local`, `local_url`).
 
 The old server paths keep working for older apps and bookmarks:
-`/download/ARK-Studio-android.apk` (alias `/download/ark.apk`) and
-`/download/ARK-Studio-webapp.apk` serve a build copied to the server's `dist/`
-when there is one, and otherwise redirect (302) to the latest release's APK.
+`/download/ARK-Studio-android.apk` (aliases `/download/ark.apk` and
+`/download/ARK-Studio-webapp.apk`) serves a build copied to the server's
+`dist/ARK-Studio-android.apk` when there is one, and otherwise redirects (302)
+to the latest release's APK. A release binary has the web UI built in and no
+`dist/` folder beside it; set `ARK_DOWNLOAD_DIR` to the folder holding
+`ARK-Studio-android.apk` so phones that cannot reach GitHub download the APK
+and its updates from the server (`/download/android-apps.json` then reports
+`source: "server"` with the APK's version code).
 
-The native app is described next.
-It is a hybrid: everyday screens are native, the rest is the web app in a
+The app is a hybrid: everyday screens are native, the rest is the web app in a
 same-origin WebView signed in with the same device session.
 
 | Native | WebView (deep-linked hash routes) |

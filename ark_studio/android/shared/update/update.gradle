@@ -1,0 +1,41 @@
+// Applied by :app (after its android {} block).
+//
+// * The in-app updater in android/shared/update (sources, strings, JVM tests).
+// * BuildConfig.ARK_RELEASE: the ARK release (repo VERSION file) the APK was
+//   built from; the updater compares it with a GitHub release tag.
+// * -ParkVersionCode=<n> overrides versionCode (test builds of an update).
+// * Optional fixed signing key: with ARK_ANDROID_KEYSTORE (path),
+//   ARK_ANDROID_KEYSTORE_PASSWORD, ARK_ANDROID_KEY_ALIAS and
+//   ARK_ANDROID_KEY_PASSWORD set, the debug build is signed with that key
+//   instead of the machine's debug key, so every release can update the last.
+def versionFile = rootProject.file('../../VERSION')
+def arkRelease = versionFile.exists() ? versionFile.text.trim() : ''
+
+android {
+    defaultConfig {
+        buildConfigField 'String', 'ARK_RELEASE', "\"${arkRelease}\""
+        if (project.hasProperty('arkVersionCode')) {
+            versionCode project.property('arkVersionCode').toString().toInteger()
+        }
+    }
+    sourceSets {
+        main {
+            java.srcDirs += '../shared/update/java'
+            res.srcDirs += '../shared/update/res'
+        }
+        test {
+            java.srcDirs += '../shared/update/test'
+        }
+    }
+    def keystore = System.getenv('ARK_ANDROID_KEYSTORE')
+    if (keystore) {
+        signingConfigs {
+            debug {
+                storeFile file(keystore)
+                storePassword System.getenv('ARK_ANDROID_KEYSTORE_PASSWORD')
+                keyAlias System.getenv('ARK_ANDROID_KEY_ALIAS')
+                keyPassword System.getenv('ARK_ANDROID_KEY_PASSWORD') ?: System.getenv('ARK_ANDROID_KEYSTORE_PASSWORD')
+            }
+        }
+    }
+}

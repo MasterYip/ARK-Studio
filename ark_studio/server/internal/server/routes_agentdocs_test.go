@@ -207,11 +207,11 @@ func TestAgentInterfaceListsDocs(t *testing.T) {
 	for _, c := range caps {
 		id, _ := c.(map[string]any)["id"].(string)
 		if !strings.HasPrefix(id, "docs.") && !strings.HasPrefix(id, "watch.") && !strings.HasPrefix(id, "messages.") &&
-			!goOnlyLinkCaps[id] {
+			!goOnlyLinkCaps[id] && !strings.HasPrefix(id, "project_move.") {
 			kept = append(kept, c)
 		}
 	}
-	if len(caps)-len(kept) != 9 || ids["watch.updates"] != "/api/agent/v1/updates" {
+	if len(caps)-len(kept) != 16 || ids["watch.updates"] != "/api/agent/v1/updates" {
 		t.Fatalf("Go-only capabilities: %d, %v", len(caps)-len(kept), ids)
 	}
 	mine["capabilities"] = kept
@@ -230,4 +230,4 @@ func TestAgentInterfaceListsDocs(t *testing.T) {
 
 // goOnlyLinkCaps are the Go-only link capabilities (routes_agentlinks.go);
 // Python's links.write stays.
-var goOnlyLinkCaps = map[string]bool{"links.list": true, "links.delete": true, "links.update": true}
+var goOnlyLinkCaps = map[string]bool{"links.list": true, "links.delete": true, "links.update": true, "markers.list": true}

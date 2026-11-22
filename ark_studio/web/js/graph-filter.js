@@ -124,16 +124,34 @@ export class GraphFilterIndex {
     }
     const context = [...extra].sort((a, b) => a - b).slice(0, 120);
     for (const id of context) ids.add(id);
+    // `reveal` (uids or ids, "Locate in research map"): shown even when the
+    // filters or the node limit leave them out, marked with why.
+    const revealed = [];
+    const wanted = new Set(values(query.reveal).map(String));
+    if (wanted.size) {
+      const matchedIds = new Set(matched.map((row) => row.node.id));
+      for (const row of this.rows) {
+        const n = row.node;
+        if (ids.has(n.id) || !(wanted.has(String(n.uid)) || wanted.has(String(n.id)))) continue;
+        ids.add(n.id);
+        revealed.push({ node: n, reason: matchedIds.has(n.id) ? "limit" : "filter" });
+      }
+    }
     const edges = this.edges.filter((edge) => ids.has(edge.source) && ids.has(edge.target));
     const degree = new Map();
     for (const edge of edges) {
       degree.set(edge.source, (degree.get(edge.source) || 0) + 1);
       degree.set(edge.target, (degree.get(edge.target) || 0) + 1);
     }
-    const nodes = [...selected, ...context.map((id) => this.byId.get(id).node)].map((node, i) => {
+    const shown = (node, extraFields) => {
       const { search_body, ...display } = node;
-      return { ...display, context: i >= selected.length, degree: degree.get(node.id) || 0 };
-    });
-    return { nodes, edges, context_count: context.length, total: matched.length };
+      return { ...display, ...extraFields, degree: degree.get(node.id) || 0 };
+    };
+    const nodes = [
+      ...selected.map((node) => shown(node, { context: false })),
+      ...context.map((id) => shown(this.byId.get(id).node, { context: true })),
+      ...revealed.map(({ node, reason }) => shown(node, { context: false, revealed: reason })),
+    ];
+    return { nodes, edges, context_count: context.length, total: matched.length, revealed_count: revealed.length };
   }
 }

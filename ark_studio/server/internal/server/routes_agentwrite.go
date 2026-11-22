@@ -63,7 +63,16 @@ func (c *reqCtx) agentWrite(path string, body *pyjson.Object, actor string) erro
 		return err
 	}
 	s := p.Store
+	if rest, ok := strings.CutPrefix(path, agentImportArkBase); ok { // Go only (routes_projectmove.go)
+		return c.agentImportArkRoute(rest, true)
+	}
+	if rest, ok := strings.CutPrefix(path, agentProjectMoveBase); ok { // Go only (routes_projectmove.go)
+		return c.projectMoveRoute(rest, true)
+	}
 	if handled, err := c.agentReviewsPost(p, path, body, actor); handled { // Go only (routes_reviews.go)
+		return err
+	}
+	if handled, err := c.agentPromptsPost(path, body); handled { // Go only (routes_prompts.go)
 		return err
 	}
 	if m := reAgentHistoryRaw.FindStringSubmatch(path); m != nil {

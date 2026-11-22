@@ -18,7 +18,7 @@ async function fixture(layout = "mind") {
       h() {}, clear() {}, copyText() {}, typeColor: () => "#60a5fa", statusColor: () => "#14b8a6",
       clamp: (n, min, max) => Math.max(min, Math.min(max, n)),
     },
-    "./i18n.js": { t: (s) => s, typeLabel: (s) => s, statusLabel() {}, relLabel() {} },
+    "./i18n.js": { t: (s) => s, hasKey: () => false, typeLabel: (s) => s, statusLabel() {}, relLabel() {} },
     "./icons.js": { icon() {}, drawStatusIcon: (...args) => calls.push(["status", ...args.slice(1)]) },
     "./physics.js": { normalizeGraphPhysics: (s) => s, GRAPH_DEFAULTS: {} },
     "./mind-settings.js": { getMindSettings: () => { calls.push(["settings"]); return settings; } },
@@ -30,7 +30,10 @@ async function fixture(layout = "mind") {
     "./assign-menu.js": { assignMenuItem() {} },
     "./export-menu.js": { exportBundleMenuItem() {} },
     "./node-history.js": { historyMenuItem() {} },
+    "./locate-map.js": { locateInMapItem() { return null; }, isLocateShortcut() { return false; }, locateShortcut() { return "Alt+M"; }, locateUnit() { return false; } },
+    "./locate-map-model.js": { locateCamera(node, zoom) { return { zoom, pan: { x: -node.x * zoom, y: -node.y * zoom } }; } },
     "./presence-ui.js": { attachPresenceOverlay: () => null, createPresenceChip: () => ({ el: null, destroy() {} }) },
+    "./read-edit-mode.js": { rememberMode() {}, savedMode: () => "read" },
   };
   const i18n = new vm.SyntheticModule(Object.keys(imports["./i18n.js"]), function () {
     for (const [name, value] of Object.entries(imports["./i18n.js"])) this.setExport(name, value);
@@ -603,5 +606,30 @@ test("Delete on a selected link deletes that link, not the nodes; Ctrl+Z restore
     graph._onKeyDown(event);
     assert.equal(event.prevented, undefined);
     assert.equal(asked.length, 2);
+  }
+});
+
+test("locate opens the folded branches, selects the node and moves the camera to it (mind and force)", async () => {
+  for (const layout of ["mind", "force"]) {
+    const { graph, load, calls } = await fixture(layout);
+    load([{ id: 1, uid: "S-1", x: 0, y: 0 }, { id: 2, uid: "C-2", x: 100, y: 40 }, { id: 3, uid: "E-3", x: 240, y: -60 }],
+      [[2, 1], [3, 2]]);
+    graph.collapsed = new Set([1, 2]);
+    const cameras = [];
+    graph.host = { isConnected: true };
+    graph._animateCamera = (zoom, pan) => cameras.push({ zoom, pan });
+    graph._pulseNode = (node) => calls.push(["pulse", node.id]);
+    assert.equal(graph.locate("X-9"), false, `${layout}: an unknown node`);
+    assert.equal(graph.locate("E-3"), true, layout);
+    assert.equal(graph.selected, 3);
+    assert.deepEqual([...graph.selectedNodes], [3]);
+    if (layout === "mind") {
+      assert.deepEqual([...graph.collapsed], [], "mind: the ancestors of the node unfold");
+      assert.ok(calls.some(([name]) => name === "layout"), "mind: the layout reflows");
+    }
+    assert.deepEqual(cameras.at(-1).pan, { x: -240 * cameras.at(-1).zoom, y: 60 * cameras.at(-1).zoom }, `${layout}: centred`);
+    assert.ok(calls.some(([name, id]) => name === "pulse" && id === 3), `${layout}: pulses`);
+    assert.equal(graph._pendingForceFit, false, `${layout}: no later fit undoes it`);
+    clearTimeout(graph._locateFollow);
   }
 });

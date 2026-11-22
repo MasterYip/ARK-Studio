@@ -46,6 +46,12 @@ type Config struct {
 	DetectPublicIP bool
 	TrustProxy     bool
 	WebRoot        string // Go only: serve web/ from this folder
+	// Go only: the release version (ldflags), shown in Settings › About
+	// through <meta name="ark-version">; empty for development builds.
+	ReleaseVersion string
+	// Go only: agent sessions run under a relay and survive a server
+	// restart (Linux; internal/sessions/relay.go).  Off for the desktop app.
+	SessionRelay bool
 
 	// Concurrency knobs (Go only, docs/development/go-port/concurrency.md).
 	ReadPool       int           // read connections per project database
@@ -76,6 +82,7 @@ type App struct {
 	Blackbox        *blackbox.BlackBox
 	Mobile          *mobile.Manager
 	appRelease      releaseResolver // Go-only: latest GitHub release of the APKs
+	apks            apkCache        // Go-only: hash and version of the dist/ APKs (app_manifest.go)
 	restoreMu       sync.Mutex      // App.lock around blackbox restore
 
 	Heavy      *procx.Pool
@@ -91,8 +98,9 @@ type App struct {
 	Terminals *workspace.Manager // the Editor's terminal registry
 	failures  *failureLimiter
 	StartedAt string
-	activity  projectActivity // my_activity per project (project_activity.go)
-	writers   lastWriters     // latest writer per project (project_people.go)
+	activity  projectActivity   // my_activity per project (project_activity.go)
+	writers   lastWriters       // latest writer per project (project_people.go)
+	reviews   projectNeedsCards // Needs you cards per project (project_reviews.go)
 	// Presence: which agent is on which node, memory only (routes_presence.go, Go only).
 	Presence *presence.Hub
 	invites  inviteLimiter // public invite routes (routes_invites.go, Go only)
@@ -155,6 +163,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 	if a.Sessions, err = sessions.Open(sessionsRoot); err != nil {
 		return nil, fmt.Errorf("agent sessions: %w", err)
 	}
+	a.Sessions.Relay = a.Sessions.Relay && cfg.SessionRelay
 	presets, err := providers.DefaultPresets()
 	if err != nil {
 		return nil, fmt.Errorf("task presets: %w", err)
@@ -190,6 +199,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 	if err != nil {
 		return nil, fmt.Errorf("organization bootstrap: %w", err)
 	}
+	a.recoverMoves() // routes_projectmove.go: moves a restart interrupted
 	raw := pytext.Strip(cfg.PublicURL)
 	if raw == "" {
 		raw = pytext.Strip(os.Getenv("ARK_PUBLIC_URL"))
@@ -231,11 +241,19 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 		return nil, fmt.Errorf("legacy chat owner: %w", err)
 	}
 	a.setupBlackbox(ctx)
+	// Agent sessions the previous server left running (relay.go).
+	if attached, ended := a.Sessions.Resume(); attached+ended > 0 {
+		fmt.Fprintf(os.Stderr, "agent sessions: %d re-attached, %d ended while the server was down\n", attached, ended)
+	}
 	return a, nil
 }
 
-// Close releases every database.
+// Close releases every database.  Relayed agent sessions keep running;
+// the next server re-attaches them.
 func (a *App) Close() {
+	if a.Sessions != nil {
+		a.Sessions.Detach()
+	}
 	a.Terminals.Shutdown()
 	a.Projects.Close()
 	a.Org.Close()

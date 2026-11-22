@@ -11,6 +11,8 @@ import { foldSection } from "../fold-section.js";
 import { deviceRows, since } from "../setup-devices-model.js";
 import { sizeBadge, refreshLocationSize, desktopDeviceId, measureOnDesktop } from "../location-size.js";
 import { duePaths, isLocalPath } from "../location-size-model.js";
+import { openContextMenu } from "../context-menu.js";
+import { connectionStore, openMenuItems } from "../resource-open.js";
 import { reviewPages, visiblePages, stepLabel, reviewOutcome, plainSummary, confirmPlan, confirmLabelKey,
   changeGroups } from "../setup-review-model.js";
 
@@ -432,7 +434,22 @@ function openLocationForm(state, item, reload, device = null) {
 
 /* ------------------------------------------------------------------ rows */
 
-function resourceRow(item, { actions = [], showOwner = true, reason = "", sizeRefresh = null } = {}) {
+// ⋯ next to a location or device: Open in VS Code / SSH, Copy path
+// (resource-open.js); the items are built when the menu opens.
+function moreButton(items) {
+  return h("button", { class: "icon-btn sm setupres-more", type: "button", title: t("resources.open.more"),
+    "aria-label": t("resources.open.more"), "aria-haspopup": "menu", "data-setupres-more": "1",
+    onclick: (event) => {
+      event.stopPropagation();
+      const button = event.currentTarget;
+      const list = items();
+      if (!list.length) { toast(t("resources.open.none")); return; }
+      const rect = button.getBoundingClientRect();
+      openContextMenu({ x: rect.left, y: rect.bottom + 4, items: list, returnFocus: button });
+    } }, icon("more", "sm"));
+}
+
+function resourceRow(item, { actions = [], showOwner = true, reason = "", sizeRefresh = null, more = null } = {}) {
   const needsLoc = item.details && !NO_LOCATION.has(item.kind) && !item.location
     && !(item.kind === "compute" && item.details?.kind !== "local");
   return h("div", { class: "setupres-row", "data-resource-key": item.key, "data-reason": reason || item.reason || "" },
@@ -452,7 +469,8 @@ function resourceRow(item, { actions = [], showOwner = true, reason = "", sizeRe
           h("code", { class: "setupres-loc" }, loc.path_or_ref),
           isLocalPath(loc.path_or_ref) ? sizeBadge(loc.stats, {
             onRefresh: sizeRefresh ? (button) => sizeRefresh(item, loc, button) : null }) : null,
-          loc.added_by ? userBadge(loc.added_by) : null)))),
+          loc.added_by ? userBadge(loc.added_by) : null,
+          more && loc.path_or_ref ? more(loc) : null)))),
     h("div", { class: "setupres-actions" }, ...actions));
 }
 
@@ -468,6 +486,14 @@ export function setupResourcesPanels(ctx) {
   const othersPanel = h("section", { class: "panel settings-panel setupres-panel", "data-setup-panel": "others" });
   const devicesPanel = h("section", { class: "panel settings-panel setupres-panel", "data-setup-panel": "devices" });
   let state = null;
+  // SSH connections of the project's devices (resource-open.js).
+  const connections = connectionStore();
+  const deviceOf = (hostId, label) => {
+    const id = connections.deviceOfHost(hostId);
+    return { id, label: label || hostId, kind: id === "ark" ? "ark" : id.startsWith("gpu:") ? "gpu-server" : "host" };
+  };
+  const more = (loc) => moreButton(() => openMenuItems(connections,
+    { device: deviceOf(loc.host_id, loc.host_label), path: loc.path_or_ref }));
 
   const reload = async (data) => {
     try { state = data && data.layers ? data : await api.setupState(); }
@@ -476,6 +502,12 @@ export function setupResourcesPanels(ctx) {
       projectPanel.appendChild(h("div", { class: "notice" }, icon("alert"), h("div", null, err.message)));
       return;
     }
+    const hosts = new Map();
+    for (const item of [...(state.accessible || []), ...(state.known_but_inaccessible || [])]) {
+      for (const loc of item.locations || []) if (loc.host_id) hosts.set(loc.host_id, loc.host_label);
+    }
+    for (const device of state.devices || []) if (device.id) hosts.set(device.id, device.label);
+    connections.refresh([...hosts].map(([id, label]) => deviceOf(id, label)));
     renderProject();
     renderMine();
     renderDevices();
@@ -542,6 +574,7 @@ export function setupResourcesPanels(ctx) {
     const list = h("div", { class: "setupres-list" },
       ...(items.length ? items.map((item) => resourceRow(item, {
         sizeRefresh,
+        more,
         reason: item.reason === "no_location_on_host" ? "no_location_on_host" : "",
         actions: [
           state.layers?.user?.can_edit && item.details && !NO_LOCATION.has(item.kind)
@@ -613,6 +646,7 @@ export function setupResourcesPanels(ctx) {
       ...(items.length ? items.map((item) => resourceRow(item, {
         showOwner: false,
         sizeRefresh,
+        more,
         actions: [
           !NO_LOCATION.has(item.kind) ? btn(t("setupres.add_location"), "plus", () => openLocationForm(state, item, reload)) : null,
           btn(t("setupres.edit"), "edit", () => openResourceForm(state, { layer: "user", item, reload })),
@@ -656,6 +690,7 @@ export function setupResourcesPanels(ctx) {
       ...(others.length ? others.map((item) => {
         return resourceRow(item, {
           sizeRefresh,
+          more,
           reason: item.usable_here ? "" : "no_location_on_host",
           actions: [
             state.layers?.user?.can_edit && !NO_LOCATION.has(item.kind)
@@ -692,7 +727,8 @@ export function setupResourcesPanels(ctx) {
       since(device.lastSeen) ? h("span", { class: "muted" }, t(`setupres.device_seen_${since(device.lastSeen).unit}`,
         { n: since(device.lastSeen).n })) : null,
       h("span", { class: `pill ${device.missing ? "warn" : "ok"}` },
-        device.missing ? t("setupres.device_missing", { n: device.missing }) : t("setupres.device_complete"))),
+        device.missing ? t("setupres.device_missing", { n: device.missing }) : t("setupres.device_complete")),
+      moreButton(() => openMenuItems(connections, { device: deviceOf(device.id, device.label), onChange: () => reload() }))),
     h("div", { class: "stack tight" }, ...device.paths.map((p) => h("div", { class: "row tight setupres-device-path",
       "data-device-path": p.resource },
     h("span", null, p.name), h("span", { class: "muted" }, kindLabel(p.kind)),
@@ -701,7 +737,9 @@ export function setupResourcesPanels(ctx) {
     isLocalPath(p.path_or_ref) ? sizeBadge(p.stats, { onRefresh: (button) => refreshSize({
       resource: p.resource, path: p.path_or_ref, hostId: device.id, deviceLabel: device.label }, button) }) : null,
     canEdit ? btn(p.path_or_ref ? t("setupres.edit_location") : t("setupres.add_path"), p.path_or_ref ? "edit" : "plus",
-      () => openLocationForm(state, { key: p.resource, name: p.name, path_or_ref: p.path_or_ref }, reload, device)) : null))))));
+      () => openLocationForm(state, { key: p.resource, name: p.name, path_or_ref: p.path_or_ref }, reload, device)) : null,
+    p.path_or_ref ? moreButton(() => openMenuItems(connections,
+      { device: deviceOf(device.id, device.label), path: p.path_or_ref })) : null))))));
     devicesPanel.append(
       h("div", { class: "panel-head" }, h("h3", null, t("setupres.devices_title")),
         h("span", { class: "pill" }, String(rows.length))),

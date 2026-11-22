@@ -16,7 +16,6 @@ import (
 	"time"
 
 	"arkstudio/go/internal/platform/pyerr"
-	"arkstudio/go/internal/webui"
 
 	"arkstudio/go/internal/auth"
 	"arkstudio/go/internal/compat/pyjson"
@@ -631,7 +630,8 @@ var (
 		"/api/mobile/session", "/api/health", "/api/changes", "/api/events",
 		"/api/unit-details",
 		"/api/trash"} // Go only: the recycle bin (routes_trash.go)
-	mobileScopedGet = map[string]bool{"/api/org": true, "/api/projects": true, "/api/gpu/dashboard": true}
+	mobileScopedGet = map[string]bool{"/api/org": true, "/api/projects": true, "/api/gpu/dashboard": true,
+		notificationsPath: true} // Go only (notifications.go)
 )
 
 // mobileDevicePathAllowed is server.mobile_device_path_allowed.
@@ -767,20 +767,16 @@ func (c *reqCtx) guardMobile() error {
 
 // ----------------------------------------------------------- routes
 
-// androidApps lists the two Android apps.  Go-only: url is the APK asset of
+// androidApps lists the Android app.  Go-only: url is the APK asset of
 // the latest GitHub release (app_release.go), or the release page when it
 // cannot be resolved, so every app is available; qr_svg encodes url for a
 // phone.  local, local_url, size and updated describe a dist/ build on this
 // server, when there is one.
 func (a *App) androidApps(rel *appRelease) *pyjson.Object {
 	out := pyjson.NewObject()
-	dist := ""
-	if a.Assets != nil && a.Assets.Dir != "" {
-		dist = webui.Beside(a.Assets.Dir, "dist")
-	}
+	dist := a.apkDir()
 	for _, item := range []struct{ key, file, path, appID, title string }{
 		{"native", "ARK-Studio-android.apk", "/download/ARK-Studio-android.apk", "com.masteryip.arkstudio", "ARK Studio (native)"},
-		{"webapp", "ARK-Studio-webapp.apk", "/download/ARK-Studio-webapp.apk", "com.masteryip.arkstudio.web", "ARK Studio Web"},
 	} {
 		var size int64
 		var updated any
@@ -1114,10 +1110,11 @@ func (c *reqCtx) createPairing(body *pyjson.Object, requestHost string, requestP
 		return &pyerr.InternalError{Message: err.Error()}
 	}
 	c.app.allowAdvertisedURL(base)
-	if err := p.Store.LogActivity(c.ctx, "human:ui", "mobile.pair.create", nil, pyjson.NewObject("pair", pair.Value("id"),
-		"permission", pair.Value("permission"), "source", source)); err != nil {
-		return err
-	}
+	// A pairing code changes nothing in the project: it is audited in the
+	// org log only.  A project activity row would bump the project revision,
+	// and every open tab of the project would refetch and repaint (Settings
+	// generated a code on each paint, so it repainted every ~2 s).  Claiming
+	// the code (a device joins) is logged in the project.
 	actorID, err := c.app.Org.UserIDFor(c.ctx, actor)
 	if err != nil {
 		return err
@@ -1335,29 +1332,27 @@ func (c *reqCtx) mobileDelete() error {
 
 type apkInfo struct{ file, title string }
 
-// apkByPath is ANDROID_APKS by download path.
+// apkByPath is ANDROID_APKS by download path.  The WebView app's old path
+// (no longer built) serves the native app, so old links and QR codes still
+// install ARK Studio.
 var apkByPath = map[string]apkInfo{
 	"/download/ARK-Studio-android.apk": {"ARK-Studio-android.apk", "ARK Studio (native)"},
 	"/download/ark.apk":                {"ARK-Studio-android.apk", "ARK Studio (native)"},
-	"/download/ARK-Studio-webapp.apk":  {"ARK-Studio-webapp.apk", "ARK Studio Web"},
+	"/download/ARK-Studio-webapp.apk":  {"ARK-Studio-android.apk", "ARK Studio (native)"},
 }
 
-// sendAPK serves <checkout>/dist/<apk> (webui.Beside) (do_GET's ANDROID_APKS
+// sendAPK serves <apkDir>/<apk> (app_manifest.go) (do_GET's ANDROID_APKS
 // branch).  Go-only: without a local build it redirects (302) to the latest
 // GitHub release asset (or the release page) instead of answering 404, so
 // older apps that download updates from the server keep working.
 func (c *reqCtx) sendAPK(apk apkInfo) error {
 	target := ""
-	if c.app.Assets != nil && c.app.Assets.Dir != "" {
-		target = filepath.Join(webui.Beside(c.app.Assets.Dir, "dist"), apk.file)
+	if dir := c.app.apkDir(); dir != "" {
+		target = filepath.Join(dir, apk.file)
 	}
 	fi, err := os.Stat(target)
 	if target == "" || err != nil || !fi.Mode().IsRegular() {
-		key := "native"
-		if apk.file == "ARK-Studio-webapp.apk" {
-			key = "webapp"
-		}
-		url, _, _ := c.app.appRelease.resolve(c.ctx).url(key)
+		url, _, _ := c.app.appRelease.resolve(c.ctx).url("native")
 		c.redirect(url, 302, nil)
 		return nil
 	}

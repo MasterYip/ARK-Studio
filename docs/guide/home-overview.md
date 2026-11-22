@@ -193,6 +193,48 @@ tests/js/starter_prompts.test.mjs checks the order, the rules, both prompts' ste
 API path, header, JSON field and interpolation of the English text appears
 verbatim in the Chinese one.
 
+### More prompts (the prompt library)
+
+**More prompts** under the cards opens the prompt library.  Home shows the
+*pinned* prompts; by default those are the two starter prompts.  Each entry
+has a title, one line, **Copy prompt**, **Preview** and **Pin**; pinned
+entries can be moved up and down, and **Restore default pins** goes back to
+the two starter prompts.  Pins are kept per person and per project on the
+server (`POST /api/prompts {action: "pins"}`); an older server keeps them in
+the browser.  Copy works like the starter prompts: the same personal token,
+the project's composed agent rules (with their version stamp) first, then the
+prompt, then the session block.
+
+Built-in prompts (English and Chinese, short): **Organize or move project
+content** (reads `docs/agents/project-content.md`; inspect, plan, approval,
+apply, report), **Sort the review backlog**, **Continue a task** (a unit ID
+field in the library fills `{{unit}}`), **Plan an idea**, **Check the project
+status** (read only), **Resume interrupted work**, **Set up this device** and
+**Add a custom prompt**.  The last one tells the agent how to write a prompt
+with the person and save it with `POST /api/agent/v1/prompts`.
+
+**Custom prompts** have a title, a one-line description and a body with the
+placeholders `{project}` (name and id), `{unit}` (entered when copying) and
+`{user}`; other braces stay as written.  *My prompts* are the person's own
+(they need only read access to the project); *Project prompts* are shown to
+everyone in the project and only project admins add or change them.
+**Export** writes both lists as JSON (`{"format": "ark-prompts", "prompts":
+[{title, description, body}]}`) and **Import** adds such a file to My prompts,
+skipping prompts that are already there.  Storage: `<project>/prompts.json`
+and `<private dir>/prompts/<user>.json` (which also holds the pins), with a
+content version per prompt (`p-…`) and for the library (`l-…`).
+
+| Route | |
+| --- | --- |
+| `GET /api/prompts` | My and project prompts, my pins for the project (`null` = the defaults), `can_edit_project`, `rules_version` |
+| `POST /api/prompts` | `{action: "save", scope, prompt: {id?, title, description, body}}`, `{action: "delete", scope, id}`, `{action: "import", scope, prompts}`, `{action: "pins", pins}` (people only) |
+| `GET /api/agent/v1/prompts` | the token user's and the project's custom prompts |
+| `POST /api/agent/v1/prompts` | `{title, description, body, scope?, id?}` or `{delete: id, scope?}`; personal by default, project scope only for a project admin; needs a token that may write |
+
+tests/js/prompt_library.test.mjs covers the library, pins, placeholders and
+export; tests/browser/prompt_library.test.cjs drives the dialog in both
+languages.
+
 ### Review & confirm
 
 The setup chip's **Review & confirm** (Home) and the Review buttons in

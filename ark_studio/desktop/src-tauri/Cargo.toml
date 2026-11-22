@@ -1,6 +1,6 @@
 [package]
 name = "ark-studio"
-version = "2.1.1"
+version = "2.1.2"
 description = "ARK Studio desktop shell: tray, settings, saved servers and the bundled ark-server sidecar"
 authors = ["Raymon Yip"]
 license = "AGPL-3.0-only"
@@ -22,6 +22,8 @@ tauri-plugin-window-state = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-opener = "2"
 tauri-plugin-updater = "2"
+# "ARK Studio 2.x.y is available": a system notification once per version.
+tauri-plugin-notification = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 hmac = "0.12"

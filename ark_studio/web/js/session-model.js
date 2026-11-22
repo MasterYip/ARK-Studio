@@ -430,6 +430,15 @@ export function approvalRequestLabel(item = {}, { t = enText } = {}) {
 }
 
 // --------------------------------------------------------------- steer queue
+/**
+ * The queued-turns card: messages still waiting and failed deliveries
+ * (retry or remove).  A delivered message is in the conversation; it is not
+ * listed again.
+ */
+export function pendingSteerItems(session = {}) {
+  return (session?.steer_queue || []).filter((item) => item.status === "queued" || item.status === "failed");
+}
+
 export function queuedSteerItems(session = {}) {
   return (session?.steer_queue || []).filter((item) => item.status !== "delivered");
 }
@@ -620,12 +629,42 @@ export function turnRunning(session) {
   return ["turn", "starting", "stopping"].includes(sessionPhase(session));
 }
 
-/** The status a badge shows: a quiet one-shot turn still runs; a waiting process is idle. */
-export function shownStatus(session) {
+/**
+ * Background work still running in a session between turns: its sub-agents
+ * and background tasks (not the ARK watcher).  `activity` (the open
+ * session's sessionActivity) is fresher than the server's `session.busy`.
+ */
+export function busyWork(session, activity = null) {
+  if (!isActiveSession(session)) return { subagents: 0, background: 0 };
+  if (activity) return { subagents: activity.runningSubagents || 0, background: activity.busyBackground || 0 };
+  const busy = session?.busy || {};
+  return { subagents: Number(busy.subagents) || 0, background: Number(busy.background) || 0 };
+}
+
+/**
+ * The status a badge shows: running while a turn runs or, between turns,
+ * while sub-agents or background tasks run; idle only when all is quiet; a
+ * session that has ended shows how it ended (stopped, errored, closed).
+ */
+export function shownStatus(session, activity = null) {
   const phase = sessionPhase(session);
   if (phase === "turn") return "running";
-  if (phase === "waiting") return "idle";
+  if (phase === "waiting") {
+    const busy = busyWork(session, activity);
+    return busy.subagents + busy.background ? "running" : "idle";
+  }
   return session?.status || "stopped";
+}
+
+/**
+ * Why a session runs when its turn has ended, for a sub-label:
+ * [{key, n}] ("session.busy.subagents_n", 2), empty while a turn runs.
+ */
+export function busyReason(session, activity = null) {
+  if (sessionPhase(session) !== "waiting") return [];
+  const busy = busyWork(session, activity);
+  return [busy.subagents ? { key: `session.busy.subagents_${busy.subagents === 1 ? "one" : "n"}`, n: busy.subagents } : null,
+    busy.background ? { key: `session.busy.background_${busy.background === 1 ? "one" : "n"}`, n: busy.background } : null].filter(Boolean);
 }
 
 export function liveActivity(items = [], session = {}) {

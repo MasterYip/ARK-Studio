@@ -418,3 +418,18 @@ func ReapplyBlock(old, new string, block *pyjson.Object) string {
 	out := append(append(append([]string{}, target[:start]...), repl...), target[end:]...)
 	return strings.Join(out, "")
 }
+
+// Import fetches every revision of the history at src into h (Go only,
+// store/move.go: units moved to another project keep their text history).
+// Revisions are commits named by refs/ark/revisions/<hash>; a head stays
+// valid in h once its commit is there.
+func (h *History) Import(ctx context.Context, src string) error {
+	if st, err := os.Stat(filepath.Join(src, "HEAD")); err != nil || st.IsDir() {
+		return nil
+	}
+	if err := h.init(ctx); err != nil {
+		return err
+	}
+	_, err := h.git(ctx, nil, "ARK", "fetch", "--quiet", "--no-tags", src, "+refs/ark/*:refs/ark/*")
+	return err
+}

@@ -9,7 +9,7 @@
 </head>
 <body>
   <div class="frame">
-  <header class="titlebar" data-tauri-drag-region="deep"><span class="titlebar-name" data-i18n="settings.window_title">ARK Studio · Settings</span></header>
+  <header class="titlebar" data-tauri-drag-region="deep"><span class="titlebar-name" data-i18n="settings.window_title">ARK Studio · App settings</span></header>
   <div class="content settings-content" data-tauri-drag-region="deep">
   <main class="shell settings-shell">
     <header class="brand">
@@ -18,6 +18,14 @@
         <img src="brand/ark-lockup-loading.svg" alt="ARK Studio" height="44">
       </picture>
     </header>
+
+    <section id="sec-scope" class="card scope-card" aria-labelledby="scope-title">
+      <h2 id="scope-title" data-i18n="scope.title">Settings of this app</h2>
+      <p class="lead" data-i18n="scope.lead">Servers, start-up, data and updates of ARK Studio on this computer. Project, personal and admin settings belong to each ARK server: open them from Settings in ARK.</p>
+      <div class="row">
+        <button type="button" id="open-web-settings" class="btn" data-i18n="scope.open_web">Open the settings of this computer's ARK</button>
+      </div>
+    </section>
 
     <div id="notice" class="note hidden" role="status"></div>
 
@@ -117,7 +125,7 @@
       </div>
       <label id="auto-check-row" class="check hidden">
         <input id="auto-check" type="checkbox">
-        <span data-i18n="about.auto_check">Check for updates when ARK Studio starts (once a day)</span>
+        <span data-i18n="about.auto_check">Check for updates automatically (at start and every 12 hours)</span>
       </label>
     </section>
 

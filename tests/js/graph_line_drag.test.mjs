@@ -45,7 +45,7 @@ async function fixture(layout = "force") {
     "./physics.js": ["normalizeGraphPhysics", "GRAPH_DEFAULTS"],
     "./mind-settings.js": ["getMindSettings"],
     "./shortcuts.js": ["getTagShortcuts", "shortcutMatches"],
-    "./markers.js": ["MARKERS", "markersFor", "markerArc"],
+    "./markers.js": ["markersFor", "markerArc", "markerMenuChildren", "toggleMarkerChange", "isMarkerTag"],
     "./context-menu.js": ["openContextMenu"],
     "./image-copy.js": ["imageCopyMenuItems"],
     "./api.js": ["authenticatedUrl"],
@@ -53,8 +53,11 @@ async function fixture(layout = "force") {
     "./assign-menu.js": ["assignMenuItem"],
     "./export-menu.js": ["exportBundleMenuItem"],
     "./node-history.js": ["historyMenuItem"],
+    "./locate-map.js": ["locateInMapItem", "isLocateShortcut", "locateShortcut", "locateUnit"],
+    "./locate-map-model.js": ["locateCamera"],
     "./presence-ui.js": ["attachPresenceOverlay", "createPresenceChip"],
     "./selection-model.js": ["siblingGroup", "groupDefaults"],
+    "./read-edit-mode.js": ["rememberMode", "savedMode"],
   };
   const nodeLayout = await loadNodeGraphLayout(context);
   const nodeCard = await loadNodeCard(context);

@@ -14,14 +14,49 @@ const ACTIVE = ["starting", "running", "idle", "stopping"];
 const isActive = (session) => Boolean(session) && ACTIVE.includes(session.status);
 const text = (value, max) => String(value ?? "").trim().slice(0, max);
 
-/** Stored sidebar state: the open session and the provider/model for a new one. */
+export const MAX_PROJECT_SESSIONS = 40;
+
+/**
+ * Stored sidebar state: the open session, the one open per project
+ * (`byProject`, so switching projects and back reopens it) and the
+ * provider/model for a new one.
+ */
 export function normalizeSidebarPrefs(raw) {
   const src = raw && typeof raw === "object" ? raw : {};
+  const byProject = {};
+  const stored = src.byProject && typeof src.byProject === "object" ? src.byProject : {};
+  for (const [project, id] of Object.entries(stored).slice(-MAX_PROJECT_SESSIONS)) {
+    if (project && project.length <= 80 && typeof id === "string") byProject[project] = text(id, 80);
+  }
   return {
     sessionId: text(src.sessionId, 80),
     platform: text(src.platform, 60),
     model: text(src.model, 80),
+    byProject,
   };
+}
+
+/** Prefs after opening session `id` ("" = a new one) in `project`. */
+export function withProjectSession(prefs, project, id) {
+  const byProject = { ...(prefs?.byProject || {}) };
+  if (project) {
+    delete byProject[project];   // re-inserted last: the newest stays when capped
+    byProject[project] = id || "";
+  }
+  return { sessionId: id || "", byProject };
+}
+
+/**
+ * The session the sidebar shows for a fresh list: the one open before
+ * while it exists; after a project switch, the one last open in that
+ * project; else none (a new session).
+ */
+export function sessionForList(sessions = [], { selected = "", prefs = null, project = "", switched = false } = {}) {
+  const has = (id) => Boolean(id) && sessions.some((session) => session.id === id);
+  if (!switched && has(selected)) return selected;
+  const remembered = prefs?.byProject?.[project] || "";
+  if (has(remembered)) return remembered;
+  return switched ? NEW_SESSION : sidebarSelection(sessions, selected);
 }
 
 function storage() {
@@ -229,6 +264,16 @@ export function turnRunning(session) {
   return !(session.capabilities?.stream_input && session.status === "idle");
 }
 
+/**
+ * Between turns with sub-agents or background tasks running (busy), the
+ * empty composer's button is "Stop background tasks…": a choice to stop
+ * them or end the session.  Enter still sends at once.
+ */
+export function stopBackgroundMode(session, busy = null, { hasContent = false } = {}) {
+  if (hasContent || !session || turnRunning(session) || !LIVE.includes(session.status)) return false;
+  return Boolean(busy && (busy.subagents || busy.background));
+}
+
 /** Label key of the Stop button: stop the turn, end a waiting session, or stop. */
 export function stopLabelKey(session) {
   if (!session?.capabilities?.stream_input) return "tasks.stop";
@@ -261,7 +306,12 @@ export function imageContext(images = []) {
 export const TABS_STORE_KEY = "ark.session.agentTabs.v1";
 export const MAX_AGENT_TABS = 12;
 
-/** Open sub-agent tabs per session: { [sessionId]: { tabs: [{ id, label }], active } } */
+/**
+ * Tabs of a session's conversation pane: { [sessionId]: { tabs: [{ id,
+ * label, kind }], active } }.  kind "agent": a sub-agent of the session (its
+ * Task call id, read-only); kind "session": another ARK session opened next
+ * to it (a fork, with its own composer).  active "" is the main conversation.
+ */
 export function normalizeAgentTabs(raw) {
   const out = {};
   const src = raw && typeof raw === "object" ? raw : {};
@@ -269,7 +319,7 @@ export function normalizeAgentTabs(raw) {
     const tabs = (Array.isArray(value?.tabs) ? value.tabs : [])
       .filter((tab) => tab && typeof tab.id === "string" && /^[A-Za-z0-9_.:-]{1,120}$/.test(tab.id))
       .slice(-MAX_AGENT_TABS)
-      .map((tab) => ({ id: tab.id, label: String(tab.label || "").slice(0, 80) }));
+      .map((tab) => ({ id: tab.id, label: String(tab.label || "").slice(0, 80), kind: tab.kind === "session" ? "session" : "agent" }));
     const active = tabs.some((tab) => tab.id === value?.active) ? value.active : "";
     if (tabs.length) out[sessionId] = { tabs, active };
   }
@@ -279,7 +329,9 @@ export function normalizeAgentTabs(raw) {
 export function openAgentTab(store, sessionId, tab) {
   const next = normalizeAgentTabs(store);
   const entry = next[sessionId] || { tabs: [], active: "" };
-  if (!entry.tabs.some((item) => item.id === tab.id)) entry.tabs = [...entry.tabs, { id: tab.id, label: String(tab.label || "").slice(0, 80) }].slice(-MAX_AGENT_TABS);
+  if (!entry.tabs.some((item) => item.id === tab.id)) {
+    entry.tabs = [...entry.tabs, { id: tab.id, label: String(tab.label || "").slice(0, 80), kind: tab.kind === "session" ? "session" : "agent" }].slice(-MAX_AGENT_TABS);
+  }
   entry.active = tab.id;
   next[sessionId] = entry;
   return next;
@@ -325,4 +377,65 @@ export function sessionViewMode(state = {}, { shell = true } = {}) {
 /** Session properties apply on Execute › Runs only (the node inspector elsewhere). */
 export function sessionPropsApplies(state = {}) {
   return onRunsPage(state);
+}
+
+// --------------------------------------------------------- session contexts
+/**
+ * The stored-contexts section under the session list: rows not already in
+ * the list (external uploads, copies, sessions no longer listed), their
+ * count, and the stored total (ARK transcripts and uploads).
+ */
+export function contextSection(items = [], listedIds = []) {
+  const listed = new Set(listedIds);
+  const rows = items.filter((item) => item.source === "external" || !listed.has(item.id));
+  const total = items.reduce((sum, item) => sum + (Number(item.bytes) || 0), 0);
+  const sizes = {};
+  for (const item of items) if (listed.has(item.id)) sizes[item.id] = Number(item.bytes) || 0;
+  const listedItems = items.filter((item) => item.source !== "external" && listed.has(item.id));
+  return { rows, count: rows.length, total, sizes, listed: listedItems };
+}
+
+// ------------------------------------------------------- collapsible blocks
+export const BLOCKS_STORE_KEY = "ark.sessionList.blocks.v1";
+export const BLOCK_DEFAULTS = { list: true, groups: false, contexts: true };
+
+export function loadBlocks(store = storage()) {
+  try {
+    const raw = JSON.parse(store?.getItem(BLOCKS_STORE_KEY) || "{}");
+    const out = { ...BLOCK_DEFAULTS };
+    for (const key of Object.keys(BLOCK_DEFAULTS)) if (typeof raw[key] === "boolean") out[key] = raw[key];
+    return out;
+  } catch { return { ...BLOCK_DEFAULTS }; }
+}
+
+export function toggleBlock(key, store = storage()) {
+  const next = { ...loadBlocks(store), [key]: !loadBlocks(store)[key] };
+  try { store?.setItem(BLOCKS_STORE_KEY, JSON.stringify(next)); } catch { /* storage disabled */ }
+  return next;
+}
+
+/** The open tab of a session: { kind: "main" | "agent" | "session", id }. */
+export function activeTabOf(store, sessionId) {
+  const entry = normalizeAgentTabs(store)[sessionId];
+  const tab = entry?.tabs.find((item) => item.id === entry.active);
+  return tab ? { kind: tab.kind, id: tab.id } : { kind: "main", id: "" };
+}
+
+// ------------------------------------------------- tab groups (forks)
+/**
+ * A fork opens as a tab of the session it came from.  The strip belongs to
+ * the group's root: the session itself, or for a fork the session it was
+ * forked from when that one has the fork as a tab.
+ */
+export function tabRoot(store, sessionId) {
+  const tabs = normalizeAgentTabs(store);
+  for (const [root, entry] of Object.entries(tabs)) {
+    if (root !== sessionId && entry.tabs.some((tab) => tab.kind === "session" && tab.id === sessionId)) return root;
+  }
+  return sessionId;
+}
+
+/** Open (or focus) a fork tab in `root`'s strip. */
+export function openForkTab(store, root, fork) {
+  return openAgentTab(store, root, { id: fork.id, label: fork.label, kind: "session" });
 }

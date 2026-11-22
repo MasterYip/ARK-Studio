@@ -8,6 +8,7 @@
 import { api } from "./api.js";
 import { h } from "./dom.js";
 import { t } from "./i18n.js";
+import { railChip } from "./filter-chip-menu.js";
 import { displayName, paintAvatar, registerUserPainter, userCard, userLabel, userName } from "./users.js";
 
 const cache = { project: "", data: null, promise: null };
@@ -164,13 +165,16 @@ export function assigneeFilterSection(ctx, facets = {}) {
   for (const user of loaded?.users || []) names.add(user.username);
   // Assignees who left the project still filter, marked as no longer members.
   const member = (name) => !loaded || (loaded.users || []).some((u) => u.username.toLowerCase() === name.toLowerCase());
+  const base = [];
   const chip = (value, label, count, extra = null) => {
     const on = selected.has(value);
-    return h("button", {
+    base.push(value);
+    // The group menu (filter-chip-menu.js) reads `base` once every chip is drawn.
+    return railChip(ctx, h("button", {
       type: "button", class: `type-chip ${on ? "on" : ""}`.trim(), "aria-pressed": String(on),
-      dataset: { assigneeFilter: value },
+      dataset: { assigneeFilter: value, filterGroup: "assignees", value },
       onclick: () => ctx.toggleFilterValue("assignees", value),
-    }, extra, label, h("span", { class: "n" }, count ?? 0));
+    }, extra, label, h("span", { class: "n" }, count ?? 0)), "assignees", base, value);
   };
   const wrap = h("div", { class: "type-filter assignee-filter" });
   if (me) wrap.appendChild(chip("me", t("assignee.me"), counts[me] ?? 0, assigneeChip({ assignee: me })));

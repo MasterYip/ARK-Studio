@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 应用更新（android/shared/update）。 -->
+<resources>
+    <string name="update_title">关于与更新</string>
+    <string name="update_back">返回</string>
+    <string name="update_version">版本 %1$s（%2$d）</string>
+    <string name="update_built_from">基于 ARK %1$s 构建</string>
+    <string name="update_source_line">更新来自 %1$s；该服务器没有安装包时改用 GitHub 发布。</string>
+    <string name="update_source_github_only">更新来自 GitHub 发布。</string>
+    <string name="update_auto">每天自动检查更新</string>
+    <string name="update_auto_detail">每个新版本只通知一次。</string>
+    <string name="update_check">检查更新</string>
+    <string name="update_checking">正在检查更新…</string>
+    <string name="update_last_check">上次检查：%1$s</string>
+    <string name="update_latest">已是最新版本。</string>
+    <string name="update_available">有新版本 %1$s。</string>
+    <string name="update_unknown">有可下载的版本 %1$s，下载后再核对版本号。</string>
+    <string name="update_none_found">没有找到可下载的安装包。</string>
+    <string name="update_offline">连不上服务器和 GitHub，请稍后再试。</string>
+    <string name="update_from_server">来自当前服务器</string>
+    <string name="update_from_github">来自 GitHub 发布</string>
+    <string name="update_install">下载并安装</string>
+    <string name="update_downloading">正在下载… %1$d%%</string>
+    <string name="update_verifying">正在校验下载的文件…</string>
+    <string name="update_installing">正在安装…</string>
+    <string name="update_bad_checksum">下载的文件与公布的 SHA-256 校验值不符，已删除，请重试。</string>
+    <string name="update_no_checksum">这个版本没有公布 SHA-256 校验值</string>
+    <string name="update_failed">更新失败：%1$s</string>
+    <string name="update_unreadable">Android 无法读取下载的安装包。</string>
+    <string name="update_wrong_package">下载的是另一个应用（%1$s）。</string>
+    <string name="update_not_newer">下载的版本（%1$d）不比已安装的版本（%2$d）新。</string>
+    <string name="update_mismatch_title">此更新的签名与已安装的应用不同</string>
+    <string name="update_mismatch_body">只有与已安装应用使用同一密钥签名的更新，Android 才会安装。这个版本（%1$s）使用了另一个密钥签名，例如测试版与正式发布版。如需更换，请先卸载 ARK Studio，再从下载页安装新的安装包，之后在这台手机上重新登录。</string>
+    <string name="update_permission_title">允许安装更新</string>
+    <string name="update_permission_body">安装更新需要你授权一次：为本应用打开“允许来自此来源的应用”，然后返回。</string>
+    <string name="update_permission_go">打开设置</string>
+    <string name="update_channel">应用更新</string>
+    <string name="update_channel_desc">应用有新版本可用</string>
+    <string name="update_notify_title">有可用更新</string>
+    <string name="update_notify_text">新版本 %1$s 可以安装。</string>
+</resources>

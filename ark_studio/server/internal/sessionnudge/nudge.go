@@ -27,6 +27,7 @@ type Session struct {
 	ProjectID string
 	User      string // the account it acts for
 	Idle      bool   // running and quiet for a while
+	Busy      bool   // between turns, but its sub-agents or background tasks still run
 	Accepts   bool   // takes follow-up input
 	Stopped   bool   // finished recently and can be resumed with a new turn
 	Watching  bool   // a watcher of its own is waiting on the update feed
@@ -89,7 +90,7 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 			}
 			continue
 		}
-		if !(s.Idle && s.Accepts) && !s.Stopped {
+		if !(s.Idle && s.Accepts && !s.Busy) && !s.Stopped {
 			continue // the agent is working: keep the cursor, nudge when it rests
 		}
 		b, err := n.D.Since(ctx, s, c.after)

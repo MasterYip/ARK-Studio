@@ -661,6 +661,8 @@ export const api = {
   projects: () => request("/api/projects"),
   createProject: (body) => request("/api/projects", { method: "POST", body }),
   openProject: (body) => request("/api/projects/open", { method: "POST", body, write: false }),
+  // The person looked at the Needs you list (all) or some of its items (project picker badges).
+  markNeedsSeen: (body) => request("/api/needs/seen", { method: "POST", body, write: false }),
   updateProject: (body) => request("/api/project", { method: "PATCH", body }),
   deleteProject: (body) => request("/api/project", { method: "DELETE", body }),
   updateSettings: (body) => request("/api/project/settings", { method: "PATCH", body }),
@@ -772,6 +774,11 @@ export const api = {
   restoreUnit: (id) => request(`/api/units/${encodeURIComponent(id)}/restore`, { method: "POST", body: {} }),
   // Recycle bin: deleted nodes (archiveUnit puts them there).
   trash: () => request("/api/trash"),
+  // Go only (routes_projectmove.go): split a project, merge it into another.
+  projectMoveClusters: () => request("/api/project-move/clusters"),
+  movePlanCreate: (body) => request("/api/project-move/plans", { method: "POST", body }),
+  movePlan: (id) => request(`/api/project-move/plans/${encodeURIComponent(id)}`),
+  movePlanAction: (id, action, body = {}) => request(`/api/project-move/plans/${encodeURIComponent(id)}/${action}`, { method: "POST", body }),
   purgeUnit: (id) => request(`/api/trash/${encodeURIComponent(id)}`, { method: "DELETE" }),
   emptyTrash: () => request("/api/trash", { method: "DELETE" }),
   insertBetween: (id, body = {}) => request(`/api/units/${encodeURIComponent(id)}/insert-between`, { method: "POST", body }),
@@ -879,11 +886,15 @@ export const api = {
   // Agent rules (Settings > Agents and Personal AI; the Home starter prompts).
   agentRules: () => request("/api/agent-rules"),
   saveAgentRules: (scope, settings) => request("/api/agent-rules", { method: "POST", body: { scope, settings } }),
+  prompts: () => request("/api/prompts"),
+  promptsPost: (body) => request("/api/prompts", { method: "POST", body }),
   previewAgentRules: (scope, settings) => request("/api/agent-rules", { method: "POST", body: { scope, settings, dry_run: true }, write: false }),
   // Experimental agent messages (agent-messages.js; docs/development/agent-messaging.md).
   agentMessages: (unit = "") => request(`/api/agent-messages${unit ? `?unit=${encodeURIComponent(unit)}` : ""}`),
   sendAgentMessage: (body) => request("/api/agent-messages", { method: "POST", body }),
   createAgentToken: (body) => request("/api/personal/agent-tokens", { method: "POST", body }),
+  // Home starter-prompt token: mode copy | new | peek | cleanup (org/starter_tokens.go).
+  starterToken: (body) => request("/api/personal/agent-tokens", { method: "POST", body: { purpose: "starter", ...body } }),
   revokeAgentToken: (id) => request(`/api/personal/agent-tokens/${encodeURIComponent(id)}`, { method: "DELETE" }),
 
   gpuStatus: () => request("/api/gpu/status"),
@@ -894,6 +905,8 @@ export const api = {
   gpuDashboard: (options = {}) => request("/api/gpu/dashboard", options),
   resourcesGraph: (options = {}) => request("/api/resources/graph", options),
   resourceDevicePrivacy: (id, body) => request(`/api/resources/devices/${encodeURIComponent(id)}`, { method: "POST", body }),
+  resourcesConnect: () => request("/api/resources/connect"),
+  resourceConnectSave: (id, body) => request(`/api/resources/connect/${encodeURIComponent(id)}`, { method: "POST", body }),
   blackbox: () => request("/api/blackbox"),
   blackboxSnapshot: (reason = "manual") => request("/api/blackbox", {
     method: "POST", body: { reason },
@@ -957,6 +970,9 @@ export const api = {
     { method: "POST", body: {} }),
   deleteSession: (id) => request(`/api/agent-sessions/${encodeURIComponent(id)}`, { method: "DELETE" }),
   renameSession: (id, title) => request(`/api/agent-sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: { title } }),
+  closeSession: (id) => request(`/api/agent-sessions/${encodeURIComponent(id)}`, { method: "PATCH", body: { closed: true } }),
+  archiveSessionEnded: (id) => request(`/api/agent-sessions/${encodeURIComponent(id)}/archive`, { method: "POST", body: { end: true } }),
+  deleteSessionEnded: (id) => request(`/api/agent-sessions/${encodeURIComponent(id)}?end=1`, { method: "DELETE" }),
   sessionLogs: (id, stream = "stdout", offset = 0, limit = 300) => request(
     `/api/agent-sessions/${encodeURIComponent(id)}/logs${qs({ stream, offset, limit })}`),
   // query: { tail, known, agent, item } (a page of items, an unchanged marker,
@@ -1131,7 +1147,7 @@ export async function clearClientData({ signOut = true } = {}) {
     try {
       localStorage.removeItem("ark.cache.identity");
       localStorage.removeItem("ark.cache.lastProject");
-      // Home starter tokens kept for Copy prompt (starter-token-store.js).
+      // Starter token values older builds kept here (starter-token-store.js).
       clearStarterTokens(localStorage);
     } catch { /* storage disabled */ }
   }

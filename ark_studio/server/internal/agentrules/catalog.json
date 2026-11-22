@@ -26,8 +26,8 @@
       "id": "task-node", "kind": "required", "scope": "ark", "order": 20,
       "title": {"en": "One task unit per request", "zh": "一个请求一个任务节点"},
       "text": {
-        "en": "One request is one task unit (POST /api/agent/v1/units, type: \"task\") with the plan in its body (goal, my request verbatim, steps, evaluation protocol, decision gates, timeline), linked derived_from the question or parent task it comes from (POST /api/agent/v1/links). Status: open → active → review or blocked → done.",
-        "zh": "一个请求就是一个任务节点（POST /api/agent/v1/units，type: \"task\"），计划写在正文里（目标、我的原话请求、步骤、评估协议、决策关卡、时间线），以 derived_from 关联到它所来自的问题或上级任务（POST /api/agent/v1/links）。状态：open → active → review 或 blocked → done。"
+        "en": "One request is one task unit (POST /api/agent/v1/units, type: \"task\") with the plan in its body (goal, my request verbatim, steps, evaluation protocol, decision gates, timeline), linked part_of the line, topic or parent task it belongs to (POST /api/agent/v1/links; derived_from the question it comes from as well, for provenance). Status: open → active → review or blocked → done.",
+        "zh": "一个请求就是一个任务节点（POST /api/agent/v1/units，type: \"task\"），计划写在正文里（目标、我的原话请求、步骤、评估协议、决策关卡、时间线），以 part_of 关联到它所属的主线、主题或上级任务（POST /api/agent/v1/links；另以 derived_from 关联它所来自的问题，记录来源）。状态：open → active → review 或 blocked → done。"
       }
     },
     {
@@ -50,8 +50,8 @@
       "id": "needs-you", "kind": "required", "scope": "ark", "order": 50,
       "title": {"en": "Hand-offs go to Needs you", "zh": "交付进入“待你处理”"},
       "text": {
-        "en": "Needs you: whenever you hand me something (a result, a plan to approve, versions to choose from), set that unit's status to review so it appears in Needs you; a question for me is a decision unit left open. Never leave it only in chat, a comment or a body, and never set a review unit to done yourself: I Accept or Send back in ARK.",
-        "zh": "待你处理：每当你交给我东西（结果、待批准的计划、待选择的版本），把那个节点的状态设为 review，让它出现在“待你处理”中；需要我回答的问题是一个保持未完成的决定节点。不要只写在对话、评论或正文里，也绝不要自己把 review 节点设为 done：由我在 ARK 中接受或退回。"
+        "en": "Needs you: whenever you hand me something (a result, a plan to approve, versions to choose from), set that unit's status to review so it appears in Needs you; a question for me is a decision unit left open. Each time you set status review, send review_note with it: one to three lines saying what to look at and what changed, with anchors to the exact places (`[heading](#slug)`, `T-0042#slug`, `media:<id>@0:08-0:12`); never just \"see the body\". Never leave it only in chat, a comment or a body, and never set a review unit to done yourself: I Accept or Send back in ARK.",
+        "zh": "待你处理：每当你交给我东西（结果、待批准的计划、待选择的版本），把那个节点的状态设为 review，让它出现在“待你处理”中；需要我回答的问题是一个保持未完成的决定节点。每次设为 review 时同时提交 review_note（本次请看）：1–3 行，说明这次请看什么、改了什么，并用锚点指到具体位置（`[heading](#slug)`、`T-0042#slug`、`media:<id>@0:08-0:12`）；不要只写“见正文”。不要只写在对话、评论或正文里，也绝不要自己把 review 节点设为 done：由我在 ARK 中接受或退回。"
       }
     },
     {
@@ -213,6 +213,7 @@
         "en": "When you start sub-agents, use {{worker_model}}; if it is not available, say so and do not substitute another model.",
         "zh": "启动子代理时使用 {{worker_model}}；如果不可用，直接说明，不要换用其他模型。"
       }
-    }
+    },
+    {"id": "review-groups", "kind": "preference", "scope": "project", "order": 220, "default": true, "title": {"en": "One delivery, one review", "zh": "一次交付，一次审阅"}, "text": {"en": "One delivery, one review: when one delivery puts two or more different units up for review, submit one review group (POST /api/agent/v1/reviews {title, summary, review_note, members}) with an anchored review_note, and do not also set the members to review. A single unit is set to review with its review_note; never create a group of one.", "zh": "一次交付，一次审阅：一次交付让两个或更多不同节点需要审阅时，提交一个审阅组（POST /api/agent/v1/reviews {title, summary, review_note, members}），附带有锚点的 review_note，不要再把各成员设为 review。只有一个节点时把它设为 review 并附 review_note；绝不要建只有一个成员的组。"}, "off_text": {"en": "When one delivery puts several units up for review, set each to review with its own anchored review_note.", "zh": "一次交付有多个节点需要审阅时，把每个节点设为 review，各自附带有锚点的 review_note。"}}
   ]
 }

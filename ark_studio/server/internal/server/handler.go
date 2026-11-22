@@ -150,6 +150,8 @@ var replayClockOn = func() bool {
 func (c *reqCtx) handleError(err error) {
 	var api *ApiError
 	var se *store.Error
+	var moved *store.MovedError
+	var merged *store.MergedError
 	var pe *project.Error
 	var oe *org.Error
 	var ve *pyerr.ValueError
@@ -163,6 +165,10 @@ func (c *reqCtx) handleError(err error) {
 		} else {
 			c.fail(api.Status, api.Message, api.Code)
 		}
+	case errors.As(err, &moved): // store/move.go: a write to a moved unit
+		c.fail(409, moved.Error(), "UNIT_MOVED")
+	case errors.As(err, &merged): // store/move.go: a merged project is read-only
+		c.fail(409, merged.Error(), "PROJECT_MERGED")
 	case errors.As(err, &se):
 		c.fail(400, se.Message, "")
 	case errors.As(err, &pe):

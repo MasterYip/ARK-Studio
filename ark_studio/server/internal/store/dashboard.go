@@ -398,11 +398,17 @@ func (s *Store) previewMediaBatch(ctx context.Context, q sqlitedb.Querier, idLis
 	return result, nil
 }
 
+// The units Needs you lists: in review, or open decisions (needsopen.go).
+var needsYouWhere = needsYouCond("")
+
+const (
+	needsYouOrder = `
+                   ORDER BY CASE WHEN type='decision' THEN 0 ELSE 1 END, updated_at DESC, id DESC`
+)
+
 // needsYou is Store.needs_you.
 func (s *Store) needsYou(ctx context.Context, q sqlitedb.Querier) ([]any, error) {
-	rows, err := sqlitedb.Query(ctx, q, `SELECT * FROM units WHERE archived=0
-                   AND (status='review' OR (type='decision' AND status!='done'))
-                   ORDER BY CASE WHEN type='decision' THEN 0 ELSE 1 END, updated_at DESC, id DESC`)
+	rows, err := sqlitedb.Query(ctx, q, "SELECT * FROM units WHERE "+needsYouWhere+needsYouOrder)
 	if err != nil {
 		return nil, err
 	}

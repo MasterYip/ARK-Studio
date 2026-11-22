@@ -185,7 +185,7 @@ func needsPending(typeName, status string, archived bool) string {
 	if status == "review" {
 		return "review"
 	}
-	if typeName == "decision" && status != "done" && status != "abandoned" && status != "archived" {
+	if IsOpenDecision(typeName, status) {
 		return "decision"
 	}
 	return ""

@@ -281,6 +281,7 @@ async function init() {
       await saveRoots([...(state.settings.localOpenRoots || []), picked]);
     }
   });
+  $("open-web-settings").addEventListener("click", () => invoke("open_local_settings").catch((err) => showStatus("local", splitError(err).message, { error: true })));
   $("check-update").addEventListener("click", checkUpdate);
   $("install-update").addEventListener("click", installUpdate);
   $("download-update").addEventListener("click", () => invoke("open_releases", { version: state.update?.available || null }));
@@ -299,6 +300,10 @@ async function init() {
     $("local-root").focus({ preventScroll: true });
   } else if (view === "about") {
     $("sec-about").scrollIntoView({ block: "start" });
+  } else if (view === "window") {
+    $("sec-window").scrollIntoView({ block: "start" });
+  } else if (view === "data") {
+    $("sec-data").scrollIntoView({ block: "start" });
   }
 }
 

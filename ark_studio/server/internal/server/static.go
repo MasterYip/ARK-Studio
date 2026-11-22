@@ -36,6 +36,31 @@ func VersionedHTML(text, version string) string {
 	return htmlAssetRe.ReplaceAllString(text, "${1}${2}?v="+version+"${3}")
 }
 
+// ReleaseMeta adds <meta name="ark-version"> (Settings › About) after the
+// ark-build meta when the server knows its release version.
+func ReleaseMeta(text, release string) string {
+	release = strings.Map(func(r rune) rune {
+		if r < 128 && (r == '.' || r == '+' || r == '-' || ('0' <= r && r <= '9') || ('a' <= r && r <= 'z') || ('A' <= r && r <= 'Z')) {
+			return r
+		}
+		return -1
+	}, release)
+	if len(release) > 40 {
+		release = release[:40]
+	}
+	const build = `<meta name="ark-build" content="`
+	at := strings.Index(text, build)
+	if release == "" || at < 0 {
+		return text
+	}
+	end := strings.Index(text[at:], ">")
+	if end < 0 {
+		return text
+	}
+	at += end + 1
+	return text[:at] + "\n  <meta name=\"ark-version\" content=\"" + release + "\">" + text[at:]
+}
+
 // VersionedJS is server._versioned_js.
 func VersionedJS(source, version string) string {
 	for _, re := range jsAssetRes {
@@ -207,7 +232,7 @@ func (c *reqCtx) static() error {
 	var transform func(string, string) string
 	switch {
 	case rel == "index.html":
-		transform = indexHTML(c.app.Assets)
+		transform = indexHTML(c.app.Assets, c.app.Cfg.ReleaseVersion)
 	case suffix == ".html":
 		transform = VersionedHTML
 	case suffix == ".js":

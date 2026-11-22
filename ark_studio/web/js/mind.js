@@ -3,6 +3,7 @@ import { api } from "./api.js";
 import { t, relLabel } from "./i18n.js";
 import { confirmDialog } from "./components.js";
 import { mediaSource } from "./editor-media.js";
+import { saveMarkerChange } from "./marker-actions.js";
 
 const GRAPH_LAYOUTS = new Set(["force", "tree", "mind", "node"]);
 
@@ -238,7 +239,7 @@ export function mindGraphOptions(ctx) {
     // A graph of this project's units (multi-selection inspector, app.js).
     projectUnits: true,
     mode: ctx.S.graphMode || undefined,
-    onModeChange: (mode) => ctx.syncInspectorMode?.(mode),
+    onModeChange: (mode, options) => ctx.syncInspectorMode?.(mode, options),
     getSelectedId: () => ctx.S.selectedId,
     onInsertBetween: async (node) => {
       try {
@@ -323,6 +324,8 @@ export function mindGraphOptions(ctx) {
       }
       return created;
     },
+    // Markers: one batch for all target nodes, one undo step (marker-actions.js).
+    onMarkers: (nodes, change) => saveMarkerChange(ctx, nodes.map(uidOf), change),
     onAddTag: async (nodes, tag) => {
       for (const node of nodes) {
         const data = await api.unit(uidOf(node));

@@ -92,7 +92,8 @@ func (c *reqCtx) guardPublicAuth() error {
 		// and is pinned to the paired project (_guard_mobile narrows it next).
 		c.bindMobile(ms.User, ms)
 	}
-	if publicAuthPaths[c.path] || loginAssets[c.path] || session != nil || ms != nil {
+	// The Android update manifest is as public as the APKs (app_manifest.go).
+	if publicAuthPaths[c.path] || loginAssets[c.path] || c.path == appManifestPath || session != nil || ms != nil {
 		return nil
 	}
 	if ts := c.taskReadSession(); ts != nil && strings.HasPrefix(c.path, "/api/task-agent/") {
@@ -115,7 +116,13 @@ func (c *reqCtx) guardProjectScope() error {
 		return nil
 	}
 	// Go-only desktop-link routes check their own access (routes_desktop.go).
-	if path == desktopLinkPath || path == mobile.DesktopProjectsPath {
+	// The notification feed covers the person's projects (notifications.go).
+	if path == desktopLinkPath || path == mobile.DesktopProjectsPath || path == notificationsPath {
+		return nil
+	}
+	// The prompt library checks per scope: a person's own prompts and pins
+	// need read access, the project's need an admin (routes_prompts.go).
+	if path == promptsPath {
 		return nil
 	}
 	for _, p := range globalAPIPrefixes {

@@ -117,3 +117,75 @@ func (h Handlers) DevicePost(c api.Ctx, path string, body *pyjson.Object) (bool,
 	c.OK(pyjson.NewObject("device", saved))
 	return true, nil
 }
+
+// ConnectPath is GET /api/resources/connect (Go only, 2026-11-22): the SSH
+// connections of the viewer's graph devices (resources.Connections).
+const ConnectPath = "/api/resources/connect"
+
+var reConnect = api.PyRe(`/api/resources/connect/([^/]+)`, true)
+
+// Connect is GET /api/resources/connect.
+func (h Handlers) Connect(c api.Ctx) error {
+	p, err := c.Require("read")
+	if err != nil {
+		return err
+	}
+	src, err := h.sources(c, p)
+	if src == nil || err != nil {
+		return err
+	}
+	graph, err := resdom.BuildGraph(src, c.Actor())
+	if err != nil {
+		return err
+	}
+	saved, err := resdom.SSHSettings(c.Context(), h.Deps.Org, c.Actor())
+	if err != nil {
+		return err
+	}
+	out := resdom.Connections(graph, src, saved)
+	out.Set("can_save", h.Deps.Org != nil && c.Actor() != "")
+	c.OK(out)
+	return nil
+}
+
+// ConnectPost is POST /api/resources/connect/<device id> {alias, host, user,
+// port} (raw path): the viewer's own entry for a device of their graph; an
+// empty body removes it.  False for other paths.
+func (h Handlers) ConnectPost(c api.Ctx, path string, body *pyjson.Object) (bool, error) {
+	m := reConnect.FindStringSubmatch(path)
+	if m == nil {
+		return false, nil
+	}
+	deviceID := pyurl.Unquote(m[1])
+	p, err := c.Require("read")
+	if err != nil {
+		return true, err
+	}
+	actor := c.Actor()
+	src, err := h.sources(c, p)
+	if src == nil || err != nil {
+		return true, err
+	}
+	graph, err := resdom.BuildGraph(src, actor)
+	if err != nil {
+		return true, err
+	}
+	saved, err := resdom.SSHSettings(c.Context(), h.Deps.Org, actor)
+	if err != nil {
+		return true, err
+	}
+	// A device that left the graph can still be cleared.
+	if !resdom.VisibleDevice(graph, deviceID) && !saved.Has(deviceID) {
+		return true, api.Err(404, "device not found", "RESOURCES_DEVICE_NOT_FOUND")
+	}
+	result, err := resdom.SetSSH(c.Context(), h.Deps.Org, actor, deviceID, body)
+	var re *resdom.Error
+	if errors.As(err, &re) {
+		return true, api.Err(re.Status, re.Message, re.Code)
+	}
+	if err != nil {
+		return true, err
+	}
+	c.OK(result)
+	return true, nil
+}

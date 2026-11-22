@@ -57,7 +57,21 @@ export function renderTasks(host, ctx) {
   const sessionOnly = phone && S.taskView === "sessions";
   // Execute › Runs on a wide window: a compact header, the conversation below.
   const fullSession = S.taskView === "sessions" && shellActive();
-  const page = h("div", { class: `page ${sessionOnly ? "mobile-session-page" : ""} ${fullSession ? "session-full-page" : ""}`.trim() },
+  if (fullSession || sessionOnly) {
+    // Execute › Runs on a wide window is the chat: its page actions live in
+    // the Sessions view's "+" menu (ctx.runsActions).
+    ctx.runsActions = () => [
+      { label: t("session.sidebar.new"), icon: "plus", onClick: () => openLaunchSession(ctx) },
+      { label: t("tasks.add"), icon: "tasks", onClick: () => ctx.openCreate({ type: "task", status: "open" }) },
+      { label: t("assistant.title"), icon: "check", onClick: () => ctx.openAssistant() },
+      advancedEnabled() ? { label: t("palette.cmd.import"), icon: "database", onClick: () => ctx.openImport() } : null,
+    ].filter(Boolean);
+    const page = h("div", { class: `page session-chat-page ${sessionOnly ? "mobile-session-page" : ""}`.trim() }, sessionsView(ctx, S, tasks));
+    host.appendChild(page);
+    return;
+  }
+  ctx.runsActions = null;
+  const page = h("div", { class: `page ${sessionOnly ? "mobile-session-page" : ""}`.trim() },
     h("div", { class: "page-head" },
       h("div", null,
         h("div", { class: "eyebrow" }, t("nav.execute")),
@@ -280,15 +294,23 @@ function gpuJobStatus(status) {
 }
 
 // ------------------------------------------------------------- agent sessions
+const phoneNow = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
+
 function sessionsView(ctx, S, tasks) {
   const docked = shellActive() && Boolean(ctx.sessionPage);
+  let ws = null;
   const workspace = renderSessionWorkspace(ctx, {
     tasks,
     docked,
-    library: sessionLibraryPanel(ctx, { skip: (item) => item.source !== "external" && (S.taskSessions || []).some((s) => s.id === item.id) }),
+    library: sessionLibraryPanel(ctx, {
+      compact: docked || phoneNow(),
+      listed: () => (S.taskSessions || []).map((s) => s.id),
+      onData: (section) => ws?.setStoredContexts(section),
+    }),
     related: docked ? null : h("div", { class: "session-below" }, relatedBoard(ctx, S, tasks)),
     onLaunch: (prefill) => openLaunchSession(ctx, prefill || {}),
   });
+  ws = workspace;
   const wrap = workspace.el;
   const showing = () => wrap.isConnected && S.tab === "tasks" && S.taskView === "sessions";
   // The session list comes from the shared stream: the Sessions sidebar view
@@ -302,6 +324,8 @@ function sessionsView(ctx, S, tasks) {
       else unsubscribe();
       return;
     }
+    // A list read for the project before a switch: the next one follows.
+    if (data.project && data.project !== S.project?.id) return;
     workspace.applySessions(data.sessions || [], data.groups || []);
   }, { active: showing, immediate: false });
   stopSessionsTimer();

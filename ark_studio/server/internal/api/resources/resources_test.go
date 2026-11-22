@@ -63,3 +63,27 @@ func TestGraphNeedsRead(t *testing.T) {
 		t.Fatalf("%v %v", err, c.asked)
 	}
 }
+
+func TestConnectNeedsRead(t *testing.T) {
+	for _, tc := range []struct {
+		path    string
+		handled bool
+	}{
+		{"/api/resources/connect/gpu:a", true},
+		{"/api/resources/connect/", false},
+		{"/api/resources/connect/a/b", false},
+		{"/api/resources/connect", false},
+	} {
+		c := &denyCtx{}
+		handled, err := Handlers{}.ConnectPost(c, tc.path, pyjson.NewObject())
+		var ae *api.Error
+		if handled != tc.handled || (handled && (!errors.As(err, &ae) || ae.Status != 403 || c.asked[0] != "read")) {
+			t.Errorf("%s: %v %v %v", tc.path, handled, err, c.asked)
+		}
+	}
+	c := &denyCtx{}
+	var ae *api.Error
+	if err := (Handlers{}).Connect(c); !errors.As(err, &ae) || ae.Status != 403 || c.asked[0] != "read" {
+		t.Fatalf("%v %v", err, c.asked)
+	}
+}

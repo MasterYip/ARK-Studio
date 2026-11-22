@@ -75,7 +75,8 @@ test("app.js routes #/research/review like the other Research sub-tabs", async (
   assert.match(app, /case "review": return lazyView\(host, VIEW_MODULES\.review, "renderReview"\)/);
   // Back/forward between waiting and history re-renders; a deep link sets it on boot too.
   assert.match(app, /route\.reviewView === reviewView\(S\.reviewView\)/);
-  assert.equal(app.match(/if \(route\.reviewView\) S\.reviewView = route\.reviewView;/g)?.length, 2);
+  // ... and so does a restored page after a project switch (project-state-model.js).
+  assert.equal(app.match(/if \(route\.reviewView\) S\.reviewView = route\.reviewView;/g)?.length, 3);
   const state = await read("js/state.js");
   assert.match(state, /review: "list"/);
   assert.match(state, /review: \[\]/);

@@ -19,6 +19,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"arkstudio/go/internal/platform/clock"
@@ -93,9 +94,12 @@ type Session struct {
 	lastSave       time.Time
 	logMu          sync.Mutex
 	stdinMu        sync.Mutex
+	ingestMu       sync.Mutex // one relayed output line at a time (relay.go)
 	// The run's agent token (Hooks.AgentToken), kept in memory only so
 	// output lines that echo it are redacted before they are written.
 	agentSecret string
+	// Background work between turns, as last counted by Manager.Busy (busy.go).
+	busy Busy
 }
 
 // Workspace is ManagedSession.workspace.
@@ -135,6 +139,10 @@ type Manager struct {
 	Catalog        *providers.Catalog
 	OnChange       func(s *Session, event string)
 	GuessType      func(name string) string
+	// Relay starts processes under `ark-server session-relay` so they
+	// outlive the server (relay.go); on by default on Linux.
+	Relay     bool
+	detaching atomic.Bool
 
 	mu       sync.Mutex
 	sessions map[string]*Session
@@ -173,13 +181,14 @@ func resolvePath(p string) string {
 }
 
 // Open is SessionManager.__init__ + _load_existing: sessions left active by
-// a previous process are marked stopped, exactly like Python does at start.
+// a previous process are marked stopped, exactly like Python does at start,
+// except relayed ones: Resume re-attaches or finishes those.
 func Open(root string) (*Manager, error) {
 	root = resolvePath(root)
 	if err := os.MkdirAll(filepath.Join(root, ".archived"), 0o755); err != nil {
 		return nil, err
 	}
-	m := &Manager{Root: root, IdleAfter: 90 * time.Second, sessions: map[string]*Session{}}
+	m := &Manager{Root: root, IdleAfter: 90 * time.Second, sessions: map[string]*Session{}, Relay: relaySupported()}
 	entries, err := os.ReadDir(root)
 	if err != nil {
 		return nil, err
@@ -198,7 +207,7 @@ func Open(root string) (*Manager, error) {
 		if !ok || !IDRe.MatchString(strOr(meta.Value("id"))) {
 			continue
 		}
-		if activeStatuses[strOr(meta.Value("status"))] {
+		if activeStatuses[strOr(meta.Value("status"))] && !hasRelay(folder) {
 			now := NowISO()
 			meta.Set("status", "stopped").Set("ended_at", now).Set("last_activity_at", now).
 				Set("notice", "ARK restarted; the previous process is no longer attached.")
@@ -338,10 +347,14 @@ func (m *Manager) Brief() []*pyjson.Object {
 		meta := deepCopy(s.Meta).(*pyjson.Object)
 		m.mu.Unlock()
 		status, _ := m.displayStatus(meta)
-		out = append(out, pyjson.NewObject("id", or(meta.Value("id"), s.ID), "title", or(meta.Value("title"), ""),
+		item := pyjson.NewObject("id", or(meta.Value("id"), s.ID), "title", or(meta.Value("title"), ""),
 			"status", status, "agent", or(meta.Value("agent"), ""), "platform", or(meta.Value("platform"), ""),
 			"task_ref", or(meta.Value("task_ref"), ""), "created_at", meta.Value("created_at"),
-			"last_activity_at", meta.Value("last_activity_at"), "project", objOr(meta.Value("project"))))
+			"last_activity_at", meta.Value("last_activity_at"), "project", objOr(meta.Value("project")))
+		if b := m.Busy(s); b.Any() {
+			item.Set("busy", b.public())
+		}
+		out = append(out, item)
 	}
 	return out
 }

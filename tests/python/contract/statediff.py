@@ -124,10 +124,11 @@ class StateNormalizer:
 
 # Tables only the Go server keeps, left out of the comparison: the project
 # picker's latest writer per project (ark_studio/server/internal/org/people.go).
+# What each person has seen of Needs you (ark_studio/server/internal/org/reviewseen.go).
 # Review rounds and groups (ark_studio/server/internal/store/reviewrounds.go,
 # reviewgroups.go) are created on first use.
 GO_ONLY_TABLES = ("project_last_writer", "project_invites", "org_options", "review_rounds", "review_groups",
-                  "review_group_members", "review_group_comments")
+                  "review_group_members", "review_group_comments", "review_seen", "unit_aliases")
 
 
 def _dump_sqlite(path: Path, norm: StateNormalizer) -> dict:

@@ -329,6 +329,9 @@ type liveStream struct {
 
 func (m *Manager) liveStreams() []liveStream {
 	var out []liveStream
+	if m.detaching.Load() {
+		return nil // the processes belong to the next server
+	}
 	for _, s := range m.all() {
 		m.mu.Lock()
 		if isStream(s) && s.proc != nil && s.proc.running() && !s.stopRequested {

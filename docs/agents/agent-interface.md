@@ -143,10 +143,11 @@ X-ARK-Project: <project id>             # account mode: which project to use
   Tokens may expire (never / 30 / 90 days); revoking the token, or disabling
   or deleting the account, stops it at once. Each account may hold 10 active
   tokens. Failed bearer attempts are rate-limited per client (HTTP 429).
-  Home -> "Copy prompt" rotates instead of piling up: its token is labelled
-  "Home starter prompt (<project id>) – <date>", and each copy revokes the
-  older starter tokens of that project except the previous one, so an agent
-  started from the last copy keeps working and at most two stay active.
+  Home -> "Copy prompt" uses one token per person and project, labelled
+  "Home starter prompt (<project id>) – <date>". The server keeps its value
+  encrypted and copies reuse it until it expires or is revoked; "New token"
+  revokes it and creates another. Settings -> Personal -> Agent access can
+  revoke older starter tokens that copies no longer use.
 - `GET /api/agent/v1/whoami` returns `{user, actor, token_kind, token_label,
   scope, expires_at, projects}`: who the agent acts for and which projects
   (with effective permission) it can reach. Call it first.

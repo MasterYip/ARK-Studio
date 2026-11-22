@@ -258,6 +258,18 @@ POST /api/agent/v1/units
 Update with a complete status/tag set, not both `status:open` and
 `status:done` tags. ARK validates that a unit has exactly one status.
 
+### Node markers
+
+A marker (star, flag, priority, progress, symbol) is the tag
+`marker:<id>`. `GET /api/agent/v1/markers` lists the project's marker groups
+with each marker's tag, glyph, colour and label. A node has each marker at
+most once. In an exclusive group (by default stars, flags, priority and
+progress) it has at most one marker: when a write contains several, the one
+written last stays and replaces the others. For example, adding
+`marker:star-blue` to a node with `marker:star-yellow` leaves only the blue
+star. To remove a marker, write the tags without it. Project admins edit the
+groups in Settings › Appearance › Node markers.
+
 ### Topics
 
 A topic (`type: topic`) is a node that shows a chosen subgraph of the project:

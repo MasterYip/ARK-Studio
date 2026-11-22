@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
-  SETTINGS_TABS, DEFAULT_SETTINGS_TAB, GRAPH_SECTION, resolveSettingsTab, settingsTabScope,
+  SETTINGS_TABS, DEFAULT_SETTINGS_TAB, GRAPH_SECTION, resolveSettingsTab, settingsTabScope, settingsTarget,
 } from "../../ark_studio/web/js/settings-tabs.js";
 
 // Section ids used as Settings tab ids before the regrouping, with the scope
@@ -15,16 +15,17 @@ const LEGACY = {
   remote: "personal",
   profile: "personal", display: "personal", guidance: "personal", assistant: "personal",
   personalAgents: "personal", account: "personal", agentAccess: "personal", environment: "personal",
-  shortcuts: "personal", about: "personal", admin: "admin",
+  // About moved from Personal to the top level, next to the overview.
+  shortcuts: "personal", about: "overview", admin: "admin",
 };
 
 test("settings are grouped into a few tabs per scope", () => {
   const count = (scope) => SETTINGS_TABS.filter((tab) => tab.scope === scope).length;
   assert.deepEqual(SETTINGS_TABS.map((tab) => tab.id),
-    ["overview", "appearance", "agents", "data", "trash", "members", "resources", "access", "profile", "display", "personalAI", "plugins", "browser", "about", "storage", "admin"]);
-  assert.equal(count("overview"), 1);
+    ["overview", "app", "about", "appearance", "agents", "data", "trash", "members", "resources", "access", "profile", "display", "personalAI", "plugins", "browser", "storage", "admin"]);
+  assert.equal(count("overview"), 3);
   assert.equal(count("project"), 7);
-  assert.equal(count("personal"), 6);
+  assert.equal(count("personal"), 5);
   assert.equal(count("admin"), 2);
   // Settings opens on the overview; Resources and Access are listed as Advanced.
   assert.equal(DEFAULT_SETTINGS_TAB, "overview");
@@ -34,7 +35,7 @@ test("settings are grouped into a few tabs per scope", () => {
   // Sections added after the regrouping (no legacy tab id).
   assert.deepEqual([...sections].sort(), [...Object.keys(LEGACY), "appearanceOverride", "sessionUploads",
     "overview", "advanced", "infohubSource", "graphOverride", "plugins", "trash",
-    "agentRules", "personalAgentRules", "members", "projectStorage"].sort());
+    "agentRules", "personalAgentRules", "members", "projectStorage", "app", "markers"].sort());
   // Browser-local settings no longer sit under the Project scope.
   assert.equal(settingsTabScope(resolveSettingsTab("infohubSource").tab), "personal");
   assert.equal(resolveSettingsTab("sessionUploads").tab, "access");
@@ -81,4 +82,16 @@ test("new tab ids resolve to themselves and unknown ids are rejected", () => {
   assert.deepEqual(resolveSettingsTab("graphOverride"), { tab: "display", section: "graphOverride" });
   assert.deepEqual(resolveSettingsTab("graph"), { tab: "appearance", section: "graph" });
   for (const id of ["", null, undefined, "nope", "constructor", "__proto__"]) assert.equal(resolveSettingsTab(id), null);
+});
+
+test("About is a top-level page next to the overview; old links and remembered tabs open it there", () => {
+  assert.deepEqual(SETTINGS_TABS.filter((tab) => tab.scope === "overview").map((tab) => tab.id), ["overview", "app", "about"]);
+  // App: the desktop app's own settings (the view drops it outside the app).
+  assert.deepEqual(settingsTarget("app"), { tab: "app", section: "", scope: "overview" });
+  assert.equal(SETTINGS_TABS.some((tab) => tab.scope === "personal" && tab.sections.includes("about")), false);
+  // ?settings=about and a remembered ark.settingsTab "about" (from Personal).
+  assert.deepEqual(resolveSettingsTab("about"), { tab: "about", section: "" });
+  assert.deepEqual(settingsTarget("about"), { tab: "about", section: "", scope: "overview" });
+  assert.deepEqual(settingsTarget("shortcuts"), { tab: "display", section: "shortcuts", scope: "personal" });
+  assert.equal(settingsTarget("nope"), null);
 });

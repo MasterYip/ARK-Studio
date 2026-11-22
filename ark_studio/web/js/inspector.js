@@ -1,4 +1,5 @@
 import { h, clear, fmtDate, fmtDateTime, relativeTime, typeColor, statusColor, richText, copyText, isImageUrl } from "./dom.js";
+import { crossProjectSection } from "./project-move.js";
 import { t, typeLabel, statusLabel, impLabel, relLabel, originLabel, logLabel, nsLabel } from "./i18n.js";
 import { icon } from "./icons.js";
 import { createImageViewer, openImageLightbox } from "./image-viewer.js";
@@ -9,9 +10,12 @@ import { mediaSource, mediaPreviewable } from "./editor-media.js";
 import { draftFromUnit, mediaKinds } from "./node-model.js";
 import { assigneePicker, assigneeLabel } from "./assignee.js";
 import { commentsSection } from "./comments.js";
-import { acceptUnit, reviewPanel, sendBackUnit } from "./needs-ui.js";
+import { acceptUnit, reviewPanel, sendBackUnit, markNeedsSeen } from "./needs-ui.js";
+import { needsUnitKey } from "./needs-model.js";
 import { canDecideReview } from "./review-model.js";
 import { openNodeHistory } from "./node-history.js";
+import { openContextMenu } from "./context-menu.js";
+import { unitMenuItems } from "./unit-menu.js";
 import { openAddToTopic, topicSettings } from "./topic-actions.js";
 import { floatingPosition } from "./floating-position.js";
 import { INSPECTOR_WIDTH_KEY, clampInspectorWidth, dragInspectorWidth } from "./inspector-width.js";
@@ -20,6 +24,9 @@ import {
 } from "./unit-edit.js";
 import { shellActive, viewHost, revealView, render as renderWorkbench } from "./workbench.js";
 import { presenceDetailsLine } from "./presence-ui.js";
+import { inspectorReadOnly, savedMode } from "./read-edit-mode.js";
+import { markersFor, markerMenuChildren, removeMarkersChange, isMarkerTag } from "./markers.js";
+import { saveMarkerChange } from "./marker-actions.js";
 
 // With the workbench shell the docked inspector is the "Details" view and
 // lives in whichever sidebar/panel holds it; floating drawers and the
@@ -60,9 +67,10 @@ window.addEventListener(UNIT_SAVED_EVENT, (event) => {
   const live = liveInspector;
   if (!unit || origin === "inspector" || !live || live.unitId !== unit.id) return;
   if (!live.ctx.S.drawerOpen || live.isDirty()) return;
-  if (origin === "remote") {
-    // Newer server data for the open unit (cache revalidation or another
-    // person's edit): repaint the docked or floating panel in place, but not
+  if (origin === "remote" || origin === "markers") {
+    // Newer server data for the open unit (cache revalidation, another
+    // person's edit, a marker change from the graph menu or its undo):
+    // repaint the docked or floating panel in place, but not
     // under a focused field; retry once the person moves on.
     const active = document.activeElement;
     if (active?.closest?.(".drawer") && (active.isContentEditable || /^(input|textarea|select)$/i.test(active.tagName))) {
@@ -106,7 +114,8 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
   try {
     data = await api.unit(ref);
   } catch (err) {
-    if (request === inspectorRequest) toast(err.message, "err");
+    // quiet: a restored inspector (project-state-model.js) whose unit is gone.
+    if (request === inspectorRequest && !options.quiet) toast(err.message, "err");
     return;
   }
   if (request !== inspectorRequest) return;
@@ -114,6 +123,8 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
   ctx.S.selectedId = unit.id;
   ctx.S.detail = unit;
   ctx.S.drawerOpen = true;
+  const seenKey = needsUnitKey(unit);
+  if (seenKey) markNeedsSeen(ctx, { items: [seenKey] });
   ctx.S.drawerAnchor = anchor || null;
   const isPhone = typeof window.matchMedia === "function"
     && window.matchMedia("(max-width: 760px)").matches;
@@ -129,9 +140,9 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
     || null;
   // Read / Edit: the person's one remembered choice (the graphs share it);
   // Read until they switch, also on pages without a graph.
-  const savedMode = (() => { try { return localStorage.getItem("ark.graphMode") === "edit" ? "edit" : "read"; } catch { return "read"; } })();
-  const mode = ctx.S.graphMode || (graph ? graph.mode : savedMode);
-  const readOnly = options.readOnly ?? (mode !== "edit");
+  const readOnly = inspectorReadOnly({
+    readOnly: options.readOnly, sessionMode: ctx.S.graphMode, graphMode: graph?.mode, saved: savedMode(),
+  });
   ctx.S.drawerFloating = Boolean(options.forceFloating);
   document.body.classList.toggle("inspector-pinned", docked);
   renderInspector(ctx, unit, {
@@ -295,20 +306,60 @@ function renderInspector(ctx, unit, {
   });
   const renderTags = () => {
     clear(tagWrap);
-    for (const tag of tags) {
+    // Markers have their own row (markerWrap below).
+    for (const tag of tags.filter((item) => !isMarkerTag(item))) {
       tagWrap.appendChild(h("span", { class: "tag" }, tag,
         h("button", { title: t("action.remove"), onclick: () => { tags = tags.filter((x) => x !== tag); renderTags(); markDirty(); } }, "×")));
     }
     tagWrap.appendChild(tagInput);
-    if (tags.length) {
+    if (tags.some((item) => !isMarkerTag(item))) {
       tagWrap.appendChild(h("button", {
         class: "tag-clear", type: "button", title: t("inspector.clear_tags"),
         "aria-label": t("inspector.clear_tags"),
-        onclick: () => { tags = []; renderTags(); markDirty(); },
+        onclick: () => { tags = tags.filter(isMarkerTag); renderTags(); markDirty(); },
       }, icon("trash", "sm")));
     }
   };
   renderTags();
+
+  // Markers: a chip removes its marker, + opens the marker menu (choosing a
+  // marker the node has removes it; one marker per exclusive group).  Saved
+  // at once as one batch, one Ctrl+Z step on the graph.
+  const markerWrap = h("div", { class: "marker-editor", "data-markers": "" });
+  const ownTagsOf = (saved) => (saved.tags || []).filter((tag) => !/^(type|status|importance):/.test(tag));
+  const changeMarkers = async (change) => {
+    try {
+      if (dirty) { clearTimeout(saveTimer); saveTimer = null; await save(); }
+      const result = await saveMarkerChange(ctx, [unit.id], change);
+      const saved = result?.updated.find((item) => item.id === unit.id);
+      if (saved) { tags = ownTagsOf(saved); renderTags(); renderMarkers(); }
+      if (result?.undo && graph?._pushHistory) {
+        graph._pushHistory({ undo: async () => graph._syncNodeTags?.(await result.undo()) });
+      }
+    } catch (err) {
+      toast(err.message, "err");
+    }
+  };
+  const markerChips = (editable) => markersFor({ tags }).map((marker) => h(editable ? "button" : "span", {
+    class: "marker-chip", type: editable ? "button" : undefined, "data-marker": marker.tag,
+    style: { "--marker-color": marker.color },
+    title: editable ? t("inspector.remove_marker", { label: marker.label }) : marker.label,
+    onclick: editable ? () => changeMarkers(removeMarkersChange([{ tags }], marker.tag)) : undefined,
+  }, h("b", null, marker.glyph), marker.label,
+  editable ? h("span", { class: "marker-chip-x", "aria-hidden": "true" }, "×") : null));
+  function renderMarkers() {
+    clear(markerWrap);
+    markerWrap.append(...markerChips(true));
+    markerWrap.appendChild(h("button", {
+      class: "btn sm ghost", type: "button", "data-marker-add": "",
+      onclick: (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        openContextMenu({ x: rect.left, y: rect.bottom + 4, returnFocus: event.currentTarget,
+          items: markerMenuChildren([{ tags }], changeMarkers) });
+      },
+    }, icon("plus", "sm"), t("inspector.add_marker")));
+  }
+  renderMarkers();
 
   // Media
   let mediaPop = null;
@@ -714,6 +765,15 @@ function renderInspector(ctx, unit, {
       class: "icon-btn", title: t("inspector.open_map"), "aria-label": t("inspector.open_map"),
       onclick: () => { if (preview) onClose?.(); else closeInspector(ctx); ctx.showOnMap ? ctx.showOnMap(unit.uid) : ctx.navigate("map"); },
     }, icon("map", "sm")),
+    // ⋯: the node's menu (the same as a right click on its row or card).
+    h("button", {
+      class: "icon-btn inspector-more", type: "button", title: t("inspector.more"), "aria-label": t("inspector.more"), "aria-haspopup": "menu",
+      onclick: (event) => {
+        const rect = event.currentTarget.getBoundingClientRect();
+        const items = unitMenuItems(ctx, unit).filter((item) => !item?.id || item.id !== "open-details");
+        openContextMenu({ x: rect.right - 240, y: rect.bottom + 4, items, returnFocus: event.currentTarget });
+      },
+    }, icon("more", "sm")),
     h("button", { class: "icon-btn drawer-close", title: t("action.close"), onclick: () => close(false) }, icon("x"))));
   // Accept / Send back under the comment box for a unit in review.
   let mobilePermission = "";
@@ -756,10 +816,13 @@ function renderInspector(ctx, unit, {
         h("div", null, unit.source_title || unit.source_ref),
         unit.source_ref ? h("div", { class: "mono" }, unit.source_ref) : null,
         h("div", { class: "muted" }, `${t("inspector.origin")}: ${originLabel(unit.origin)} · ${t("common.created")} ${fmtDate(unit.created_at)}`))) : null,
+    crossProjectSection(unit) ? readSection(t("cross_project.title"), crossProjectSection(unit)) : null,
     unit.body ? readSection(t("inspector.body"), h("div", { class: "read-body" }, inspectorRichBody(unit))) : null,
     readOnly ? comments : null,
-    tags.length ? readSection(t("inspector.tags"),
-      h("div", { class: "read-tags" }, tags.map((tag) => h("span", { class: "tag static" }, tag)))) : null,
+    markersFor({ tags }).length ? readSection(t("inspector.markers"),
+      h("div", { class: "marker-editor read-markers" }, markerChips(false))) : null,
+    tags.some((tag) => !isMarkerTag(tag)) ? readSection(t("inspector.tags"),
+      h("div", { class: "read-tags" }, tags.filter((tag) => !isMarkerTag(tag)).map((tag) => h("span", { class: "tag static" }, tag)))) : null,
     readSection(t("nav.topic"), topicsBlock()),
     readSection(t("inspector.connections"), h("div", { class: "read-links" },
       h("div", { class: "muted" }, t("inspector.outgoing")), linksOut,
@@ -787,12 +850,14 @@ function renderInspector(ctx, unit, {
       h("b", null, t("inspector.source")), ": ", unit.source_title || unit.source_ref,
       unit.source_ref ? h("div", { class: "mono", style: { fontSize: "9.5px", marginTop: "2px" } }, unit.source_ref) : null,
       h("div", { style: { marginTop: "3px" } }, `${t("inspector.origin")}: ${originLabel(unit.origin)} · ${t("common.created")} ${fmtDate(unit.created_at)}`)) : null,
+    crossProjectSection(unit) ? h("div", { class: "provenance" }, h("b", null, t("cross_project.title")), crossProjectSection(unit)) : null,
     unit.body ? h("details", { class: "report-preview", open: ["artifact", "note"].includes(unit.type) ? true : undefined },
       h("summary", null, t("inspector.rendered_report")),
       inspectorRichBody(unit)) : null,
     field(t("inspector.body"), body, t("inspector.body_hint")),
     readOnly ? null : reviewPanel(ctx, unit),
     readOnly ? null : comments,
+    field(t("inspector.markers"), markerWrap),
     field(t("inspector.tags"), tagWrap, t("inspector.tags_hint")),
     h("div", { class: "field-row" },
       field(t("common.start"), start), field(t("common.end"), end)),

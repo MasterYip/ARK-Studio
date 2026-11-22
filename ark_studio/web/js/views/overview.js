@@ -8,6 +8,7 @@ import {
 } from "../needs-model.js";
 import {
   NEEDS_CHANGED, bulkAcceptDialog, closeNeedsFilters, needsEntryCard, needsFilterBar, needsFilterFor, needsProjectKey, saveNeedsFilter,
+  watchNeedsSeen,
 } from "../needs-ui.js";
 import { currentUsername, displayName, userAvatar } from "../users.js";
 import { startPanel, setupNeedsRow } from "./onboarding.js";
@@ -769,6 +770,7 @@ function needsYouPanel(ctx, all) {
   };
   if (sorted.length) panel.appendChild(needsFilterBar(facets, filter, setFilter));
   if (!items.length) {
+    if (!sorted.length) watchNeedsSeen(ctx, panel, null, [], { filtered: false });
     panel.appendChild(h("div", { class: "empty sm" }, sorted.length ? t("needs.filter.empty") : t("needs.empty"),
       sorted.length ? h("button", { class: "link needs-filter-clear", type: "button",
         onclick: () => { closeNeedsFilters(); setFilter(normalizeNeedsFilter({})); } }, t("filters.clear")) : null));
@@ -802,6 +804,7 @@ function needsYouPanel(ctx, all) {
     while (list.children.length > NEEDS_LIMIT) list.lastElementChild.remove();
   };
   pruneNeedsRows(projectKey, entries);
+  watchNeedsSeen(ctx, panel, list, entries, { filtered });
   if (rest.length) {
     const more = h("button", { class: "link needs-toggle", type: "button", "aria-expanded": String(expanded),
       dataset: { open: expanded ? "1" : "0" } }, expanded ? t("needs.show_less") : t("needs.show_all", { n: items.length }));

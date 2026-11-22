@@ -7,8 +7,9 @@ use crate::paths;
 
 pub const DEFAULT_PORT: u16 = 18890;
 const HISTORY_MAX: usize = 12;
-/// The automatic update check runs at most this often (seconds).
-pub const UPDATE_CHECK_INTERVAL: u64 = 24 * 60 * 60;
+/// The automatic update check runs at start and, while the app stays open,
+/// again after this long (seconds).
+pub const UPDATE_CHECK_INTERVAL: u64 = 12 * 60 * 60;
 
 /// Version of the `desktop.json` layout. 2: no connection chooser; the app
 /// always starts the local server and the remote servers are a saved list.
@@ -36,10 +37,20 @@ pub struct Settings {
     /// default became "on" stored `false` without anyone choosing it, so an
     /// unchosen value is read as the default.
     pub close_to_tray_chosen: bool,
-    /// Check for updates when the app starts (at most once a day; default on).
+    /// Check for updates at start and every 12 hours while running (default on).
     pub auto_update_check: bool,
     /// When the last update check succeeded (Unix seconds; 0: never).
     pub last_update_check: u64,
+    /// The app version that last ran: a different one means the app was
+    /// updated ("ARK Studio was updated to ..." once). Empty: not recorded yet.
+    pub last_seen_version: String,
+    /// The newer version the system notification was shown for (once per version).
+    pub notified_update: String,
+    /// The newer version the person chose "Later" for in the app window's notice.
+    pub dismissed_update: String,
+    /// Not stored: there was no `desktop.json` (a fresh install).
+    #[serde(skip)]
+    pub fresh: bool,
     /// Version 1 (connection chooser): "local" / "remote" / "". Read for the
     /// migration only, never written.
     #[serde(skip_serializing)]
@@ -66,6 +77,10 @@ impl Default for Settings {
             close_to_tray_chosen: false,
             auto_update_check: true,
             last_update_check: 0,
+            last_seen_version: String::new(),
+            notified_update: String::new(),
+            dismissed_update: String::new(),
+            fresh: false,
             mode: String::new(),
             remote_url: String::new(),
             auto_connect: false,
@@ -81,6 +96,7 @@ impl Settings {
             .unwrap_or_else(|| {
                 let mut s = Settings::default();
                 s.migrate();
+                s.fresh = true;
                 s
             })
     }
@@ -155,6 +171,26 @@ impl Settings {
     pub fn update_check_due(&self, now: u64) -> bool {
         self.auto_update_check
             && (now < self.last_update_check || now - self.last_update_check >= UPDATE_CHECK_INTERVAL)
+    }
+
+    /// Records the running version. Returns the previous version when the
+    /// app was updated since it last ran ("" when an older app, which did
+    /// not record it, ran before); None on a fresh install or the same version.
+    pub fn note_version(&mut self, current: &str) -> Option<String> {
+        let previous = std::mem::replace(&mut self.last_seen_version, current.to_string());
+        if previous == current || (previous.is_empty() && self.fresh) {
+            return None;
+        }
+        Some(previous)
+    }
+
+    /// Whether to show the system notification for `version` (once per version).
+    pub fn take_notification(&mut self, version: &str) -> bool {
+        if version.is_empty() || self.notified_update == version {
+            return false;
+        }
+        self.notified_update = version.to_string();
+        true
     }
 
     /// Saves (or moves to the front) a normalized server address.
@@ -269,7 +305,36 @@ mod tests {
     }
 
     #[test]
-    fn automatic_update_check_is_on_by_default_and_daily() {
+    fn an_updated_app_is_noticed_once() {
+        // fresh install: nothing to announce, the version is recorded
+        let mut s = Settings { fresh: true, ..Settings::default() };
+        assert_eq!(s.note_version("2.1.2"), None);
+        assert_eq!(s.last_seen_version, "2.1.2");
+        assert_eq!(s.note_version("2.1.2"), None);
+        // updated: the previous version, once
+        assert_eq!(s.note_version("2.2.0").as_deref(), Some("2.1.2"));
+        assert_eq!(s.note_version("2.2.0"), None);
+        // a file written by an older app (no lastSeenVersion): updated from an unknown version
+        let mut old = Settings::parse(br#"{"settingsVersion":2,"lastUpdateCheck":5}"#).unwrap();
+        assert!(!old.fresh);
+        assert_eq!(old.note_version("2.1.2").as_deref(), Some(""));
+        let out = serde_json::to_string(&old).unwrap();
+        assert!(out.contains("\"lastSeenVersion\":\"2.1.2\"") && !out.contains("fresh"));
+    }
+
+    #[test]
+    fn the_update_notification_shows_once_per_version() {
+        let mut s = Settings::default();
+        assert!(s.take_notification("2.1.2"));
+        assert!(!s.take_notification("2.1.2"));
+        assert!(s.take_notification("2.2.0"));
+        assert!(!s.take_notification(""));
+        let s = Settings::parse(br#"{"notifiedUpdate":"2.2.0","dismissedUpdate":"2.2.0"}"#).unwrap();
+        assert_eq!((s.notified_update.as_str(), s.dismissed_update.as_str()), ("2.2.0", "2.2.0"));
+    }
+
+    #[test]
+    fn automatic_update_check_is_on_by_default_every_12_hours() {
         let day = UPDATE_CHECK_INTERVAL;
         let s = Settings::default();
         assert!(s.auto_update_check);

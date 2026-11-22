@@ -31,6 +31,7 @@ const (
 	KindAssignee       = "assignee"         // assignee change on the agent's unit
 	KindImportance     = "importance"       // importance change on the agent's unit
 	KindArchived       = "archived"         // the agent's unit was deleted (archived)
+	KindMoved          = "moved"            // the agent's unit was moved to another project (T-0068)
 	KindAssigned       = "assigned"         // a task was assigned to the agent's user
 	KindDecision       = "decision"         // a person created a decision node
 	KindSetupConfirmed = "setup_confirmed"  // a setup layer was confirmed
@@ -39,7 +40,7 @@ const (
 
 // Kinds lists every item kind.
 var Kinds = []string{KindComment, KindReply, KindMention, KindSentBack, KindAccepted, KindDecided, KindReopened,
-	KindStatus, KindAssignee, KindImportance, KindArchived, KindAssigned, KindDecision, KindSetupConfirmed, KindMessage}
+	KindStatus, KindAssignee, KindImportance, KindArchived, KindMoved, KindAssigned, KindDecision, KindSetupConfirmed, KindMessage}
 
 // Viewer is who asks: the agent and the account it acts for.
 type Viewer struct {
@@ -295,6 +296,13 @@ func (v Viewer) classify(r store.UpdateRow, messages map[int64]*pyjson.Object, a
 	case r.Action == "unit.archive":
 		if !mine {
 			return nil
+		}
+		if to, ok := r.Detail.Value("moved_to").(*pyjson.Object); ok {
+			where := pyjson.Str(to.Value("project")) + "/" + pyjson.Str(to.Value("uid"))
+			it := v.item(r, KindMoved, fmt.Sprintf("%s was moved to project %s as %s (%s); work on it there",
+				unitLabel(r), pyjson.Str(to.Value("project_name")), pyjson.Str(to.Value("uid")), where))
+			it.Set("moved_to", to)
+			return []*pyjson.Object{it}
 		}
 		return []*pyjson.Object{v.item(r, KindArchived, fmt.Sprintf("%s was deleted", unitLabel(r)))}
 	case strings.HasPrefix(r.Action, "setup.") && strings.HasSuffix(r.Action, ".confirmed"):

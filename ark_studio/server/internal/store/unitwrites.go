@@ -381,6 +381,9 @@ func (s *Store) createUnit(ctx context.Context, data *pyjson.Object, actor strin
 // only, batch.go): the unit row goes into that transaction, and links/media
 // in data are not supported there.
 func (s *Store) createUnitIn(ctx context.Context, outer *wtx, data *pyjson.Object, actor string, who Who) (int64, error) {
+	if err := s.refuseMerged(); err != nil { // move.go: a merged project is read-only
+		return 0, err
+	}
 	title, err := cleanTextField(data.Value("title"), "title", maxTitle, true)
 	if err != nil {
 		return 0, err
@@ -399,7 +402,7 @@ func (s *Store) createUnitIn(ctx context.Context, outer *wtx, data *pyjson.Objec
 	if err != nil {
 		return 0, err
 	}
-	tags, err := normalizeTags(withoutNeeds(rawTags), typeName, data.Value("status"), data.Value("importance"))
+	tags, err := normalizeTags(s.resolveMarkers(withoutNeeds(rawTags)), typeName, data.Value("status"), data.Value("importance"))
 	if err != nil {
 		return 0, err
 	}
@@ -617,6 +620,9 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 		if err != nil {
 			return err
 		}
+		if err := refuseMoved(row); err != nil { // move.go
+			return err
+		}
 		unitID = row.Int("id")
 		w.units = []int64{unitID}
 		var changed []string
@@ -671,7 +677,7 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 		} else if source, err = listOf(want); err != nil {
 			return err
 		}
-		source = withoutNeeds(source)
+		source = s.resolveMarkers(withoutNeeds(source))
 		oldNeeds := needsOf(oldTags)
 		tags, err := normalizeTags(source, getOrRow("type"), getOrRow("status"), getOrRow("importance"))
 		if err != nil {
@@ -913,6 +919,9 @@ func (s *Store) RestoreUnit(ctx context.Context, ref any, actor string) (*pyjson
 		if err != nil {
 			return err
 		}
+		if err := refuseMoved(row); err != nil { // move.go: undo the move instead
+			return err
+		}
 		if _, err := w.q.ExecContext(ctx, "UPDATE units SET archived=0, updated_at=? WHERE id=?", clock.UTCNow(), row.Int("id")); err != nil {
 			return err
 		}
@@ -1016,6 +1025,12 @@ func (s *Store) CreateLink(ctx context.Context, source, target, relation, note a
 		}
 		dst, err := unitRowAny(ctx, w.q, target)
 		if err != nil {
+			return err
+		}
+		if err := refuseMoved(src); err != nil { // move.go
+			return err
+		}
+		if err := refuseMoved(dst); err != nil {
 			return err
 		}
 		if src.Int("id") == dst.Int("id") {
@@ -1139,6 +1154,9 @@ func (s *Store) AddMedia(ctx context.Context, ref, url, kind, caption any, actor
 	err = s.write(ctx, func(w *wtx) error {
 		row, err := unitRowAny(ctx, w.q, ref)
 		if err != nil {
+			return err
+		}
+		if err := refuseMoved(row); err != nil { // move.go
 			return err
 		}
 		w.units = []int64{row.Int("id")}

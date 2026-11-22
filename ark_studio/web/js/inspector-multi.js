@@ -23,6 +23,9 @@ import {
 import {
   sharedAttributes, tagPresence, topicPresence, batchFieldPayload, batchTagsPayload, undoPayload, changedBefore,
 } from "./selection-model.js";
+import { inspectorReadOnly, savedMode } from "./read-edit-mode.js";
+import { markerMenuChildren, markerState, presentMarkers, removeMarkersChange, isMarkerTag } from "./markers.js";
+import { openContextMenu } from "./context-menu.js";
 
 const isPhone = () => typeof window.matchMedia === "function" && window.matchMedia("(max-width: 760px)").matches;
 
@@ -70,10 +73,7 @@ export async function openMultiInspector(ctx, refs, options = {}) {
 function readOnlyFor(ctx, graph) {
   if (!canAssign(ctx.S)) return true;
   if (graph?.readOnly) return true;
-  let saved = "read";
-  try { saved = localStorage.getItem("ark.graphMode") === "edit" ? "edit" : "read"; } catch { /* storage disabled */ }
-  const mode = ctx.S.graphMode || graph?.mode || saved;
-  return mode !== "edit";
+  return inspectorReadOnly({ sessionMode: ctx.S.graphMode, graphMode: graph?.mode, saved: savedMode() });
 }
 
 function renderMultiInspector(ctx, initial, { docked, anchor, graph, mobileSheet, request }) {
@@ -204,7 +204,10 @@ function renderMultiInspector(ctx, initial, { docked, anchor, graph, mobileSheet
   };
 
   const tagsBlock = () => {
-    const { all, some } = tagPresence(units);
+    const plain = (list) => list.filter((item) => !isMarkerTag(item.tag || item));
+    const presence = tagPresence(units);
+    const all = plain(presence.all);
+    const some = plain(presence.some);
     const wrap = h("div", { class: "tag-editor multi-tags", "data-multi-tags": "" });
     for (const tag of all) {
       wrap.appendChild(h("span", { class: "tag", "data-tag": tag, title: t("multi.tag_on_all") }, tag,
@@ -238,6 +241,37 @@ function renderMultiInspector(ctx, initial, { docked, anchor, graph, mobileSheet
       }));
     } else if (!all.length && !some.length) {
       wrap.appendChild(h("span", { class: "muted" }, t("multi.no_tags")));
+    }
+    return wrap;
+  };
+
+  // Markers on all / some of the nodes: a chip removes its marker from all;
+  // + opens the marker menu (same rules as the graph menu).
+  const markersBlock = () => {
+    const wrap = h("div", { class: "marker-editor", "data-multi-markers": "" });
+    for (const marker of presentMarkers(units)) {
+      const state = markerState(units, marker.tag);
+      const count = units.filter((unit) => markerState([unit], marker.tag) === "all").length;
+      wrap.appendChild(h(readOnly ? "span" : "button", {
+        class: `marker-chip ${state === "some" ? "partial" : ""}`.trim(), type: readOnly ? undefined : "button",
+        "data-marker": marker.tag, style: { "--marker-color": marker.color },
+        title: readOnly ? marker.label : t("multi.remove_marker_all", { label: marker.label }),
+        onclick: readOnly ? undefined : () => setTags(removeMarkersChange(units, marker.tag)),
+      }, h("b", null, marker.glyph), marker.label,
+      state === "some" ? h("small", null, ` ${count}/${units.length}`) : null,
+      readOnly ? null : h("span", { class: "marker-chip-x", "aria-hidden": "true" }, "×")));
+    }
+    if (!readOnly) {
+      wrap.appendChild(h("button", {
+        class: "btn sm ghost", type: "button", "data-marker-add": "",
+        onclick: (event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          openContextMenu({ x: rect.left, y: rect.bottom + 4, returnFocus: event.currentTarget,
+            items: markerMenuChildren(units, (change) => setTags(change)) });
+        },
+      }, icon("plus", "sm"), t("inspector.add_marker")));
+    } else if (!wrap.children.length) {
+      wrap.appendChild(h("span", { class: "muted" }, t("inspector.no_markers")));
     }
     return wrap;
   };
@@ -288,6 +322,7 @@ function renderMultiInspector(ctx, initial, { docked, anchor, graph, mobileSheet
       h("div", { class: "field-row" },
         field(t("common.start"), dateField("start_at", shared.start_at), shared.start_at.mixed),
         field(t("common.end"), dateField("end_at", shared.end_at), shared.end_at.mixed)),
+      field(t("inspector.markers"), markersBlock()),
       field(t("inspector.tags"), tagsBlock()),
       h("div", { class: "link-section" }, h("h4", null, t("nav.topic")), topicsBlock()),
       h("div", { class: "link-section" },

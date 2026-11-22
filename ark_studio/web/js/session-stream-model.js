@@ -130,7 +130,7 @@ export function createSessionStream({
     listInflight = Promise.resolve()
       .then(() => listSessions())
       .then((data) => {
-        latest = { sessions: data?.sessions || [], groups: data?.groups || [], at: now() };
+        latest = { sessions: data?.sessions || [], groups: data?.groups || [], project: data?.project || "", at: now() };
         deliverSessions();
         followTranscripts();
         return latest;

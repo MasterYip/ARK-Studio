@@ -175,6 +175,7 @@ public class ShellActivity extends BaseActivity {
         updateSubtitle();
         if (switched) invalidatePages();
         pages[current].show();
+        com.masteryip.arkstudio.platform.Notifications.checkSoon(this);
     }
 
     @Override

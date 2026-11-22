@@ -38,8 +38,19 @@ import { renderEditor, editorExplorerVisible, setExplorerVisible, EXPLORER_CHANG
 import { keyFromRoute } from "./editor-model.js";
 import { needsCount } from "./needs-model.js";
 import { installUnitContextMenu, openUnitInEditor } from "./unit-menu.js";
-import { setActiveGraphPhysics, setActiveGraphArrows, setMindNodeStore } from "./graph.js";
+import { projectMoveCommands } from "./project-move.js";
+import { focusLocated, isLocateShortcut, setLocateContext, syncRevealNotice } from "./locate-map.js";
+import { revealList } from "./locate-map-model.js";
+import { applyRailGroup } from "./filter-group-model.js";
+import { setActiveGraphPhysics, setActiveGraphArrows, setMindNodeStore, graphCameraEntries, seedGraphCameras } from "./graph.js";
+import {
+  createProjectStateStore, restorePlan, restorableRoute, sessionPatch, scrollSelector, projectCameras,
+} from "./project-state-model.js";
+import { desktopHub } from "./desktop-hub-model.js";
+import { otherProjectsNew, withReviewBadge } from "./project-picker-model.js";
+import { REVIEW_SEEN } from "./needs-ui.js";
 import { getMindSettings, setActiveGraphDisplay } from "./mind-settings.js";
+import { setMarkerGroups } from "./markers.js";
 import { createMindNodeStore } from "./mind-node-state.js";
 import { GraphFilterIndex } from "./graph-filter.js";
 import { mountGuidance } from "./guidance.js";
@@ -68,13 +79,20 @@ import { trackActivationPoint } from "./floating-position.js";
 import { installDesktopShell } from "./desktop-shell.js";
 import { withDesktopGroups, applyDesktopQuery, confirmLinkDesktop } from "./desktop-hub.js";
 import { advancedEnabled, ADVANCED_CHANGED } from "./advanced.js";
-import { liveProjectPicker, initProjectPrefs, withKnownActivity } from "./project-picker.js";
-import { contextMenuOpen } from "./context-menu.js";
+import { liveProjectPicker, initProjectPrefs, withKnownActivity, PROJECTS_LISTED } from "./project-picker.js";
+import { contextMenuOpen, openContextMenu } from "./context-menu.js";
 import { reviewHash, reviewView } from "./needs-model.js";
 import { parseJoinHash, openJoinDialog } from "./invites.js";
+import { aboutActivityButton } from "./about.js";
+import { watchUpdates } from "./update-state.js";
+import { settingsTarget } from "./settings-tabs.js";
+import { settingsNeedsRepaint, settingsViewKey } from "./settings-sync-model.js";
+import { rememberMode } from "./read-edit-mode.js";
 
 // Inside the ARK Studio desktop app (borderless window): top bar = title bar.
 installDesktopShell();
+// The desktop app's update state (local page only) for the About dot and Home's banner.
+watchUpdates().catch(() => { /* browser or server page */ });
 
 // A load right after the page hung (or crashed), or with ?safe=1, starts at
 // Home instead of reopening the view that hung it (reload-guard.js).
@@ -232,10 +250,12 @@ const ctx = {
   get graphs() { return graphs; },
   get gantts() { return gantts; },
   reloadDetail: async () => { if (S.selectedId) await openInspector(ctx, S.selectedId); },
-  syncInspectorMode: async (mode = "") => {
+  // `persist: false`: an edit action switched on its own (or a graph only
+  // reported its start mode); keep the person's remembered choice.
+  syncInspectorMode: async (mode = "", { persist = true } = {}) => {
     if (mode) {
       S.graphMode = mode === "read" ? "read" : "edit";
-      try { localStorage.setItem("ark.graphMode", S.graphMode); } catch { /* storage disabled */ }
+      if (persist) rememberMode(S.graphMode);
       if (ctx._syncingGraphMode) return;
       ctx._syncingGraphMode = true;
       try {
@@ -280,12 +300,14 @@ const ctx = {
     await openInspector(ctx, ref, anchor, { forceFloating: true });
   },
   openCreate: (defaults = {}) => openCreateUnit(ctx, defaults),
-  // Inspector "Show on map": open the Map graph, then select and centre the node.
-  showOnMap: (uid) => {
-    if (!uid) return;
-    S.mapFocus = uid;
-    if (S.tab === "map" && S.view !== "graph") ctx.setView("graph");
-    else navigate("map");
+  // "Locate in research map" (every node's menu, Alt+M; locate-map.js) and
+  // the inspector's "Show on map".
+  locateInMap: (uid) => locateInMap(uid),
+  showOnMap: (uid) => locateInMap(uid),
+  clearMapReveal: () => {
+    if (!S.mapReveal?.length) return;
+    S.mapReveal = [];
+    applyFiltersIncremental({ silent: true, repaintRail: false, fit: false });
   },
   // A topic opens in Research > Topics; #/research/topic/<uid> deep-links it.
   openTopic: (ref, { keepTrail = false } = {}) => {
@@ -418,6 +440,12 @@ const ctx = {
     const active = !list.includes(value);
     S.filters[key] = active ? [...list, value] : list.filter((x) => x !== value);
     if (sourceEl) sourceEl.classList.toggle("on", active);
+    paintFiltersNow();
+    applyFiltersIncremental();
+  },
+  // A chip's menu or Alt+click: Only this / Select all / Invert in its group (filter-group-model.js).
+  applyFilterGroup: (group, action, base, value) => {
+    applyRailGroup(S.filters, group, action, base, value);
     paintFiltersNow();
     applyFiltersIncremental();
   },
@@ -630,6 +658,13 @@ async function refreshFromRemote({ manual = false } = {}) {
       const rail = document.querySelector(".rail");
       if (rail) renderFilterRail(rail, ctx);
       syncTopbar();
+    } else if (S.tab === "settings" && ctx.settingsPage?.mounted()
+        && !settingsNeedsRepaint({ key: settingsViewKey(S), shownKey: ctx.settingsPage.shownKey,
+          dirty: ctx.settingsPage.dirty(), manual })) {
+      // Settings shows none of what changed (or has unsaved edits): the
+      // page and its drafts stay; only the chrome follows.
+      syncTopbar();
+      return manual;
     } else {
       // Load first, then swap the page in one step (no loading flash).
       const data = await loadRouteData({ fresh: true });
@@ -1146,6 +1181,19 @@ async function bootWorkbench() {
   applyLayoutPrefs();
   document.body.classList.toggle("assistant-dock-open", Boolean(S.sessionDock));
   rememberProject();
+  // After a hang the project's saved page could hang again: forget it.
+  if (startGuard.safe) projectStates.drop(S.project?.id);
+  // The desktop app opens a server's page without a route when it moves
+  // between this computer and a server: show the project as it was left.
+  let bootPlan = null;
+  if (!startGuard.safe && desktopHub() && /^#?\/?$/.test(location.hash) && !parsePairHash(location.hash)) {
+    bootPlan = restorePlan(projectStates.get(S.project?.id));
+    if (bootPlan) {
+      restoring = { project: S.project?.id };
+      prepareRestore(bootPlan);
+      history.replaceState(null, "", location.pathname + location.search + bootPlan.route);
+    }
+  }
   const route = parseHash();
   setTab(route.tab, route.sub);
   if (route.topicRef) S.topicRef = route.topicRef;
@@ -1155,21 +1203,26 @@ async function bootWorkbench() {
   if (route.tab === "editor") S.editorKey = route.editorKey || "";
   applyViewQuery();
   applyFilterTabQuery();
+  if (bootPlan?.view) S.view = bootPlan.view;
   window.ARKBoot?.progress(3);
   setupWorkbench();
   initLayoutPresets(data.profile);
   initProjectPrefs(data.profile, { toast });
   // The picker ranks projects by the person's own activity, which only GET
   // /api/projects carries: load it once now so the first menu is in order.
+  projectsReadAt = Date.now();
   api.projects().then((list) => {
     if (Array.isArray(list?.projects)) S.projects = list.projects;
+    syncReviewDot();
   }).catch(() => { /* the bootstrap list stays */ });
   await renderRoute();
   markFirstRender();
+  if (bootPlan) finishRestore(S.project?.id, bootPlan);
   // An invite link (#/join/<token>) opens its Join dialog; the Welcome waits for the next visit.
   const joining = maybeOpenJoin();
   mountSessionDock(ctx);
   installUnitContextMenu(ctx);
+  setLocateContext(ctx);
   // First run: the Welcome speaks first; the guide invitation waits for it.
   if (!joining) maybeShowWelcome(ctx);
   ctx.guidance = mountGuidance(ctx);
@@ -1192,6 +1245,7 @@ async function bootWorkbench() {
     toast,
   });
   window.addEventListener("hashchange", onHashChange);
+  window.addEventListener("hashchange", saveProjectStateSoon);
   window.addEventListener("popstate", onHashChange);
   // "System" theme preference following the OS (profile.js).
   window.addEventListener("ark:theme-applied", () => { renderTopbar(); graphs.forEach((g) => g._draw?.()); });
@@ -1298,6 +1352,12 @@ function applyBootstrap(data, reset = false) {
     S.taskSessions = [];
     S.sessionsLoaded = false;
     S.selectedSessionId = null;
+    // Back to a project seen before: its page as it was left.
+    const plan = restorePlan(projectStates.get(S.project?.id));
+    if (plan) {
+      applyRestorePlan(plan, { push: true });
+      return;
+    }
     setTab("overview");
     history.pushState(null, "", "#/overview");
     renderRoute();
@@ -1318,15 +1378,18 @@ async function switchProject(project, { beforeOpen = null } = {}) {
   // Back to the shown project while another switch is on its way counts as
   // a switch too: that one already stopped the page.
   const same = project.id === S.project?.id && !document.body.classList.contains("project-switching");
+  // The page being left, for when the person comes back (before the menu
+  // closes the inspector).
+  if (!same && !document.body.classList.contains("project-switching")) saveProjectState();
   beforeOpen?.(project);
   if (!same) {
     showSwitching(project);
     // Nothing of the old project keeps running while the new one loads.
     ++loadSeq;
     destroyVisuals();
-    // Home is where a switch lands; read its data in parallel with the open.
+    // A first visit lands on Home: read its data in parallel with the open.
     // (A local server has one current project for every tab: nothing to gain.)
-    if (!S.session?.local) prefetchProject(project.id, SWITCH_ROUTES);
+    if (!S.session?.local && !projectStates.get(project.id)?.route) prefetchProject(project.id, SWITCH_ROUTES);
   }
   try {
     const data = await api.openProject({ id: project.id });
@@ -1359,6 +1422,168 @@ function showSwitching(project) {
 function endSwitching() {
   document.body.classList.remove("project-switching");
   topbar.querySelector(".project-picker")?.removeAttribute("aria-busy");
+}
+
+// ------------------------------------------------------------ review badges
+// The project selector shows a dot while another project has Needs you
+// cards new for the person (GET /api/projects review_new; the cards in the
+// picker show the counts).  The list is read again when the page comes
+// back into view and every few minutes while it is shown.
+const PROJECTS_REFRESH_MS = 3 * 60 * 1000;
+let projectsReadAt = 0;
+
+function syncReviewDot(picker = topbar.querySelector(".project-picker")) {
+  if (!picker) return;
+  const n = otherProjectsNew(S.projects, S.project?.id);
+  let dot = picker.querySelector(".project-new-dot");
+  if (!dot && n) {
+    dot = h("span", { class: "project-new-dot", "aria-hidden": "true" });
+    picker.querySelector(".p-name")?.after(dot);
+  }
+  if (dot) dot.hidden = !n;
+  picker.dataset.reviewNew = String(n);
+  const name = S.project?.name || t("common.project");
+  const note = n ? t("app.menu.projects_new", { n }) : "";
+  picker.title = [S.project?.path || name, note].filter(Boolean).join("\n");
+  picker.setAttribute("aria-label", [`${t("app.menu.projects")}: ${name}`, note].filter(Boolean).join(". "));
+}
+
+function refreshProjectList({ force = false } = {}) {
+  if (!S.booted || document.hidden || (!force && Date.now() - projectsReadAt < 30000)) return;
+  projectsReadAt = Date.now();
+  api.projects().then((list) => {
+    if (!Array.isArray(list?.projects)) return;
+    S.projects = list.projects;
+    syncReviewDot();
+  }).catch(() => { /* keep the known list */ });
+}
+
+document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshProjectList(); });
+setInterval(() => refreshProjectList({ force: true }), PROJECTS_REFRESH_MS);
+// POST /api/needs/seen answered with this project's new counts (needs-ui.js).
+window.addEventListener(PROJECTS_LISTED, () => syncReviewDot());
+window.addEventListener(REVIEW_SEEN, (event) => {
+  const { project, counts } = event.detail || {};
+  if (!project) return;
+  S.projects = withReviewBadge(S.projects, project, counts);
+  syncReviewDot();
+});
+
+// ------------------------------------------------------------ project state
+// Each project's page as the person left it (project-state-model.js): saved
+// on a switch, when the page is hidden and, debounced, while they work;
+// restored when they switch back (and, in the desktop app, when a page of
+// this server opens without a route: the app moving between servers).
+const projectStates = createProjectStateStore({
+  storage: (() => { try { return localStorage; } catch { return null; } })(),
+  user: () => S.session?.user || "",
+});
+let restoring = null;       // { project } while a restore finishes (no saves meanwhile)
+let saveTimer = 0;
+const scrolled = new Set(); // elements the person scrolled (scroll positions to keep)
+
+function captureProjectState() {
+  if (!S.booted || !S.project?.id || showingPairGate) return null;
+  const body = S.drawerOpen && S.detail ? document.querySelector(".drawer:not(.inspector-empty) .drawer-body") : null;
+  const scrolls = [];
+  for (const el of scrolled) {
+    if (!el.isConnected || !appRoot.contains(el)) { scrolled.delete(el); continue; }
+    if (!(el.scrollTop > 0) || scrolls.length >= 6) continue;
+    const sel = scrollSelector(el.tagName, el.classList);
+    if (!sel) continue;
+    const index = [...appRoot.querySelectorAll(sel)].indexOf(el);
+    if (index >= 0) scrolls.push({ sel, index, top: el.scrollTop });
+  }
+  let graphLayout = "";
+  try { graphLayout = localStorage.getItem("ark.graphLayout") || ""; } catch { /* storage disabled */ }
+  return {
+    v: 1,
+    route: restorableRoute(location.hash),
+    view: S.view,
+    graphLayout,
+    unit: S.drawerOpen && S.detail && !S.multi
+      ? { ref: S.detail.uid || S.detail.id, floating: Boolean(S.drawerFloating), scroll: body?.scrollTop || 0 } : null,
+    sessions: {
+      selected: S.selectedSessionId || "", query: S.sessionQuery || "", filter: S.sessionFilter || "",
+      groupBy: S.sessionGroupBy || "", railTab: S.sessionRailTab || "", threadMode: S.sessionThreadMode || "",
+    },
+    cameras: projectCameras(graphCameraEntries(), S.project.id),
+    scrollY: window.scrollY || 0,
+    scrolls,
+  };
+}
+
+function saveProjectState() {
+  clearTimeout(saveTimer);
+  if (restoring || document.body.classList.contains("project-switching")) return;
+  const snapshot = captureProjectState();
+  if (snapshot) projectStates.put(S.project.id, snapshot);
+}
+
+function saveProjectStateSoon() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(saveProjectState, 1500);
+}
+
+document.addEventListener("scroll", (event) => {
+  if (event.target instanceof Element && appRoot.contains(event.target)) scrolled.add(event.target);
+  saveProjectStateSoon();
+}, { capture: true, passive: true });
+window.addEventListener("ark:selection", saveProjectStateSoon);
+window.addEventListener("pagehide", saveProjectState);
+document.addEventListener("visibilitychange", () => { if (document.hidden) saveProjectState(); });
+
+// Lightweight state first (route, view, cameras, session list), so the page
+// paints at once; the inspector and the scroll positions follow it.
+function prepareRestore(plan) {
+  if (plan.graphLayout) {
+    try { localStorage.setItem("ark.graphLayout", plan.graphLayout); } catch { /* storage disabled */ }
+  }
+  seedGraphCameras(plan.cameras);
+  Object.assign(S, sessionPatch(plan.sessions));
+}
+
+function applyRestorePlan(plan, { push = false } = {}) {
+  const project = S.project?.id;
+  restoring = { project };
+  prepareRestore(plan);
+  history[push ? "pushState" : "replaceState"](null, "", plan.route);
+  const route = parseHash();
+  if (route.tab === "editor") S.editorKey = route.editorKey || "";
+  setTab(route.tab, route.sub);
+  if (route.topicRef) S.topicRef = route.topicRef;
+  S.workspace = route.workspace || workspaceForTab(route.tab);
+  if (route.taskView) S.taskView = route.taskView;
+  if (route.reviewView) S.reviewView = route.reviewView;
+  if (plan.view) S.view = plan.view;
+  renderRoute().then(() => finishRestore(project, plan), () => { restoring = null; });
+}
+
+async function finishRestore(project, plan) {
+  const current = () => S.project?.id === project && restoring?.project === project;
+  try {
+    if (!current()) return;
+    if (plan.unit) {
+      // A unit deleted meanwhile just stays closed (quiet: no error toast).
+      await ctx.openUnit(plan.unit.ref, null, { quiet: true, forceFloating: plan.unit.floating || undefined });
+      if (!current()) return;
+      if (S.detail?.id != null) for (const graph of graphs) if (graph.byId?.has(S.detail.id)) graph.setSelected(S.detail.id);
+    }
+    // Lists fill in as their data arrives: try a few times.
+    for (const wait of [0, 200, 800]) {
+      await new Promise((resolve) => setTimeout(resolve, wait));
+      if (!current()) return;
+      if (plan.scrollY && Math.abs(window.scrollY - plan.scrollY) > 2) window.scrollTo({ top: plan.scrollY });
+      for (const item of plan.scrolls || []) {
+        const el = appRoot.querySelectorAll(item.sel)[item.index];
+        if (el && Math.abs(el.scrollTop - item.top) > 2) el.scrollTop = item.top;
+      }
+      const body = plan.unit?.scroll ? document.querySelector(".drawer:not(.inspector-empty) .drawer-body") : null;
+      if (body && Math.abs(body.scrollTop - plan.unit.scroll) > 2) body.scrollTop = plan.unit.scroll;
+    }
+  } finally {
+    if (restoring?.project === project) restoring = null;
+  }
 }
 
 function applyProject(data) {
@@ -1405,6 +1630,8 @@ function applyEffectiveAppearance() {
     window.dispatchEvent(new CustomEvent("ark:graph-display", { detail: after }));
   }
   if (before.agentPresence !== after.agentPresence) setPresenceEnabled(after.agentPresence);
+  // The project's marker groups (Settings › Appearance › Node markers).
+  if (setMarkerGroups(S.project?.settings?.markers)) for (const graph of graphs) graph._draw?.();
   applyProjectPalette(effective.palette);
 }
 
@@ -1543,6 +1770,27 @@ async function onHashChange() {
 
 // `filters` (optional) replaces the target tab's filters, e.g. Home's
 // "View history" opens the Map filtered to every needs: tag.
+// Open the Map's graph with `uid` shown (even when the filters hide it),
+// selected, centred and open in the inspector.  The Map view loads lazily
+// the first time; an open Map graph is updated in place.
+async function locateInMap(ref) {
+  const uid = String(ref ?? "").trim();
+  if (!uid || !S.project) return;
+  // The command palette and dialogs give way to the Map.
+  paletteEl?.closePalette?.();
+  document.getElementById("overlay-root")?.querySelectorAll(".modal-backdrop").forEach((el) => el.remove());
+  S.mapReveal = revealList(uid);
+  S.mapFocus = uid;
+  const graph = graphs.find((item) => item.opts?.mapGraph && item.host?.isConnected);
+  if (S.tab === "map" && S.view === "graph" && graph) {
+    await applyFiltersIncremental({ silent: true, repaintRail: false, fit: false });
+    focusLocated(ctx, graph, uid);
+    return;
+  }
+  if (S.tab === "map") ctx.setView("graph");
+  else navigate("map");
+}
+
 function navigate(tab, sub = null, filters = null) {
   if (tab === "plan" && !PLAN_SUBS.includes(sub)) sub = S.sub || "story";
   setTab(tab, sub);
@@ -1868,7 +2116,7 @@ async function loadRouteData({ fresh = false } = {}) {
     api.units({ ...params, slim: S.tab === "production" ? 0 : 1 }, opts),
     needsGraph ? api.graphSnapshot(opts).then(async (snapshot) => {
       graphIndex = await graphIndexFor(snapshot);
-      return graphIndex.filter(graphQuery, S.session?.user || "");
+      return graphIndex.filter(withMapReveal(graphQuery), S.session?.user || "");
     }).catch(() => api.graph(graphQuery)) : Promise.resolve(null),
     S.tab === "tasks"
       ? api.agentSessions().catch(() => ({ sessions: [] }))
@@ -1887,6 +2135,12 @@ async function loadRouteData({ fresh = false } = {}) {
 let filterRequestSeq = 0;
 let filterFacetController = null;
 let filterFacetTimer = null;
+
+// A node located on the Map ("Locate in research map") stays shown while
+// the filters would hide it (S.mapReveal, cleared on leaving the Map).
+function withMapReveal(query) {
+  return S.tab === "map" && S.mapReveal?.length ? { ...query, reveal: S.mapReveal } : query;
+}
 
 function currentGraphQuery() {
   const base = baseTypes(S.tab, S.sub);
@@ -2032,6 +2286,7 @@ function paintGraphData(data, { preserveCamera = true, animate = false, fit = fa
     });
     if (fit && !remote && graph.nodes?.length) graph.fit({ animate: true });
   }
+  syncRevealNotice(ctx);
   return targets.length;
 }
 
@@ -2077,7 +2332,7 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
   }
   if (S.graphIndex) {
     const query = currentGraphQuery();
-    const data = S.graphIndex.filter(query, S.session?.user || "");
+    const data = S.graphIndex.filter(withMapReveal(query), S.session?.user || "");
     S.graph = data;
     S.total = data.total;
     paintGraphData(data, { animate: true, fit, warm: false, remote });
@@ -2678,11 +2933,26 @@ function workspaceButton(id, extraClass, title = null, { side = false } = {}) {
   }, icon(iconName, side ? "sm" : undefined));
 }
 
-// Bottom of the workbench activity bar (as in VS Code): Settings, then the
-// account avatar, whose menu opens to the right of the bar.
+// Settings at one tab (or section): the About button, the palette.
+function openSettingsAt(id) {
+  const target = settingsTarget(id);
+  if (!target) return;
+  try {
+    localStorage.setItem("ark.settingsScope", target.scope);
+    localStorage.setItem("ark.settingsTab", target.tab);
+  } catch { /* storage unavailable */ }
+  if (S.tab !== "settings") { navigateWorkspace("settings"); return; }
+  // A #/settings?settings=… link would win over the stored tab.
+  if (String(location.hash).includes("?")) history.replaceState(history.state, "", `${location.pathname}${location.search}#/settings`);
+  renderRoute({ keepScroll: false });
+}
+
+// Bottom of the workbench activity bar (as in VS Code): About, Settings, then
+// the account avatar, whose menu opens to the right of the bar.
 const activityFoot = h("div", { class: "wb-activity-foot" });
 function renderActivityFoot() {
   clear(activityFoot);
+  activityFoot.append(aboutActivityButton(() => openSettingsAt("about")));
   activityFoot.append(workspaceButton("settings", "wb-foot-btn", null, { side: true }));
   const account = accountMenuButton(ctx, { side: true });
   if (account) activityFoot.append(account);
@@ -2823,6 +3093,8 @@ function setupWorkbench() {
   sessionSidebar = createSessionSidebar(ctx);
   // Execute › Runs: its list shows in the Sessions view, its details in Session properties.
   registerBuiltinView("sessionprops", {}, { applies: (state) => state.tab === "tasks" && state.taskView === "sessions" });
+  // The Sessions view's header buttons follow its mode (list or conversation).
+  window.addEventListener("ark:view-actions", () => renderWorkbench());
   ctx.sessionPage = {
     mount({ list, props }) {
       sessionSidebar.showList(list);
@@ -2834,10 +3106,18 @@ function setupWorkbench() {
   };
   registerBuiltinView("sessions", panelPlugin(sessionSidebar), {
     tooltip: () => t("session.sidebar.tooltip"),
-    actions: () => [
+    // The list (Execute › Runs): launch and refresh; elsewhere a new chat and the page.
+    actions: () => (sessionSidebar.listMode ? [
+      { icon: "plus", title: t("session.runs_menu"), onClick: (event) => {
+        const items = ctx.runsActions?.() || [{ label: t("session.sidebar.new"), icon: "plus", onClick: () => ctx.openSessionLaunch?.({}) }];
+        const rect = event?.currentTarget?.getBoundingClientRect?.() || { left: 80, bottom: 80 };
+        openContextMenu({ x: rect.left, y: rect.bottom + 4, items, returnFocus: event?.currentTarget || null });
+      } },
+      { icon: "refresh", title: t("action.refresh"), onClick: () => sessionSidebar.refreshList() },
+    ] : [
       { icon: "plus", title: t("session.sidebar.new"), onClick: () => sessionSidebar.newSession() },
       { icon: "external", title: t("session.sidebar.open_page"), onClick: () => sessionSidebar.openPage() },
-    ],
+    ]),
   });
   initWorkbench(ctx, { onLayoutChange: onWorkbenchChange });
   if (shellActive()) syncPanelFlags();
@@ -2964,6 +3244,7 @@ function syncTopbar() {
     picker.title = S.project?.path || name;
     picker.setAttribute("aria-label", `${t("app.menu.projects")}: ${name}`);
     picker.querySelector(".project-dot")?.classList.toggle("demo", Boolean(S.project?.demo));
+    syncReviewDot(picker);
   }
   for (const button of topbar.querySelectorAll(".top-subtab[data-workspace-view]")) {
     const id = button.dataset.workspaceView;
@@ -3073,6 +3354,7 @@ function openPalette() {
     { id: "distribution", label: t("palette.cmd.distribution"), cat: t("palette.commands"), run: () => navigate("distribution") },
     { id: "chat", label: t("palette.cmd.chat"), cat: t("palette.commands"), run: () => { navigate("chat"); setTimeout(focusChat, 60); } },
     { id: "settings", label: t("palette.cmd.settings"), cat: t("palette.commands"), run: () => navigate("settings") },
+    { id: "about", label: t("about.button"), cat: t("palette.commands"), run: () => openSettingsAt("about") },
     { id: "editor", label: t("palette.cmd.editor"), cat: t("palette.commands"), run: () => navigateWorkspace("editor") },
     { id: "editor-open", label: t("palette.cmd.editor_open"), cat: t("palette.commands"), run: () => { navigateWorkspace("editor"); setTimeout(focusQuickOpen, 120); } },
     { id: "new", label: t("palette.cmd.new"), cat: t("palette.commands"), run: () => openCreateUnit(ctx, {}) },
@@ -3083,6 +3365,7 @@ function openPalette() {
     { id: "lang", label: t("palette.cmd.lang"), cat: t("palette.commands"), run: () => changeLanguage(getLang() === "zh" ? "en" : "zh") },
     { id: "export", label: t("palette.cmd.export"), cat: t("palette.commands"), run: () => openExport() },
     ...presetCommands(t("workbench.preset.menu")),
+    ...projectMoveCommands(ctx),
   ];
   let items = commands.map((c) => ({ type: "command", ...c }));
   let active = 0;
@@ -3096,6 +3379,7 @@ function openPalette() {
   backdrop.appendChild(box);
   document.getElementById("overlay-root").appendChild(backdrop);
   paletteEl = backdrop;
+  backdrop.closePalette = () => close();
 
   const render = () => {
     clear(list);
@@ -3106,7 +3390,16 @@ function openPalette() {
     items.slice(0, 40).forEach((item, index) => {
       list.appendChild(h("div", {
         class: `palette-item ${index === active ? "on" : ""}`.trim(),
-        onmouseenter: () => { active = index; render(); },
+        // A unit result has the node menu (unit-menu.js), Locate in map included.
+        dataset: item.type === "unit" ? { unitRef: item.unit.uid } : {},
+        // Only move the highlight: re-rendering here would replace the row under
+        // the pointer between mousedown and mouseup, so the click never fired.
+        onmouseenter: (e) => {
+          if (active === index) return;
+          active = index;
+          for (const row of list.children) row.classList.remove("on");
+          e.currentTarget.classList.add("on");
+        },
         onclick: () => choose(item),
       },
         item.type === "unit" ? typeBadge(item.unit.type) : icon("command", "sm"),
@@ -3136,6 +3429,7 @@ function openPalette() {
     else if (e.key === "ArrowUp") { e.preventDefault(); active = Math.max(0, active - 1); render(); }
     else if (e.key === "Enter") { e.preventDefault(); if (items[active]) choose(items[active]); }
     else if (e.key === "Escape") { e.preventDefault(); close(); }
+    else if (items[active]?.type === "unit" && isLocateShortcut(e)) { e.preventDefault(); e.stopPropagation(); close(); locateInMap(items[active].unit.uid); }
   });
   function choose(item) {
     close();

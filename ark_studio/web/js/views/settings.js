@@ -29,6 +29,7 @@ import {
 } from "../graph-display.js";
 import { GRAPH_SETTING_TABS, graphTabStrip, graphDisplayRows, graphDisplayPanel } from "../graph-display-panel.js";
 import { foldSection } from "../fold-section.js";
+import { settingsViewKey } from "../settings-sync-model.js";
 import { renderSkillsPanel } from "../skills-panel.js";
 import { renderProvidersPanel, renderWorktreesPanel } from "../providers-panel.js";
 import { renderAdminPanel } from "../admin-panel.js";
@@ -42,6 +43,7 @@ import { renderProfilePanels, saveAppearanceOverride } from "../profile.js";
 import { appearanceOverrides, APPEARANCE_CHANGED } from "../appearance-overrides.js";
 import { homeFilterPanel } from "../home-filter-ui.js";
 import { SETTINGS_TABS, DEFAULT_SETTINGS_TAB, GRAPH_SECTION, resolveSettingsTab } from "../settings-tabs.js";
+import { markerSettingsPanel } from "./settings-markers.js";
 import { appearancePanel } from "../appearance-panel.js";
 import { paletteMode } from "../appearance.js";
 import { applyAppearance } from "../appearance.js";
@@ -53,6 +55,8 @@ import { userBadge } from "../users.js";
 import { cachePanel } from "../cache-panel.js";
 import { pluginsPanel } from "../plugins-panel.js";
 import { projectStoragePanel } from "../project-storage-panel.js";
+import { aboutOverviewCard, aboutUpdateBlock, appOverviewCard, appSettingsPanel, settingsScopeLine } from "../about.js";
+import { inDesktopApp } from "../desktop-update-model.js";
 
 const FIELDS = [
   {
@@ -227,6 +231,10 @@ function arrowControls({ getDraft, onChange, relations = ARROW_RELATIONS }) {
   return { elements, sync, inputs };
 }
 
+// The pairing code Settings › Mobile made last, per project (kept across
+// repaints of the page so a repaint does not create another one).
+const autoPairings = new Map();
+
 export function renderSettings(host, ctx) {
   const guidedVisit = Boolean(ctx.guidance?.active);
   clear(host);
@@ -369,10 +377,14 @@ export function renderSettings(host, ctx) {
   // the scope bar.  Tab-specific actions live in the tab content.
   const pageEyebrow = h("div", { class: "eyebrow" },
     `${t("nav.settings")} · ${t("settings.project_scope")}`);
+  // Whose settings these are: this server's; inside the desktop app the
+  // app's own settings are one click away (Settings › App).
+  const desktopApp = inDesktopApp();
   page.appendChild(h("div", { class: "page-head settings-page-head" },
     h("div", null,
       pageEyebrow,
-      h("h1", { class: "page-title" }, t("settings.title")))));
+      h("h1", { class: "page-title" }, t("settings.title")),
+      settingsScopeLine(() => jump("app")))));
 
   const grid = h("div", { class: "settings-grid" });
 
@@ -877,12 +889,23 @@ export function renderSettings(host, ctx) {
   // Public/LAN mode: generate once when the panel opens so the user only scans
   // (or regenerates).  Loopback mode stays manual because it needs a tunnel
   // address that this server cannot discover for the phone.
+  // Only while the Mobile section is on screen: a code is a credential, and
+  // every tab of Settings is built at once.  A repaint of the page shows the
+  // code made earlier while it is still open instead of making another.
   async function maybeAutoPair() {
     if (guidedVisit || ctx.guidance?.active) return;
     const connection = mobileState.connection;
     if (!connection || connection.mode === "loopback" || !connection.pairing_auto) return;
     if (mobileState.created || mobileState.autoAttempted || mobileState.autoBusy) return;
+    if (!page.isConnected || activeTab !== tabOfSection("mobile")) return;
     mobileState.autoAttempted = true;
+    const earlier = autoPairings.get(ctx.S.project?.id || "");
+    const open = earlier && (mobileState.pairs || []).some((pair) => pair.id === earlier.pair?.id
+      && !pair.revoked_at && !pair.claimed_at);
+    if (open && Date.parse(earlier.pair.expires_at) - Date.now() > 60_000) {
+      renderPairingResult(earlier);
+      return;
+    }
     await performPairing(pairingBody(), { auto: true });
   }
 
@@ -894,6 +917,7 @@ export function renderSettings(host, ctx) {
     generateQrBtn.append(h("span", { class: "spinner" }), t("settings.mobile.generating"));
     try {
       const data = await api.createPairing(body);
+      autoPairings.set(ctx.S.project?.id || "", data);
       renderPairingResult(data);
       const pairs = await api.pairings();
       mobileState.pairs = pairs.pairs || [];
@@ -949,6 +973,8 @@ export function renderSettings(host, ctx) {
     try {
       const data = await api.revokePairing(pairId);
       mobileState.pairs = data.pairs || [];
+      const projectKey = ctx.S.project?.id || "";
+      if (autoPairings.get(projectKey)?.pair?.id === pairId) autoPairings.delete(projectKey);
       if (mobileState.created?.pair?.id === pairId) {
         mobileState.created = null;
         mobileState.autoAttempted = true;
@@ -1066,8 +1092,8 @@ export function renderSettings(host, ctx) {
         release: h("a", { href: RELEASE_PAGE, target: "_blank", rel: "noopener noreferrer" }, t("settings.mobile.apps_release")),
       })),
         androidAppsBox((apps) => {
-          const ready = ["native", "webapp"].filter((key) => apps?.[key]?.available).length;
-          mobileFolds.apps.setSummary([mobilePwaRow, h("span", null, t("settings.fold.apps", { n: ready }))]);
+          if (!apps?.native?.available) return;
+          mobileFolds.apps.setSummary([mobilePwaRow, h("span", null, t("settings.fold.apps"))]);
         })] }),
   };
   const mobilePanel = h("section", { class: "panel settings-panel mobile-panel" },
@@ -2018,7 +2044,9 @@ export function renderSettings(host, ctx) {
     for (const row of agentRows.filter((item) => item.mode === "project")) {
       const names = String(row.envNames?.value || "")
         .split(",").map((name) => name.trim()).filter(Boolean);
-      providers[row.id] = names.length
+      // An empty credential field still carries "enabled": dropping the row
+      // whenever no names were typed lost an unticked box on every save.
+      providers[row.id] = names.length || !row.enabled.checked
         ? { env_names: names, enabled: row.enabled.checked }
         : null;
     }
@@ -2604,7 +2632,10 @@ export function renderSettings(host, ctx) {
     h("dl", { class: "settings-about-details" },
       h("dt", null, t("about.author")),
       h("dd", null, aboutLink("MasterYip", "", "user")),
+      h("dt", null, t("about.license")),
+      h("dd", null, aboutLink("AGPL-3.0", "/ARK-Studio/blob/main/LICENSE", "book")),
       build ? [h("dt", null, t("about.build")), h("dd", null, h("code", null, build))] : null),
+    aboutUpdateBlock(),
     h("div", { class: "settings-about-links" },
       aboutLink(t("about.repository"), "/ARK-Studio", "git"),
       aboutLink(t("about.latest_release"), "/ARK-Studio/releases/latest", "download"),
@@ -2994,6 +3025,10 @@ export function renderSettings(host, ctx) {
   const overviewPanel = h("section", { class: "panel settings-panel settings-overview", "data-settings-overview": "" },
     h("div", { class: "panel-head" }, h("h3", null, t("settings.overview.title"))),
     h("p", { class: "settings-lead" }, t("settings.overview.lead")),
+    h("p", { class: "settings-lead settings-overview-where" },
+      t(desktopApp ? "settings.overview.where_app" : "settings.overview.where_browser")),
+    desktopApp ? appOverviewCard(() => jump("app")) : null,
+    aboutOverviewCard(() => jump("about")),
     h("div", { class: "settings-overview-scopes" },
       scopeCard("folder", t("settings.scope_project"), t("settings.overview.project"), t("settings.overview.project_eg")),
       scopeCard("user", t("settings.scope_personal"), t("settings.overview.personal"), t("settings.overview.personal_eg")),
@@ -3014,6 +3049,8 @@ export function renderSettings(host, ctx) {
   const sectionPanels = {
     appearance: [palettePanel],
     graph: [graphLayout],
+    markers: [markerSettingsPanel(ctx, { registerSave, setDirty,
+      readOnly: !ctx.S.session?.local && ctx.S.session?.project_permission !== "admin" })],
     projectAgents: [projectAgentsPanel],
     agentRules: [agentRulesPanel(ctx, "project")],
     projectAssistant: [projectAssistantPanel],
@@ -3045,6 +3082,7 @@ export function renderSettings(host, ctx) {
     agentAccess: [agentTokensPanel(ctx)],
     plugins: [pluginsPanel(ctx)],
     about: [aboutPanel],
+    app: desktopApp ? [appSettingsPanel()] : [],
     projectStorage: isOrgAdmin ? [projectStoragePanel(ctx)] : [],
     admin: isOrgAdmin ? [adminPanel, ...(ctx.S.session?.local ? [] : [renderInviteSignupSetting(ctx)]), legacyServerTokenPanel()] : [],
     // Invite links need accounts: project admins on a server with sign-in.
@@ -3065,6 +3103,7 @@ export function renderSettings(host, ctx) {
     personalAI: { label: t("settings.tab.personal_ai"), icon: "sparkles", hint: t("settings.tab.personal_ai_hint") },
     plugins: { label: t("plugins.title"), icon: "puzzle", hint: t("plugins.hint") },
     about: { label: t("about.title"), icon: "info", hint: t("about.hint") },
+    app: { label: t("app.title"), icon: "monitor", hint: t("app.hint") },
     storage: { label: t("settings.tab.storage"), icon: "folder", hint: t("settings.tab.storage_hint") },
     admin: { label: t("settings.scope_admin"), icon: "shield", hint: t("settings.scope_admin_hint") },
   };
@@ -3135,14 +3174,19 @@ export function renderSettings(host, ctx) {
     return true;
   };
   try { pickTab(localStorage.getItem("ark.settingsTab")); } catch { /* ignore */ }
+  let requestedTab = false;
   try {
-    const requested = new URLSearchParams(location.search).get("settings");
+    const requested = new URLSearchParams(location.search).get("settings")
+      || new URLSearchParams(String(location.hash).split("?")[1] || "").get("settings");
     if (requested && !pickTab(requested)) { activeTab = DEFAULT_SETTINGS_TAB; revealId = ""; }
+    requestedTab = Boolean(requested);
   } catch { /* ignore */ }
   const activeTabDef = tabs.find((tab) => tab.id === activeTab);
   if (activeTabDef) activeScope = activeTabDef.scope;
-  // A scope deep-link must win over the last tab remembered from another scope.
-  if (requestedScope && scopes.includes(requestedScope)
+  // A scope deep-link must win over the last tab remembered from another
+  // scope, not over a tab the same link names (?scope=personal&settings=about
+  // from before About moved to the top level still opens About).
+  if (requestedScope && scopes.includes(requestedScope) && !requestedTab
       && activeTabDef?.scope !== requestedScope) {
     activeScope = requestedScope;
     const firstForScope = tabs.find((tab) => tab.scope === requestedScope);
@@ -3232,6 +3276,7 @@ export function renderSettings(host, ctx) {
     }
     for (const [key, pane] of panes) pane.classList.toggle("hidden", key !== activeTab);
     try { localStorage.setItem("ark.settingsTab", activeTab); } catch { /* ignore */ }
+    if (activeTab === tabOfSection("mobile")) maybeAutoPair();
     if (activeTab === graphTab) requestAnimationFrame(() => preview?._resize?.());
     if (reveal && panes.get(activeTab)?.contains(sectionEls.get(reveal))) revealSection(reveal);
   }
@@ -3267,6 +3312,14 @@ export function renderSettings(host, ctx) {
   host.appendChild(page);
   syncAll();
   loadEffective();
+  // A change from elsewhere repaints this page only when the data it was
+  // built from changed and nothing is unsaved (settings-sync-model.js).
+  const shownKey = settingsViewKey(ctx.S);
+  ctx.settingsPage = {
+    mounted: () => page.isConnected,
+    shownKey,
+    dirty: () => [...saveSources.values()].some((source) => source.dirty),
+  };
 
   // ------------------------------------------------------------ preview graph
   async function reloadPreviewData() {
@@ -3315,8 +3368,8 @@ function formatPhysicsInput(key, value) {
   return String(Math.round(value));
 }
 
-// Settings -> Mobile: the native app and the web-app shell.  The server
-// resolves the APKs of the latest GitHub release (never the browser: GitHub
+// Settings -> Mobile: the Android app.  The server
+// resolves the APK of the latest GitHub release (never the browser: GitHub
 // rate-limits shared IPs) and sends their URLs and QR codes; without an
 // absolute URL (an older server, a failed request) the release page is used.
 const RELEASE_PAGE = "https://github.com/MasterYip/ARK-Studio/releases/latest";
@@ -3326,7 +3379,6 @@ function androidAppsBox(onLoad = null) {
   // Labels are keys so they resolve on every render (language switch re-renders).
   const cards = [
     ["native", "settings.android.native_title", "settings.android.native_desc"],
-    ["webapp", "settings.android.webapp_title", "settings.android.webapp_desc"],
   ];
   const render = (apps) => {
     clear(box);
@@ -3353,7 +3405,7 @@ function androidAppsBox(onLoad = null) {
     }
   };
   render(null);
-  const all = { native: { available: true }, webapp: { available: true } };
+  const all = { native: { available: true } };
   api.mobileApps().then((data) => { render(data.apps); onLoad?.(all); }).catch(() => { render(null); onLoad?.(all); });
   return box;
 }

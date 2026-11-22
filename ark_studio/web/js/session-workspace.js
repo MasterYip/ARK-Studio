@@ -24,7 +24,7 @@ import {
   permissionModeDescription as permissionModeDescriptionEn,
   permissionModeLabel as permissionModeLabelEn, queuedSteerItems, sessionAccessMode, sessionPermissionModes,
   sessionSupportsApproval, steerMoveOrder,
-  blockSignature, liveActivity, threadBlocks, sessionPhase, shownStatus, toolCommand, toolGroupSummary, toolKind, toolPaths,
+  blockSignature, liveActivity, threadBlocks, sessionPhase, shownStatus, busyWork, busyReason, pendingSteerItems, toolCommand, toolGroupSummary, toolKind, toolPaths,
   CUSTOM_MODEL_VALUE, defaultModelOption, modelEfforts, modelOptionLabel as modelOptionLabelEn, modelOptions,
   modelPickerGroups, modelSourceSummary,
 } from "./session-model.js";
@@ -37,11 +37,16 @@ import { capFirst, fmtDuration, textValue, renderToolGroup as renderToolGroupRow
 import { createActivityChips, activityRow } from "./session-activity.js";
 import { activityList, blockKeyFor } from "./session-activity-model.js";
 import {
-  composerKeyAction, composerHintKey, sendNowMode, imageContext, windowBlocks, drawLimit, turnRunning, stopLabelKey,
+  composerKeyAction, composerHintKey, sendNowMode, imageContext, windowBlocks, drawLimit, turnRunning, stopLabelKey, stopBackgroundMode,
   loadAgentTabs, saveAgentTabs, openAgentTab as openAgentTabIn, closeAgentTab, activateAgentTab,
+  tabRoot, openForkTab,
 } from "./session-sidebar-model.js";
 import { readImages, releaseImages, imageTray, bindImageInput, imagePicker, turnImages } from "./session-images.js";
 import { openContextMenu, contextMenuOpen } from "./context-menu.js";
+import { closeDeleteItems, stopBackgroundItems } from "./session-menu.js";
+import { longPressMenu, swipeDownToClose, watchKeyboard } from "./session-touch.js";
+import { loadBlocks, toggleBlock } from "./session-sidebar-model.js";
+import { openTranscript } from "./session-library.js";
 import { delegateImageContextMenu } from "./image-copy.js";
 
 // session-model.js is dependency-free; inject the app translator here.
@@ -302,20 +307,65 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   const mobileQuery = typeof window.matchMedia === "function"
     ? window.matchMedia("(max-width: 760px)") : null;
   const isPhone = () => Boolean(mobileQuery?.matches);
-  function closeMobilePanels() {
+  // An open sheet is a history entry: the Android back gesture closes it
+  // before it leaves the page.
+  function closeMobilePanels(fromHistory = false) {
+    const open = rail.classList.contains("mobile-open") || side.classList.contains("mobile-open");
     rail.classList.remove("mobile-open");
     side.classList.remove("mobile-open");
     mobileScrim.classList.add("hidden");
+    if (open && !fromHistory && history.state?.swSheet) history.back();
   }
   function openMobilePanel(panel) {
     if (!isPhone()) return;
     rail.classList.toggle("mobile-open", panel === "rail");
     side.classList.toggle("mobile-open", panel === "side");
     mobileScrim.classList.toggle("hidden", !panel);
+    if (panel && !history.state?.swSheet) history.pushState({ ...(history.state || {}), swSheet: panel }, "");
   }
+  const onHistory = () => {
+    if (destroyed) { window.removeEventListener("popstate", onHistory); return; }
+    if (!history.state?.swSheet) closeMobilePanels(true);
+  };
+  window.addEventListener("popstate", onHistory);
+  const railHandle = h("div", { class: "sw-sheet-handle", "aria-hidden": "true" });
+  const sideHandle = h("div", { class: "sw-sheet-handle", "aria-hidden": "true" });
+  rail.prepend(railHandle);
+  side.prepend(sideHandle);
+  swipeDownToClose(rail, [railHandle], () => closeMobilePanels());
+  swipeDownToClose(side, [sideHandle, sideHead], () => closeMobilePanels());
+  if (isPhone()) watchKeyboard();
 
   // Stored session contexts (ARK and uploaded) sit under the session list.
   if (library) rail.appendChild(library);
+  // In the Sessions view: the view's header is the only header; the list and
+  // the grouping info are collapsible blocks (state remembered).
+  if (docked || isPhone()) {
+    const tools = rail.querySelector(".sw-rail-tools");
+    const foot = rail.querySelector(".sw-rail-foot");
+    listCount.title = t("session.rail.foot");
+    const block = (key, label, extra, ...parts) => {
+      const state = loadBlocks();
+      const head = h("button", { class: "sw-block-head", type: "button", "aria-expanded": state[key] ? "true" : "false",
+        dataset: { block: key } }, icon("chevronRight", "sm"), h("span", null, label), extra);
+      const body = h("div", { class: "sw-block-body", hidden: !state[key] }, ...parts);
+      head.addEventListener("click", () => {
+        const next = toggleBlock(key);
+        body.hidden = !next[key];
+        head.setAttribute("aria-expanded", next[key] ? "true" : "false");
+      });
+      return h("div", { class: `sw-block ${key}` }, head, body);
+    };
+    const listBlock = block("list", t("session.block.list"), listCount, tools, listBody);
+    const groupBlock = block("groups", t("session.block.groups"), null, groupBar);
+    if (docked) rail.querySelector(".sw-rail-head")?.remove();   // the view's header is the header
+    foot?.remove();
+    rail.prepend(listBlock, groupBlock);
+    // Phone sheet: its handle and its header (close, launch, refresh) on top.
+    const railHead = rail.querySelector(".sw-rail-head");
+    if (railHead) rail.prepend(railHead);
+    rail.prepend(railHandle);
+  }
   const root = h("div", { class: `sw-workspace ${docked ? "sw-docked" : ""}`.trim() }, rail, main, side);
   // Wide window: the list goes to the Sessions view, the details to the
   // Session properties view; the conversation takes the page.
@@ -719,7 +769,22 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     startRename(mainHeader.querySelector("h2"), session);
   }
 
+  // Stored context of listed sessions (sizes, "View transcript").
+  let storedSizes = {};
+  let storedContexts = {};
+  function setStoredContexts(section) {
+    storedSizes = section?.sizes || {};
+    storedContexts = Object.fromEntries((section?.listed || []).map((item) => [item.id, item]));
+    paintList();
+  }
+
   function sessionRow(session) {
+    const row = sessionRowEl(session);
+    longPressMenu(row);
+    return row;
+  }
+
+  function sessionRowEl(session) {
     const active = isActiveSession(session);
     const depth = Math.max(0, Number(session.depth || 0));
     return h("button", {
@@ -734,21 +799,27 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
         event.preventDefault();
         openContextMenu({ x: event.clientX, y: event.clientY, returnFocus: event.currentTarget, items: [
           { label: t("session.menu.rename"), icon: "edit", onClick: () => renameRow(session) },
+          storedContexts[session.id] ? { label: t("ctx.view"), icon: "file", onClick: () => openTranscript(storedContexts[session.id]) } : null,
           { label: t("session.copy_id"), icon: "copy", onClick: () => copyText(session.id) },
-        ] });
+          ...closeDeleteItems(ctx, session, sessionTitle(session)),
+        ].filter(Boolean) });
       },
       onkeydown: (event) => {
         if (event.key === "F2") { event.preventDefault(); renameRow(session); }
       },
     },
       h("div", { class: "sw-session-top" },
-        statusDot(shownStatus(session)),
+        statusDot(shownStatus(session, activityOf(session))),
         h("span", { class: "sw-session-title" }, sessionTitle(session)),
         h("span", { class: "sw-session-time", title: session.last_activity_at || "" }, sessionTime(session.last_activity_at))),
       h("div", { class: "sw-session-meta" },
+        busyNote(session, { reasonOnly: true }),
         session.parent_id ? h("span", { class: "sw-mini-tag sub" }, t("session.tag.subagent")) : null,
         forkRelationLabel(session) ? h("span", { class: "sw-mini-tag side" }, forkRelationLabel(session)) : null,
         h("span", null, platformLabel(session)),
+        session.closed ? h("span", { class: "sw-mini-tag closed" }, t("session.tag.closed")) : null,
+        storedSizes[session.id] ? h("span", { class: "sw-sep" }, "·") : null,
+        storedSizes[session.id] ? h("span", { class: "sw-mono", title: t("ctx.stored") }, formatBytes(storedSizes[session.id])) : null,
         session.model ? h("span", { class: "sw-sep" }, "·") : null,
         session.model ? h("span", { class: "sw-mono" }, session.model) : null,
         session.agent ? h("span", { class: "sw-sep" }, "·") : null,
@@ -782,9 +853,10 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     clear(mainBar);
     const session = current();
     if (!session) {
-      mainHeader.appendChild(h("div", { class: "sw-main-empty" },
-        emptyState(t("tasks.sessions_empty"), t("tasks.sessions_empty_hint"),
-          h("button", { class: "btn primary", onclick: () => onLaunch() }, icon("play", "sm"), t("tasks.launch")))));
+      mainHeader.appendChild(h("div", { class: "sw-main-empty sw-empty-line" },
+        h("span", null, t("session.empty_line")),
+        h("button", { class: "btn sm primary", type: "button", "data-new-session": "", onclick: () => onLaunch() },
+          icon("plus", "sm"), t("session.sidebar.new"))));
       threadWrap.classList.add("hidden");
       composerHost.classList.add("hidden");
       if (isPhone()) openMobilePanel("rail");
@@ -795,53 +867,73 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const active = isActiveSession(session);
     const title = sessionTitle(session);
     const pendingCount = pendingApprovals(session).length;
-    mainHeader.appendChild(h("div", { class: "sw-title-line" },
-      statusDot(shownStatus(session)),
-      h("h2", { title }, title),
-      statusPill(shownStatus(session)),
-      session.parent_id ? h("span", { class: "sw-mini-tag sub" }, t("session.tag.subagent")) : null,
-      forkRelationLabel(session) ? h("span", { class: "sw-mini-tag side" }, forkRelationLabel(session)) : null,
-      h("button", {
-        class: "sw-mobile-btn", type: "button", title: t("session.rail.open"),
-        onclick: () => openMobilePanel("rail"),
-      }, icon("list", "sm"), t("tasks.sessions")),
-      h("button", {
-        class: `sw-mobile-btn ${pendingCount ? "attention" : ""}`.trim(), type: "button",
-        title: t("session.details.open"),
-        onclick: () => openMobilePanel("side"),
-      }, icon("info", "sm"), pendingCount ? t("session.details.button_count", { n: pendingCount }) : t("session.details.button")),
-      h("span", { class: "spacer" }),
-      h("div", { class: "sw-main-actions" },
-        active ? h("button", { class: "btn sm danger", title: t(`${stopLabelKey(session)}_hint`), onclick: stopSession },
-          icon("x", "sm"), t(stopLabelKey(session))) : null,
+    if (isPhone()) {
+      // Phone: one compact row; everything else is in the menu.
+      const more = h("button", {
+        class: "icon-btn sw-more sw-phone-btn", type: "button", title: t("session.menu.more"), "aria-label": t("session.menu.more"),
+        "aria-haspopup": "menu", "data-session-menu": "",
+        onclick: (event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          openSessionMenu(rect.left, rect.bottom + 4, event.currentTarget);
+        },
+      }, icon("more", "sm"));
+      const titleEl = h("div", { class: "sw-phone-title", title },
+        statusDot(shownStatus(session, activityOf(session))), h("h2", null, title), busyNote(session, { reasonOnly: true }));
+      mainHeader.appendChild(h("div", { class: "sw-phone-head" },
         h("button", {
-          class: "icon-btn sw-more", type: "button", title: t("session.menu.more"), "aria-label": t("session.menu.more"),
-          "aria-haspopup": "menu", "data-session-menu": "",
-          onclick: (event) => {
-            const rect = event.currentTarget.getBoundingClientRect();
-            openSessionMenu(rect.left, rect.bottom + 4, event.currentTarget);
-          },
-        }, icon("more", "sm")))));
-    mainHeader.appendChild(h("div", { class: "sw-title-meta" },
-      h("span", { class: "sw-meta-item" }, icon("cpu", "sm"), platformLabel(session)),
-      session.model ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), session.model) : null,
-      session.effort ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), t("session.meta.effort", { effort: session.effort })) : null,
-      session.worktree
-        ? h("span", {
-          class: `sw-meta-item sw-branch ${worktreeConflict(session) ? "conflict" : ""}`.trim(),
-          title: session.worktree.dirty
-            ? t("session.meta.worktree_dirty", { path: session.worktree.path || "", n: session.worktree.dirty })
-            : (session.worktree.path || ""),
-        }, icon("git", "sm"), worktreeLabel(session) || t("session.tag.worktree"),
-          worktreeConflict(session) ? h("b", { class: "sw-branch-warn" }, t("session.tag.shared")) : null)
-        : null,
-      h("span", { class: `sw-access ${session.access_mode || "read_only"}`.trim(), title: t("session.meta.access_hint") },
-        icon("shield", "sm"), session.access_label || permissionModeLabel(session.access_mode === "full_access" ? "full_access" : "read_only")),
-      session.agent ? h("span", { class: "sw-meta-item" }, icon("user", "sm"), session.agent) : null,
-      session.task_ref ? h("span", { class: "sw-meta-item" }, icon("target", "sm"), session.task_ref) : null,
-      h("span", { class: "sw-meta-item sw-mono" }, icon("folder", "sm"), sessionCwd(session)),
-      h("span", { class: "spacer" }),
-      h("span", { class: "sw-meta-item" }, icon("clock", "sm"), session.started_at ? fmtDateTime(session.started_at) : t("session.meta.not_started"))));
+          class: "sw-mobile-btn sw-phone-btn", type: "button", title: t("session.rail.open"), "aria-label": t("session.rail.open"),
+          "data-phone-list": "", onclick: () => openMobilePanel("rail"),
+        }, icon("list", "sm")),
+        titleEl,
+        pendingCount ? h("button", {
+          class: "sw-mobile-btn sw-phone-btn attention", type: "button", title: t("session.details.open"),
+          onclick: () => openMobilePanel("side"),
+        }, icon("shield", "sm"), String(pendingCount)) : null,
+        more));
+      longPressMenu(titleEl);
+      titleEl.addEventListener("contextmenu", (event) => { event.preventDefault(); openSessionMenu(event.clientX, event.clientY, titleEl); });
+    } else {
+      mainHeader.appendChild(h("div", { class: "sw-title-line" },
+        statusDot(shownStatus(session, activityOf(session))),
+        h("h2", { title }, title),
+        statusPill(shownStatus(session, activityOf(session))),
+        busyNote(session, { reasonOnly: true }),
+        session.parent_id ? h("span", { class: "sw-mini-tag sub" }, t("session.tag.subagent")) : null,
+        forkRelationLabel(session) ? h("span", { class: "sw-mini-tag side" }, forkRelationLabel(session)) : null,
+        h("span", { class: "spacer" }),
+        h("div", { class: "sw-main-actions" },
+          active ? h("button", { class: "btn sm danger", title: t(`${stopLabelKey(session)}_hint`), onclick: stopSession },
+            icon("x", "sm"), t(stopLabelKey(session))) : null,
+          h("button", {
+            class: "icon-btn sw-more", type: "button", title: t("session.menu.more"), "aria-label": t("session.menu.more"),
+            "aria-haspopup": "menu", "data-session-menu": "",
+            onclick: (event) => {
+              const rect = event.currentTarget.getBoundingClientRect();
+              openSessionMenu(rect.left, rect.bottom + 4, event.currentTarget);
+            },
+          }, icon("more", "sm")))));
+      mainHeader.appendChild(h("div", { class: "sw-title-meta" },
+        h("span", { class: "sw-meta-item" }, icon("cpu", "sm"), platformLabel(session)),
+        session.model ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), session.model) : null,
+        session.effort ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), t("session.meta.effort", { effort: session.effort })) : null,
+        session.worktree
+          ? h("span", {
+            class: `sw-meta-item sw-branch ${worktreeConflict(session) ? "conflict" : ""}`.trim(),
+            title: session.worktree.dirty
+              ? t("session.meta.worktree_dirty", { path: session.worktree.path || "", n: session.worktree.dirty })
+              : (session.worktree.path || ""),
+          }, icon("git", "sm"), worktreeLabel(session) || t("session.tag.worktree"),
+            worktreeConflict(session) ? h("b", { class: "sw-branch-warn" }, t("session.tag.shared")) : null)
+          : null,
+        h("span", { class: `sw-access ${session.access_mode || "read_only"}`.trim(), title: t("session.meta.access_hint") },
+          icon("shield", "sm"), session.access_label || permissionModeLabel(session.access_mode === "full_access" ? "full_access" : "read_only")),
+        session.agent ? h("span", { class: "sw-meta-item" }, icon("user", "sm"), session.agent) : null,
+        // The task chip has the node menu (unit-menu.js): Locate in research map and the rest.
+        session.task_ref ? h("span", { class: "sw-meta-item sw-task-ref", dataset: { unitRef: session.task_ref } }, icon("target", "sm"), session.task_ref) : null,
+        h("span", { class: "sw-meta-item sw-mono" }, icon("folder", "sm"), sessionCwd(session)),
+        h("span", { class: "spacer" }),
+        h("span", { class: "sw-meta-item" }, icon("clock", "sm"), session.started_at ? fmtDateTime(session.started_at) : t("session.meta.not_started"))));
+    }
 
     mainBar.appendChild(h("div", { class: "sw-mode" },
       h("button", {
@@ -874,10 +966,17 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       const ok = await copyText(text);
       ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
     };
+    const phone = isPhone() ? [
+      { label: t("session.props.open"), icon: "info", onClick: () => openMobilePanel("side") },
+      { label: t(threadMode === "thread" ? "session.mode.raw" : "session.mode.thread"), icon: "command",
+        onClick: () => setThreadMode(threadMode === "thread" ? "raw" : "thread") },
+    ] : [];
     return [
+      ...phone,
       { label: t("session.menu.rename"), icon: "edit", onClick: () => renameHeader(session) },
       session.task_ref ? { label: t("tasks.open_task"), icon: "target", onClick: () => ctx.openUnit(session.task_ref) } : null,
-      { label: t("session.side_chat.button"), icon: "git", onClick: () => openSideChat(session) },
+      { label: t("session.fork_tab"), icon: "git", onClick: () => forkInTab(session) },
+      { label: t("session.side_chat.button"), icon: "message", onClick: () => openSideChat(session) },
       { label: t("session.copy_id"), icon: "copy", onClick: async () => {
         const ok = await copyText(session.id);
         ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
@@ -885,8 +984,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       { label: t("session.copy_replies"), icon: "copy", onClick: copyReplies },
       active ? { label: t("tasks.stop"), icon: "x", danger: true, onClick: stopSession }
         : { label: t("session.relaunch"), icon: "refresh", onClick: relaunchSession },
-      !active ? { label: t("tasks.archive"), icon: "database", onClick: archiveSession } : null,
-      !active ? { label: t("tasks.delete"), icon: "trash", danger: true, onClick: deleteSession } : null,
+      ...closeDeleteItems(ctx, session, sessionTitle(session)),
     ].filter(Boolean);
   }
 
@@ -898,7 +996,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
 
   mainHeader.tabIndex = -1;
   mainHeader.addEventListener("contextmenu", (event) => {
-    if (event.target.closest("input, textarea, a")) return;
+    if (event.target.closest("input, textarea, a, [data-unit-ref]")) return;
     event.preventDefault();
     openSessionMenu(event.clientX, event.clientY, mainHeader);
   });
@@ -957,7 +1055,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       return h("span", { class: `sw-live ${errored ? "error" : "done"}`.trim() },
         h("i"), errored ? (session.error || statusText("errored")) : t("session.live.completed", { time: sessionTime(session.ended_at) }));
     }
-    const label = t(sessionPhase(session) === "waiting" ? "session.live.waiting" : session.status === "idle" ? "session.live.idle"
+    const busyText = busyNote(session)?.textContent || "";
+    const label = busyText || t(sessionPhase(session) === "waiting" ? "session.live.waiting" : session.status === "idle" ? "session.live.idle"
       : session.status === "starting" ? "session.live.starting"
         : session.status === "stopping" ? "session.live.stopping" : "session.live.running");
     return h("span", { class: "sw-live running" }, h("i"), label,
@@ -977,8 +1076,17 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   // ---------------------------------------------------------------- transcript
   // The open tab: the main conversation ("") or a sub-agent (its call id).
   let agentTabs = loadAgentTabs();
+  // The strip belongs to the group root: the session, or the session a fork
+  // came from.  A fork tab shows that session itself (with its composer); a
+  // sub-agent tab shows the sub-agent of the selected session.
+  function stripOwner() {
+    return selectedId ? tabRoot(agentTabs, selectedId) : "";
+  }
   function activeTab() {
-    return (selectedId && agentTabs[selectedId]?.active) || "";
+    // A sub-agent of the selected session (its call id), or "".
+    const entry = selectedId ? agentTabs[selectedId] : null;
+    const tab = entry?.tabs.find((item) => item.id === entry.active);
+    return tab && tab.kind !== "session" ? tab.id : "";
   }
   function viewKey() {
     return selectedId ? transcriptKey(selectedId, activeTab()) : "";
@@ -1051,6 +1159,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
 
   function openAgent(itemId, label = "") {
     if (!selectedId || !itemId) return;
+    closeMobilePanels();
     if (threadMode !== "thread") setThreadMode("thread");
     setTabs(openAgentTabIn(agentTabs, selectedId, { id: itemId, label }));
     showConversationTab();
@@ -1067,29 +1176,85 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
 
   function paintTabs() {
     clear(tabStrip);
-    const entry = selectedId ? agentTabs[selectedId] : null;
+    const owner = stripOwner();
+    const entry = owner ? agentTabs[owner] : null;
     tabStrip.hidden = !entry?.tabs?.length || threadMode !== "thread";
     if (tabStrip.hidden) return;
-    const statusOf = (id) => activityChips.activity.entries.find((item) => item.itemId === id)?.status || "";
-    const tab = (id, label, status) => h("div", {
-      class: `sw-tab ${activeTab() === id ? "on" : ""}`.trim(), role: "tab", tabindex: "0",
-      "aria-selected": activeTab() === id ? "true" : "false", dataset: { sessionTab: id || "main" },
-      onclick: () => { setTabs(activateAgentTab(agentTabs, selectedId, id)); showConversationTab(); },
-      onkeydown: (event) => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); } },
-      oncontextmenu: id ? null : (event) => { event.preventDefault(); openSessionMenu(event.clientX, event.clientY, event.currentTarget); },
-    },
-      status ? h("i", { class: `sa-dot ${status}` }) : icon("message", "sm"),
-      h("span", { class: "sw-tab-label", title: label }, label),
-      id ? h("button", {
-        class: "sw-tab-x", type: "button", title: t("action.close"), "aria-label": t("session.tabs.close", { label }),
-        onclick: (event) => {
-          event.stopPropagation();
-          setTabs(closeAgentTab(agentTabs, selectedId, id));
+    const statusOf = (item) => {
+      if (item.kind === "session") return shownStatusOf(sessions.find((s) => s.id === item.id));
+      return activityChips.activity.entries.find((entry2) => entry2.itemId === item.id)?.status || "";
+    };
+    // Which tab is on: a fork tab when the fork is selected; else the root's own state.
+    const onId = selectedId !== owner ? selectedId : activeTab();
+    const tab = (item, label, status) => {
+      const id = item?.id || "";
+      const on = onId === id;
+      return h("div", {
+        class: `sw-tab ${on ? "on" : ""} ${item?.kind === "session" ? "fork" : ""}`.trim(), role: "tab", tabindex: "0",
+        "aria-selected": on ? "true" : "false", dataset: { sessionTab: id || "main", tabKind: item?.kind || "main" },
+        onclick: () => {
+          if (item?.kind === "session") {
+            setTabs(activateAgentTab(agentTabs, owner, id));
+            select(id);
+            return;
+          }
+          setTabs(activateAgentTab(agentTabs, owner, id));
+          if (selectedId !== owner) { select(owner); return; }
           showConversationTab();
         },
-      }, icon("x", "sm")) : null);
-    tabStrip.append(tab("", t("session.tabs.main"), ""),
-      ...entry.tabs.map((item) => tab(item.id, item.label || t("session.activity.kind_subagent"), statusOf(item.id))));
+        onkeydown: (event) => {
+          if (event.key === "Enter" || event.key === " ") { event.preventDefault(); event.currentTarget.click(); }
+          if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+            event.preventDefault();
+            const rect = event.currentTarget.getBoundingClientRect();
+            openSessionMenu(rect.left, rect.bottom + 4, event.currentTarget);
+          }
+        },
+        oncontextmenu: item?.kind === "agent" ? null : (event) => {
+          event.preventDefault();
+          if (item?.kind === "session" && selectedId !== id) { event.currentTarget.click(); return; }
+          openSessionMenu(event.clientX, event.clientY, event.currentTarget);
+        },
+      },
+        status ? h("i", { class: `sa-dot ${status}` }) : icon(item?.kind === "session" ? "git" : "message", "sm"),
+        h("span", { class: "sw-tab-label", title: label }, label),
+        id ? h("button", {
+          class: "sw-tab-x", type: "button", title: t("action.close"), "aria-label": t("session.tabs.close", { label }),
+          onclick: (event) => {
+            event.stopPropagation();
+            setTabs(closeAgentTab(agentTabs, owner, id));
+            if (selectedId === id) { select(owner); return; }
+            showConversationTab();
+          },
+        }, icon("x", "sm")) : null);
+    };
+    tabStrip.append(tab(null, t("session.tabs.main"), ""),
+      ...entry.tabs.map((item) => tab(item, item.label || t(item.kind === "session" ? "session.tabs.fork" : "session.activity.kind_subagent"), statusOf(item))));
+    for (const el of tabStrip.children) longPressMenu(el);
+    tabStrip.querySelector(".sw-tab.on")?.scrollIntoView?.({ inline: "nearest", block: "nearest" });
+  }
+
+  function shownStatusOf(session) {
+    if (!session) return "";
+    const status = shownStatus(session);
+    return status === "running" ? "running" : status === "errored" ? "failed" : status === "idle" ? "" : "completed";
+  }
+
+  // Fork in new tab: the provider forks the conversation itself (Claude
+  // Code, Codex), otherwise the fork starts with a summary of it.
+  async function forkInTab(session) {
+    if (!session) return;
+    try {
+      const data = await api.forkSession(session.id, { mode: "fork" });
+      const fork = data.session;
+      if (!fork?.id) return;
+      sessions = [fork, ...sessions.filter((item) => item.id !== fork.id)];
+      const owner = stripOwner();
+      setTabs(openForkTab(agentTabs, owner, { id: fork.id, label: sessionTitle(fork) }));
+      ctx.toast(t(fork.fork_method === "native" ? "session.toast.forked" : "session.toast.forked_seeded"), "ok");
+      await refreshSessions();
+      select(fork.id);
+    } catch (err) { ctx.toast(err.message, "err"); }
   }
 
   // The thread is a keyed list: every display block (user turn, assistant
@@ -1097,19 +1262,42 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   // is only rebuilt when its own content changes.  A streaming reply is patched
   // in place, so new lines grow the column without re-rendering or jumping it.
   let activityCount = "";
+  let activityFor = "";
+  let busyKey = "";
   function refreshActivity(items, session) {
     const activity = activityChips.update(items, { session, sessions });
+    activityFor = session?.id || "";
     const count = `${activity.subagents.length}:${activity.background.length}:${activity.runningSubagents}:${activity.runningBackground}`;
+    const busy = session ? `${session.id}:${shownStatus(session, activity)}:${JSON.stringify(busyReason(session, activity))}` : "";
     if (count !== activityCount) {
       activityCount = count;
       if (session) paintSide();
       paintTabs();
     }
+    if (busy !== busyKey) {
+      const repaint = busyKey !== "";
+      busyKey = busy;
+      if (repaint) { paintList(); paintMain(); if (session) paintSide(); }
+      repaintSend();
+    }
   }
+  // The open session's sub-agent / background activity (fresher than the server's `busy`).
+  function activityOf(session) {
+    return session && session.id === activityFor ? activityChips.activity : null;
+  }
+  // "Running · 2 sub-agents" when the turn has ended but work goes on (reasonOnly: "2 sub-agents").
+  function busyNote(session, { reasonOnly = false } = {}) {
+    const reasons = busyReason(session, activityOf(session));
+    if (!reasons.length) return null;
+    const text = reasons.map((r) => t(r.key, { n: r.n })).join(" · ");
+    return h("span", { class: "sw-busy-note", "data-busy-note": "" }, reasonOnly ? text : `${t("session.busy.running")} · ${text}`);
+  }
+  let repaintSend = () => {};
 
   // Show a transcript item (a sub-agent's call, a background task notice):
   // open its tool group and scroll it into view.
   function revealThreadItem(itemId) {
+    closeMobilePanels();
     if (threadMode !== "thread") setThreadMode("thread");
     if (activeTab()) {
       setTabs(activateAgentTab(agentTabs, selectedId, ""));
@@ -1941,8 +2129,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   }
 
   function steerQueuePanel(session) {
-    const queue = session.steer_queue || [];
-    if (!queue.length) return null;
+    const queue = pendingSteerItems(session);
+    if (!queue.length) return null;   // nothing waiting: no card
     const queued = queuedSteerItems(session);
     const rows = queue.map((item, index) => {
       const editable = editableSteer(item);
@@ -1973,8 +2161,9 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
             onclick: () => moveSteer(session, item, 1),
           }, "↓"));
       }
-      if (item.status === "queued") {
-        const interrupt = sendNowMode(session) === "interrupt" && isActiveSession(session);
+      if (item.status === "queued" || item.status === "failed") {
+        const retry = item.status === "failed";
+        const interrupt = !retry && sendNowMode(session) === "interrupt" && isActiveSession(session);
         actions.push(h("button", {
           class: "btn sm ghost sw-steer-now", type: "button", "data-steer-now": item.id,
           title: t(interrupt ? "session.steer.send_now_interrupt" : "session.steer.send_now_hint"),
@@ -1988,7 +2177,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
               loadTranscript(false);
             } catch (err) { ctx.toast(err.message, "err"); }
           },
-        }, icon("send", "sm"), t(interrupt ? "session.steer.send_now_interrupt_short" : "session.steer.send_now")));
+        }, icon(retry ? "refresh" : "send", "sm"), t(retry ? "session.steer.retry" : interrupt ? "session.steer.send_now_interrupt_short" : "session.steer.send_now")));
       }
       actions.push(h("button", {
         class: "sw-chip-x", type: "button", title: t(editable ? "session.steer.remove" : "session.steer.remove_record"),
@@ -2203,20 +2392,26 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     composerInput = input;
     const autoGrow = () => {
       input.style.height = "auto";
-      input.style.height = `${Math.min(input.scrollHeight, 220)}px`;
+      input.style.height = `${Math.min(input.scrollHeight, isPhone() ? Math.round(window.innerHeight * 0.4) : 220)}px`;
     };
 
     const sendButton = h("button", { class: "sw-send", type: "button" });
     let stopMode = false;
+    let stopBackground = false;
     const images = () => sessionImages.get(session.id) || [];
     const paintSendButton = () => {
+      const live = current()?.id === session.id ? current() : session;
       const hasContent = Boolean(input.value.trim() || contextItemsFor(session).length || images().length);
-      stopMode = turnRunning(session) && !hasContent;
-      const label = stopMode ? t("tasks.stop")
+      stopBackground = stopBackgroundMode(live, busyWork(live, activityOf(live)), { hasContent });
+      stopMode = (turnRunning(live) && !hasContent) || stopBackground;
+      const label = stopBackground ? t("session.stop_background") : stopMode ? t("tasks.stop")
         : mode.mode === "steer" ? t("tasks.thread.send_steer") : t("tasks.thread.send");
       sendButton.classList.toggle("stop", stopMode);
       sendButton.classList.toggle("empty", !stopMode && !hasContent);
-      sendButton.title = label;
+      sendButton.toggleAttribute("data-stop-background", stopBackground);
+      // The keys live in the tooltips, not in a row of their own.
+      sendButton.title = `${label} · ${t(composerHintKey(turnRunning(session)))}`;
+      input.title = t(composerHintKey(turnRunning(session)));
       sendButton.setAttribute("aria-label", label);
       clear(sendButton);
       sendButton.appendChild(icon(stopMode ? "stop" : "arrowUp", "sm"));
@@ -2227,6 +2422,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       paintSendButton();
     });
     paintSendButton();
+    repaintSend = () => { if (sendButton.isConnected) paintSendButton(); };
     let busy = false;
     const send = async (now = false) => {
       const text = input.value.trim();
@@ -2266,7 +2462,17 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
         input.focus();
       }
     };
-    sendButton.addEventListener("click", () => (stopMode ? stopSession() : send()));
+    sendButton.addEventListener("click", (event) => {
+      if (stopBackground) {
+        const rect = event.currentTarget.getBoundingClientRect();
+        openContextMenu({ x: rect.right, y: rect.top, returnFocus: event.currentTarget, items: stopBackgroundItems(current() || session, {
+          onStopped: () => { loadTranscript(true); refreshSessions(); },
+          onError: (err) => ctx.toast(err.message, "err"),
+        }) });
+        return;
+      }
+      if (stopMode) stopSession(); else send();
+    });
     input.addEventListener("keydown", (event) => {
       const action = composerKeyAction(event, { running: turnRunning(session) });
       if (!action || action === "newline") return;
@@ -2358,7 +2564,6 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
         syncComposer();
       }),
       input,
-      h("div", { class: "sw-composer-hint", "data-composer-hint": "" }, t(composerHintKey(turnRunning(session)))),
       h("div", { class: "sw-composer-tools" },
         h("button", {
           class: `sw-chip sw-icon-tool ${contextPickerOpen ? "on" : ""}`.trim(), type: "button",
@@ -2589,7 +2794,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       h("div", { class: "sw-side-title" },
         h("span", { class: "sw-eyebrow" }, t("session.details.title")),
         h("h3", { title: sessionTitle(session) }, sessionTitle(session))),
-      h("div", { class: "sw-side-status" }, statusPill(shownStatus(session))),
+      h("div", { class: "sw-side-status" }, statusPill(shownStatus(session, activityOf(session))), busyNote(session, { reasonOnly: true })),
       h("button", {
         class: "icon-btn sw-mobile-btn", type: "button", title: t("session.details.close"),
         "aria-label": t("session.details.close_label"), onclick: () => closeMobilePanels(),
@@ -2793,7 +2998,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       sideSection(t("type.task"), taskBody),
       sideSection(t("session.section.progress"), progress),
       sideSection(t("filters.status"), h("div", { class: "sw-facts" },
-        fact(t("session.fact.status"), statusText(session.status)),
+        fact(t("session.fact.status"), [statusText(shownStatus(session, activityOf(session))),
+          busyNote(session, { reasonOnly: true })?.textContent].filter(Boolean).join(" · ")),
         fact(t("session.fact.duration"), fmtDuration(session.started_at || session.created_at, session.ended_at)),
         fact(t("session.fact.last_activity"), sessionTime(session.last_activity_at)),
         fact(t("session.fact.exit"), session.exit_code === null || session.exit_code === undefined ? "—" : String(session.exit_code), "mono"),
@@ -3380,6 +3586,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     el: wrap,
     applySessions,
     refreshSessions,
+    setStoredContexts,
     select,
     destroy() {
       destroyed = true;

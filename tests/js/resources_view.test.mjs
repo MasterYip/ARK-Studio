@@ -119,7 +119,16 @@ async function mount({ payload, dashboard = null } = {}) {
     this.setExport("cachedThenFresh", async (path, load, apply) => { apply(payload); return payload; });
     this.setExport("peekCached", async (path) => (path === "/api/gpu/dashboard" ? dashboard : null));
   }, { context });
-  const menu = new vm.SyntheticModule(["openContextMenu"], function () { this.setExport("openContextMenu", () => {}); }, { context });
+  const menus = [];
+  const menu = new vm.SyntheticModule(["openContextMenu"], function () {
+    this.setExport("openContextMenu", (spec) => { menus.push(spec); });
+  }, { context });
+  // resource-open.js: what the menu asks for (tests/js/resource_open_model.test.mjs covers the entries).
+  const opens = [];
+  const resourceOpen = new vm.SyntheticModule(["connectionStore", "openMenuItems"], function () {
+    this.setExport("connectionStore", () => ({ refresh: async () => {} }));
+    this.setExport("openMenuItems", (store, input) => { opens.push(input); return [{ label: "open-entry" }]; });
+  }, { context });
   const model = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/resources-model.js", import.meta.url), "utf8"), { context });
   await model.link(() => { throw new Error("resources-model.js must remain dependency-free"); });
@@ -136,7 +145,7 @@ async function mount({ payload, dashboard = null } = {}) {
     await readFile(new URL("../../ark_studio/web/js/resources-view.js", import.meta.url), "utf8"), { context });
   const modules = { "./dom.js": domModule, "./i18n.js": i18n, "./icons.js": icons, "./api.js": api,
     "./context-menu.js": menu, "./node-graph-layout.js": layout, "./resources-model.js": model,
-    "./location-size-model.js": sizeModel, "./location-size.js": sizeDom };
+    "./location-size-model.js": sizeModel, "./location-size.js": sizeDom, "./resource-open.js": resourceOpen };
   await view.link((specifier) => modules[specifier] || (() => { throw new Error(`unexpected import ${specifier}`); })());
   await view.evaluate();
   const panel = view.namespace.resourcesGraphPanel({ toast() {}, navigateWorkspace() {} });
@@ -152,7 +161,7 @@ async function mount({ payload, dashboard = null } = {}) {
   // One clean frame to inspect (F fits and redraws).
   ctx2d.texts = []; ctx2d.fills = [];
   key("f");
-  return { panel, state, stage, details, ctx2d, key };
+  return { panel, state, stage, details, ctx2d, key, menus, opens };
 }
 
 const payload = {
@@ -289,4 +298,24 @@ test("+ / = expand and - collapses the selection, else the card under the pointe
   assert.deepEqual([...state.collapsed].sort(), ["ark", "gpu:a"], "/ is an alias of -");
   key("+", { ctrlKey: true });
   assert.equal(state.collapsed.size, 2, "Ctrl++ stays browser zoom");
+});
+
+test("right-clicking a location offers the open entries for its path; a card for the device", async () => {
+  const { panel, state, menus, opens } = await mount({ payload });
+  const canvas = panel.findAll((el) => el.tagName === "CANVAS")[0];
+  const card = state.layout.get("ark");
+  const click = (wx, wy) => {
+    const ev = { button: 2, pointerId: 1, pointerType: "mouse", clientX: wx * state.zoom + state.pan.x,
+      clientY: wy * state.zoom + state.pan.y, preventDefault() {}, stopPropagation() {} };
+    canvas.emit("pointerdown", ev);
+    canvas.emit("pointerup", ev);
+  };
+  click(card.x, card.y - card.h / 2 + 8); // the header
+  assert.equal(opens.at(-1).device.id, "ark");
+  assert.equal(opens.at(-1).path, null);
+  assert.ok(menus.at(-1).items.some((item) => item?.label === "open-entry"));
+  const row = card.rows.findIndex((r) => r.id === "f");
+  const top = card.y - card.h / 2 + 50 + (card.summary ? 22 : 0) + card.rowTops[row] + 6;
+  click(card.x, top);
+  assert.equal(opens.at(-1).path, "/srv/p");
 });

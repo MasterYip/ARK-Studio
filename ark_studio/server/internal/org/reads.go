@@ -174,6 +174,10 @@ func Prefs(r sqlitedb.Row) *pyjson.Object {
 	if filters := settings.HomeFilterPrefs(data.Value("home_filter")); filters.Len() > 0 {
 		out.Set("home_filter", filters)
 	}
+	// Go-only: the server version this person last saw.
+	if v, ok := data.Value("seen_version").(string); ok && seenVersionRe.MatchString(v) {
+		out.Set("seen_version", v)
+	}
 	return out
 }
 

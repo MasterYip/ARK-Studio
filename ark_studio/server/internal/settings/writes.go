@@ -10,6 +10,7 @@ import (
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
 	"arkstudio/go/internal/compat/pyurl"
+	"arkstudio/go/internal/store/markers"
 )
 
 // Write side of arkstudio/settings.py: normalize_assistant(strict=True),
@@ -478,7 +479,7 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 		body = pyjson.NewObject()
 	}
 	known := map[string]bool{"graph": true, "arrows": true, "assistant": true, "agents": true, "palette": true, "sessions": true,
-		"graph_display": true}
+		"graph_display": true, "markers": true}
 	hasSection := false
 	for k := range known {
 		if body.Has(k) {
@@ -548,6 +549,19 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 			current.Set("graph_display", d)
 		} else {
 			current.Delete("graph_display")
+		}
+	}
+	if body.Has("markers") {
+		// Go-only: node marker groups; the value replaces the stored one,
+		// null, {} or {"groups": []} go back to the defaults.
+		groups, err := markers.Parse(body.Value("markers"))
+		if err != nil {
+			return nil, &Error{err.Error()}
+		}
+		if groups != nil {
+			current.Set("markers", markers.ToJSON(groups))
+		} else {
+			current.Delete("markers")
 		}
 	}
 	if body.Has("sessions") {

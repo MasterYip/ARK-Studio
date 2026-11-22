@@ -1,6 +1,9 @@
 package server
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 func TestPortedRoutesExistInContract(t *testing.T) {
 	known := map[string]bool{"exact:/api/nope": true} // harness id for "unknown endpoint"
@@ -96,6 +99,20 @@ func TestVersioning(t *testing.T) {
 	want := "<meta charset=\"utf-8\">\n  <meta name=\"ark-build\" content=\"v1\"><script src=\"./js/app.js?v=v1\"></script><link href=\"/css/a.css?x\">"
 	if html != want {
 		t.Fatalf("got %q", html)
+	}
+	// Settings › About: the release version, when the build has one.
+	page := VersionedHTML(`<meta charset="utf-8"><title>x</title>`, "v1")
+	if got := ReleaseMeta(page, "2.1.1"); got != "<meta charset=\"utf-8\">\n  <meta name=\"ark-build\" content=\"v1\">\n  <meta name=\"ark-version\" content=\"2.1.1\"><title>x</title>" {
+		t.Fatalf("release meta: got %q", got)
+	}
+	if got := ReleaseMeta(page, ""); got != page {
+		t.Fatalf("no release: got %q", got)
+	}
+	if got := ReleaseMeta(page, `2.1"><script>`); !strings.Contains(got, `content="2.1script">`) {
+		t.Fatalf("release is filtered: got %q", got)
+	}
+	if got := ReleaseMeta(`<p>no meta</p>`, "2.1.1"); got != `<p>no meta</p>` {
+		t.Fatalf("no ark-build meta: got %q", got)
 	}
 	js := VersionedJS(`import { a } from "./a.js"; const m = import('../b.js'); import "./c.js";`, "v1")
 	if js != `import { a } from "./a.js?v=v1"; const m = import('../b.js?v=v1'); import "./c.js?v=v1";` {

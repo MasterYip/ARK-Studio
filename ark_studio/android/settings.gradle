@@ -7,4 +7,3 @@ dependencyResolutionManagement {
 }
 rootProject.name = 'ARKStudio'
 include ':app'
-include ':webapp'

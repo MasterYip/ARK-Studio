@@ -26,6 +26,14 @@ const KILL_TOOLS = new Set(["killshell", "killbash", "taskstop", "kill_shell", "
 const OUTPUT_TOOLS = new Set(["bashoutput", "taskoutput", "bash_output", "task_output"]);
 const ACTIVE_SESSION = ["starting", "running", "idle", "stopping"];
 const STATUS_ORDER = { running: 0, failed: 1, stopped: 2, completed: 3 };
+// The ARK update watcher (feed listener) is plumbing: it shows in the
+// background-task chip but does not keep a session busy.
+const WATCHER_RE = /ark[-_ ]?watch|\/api\/agent\/v1\/updates|agentwatch|ark_wake/i;
+
+/** Is this background entry the ARK watcher? */
+export function isWatcherEntry(entry) {
+  return entry?.kind === "background" && [entry.label, entry.detail, entry.command].some((text) => text && WATCHER_RE.test(text));
+}
 
 const lower = (value) => String(value ?? "").trim().toLowerCase();
 const obj = (value) => (value && typeof value === "object" && !Array.isArray(value) ? value : {});
@@ -178,6 +186,7 @@ export function sessionActivity(items = [], { session = null, sessions = [], now
       key: `tool:${item.id}`, id: backgroundId(item), kind, source: "tool", background,
       label: kind === "subagent" ? firstLine(input.description || task.description || input.prompt || item.name)
         : firstLine(input.description || task.description || input.command || item.name),
+      command: String(input.command || ""),
       detail: kind === "subagent" ? String(input.subagent_type || input.agent_type || task.subagent_type || "") : firstLine(input.command || ""),
       model: String(input.model || meta.model || ""),
       status, startedAt: task.started_at || item.at || null,
@@ -213,10 +222,14 @@ export function sessionActivity(items = [], { session = null, sessions = [], now
   for (const entry of entries) entry.durationMs = durationMs(entry.startedAt, entry.endedAt, now);
   const subagents = entries.filter((entry) => entry.kind === "subagent");
   const background = entries.filter((entry) => entry.kind === "background");
+  for (const entry of background) if (isWatcherEntry(entry)) entry.watcher = true;
+  const runningBackground = background.filter((entry) => entry.status === "running");
   return {
     entries, subagents, background,
     runningSubagents: subagents.filter((entry) => entry.status === "running").length,
-    runningBackground: background.filter((entry) => entry.status === "running").length,
+    runningBackground: runningBackground.length,
+    // what keeps the session busy between turns (the watcher does not)
+    busyBackground: runningBackground.filter((entry) => !entry.watcher).length,
   };
 }
 

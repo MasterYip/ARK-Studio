@@ -4,21 +4,13 @@ Hybrid native app for ARK Studio: everyday screens are native, and the rest of t
 app opens in a same-origin WebView signed in with the same device session, so there's
 no second login.
 
-- Package `com.masteryip.arkstudio`, `versionCode 15`, `versionName 3.0`
+- Package `com.masteryip.arkstudio`, `versionCode 17`, `versionName 2.1.2` (the ARK release)
 - minSdk 26, target/compile 33, Java 11, AGP 7.4.2, Gradle 7.6
 - Server side: `POST /api/mobile/login` and the project-switch endpoints
   (see `docs/guide/mobile.md` → *Android app*)
 
-## Two apps from one project
-
-| Module | App | Package | What it is |
-|---|---|---|---|
-| `:app` | **ARK Studio** (3.0) | `com.masteryip.arkstudio` | Hybrid native app described below |
-| `:webapp` | **ARK Studio Web** (3.0-web) | `com.masteryip.arkstudio.web` | The original lightweight shell: a native server list (QR or URL) that opens the full web app in a WebView; pairing happens inside the page |
-
-The package IDs differ, so both can be installed side by side. `:webapp` is the
-pre-native shell (from `f1e1e95`) with only the ID, name, version and shortcut
-target changed; its `ServerStoreTest` still runs.
+The Gradle project has one app module, `:app`, plus the updater sources in
+`shared/update`.
 
 ## Screens
 
@@ -33,8 +25,8 @@ target changed; its `ServerStoreTest` still runs.
 | **Share to ARK**: text, link or image → idea or note with the image attached | |
 
 The UI has pull-to-refresh, offline / error states with Retry, and light and dark themes
-that follow the system. Strings are in English (`values/`) and Chinese (`values-zh/`) in
-both modules, and the app follows the system language. On Android 13+ the language can
+that follow the system. Strings are in English (`values/`) and Chinese (`values-zh/`),
+and the app follows the system language. On Android 13+ the language can
 also be set per app (Settings → Apps → ARK Studio → Language, from `res/xml/locales_config.xml`).
 Server codes (unit types, statuses, relations, activity) are labelled in `ui/Labels.java`.
 The WebView follows the phone's language too until a language is picked in ARK
@@ -70,10 +62,50 @@ Bottom navigation: Home, Tasks, Runs, GPU, More.
 
 ## Notifications
 
-Notifications are opt-in (More → Notifications, Android 13 permission prompt). A
-WorkManager periodic job runs every 15 minutes when the network is available; there is
-no FCM. It polls runs, review tasks and the GPU queue of the signed-in server and
-notifies on transitions only. The diff logic is `model/Watch.java`.
+Notifications are opt-in (More → Notification settings; an explanation, then the
+Android 13 permission prompt). There is no FCM (Google services are not available in
+China): a WorkManager job every 15 minutes (network required, exponential backoff on
+errors) and a check when the app opens read the feed `GET /api/notifications` of every
+signed-in server (`ark_studio/server/internal/server/notifications.go`):
+
+- new reviews the person has not seen yet, one per Needs you card (review groups and
+  automatic delivery groups count once), with the browser's seen marks: a review opened
+  in the web app is withdrawn from the phone;
+- open decisions and pending approval requests of the person's agent sessions (high
+  priority);
+- the person's sessions that errored or that ARK stopped when it restarted (high);
+- finished sessions (off by default).
+
+A password sign-in covers every project the account can open; a phone paired by QR code
+only its project. Notifications are grouped per server and project with a summary
+("PredActor_Rebuttal: 3 new for review · 1 session error"); tapping one switches to its
+project when needed and opens the task, node or run (`NotifyOpenActivity`). Channels: New
+reviews, Decisions and approvals, Session errors, Other, App updates. Settings: kinds,
+quiet hours (notifications arrive silently), mute per project. The feed → notification
+mapping (first poll only records, dedupe, withdraw, groups, quiet hours) is
+`model/NotifyFeed.java`. Servers without the feed fall back to the older run / review /
+GPU diff of `model/Watch.java` for the selected project.
+
+## Updates
+
+About and updates (More) shows the version, checks for a newer APK (button, and a daily
+WorkManager check with one notification per version) and offers Download and install.
+The code is in `shared/update` (`update.gradle` adds the sources, strings and tests):
+
+1. `GET /download/android-apps.json` on the paired server
+   (`server/internal/server/app_manifest.go`): version code and SHA-256 of a `dist/`
+   build, or the latest GitHub release's size and SHA-256 (`SHA256SUMS.txt`). Without an
+   answer the app asks the GitHub API itself.
+2. The download goes to the app cache and must match the published SHA-256.
+3. Package, version code and signing certificate of the download are compared with the
+   installed app first. A different signing key (a debug build from another machine, or
+   CI builds without a fixed key) is explained instead of letting the installer fail.
+4. `PackageInstaller` installs it; Android asks once for "install unknown apps".
+
+Release builds are debug-signed. Set the repository secrets `ANDROID_KEYSTORE_BASE64`,
+`ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` (and `ANDROID_KEY_PASSWORD`) so every
+release is signed with the same key; otherwise each CI run uses a new key and an installed
+release cannot update to the next one. `-ParkVersionCode=<n>` builds a test update.
 
 ## Build and test
 
@@ -94,21 +126,20 @@ JVM tests (`app/src/test`) cover:
 - review notes (anchors, chips, headline numbers, heading ids) and Needs you cards from the server's `auto_group` (`ReviewModelTest`);
 - board columns and importance, deep links, Markdown blocks and spans, the web-render
   fallback and notification diffs;
-- the existing `ServerStoreTest`.
+- the notification feed mapping (`NotifyFeedTest`) and the updater: versions, manifest
+  and GitHub parsing, checksums, signature check (`UpdateModelTest`);
+- the saved server list (`ServerStoreTest`).
 
 Dependencies added (Google Maven): `androidx.work:work-runtime:2.7.1` and
 `androidx.swiperefreshlayout:swiperefreshlayout:1.1.0`. The test-only `org.json:json:20180813` came
 from the Gradle cache.
 
-APKs are not tracked. Build both with
-`gradle :app:assembleDebug :webapp:assembleDebug`, then copy them to the server's `dist/`:
+APKs are not tracked. Build with `gradle :app:assembleDebug`, then copy
+`app/build/outputs/apk/debug/app-debug.apk` to the server's `dist/ARK-Studio-android.apk`.
+It is served at `/download/ARK-Studio-android.apk` (aliases `/download/ark.apk` and
+`/download/ARK-Studio-webapp.apk`).
 
-| Build output | Copy to | Download URL |
-|---|---|---|
-| `app/build/outputs/apk/debug/app-debug.apk` | `dist/ARK-Studio-android.apk` | `/download/ARK-Studio-android.apk` (alias `/download/ark.apk`) |
-| `webapp/build/outputs/apk/debug/webapp-debug.apk` | `dist/ARK-Studio-webapp.apk` | `/download/ARK-Studio-webapp.apk` |
-
-Each file is re-read on every request, so replacing it publishes a new build; without
+The file is re-read on every request, so replacing it publishes a new build; without
 a local file these paths redirect (302) to the latest GitHub release. Settings → Mobile
-links to the APKs of the latest GitHub release (`GET /api/mobile/apps`, resolved by the
+links to the APK of the latest GitHub release (`GET /api/mobile/apps`, resolved by the
 server; see [the mobile guide](../../docs/guide/mobile.md#android-app)).

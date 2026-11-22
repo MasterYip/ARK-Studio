@@ -18,6 +18,19 @@ export function sortNeedsValues(values = []) {
   return [...values].sort((a, b) => rank(a) - rank(b) || String(a.value).localeCompare(String(b.value)));
 }
 
+/** Statuses that end a unit (server: store.ClosedStatuses); every other status is open. */
+export const CLOSED_STATUSES = ["done", "abandoned", "archived"];
+
+/** A decision still waiting for an answer (server: store.IsOpenDecision). */
+export function isOpenDecision(unit = {}) {
+  return unit?.type === "decision" && !CLOSED_STATUSES.includes(unit.status);
+}
+
+/** Whether a unit belongs in Needs you: in review or an open decision, not in the recycle bin. */
+export function inNeedsYou(unit = {}) {
+  return !!unit && !unit.archived && (unit.status === "review" || isOpenDecision(unit));
+}
+
 export function needsCount(items) {
   return Array.isArray(items) ? items.length : 0;
 }
@@ -457,4 +470,38 @@ export function groupExplain(group) {
   const parents = [...new Set((group?.reasons || []).flatMap((r) => r.parents))].sort();
   const linked = (group?.reasons || []).some((r) => r.link);
   return { parents, linked, delivery: group?.delivery || "", minutes: group?.span || 0 };
+}
+
+// ------------------------------------------------------------- seen marks
+// The project picker's "new for review" badges (server: store/needscards.go,
+// POST /api/needs/seen) count cards the person has not looked at yet.
+
+/** The seen-mark key of a Needs you item: "rg:RG-3" for a review group, "u:<uid>" else. */
+export function needsSeenKey(item = {}) {
+  if (item.kind === "review_group") return item.id || item.uid ? `rg:${item.id || item.uid}` : "";
+  return item.uid ? `u:${item.uid}` : "";
+}
+
+/**
+ * POST /api/needs/seen body for the first `shown` cards of `entries`
+ * (groupNeeds output): their keys, and `all` (the list watermark) only when
+ * every card was on screen and no filter hid any.  null: nothing to send.
+ */
+export function needsSeenBody(entries = [], shown = entries.length, { filtered = false, max = 200 } = {}) {
+  const keys = [];
+  for (const entry of (entries || []).slice(0, Math.max(0, shown))) {
+    const items = entry?.kind === "group" ? entry.members || [] : [entry?.item];
+    for (const item of items) {
+      const key = needsSeenKey(item || {});
+      if (key && !keys.includes(key)) keys.push(key);
+    }
+  }
+  const all = !filtered && shown >= (entries || []).length;
+  if (!all && !keys.length) return null;
+  return all ? { all: true, items: keys.slice(0, max) } : { items: keys.slice(0, max) };
+}
+
+/** A unit the inspector opened counts as seen while it waits in Needs you. */
+export function needsUnitKey(unit = {}) {
+  return unit?.uid && inNeedsYou(unit) ? `u:${unit.uid}` : "";
 }

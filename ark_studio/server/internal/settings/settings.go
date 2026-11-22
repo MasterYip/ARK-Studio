@@ -14,6 +14,7 @@ import (
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
 	"arkstudio/go/internal/compat/pyurl"
+	"arkstudio/go/internal/store/markers"
 )
 
 // Error is SettingsError (a ValueError in Python).
@@ -388,6 +389,10 @@ func ProjectSettings(manifest *pyjson.Object) (*pyjson.Object, error) {
 	// so projects without one answer exactly like Python.
 	if display, _ := GraphDisplay(s.Value("graph_display"), false); display.Len() > 0 {
 		out.Set("graph_display", display)
+	}
+	// Go-only: node marker groups (internal/store/markers), present only once set.
+	if groups, err := markers.Parse(s.Value("markers")); err == nil && groups != nil {
+		out.Set("markers", markers.ToJSON(groups))
 	}
 	return out, nil
 }

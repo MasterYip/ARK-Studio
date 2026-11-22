@@ -221,6 +221,28 @@ export function saveMindLayoutEntry(projectId, entry) {
     .catch(() => localLayout.saveEntry(projectId, entry));
 }
 
+// --------------------------------------- server version this person saw
+// "This server was updated to ..." once per version: on the account profile
+// (prefs.seen_version) when it can be saved, in this browser otherwise.
+const SEEN_VERSION_KEY = "ark.seenServerVersion";
+
+export function seenServerVersion() {
+  if (prefsState.persist) return prefsState.profile?.prefs?.seen_version || "";
+  try { return localStorage.getItem(SEEN_VERSION_KEY) || ""; } catch { return ""; }
+}
+
+export async function saveSeenServerVersion(version) {
+  if (!version) return;
+  if (prefsState.persist) {
+    try {
+      const data = await api.updateMe({ prefs: { seen_version: version } });
+      prefsState.profile = data.profile;
+      return;
+    } catch { /* an older server: keep it in this browser */ }
+  }
+  try { localStorage.setItem(SEEN_VERSION_KEY, version); } catch { /* storage unavailable */ }
+}
+
 // ------------------------------------------------- Home shows (per project)
 // What the Home header graph draws (home-filter-model.js): on the account
 // profile (prefs.home_filter), where the server reads it for the overview;

@@ -11,6 +11,7 @@ import { h, clear, typeColor } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api } from "./api.js";
+import { isLocateShortcut, locateUnit } from "./locate-map.js";
 import {
   SEARCH_STORE_KEY, normalizeQuery, searchParams, queryError, groupResults, resultSummary,
   resultRows, nextMatch, moveRow, highlightSegments, matchPreview,
@@ -97,6 +98,11 @@ export function createSearchPanel(ctx) {
     el.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); schedule(0); } });
   }
   list.addEventListener("keydown", (event) => {
+    if (isLocateShortcut(event)) {
+      const item = rows[index]?.item;
+      if (item?.kind === "node" && locateUnit({ uid: item.uid || item.id }, ctx)) event.preventDefault();
+      return;
+    }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
       event.preventDefault();
       index = moveRow(rows, index, event.key === "ArrowDown" ? 1 : -1);
@@ -291,7 +297,8 @@ export function createSearchPanel(ctx) {
     } else if (row.type === "item") {
       const node = row.item.kind === "node";
       el = h("div", { class: "wb-search-row item", role: "treeitem", "aria-expanded": String(row.open), title: node ? `${row.item.uid} · ${row.item.title}` : row.item.path,
-        dataset: { kind: row.item.kind } },
+        // A node row has the node menu (unit-menu.js), Locate in map included.
+        dataset: node ? { kind: row.item.kind, unitRef: row.item.uid || row.item.id } : { kind: row.item.kind } },
         icon(row.open ? "chevron" : "chevronRight", "sm"),
         node ? nodeGlyph(row.item.type) : icon("file", "sm"),
         h("span", { class: "name" }, row.item.title),
@@ -312,6 +319,7 @@ export function createSearchPanel(ctx) {
     });
     el.addEventListener("dblclick", (event) => {
       event.preventDefault();
+      event.stopPropagation(); // not also unit-menu.js's double-click (an Editor tab without the match)
       window.getSelection?.()?.removeAllRanges?.();
       openInEditorTab(rows[Number(el.dataset.row)]);
     });

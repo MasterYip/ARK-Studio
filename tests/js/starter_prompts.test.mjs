@@ -30,7 +30,8 @@ const byId = (id) => prompts.STARTER_PROMPTS.find((item) => item.id === id);
 const SETUP = byId("setup").sections;
 const TEAM = byId("team").sections;
 const P = { ...SHARED, ...SETUP };
-const SECTIONS = [["shared", SHARED], ["setup", SETUP], ["team", TEAM]];
+const SECTIONS = [["shared", SHARED], ["setup", SETUP], ["team", TEAM],
+  ...prompts.LIBRARY_PROMPTS.map((item) => [item.id, { ...item.sections, meta: [item.title, item.desc] }])];
 
 // Every line pair of the shared part, both prompts and the session block.
 function allLines() {
@@ -118,7 +119,7 @@ test("steps, rules and options line up between the languages", () => {
       assert.deepEqual(markers("zh"), markers("en"), `${prefix}.${part}`);
     }
   }
-  assert.deepEqual(P.rules.map((line) => marker(line.en)).filter(Boolean), ["C1.", "C2.", "C3.", "C4.", "C5.", "C6.", "C7.", "C8.", "C9.", "C10.", "C11.", "P1.", "P2.", "P3.", "P4."]);
+  assert.deepEqual(P.rules.map((line) => marker(line.en)).filter(Boolean), ["C1.", "C2.", "C3.", "C4.", "C5.", "C6.", "C7.", "C8.", "C9.", "C10.", "C11.", "P1.", "P2.", "P3.", "P4.", "P5."]);
   assert.deepEqual(P.setup.map((line) => marker(line.en)).filter(Boolean), ["1.", "2.", "3.", "4.", "5."]);
   assert.equal(P.next.filter((line) => marker(line.en) === "-").length, 5);
   assert.deepEqual(TEAM.context.map((line) => marker(line.en)).filter(Boolean), ["1.", "2.", "3.", "4.", "5."]);
@@ -212,7 +213,7 @@ test("core rules cover reading, planning, progress, results, Needs you, decision
     "One request is one task unit",
     "POST /api/agent/v1/units, type: \"task\"",
     "my request verbatim",
-    "derived_from the question or parent task",
+    "part_of the line, topic or parent task",
     "POST /api/agent/v1/links",
     "open → active → review or blocked → done",
     // Progress in the body, never in comments.

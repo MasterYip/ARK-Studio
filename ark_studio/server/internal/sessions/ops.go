@@ -1325,6 +1325,7 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		return nil, err
 	}
 	actor := o.Actor
+	m.Reopen(s) // a new turn: the session is no longer closed
 	m.mu.Lock()
 	if actor == "" {
 		actor = strOr(s.Meta.Value("actor"))
@@ -1598,12 +1599,12 @@ func (m *Manager) ForkSession(h *Hooks, id string, body *pyjson.Object, baseURL,
 		return nil, serr("the parent session is archived", 400, "")
 	}
 	prompt := limit(pytext.Strip(strOr(or(body.Value("prompt"), body.Value("text")))), maxPrompt)
-	if prompt == "" {
-		return nil, serr("a side-chat prompt is required", 400, "")
-	}
 	relation := strings.ReplaceAll(pytext.Lower(pytext.Strip(pyjson.Str(or(body.Value("mode"), "side_chat")))), "-", "_")
 	if relation != "side_chat" && relation != "fork" {
 		return nil, serr("mode must be side_chat or fork", 400, "")
+	}
+	if prompt == "" && relation != "fork" {
+		return nil, serr("a side-chat prompt is required", 400, "")
 	}
 	platform := strOr(or(body.Value("platform"), pm.Value("platform")))
 	preset, err := m.Preset(platform, AgentOverrides(h, actor))
@@ -1632,12 +1633,33 @@ func (m *Manager) ForkSession(h *Hooks, id string, body *pyjson.Object, baseURL,
 	if err := m.checkEffort(preset, model, effort); err != nil {
 		return nil, err
 	}
-	title := limit(pyjson.Str(or(body.Value("title"), "Side chat · "+pyjson.Str(or(pm.Value("title"), parent.ID)))), maxTitle)
-	forkCtx, err := m.forkContext(parent)
-	if err != nil {
-		return nil, err
+	label := "Side chat · "
+	if relation == "fork" {
+		label = "Fork · "
 	}
-	composed := limit(prompt+forkCtx, maxPrompt)
+	title := limit(pyjson.Str(or(body.Value("title"), label+pyjson.Str(or(pm.Value("title"), parent.ID)))), maxTitle)
+	// A fork the provider can make itself starts with the parent's whole
+	// conversation; otherwise it is seeded with a summary of it.
+	native, nativeOK := "", false
+	if relation == "fork" {
+		native, nativeOK = m.canForkNatively(parent, platform)
+	}
+	var composed string
+	if nativeOK {
+		composed = prompt
+		if composed == "" && platform == "codex" {
+			composed = nativeForkPrompt // codex exec fork needs a prompt
+		}
+	} else {
+		if prompt == "" {
+			prompt = nativeForkPrompt
+		}
+		forkCtx, err := m.forkContext(parent)
+		if err != nil {
+			return nil, err
+		}
+		composed = limit(prompt+forkCtx, maxPrompt)
+	}
 	var cwd any = ""
 	if c := pm.Value("cwd"); c != nil && c != "" && c != "." {
 		cwd = c
@@ -1645,12 +1667,19 @@ func (m *Manager) ForkSession(h *Hooks, id string, body *pyjson.Object, baseURL,
 	startBody := pyjson.NewObject("platform", platform, "title", title, "prompt", composed, "model", model,
 		"effort", effort, "access_mode", access, "agent", strOr(or(body.Value("agent"), pm.Value("agent"))),
 		"task", strOr(or(body.Value("task"), pm.Value("task_ref"))), "cwd", cwd, "parent_id", parent.ID)
+	if nativeOK {
+		startBody.Set("fork_native_id", native)
+	}
 	s, err := m.Start(h, startBody, baseURL, actor)
 	if err != nil {
 		return nil, err
 	}
+	method := "seeded"
+	if nativeOK {
+		method = "native"
+	}
 	m.SetMeta(s, "relation", relation, "side_chat_of", parent.ID, "forked_from", parent.ID,
-		"forked_at", NowISO(), "fork_prompt", prompt)
+		"forked_at", NowISO(), "fork_prompt", prompt, "fork_method", method)
 	return s, nil
 }
 

@@ -64,7 +64,7 @@ To check a desktop (Tauri) change without the full matrix, run **Desktop check**
 | `version` | ubuntu-22.04 | `version.mjs --check`; on tags `--tag` |
 | `server` | ubuntu-22.04 | `go vet`, desktop-gate tests, `build-server.sh` (all five targets, web UI and agent docs embedded), `go test ./internal/agentdocs/` with `ARK_REQUIRE_EMBEDDED_DOCS=1`, `build-server-deb.sh` (amd64, arm64), smoke test of the linux binary (`docs-check`, `/api/health`, `GET /api/agent/v1/docs` with the agent token); artifact `ark-server` |
 | `desktop` | windows-latest, macos-15 (aarch64 native, x86_64 cross-built), ubuntu-22.04 | Go sidecar for the target triple (`ark_studio/desktop/src-tauri/binaries/ark-server-<triple>`) and `docs-check` on it (native targets), Linux deps (`libwebkit2gtk-4.1-dev`, `libayatana-appindicator3-dev`, `librsvg2-dev`, ...), optional signing setup, `tauri-action` with `--target <triple>`; Windows portable zip; artifact `desktop-<name>` |
-| `android` | ubuntu-22.04 | both Android apps (`:app`, `:webapp`, debug-signed) as `ARK-Studio-<version>-android.apk` and `-android-web.apk`; artifact `android`. Keep these names: the server finds the APKs of the latest release by them (`ARK-Studio-*-android.apk`, `ARK-Studio-*-android-web.apk`; `ark_studio/server/internal/server/app_release.go`, [mobile guide](../guide/mobile.md#android-app)) |
+| `android` | ubuntu-22.04 | the Android app (`:app`, debug build signed with the release key, see [Android](#android)) as `ARK-Studio-<version>-android.apk`; artifact `android`. Keep this name: the server finds the APK of the latest release by it (`ARK-Studio-*-android.apk`; `ark_studio/server/internal/server/app_release.go`, [mobile guide](../guide/mobile.md#android-app)) |
 | `checksums` | ubuntu-22.04 | `SHA256SUMS.txt` over all artifacts; on tags uploads server packages, portable zip, APKs and checksums to the draft release |
 
 Actions are pinned by commit SHA (the tag is in a comment). To bump one, look
@@ -157,6 +157,28 @@ For a signed and notarized app (Apple Developer Program, USD 99/year):
 
 The sidecar is signed together with the app.
 
+### Android
+
+The app updates itself only when every release is signed with the same key:
+Android refuses an APK signed with a different key ("package conflicts").
+The `android` job signs the debug build with a fixed key when these secrets
+are set (`ark_studio/android/shared/update/update.gradle`):
+
+| Name | Kind | Value |
+|---|---|---|
+| `ANDROID_KEYSTORE_BASE64` | secret | base64 of the keystore (`.jks`, PKCS12) |
+| `ANDROID_KEYSTORE_PASSWORD` | secret | the keystore password |
+| `ANDROID_KEY_ALIAS` | secret | the key's alias |
+| `ANDROID_KEY_PASSWORD` | secret | the key's password (defaults to the keystore password) |
+
+Without them each run signs with the runner's throwaway debug key, and no
+release can update the previous one. Releases up to 2.1.1 were built that
+way; 2.1.2 is the first with the fixed key, so a phone with an older APK
+uninstalls it once and installs 2.1.2. Keep the keystore backed up outside
+the repository; losing it means another one-time uninstall for every user.
+Bump `versionCode` in `ark_studio/android/app/build.gradle` for every release
+(`version.mjs` does not touch it): the app installs only a higher version code.
+
 ### Updater
 
 The Tauri updater only installs updates signed with the project's updater
@@ -201,12 +223,18 @@ The `updater` release is a pre-release, so `releases/latest` never resolves
 to it; leave it in place. To refresh the copy by hand, run the workflow with
 the tag of a published release.
 
-Apps check at start, at most once a day (Settings > About, can be switched
-off), and on "Check for updates". When a newer version is found, the local
-Home shows a banner (**Update** / **Later**, dismissed per version).
-Installer builds download, verify and install the update and restart; the
-Windows portable build opens the release page instead. Both addresses must
-be publicly readable and only see *published* releases.
+Apps check at start and every 12 hours while running (Settings > About or
+App, can be switched off), and on "Check for updates". When a newer version
+is found, the app shows a system notification once per version and a notice
+(**Update** / **Later**, dismissed per version) on every ARK page in its
+window, and the activity bar's About button and the tray menu mark it.
+Settings > About and App on the local page and the app's own settings
+window offer the check, the install and the automatic-check switch. After
+the first start of a new version, the local Home and About show "ARK Studio
+was updated to ..." with the first items of that version's CHANGELOG.md
+section (bundled at build time; keep the section filled before tagging).
+`ark-server` puts its release version in `<meta name="ark-version">`; the web
+app shows "This server was updated to ..." once per person and version.
 
 Keep the private key backed up outside the repository: losing it means
 installed apps can no longer update automatically, and a new key needs a

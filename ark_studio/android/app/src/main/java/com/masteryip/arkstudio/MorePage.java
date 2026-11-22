@@ -1,12 +1,9 @@
 package com.masteryip.arkstudio;
 
-import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Intent;
-import android.os.Build;
 import android.view.View;
 import android.widget.LinearLayout;
-import android.widget.Switch;
 import android.widget.TextView;
 
 import com.masteryip.arkstudio.data.AccountSession;
@@ -19,8 +16,6 @@ import com.masteryip.arkstudio.ui.Ui;
 
 /** Account, web workspaces, notifications, switch server and sign-out. */
 final class MorePage extends ShellActivity.Page {
-    static final int REQUEST_NOTIFY = 41;
-
     MorePage(ShellActivity activity) {
         super(activity);
     }
@@ -67,18 +62,11 @@ final class MorePage extends ShellActivity.Page {
         addLink(R.string.web_settings, WebRoutes.SETTINGS);
 
         content.addView(Ui.heading(a, a.getString(R.string.notifications)));
-        LinearLayout notify = Ui.card(a);
-        LinearLayout row = Ui.row(a);
-        TextView label = Ui.body(a, a.getString(R.string.notify_toggle));
-        row.addView(label, Ui.lp(0, Ui.WRAP, 1));
-        Switch toggle = new Switch(a);
-        toggle.setChecked(Accounts.notificationsEnabled(a) && Notifications.permitted(a));
-        toggle.setContentDescription(a.getString(R.string.notify_toggle));
-        toggle.setOnCheckedChangeListener((v, on) -> setNotifications(on));
-        row.addView(toggle);
-        notify.addView(row);
-        notify.addView(Ui.small(a, a.getString(R.string.notify_detail)));
-        content.addView(notify);
+        boolean on = Accounts.notificationsEnabled(a) && Notifications.permitted(a);
+        addRow(a.getString(R.string.notify_settings), a.getString(on ? R.string.notify_state_on : R.string.notify_state_off),
+                v -> a.startActivity(NotifySettingsActivity.intent(a)));
+        addRow(a.getString(R.string.update_title), a.getString(R.string.version_short, BuildConfig.VERSION_NAME),
+                v -> a.startActivity(new Intent(a, com.masteryip.arkstudio.update.UpdateActivity.class)));
 
         content.addView(Ui.heading(a, a.getString(R.string.account)));
         LinearLayout buttons = Ui.column(a);
@@ -99,6 +87,17 @@ final class MorePage extends ShellActivity.Page {
         rendered();
     }
 
+    private void addRow(String label, String value, View.OnClickListener open) {
+        LinearLayout row = Ui.row(a);
+        row.setPadding(Ui.dp(a, 4), Ui.dp(a, 12), Ui.dp(a, 4), Ui.dp(a, 12));
+        row.addView(Ui.body(a, label), Ui.lp(0, Ui.WRAP, 1));
+        row.addView(Ui.small(a, value));
+        row.addView(Ui.label(a, "  ›", 20, Ui.faint(a), false));
+        Ui.clickable(row, open);
+        content.addView(row);
+        content.addView(Ui.divider(a));
+    }
+
     private void addLink(int label, String route) {
         LinearLayout row = Ui.row(a);
         row.setPadding(Ui.dp(a, 4), Ui.dp(a, 12), Ui.dp(a, 4), Ui.dp(a, 12));
@@ -107,20 +106,6 @@ final class MorePage extends ShellActivity.Page {
         Ui.clickable(row, v -> a.openWeb(route));
         content.addView(row);
         content.addView(Ui.divider(a));
-    }
-
-    private void setNotifications(boolean on) {
-        Accounts.setNotificationsEnabled(a, on);
-        if (on) {
-            Notifications.ensureChannel(a);
-            if (Build.VERSION.SDK_INT >= 33 && !Notifications.permitted(a)) {
-                a.requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, REQUEST_NOTIFY);
-            }
-            Notifications.schedulePolling(a);
-            a.toast(a.getString(R.string.notify_on));
-        } else {
-            Notifications.cancelPolling(a);
-        }
     }
 
     private void confirmSignOut() {

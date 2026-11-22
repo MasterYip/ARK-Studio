@@ -3,16 +3,21 @@
 // localStorage ark.settingsTab, guidance steps) resolve to a tab + section.
 // Pure data so tests can check it without a DOM.
 
-// Scopes: "overview" is the first screen (what lives where, plus shortcuts);
+// Scopes: "overview" is the first screen (what lives where, plus shortcuts),
+// App (the ARK Studio desktop app's own settings; only inside the app) and
+// About ARK Studio (version, updates, links; it used to sit under Personal:
+// old links and remembered tabs open it here);
 // "project" is shared with every collaborator; "personal" follows your
 // account, except the "browser" tab, which is stored only in this browser.
 // Graph display settings live under Appearance by graph type (T-0036): the
 // project defaults in the "graph" section, a person's overrides in
-// "graphOverride".
+// "graphOverride".  Node marker groups (project) are the "markers" section.
 // Tabs marked `advanced` are listed under an "Advanced" heading.
 export const SETTINGS_TABS = [
   { id: "overview", scope: "overview", sections: ["overview"] },
-  { id: "appearance", scope: "project", sections: ["appearance", "graph"] },
+  { id: "app", scope: "overview", sections: ["app"] },
+  { id: "about", scope: "overview", sections: ["about"] },
+  { id: "appearance", scope: "project", sections: ["appearance", "graph", "markers"] },
   { id: "agents", scope: "project", sections: ["projectAgents", "agentRules", "projectAssistant", "providers", "skills"] },
   { id: "data", scope: "project", sections: ["data", "blackbox", "deleteProject"] },
   { id: "trash", scope: "project", sections: ["trash"] },
@@ -24,7 +29,6 @@ export const SETTINGS_TABS = [
   { id: "personalAI", scope: "personal", sections: ["assistant", "personalAgents", "personalAgentRules", "agentAccess"] },
   { id: "plugins", scope: "personal", sections: ["plugins"] },
   { id: "browser", scope: "personal", sections: ["infohubSource", "remote"] },
-  { id: "about", scope: "personal", sections: ["about"] },
   { id: "storage", scope: "admin", sections: ["projectStorage"] },
   { id: "admin", scope: "admin", sections: ["admin"] },
 ];
@@ -55,4 +59,13 @@ export function resolveSettingsTab(id) {
 
 export function settingsTabScope(id) {
   return SETTINGS_TABS.find((tab) => tab.id === id)?.scope || "";
+}
+
+/**
+ * Where to open Settings for `id` (a tab or section id): `{ tab, scope, section }`
+ * for ark.settingsTab / ark.settingsScope, or null for unknown ids.
+ */
+export function settingsTarget(id) {
+  const resolved = resolveSettingsTab(id);
+  return resolved ? { ...resolved, scope: settingsTabScope(resolved.tab) } : null;
 }

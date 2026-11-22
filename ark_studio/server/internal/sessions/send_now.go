@@ -92,10 +92,11 @@ func (m *Manager) SendSteerNow(h *Hooks, id, steerID, actor string) (*pyjson.Obj
 		m.mu.Unlock()
 		return nil, serr("queued message not found", 404, "")
 	}
-	if item.Value("status") != "queued" {
+	if st := item.Value("status"); st != "queued" && st != "failed" { // failed: a retry
 		m.mu.Unlock()
 		return nil, serr("this message was already sent", 409, "")
 	}
+	item.Set("error", "")
 	text := strOr(item.Value("text"))
 	followup := pyjson.Truthy(s.Meta.Value("followup"))
 	m.mu.Unlock()

@@ -14,7 +14,7 @@
 // English and Chinese; a narrow window keeps the classic layout.
 const assert = require('node:assert/strict');
 const { spawn } = require('node:child_process');
-const { mkdtempSync, rmSync } = require('node:fs');
+const { mkdtempSync, rmSync, existsSync } = require('node:fs');
 const net = require('node:net');
 const os = require('node:os');
 const path = require('node:path');
@@ -110,6 +110,7 @@ test('sessions sidebar and page: chat, chips, tabs, queue, images, layout', { sk
   const { base, server } = await startServer(dir, { ARK_TASK_CUSTOM_LABEL: 'Recorded Claude stream', ARK_TASK_CUSTOM_FOLLOWUP: '0' });
   const ids = [];
   let browser;
+  let emptyIdForMenu = '';
   try {
     await api(base, 'POST', '/api/projects', { name: 'Sidebar test' });
     const unit = (await api(base, 'POST', '/api/units', { type: 'task', title: 'Sidebar target' })).unit;
@@ -187,6 +188,7 @@ test('sessions sidebar and page: chat, chips, tabs, queue, images, layout', { sk
           return value && value !== echoId ? value : null;
         });
         ids.push(emptyId);
+        emptyIdForMenu = emptyId;
         assert.equal((await api(base, 'GET', `/api/agent-sessions/${emptyId}`)).session.title, '');
         assert.match(await sidebar.locator('.ssb-switch option:checked').textContent(), /New session · Echo/);
         await sidebar.locator('.ssb-switch').selectOption(echoId);
@@ -249,6 +251,37 @@ test('sessions sidebar and page: chat, chips, tabs, queue, images, layout', { sk
       await page.keyboard.press('F2');
       await page.locator('.sw-rename').press('Escape');
       assert.equal((await api(base, 'GET', `/api/agent-sessions/${streamed.id}`)).session.title, newTitle, 'Esc cancels');
+      // The stored-contexts block: its count is the rows it shows.
+      const ctxCount = Number((await sidebar.locator('[data-session-library] .sw-count').textContent()).trim());
+      const ctxRows = await sidebar.locator('[data-session-library] .ctx-list > :not(.ctx-empty-line)').count();
+      assert.equal(ctxCount, ctxRows, 'the context count matches its rows');
+      assert.match(await sidebar.locator('[data-session-library] .ctx-usage').textContent(), zh ? /已存/ : /stored/);
+      // Collapsible blocks remember their state.
+      await sidebar.locator('[data-block="groups"]').click();
+      assert.equal(await sidebar.locator('[data-block="groups"]').getAttribute('aria-expanded'), 'true');
+      if (zh) {
+        for (const width of [320, 420]) {
+          await sidebar.evaluate((el, w) => { el.closest('.wb-side, .wb-container, aside')?.style.setProperty('width', `${w}px`); el.style.width = `${w}px`; }, width);
+          await page.waitForTimeout(300);
+          await page.screenshot({ path: path.join(shots, `runs-list-zh-${width}.png`) });
+        }
+        await sidebar.evaluate((el) => { el.style.width = ''; el.closest('.wb-side, .wb-container, aside')?.style.removeProperty('width'); });
+        await page.waitForTimeout(300);
+      }
+      await sidebar.locator('[data-block="groups"]').click();
+      if (!zh && emptyIdForMenu) {
+        // 关闭 / End, then 删除 / Delete (the transcript is kept) from the list menu.
+        const row = page.locator(`[data-session-row="${emptyIdForMenu}"]`);
+        await row.click({ button: 'right' });
+        await page.locator('.graph-menu-item', { hasText: 'Close session' }).click();
+        await until(async () => (await api(base, 'GET', `/api/agent-sessions/${emptyIdForMenu}`)).session.closed === true);
+        await row.click({ button: 'right' });
+        await page.locator('.graph-menu-item', { hasText: 'Delete' }).click();
+        await page.locator('.modal [data-delete-files]').waitFor();
+        await page.locator('.modal').getByRole('button', { name: 'Delete' }).click();
+        await row.waitFor({ state: 'detached', timeout: 20000 });
+        assert.ok(existsSync(path.join(dir, 'sessions', '.archived', emptyIdForMenu)), 'the transcript stays in the sessions folder');
+      }
       await page.locator('.sw-side-tab', { hasText: zh ? '子智能体' : 'Subagents' }).click();
       await page.locator('.sa-side-list .sa-row').first().waitFor();
       assert.equal(await page.locator('.sa-side-list .sa-row[data-activity-kind="background"]').count(), 0, 'no commands under Sub-agents');
@@ -279,7 +312,8 @@ test('sessions sidebar and page: chat, chips, tabs, queue, images, layout', { sk
       if (!zh) {
         // Enter queues while the turn runs; "Send now" stops the turn and starts the next with it.
         const composer = page.locator('.sw-composer-input');
-        assert.match(await page.locator('.sw-main [data-composer-hint]').textContent(), /Ctrl\+Enter to send now/);
+        assert.equal(await page.locator('.sw-main [data-composer-hint]').count(), 0, 'no hint row');
+        assert.match(await page.locator('.sw-main .sw-send').getAttribute('title'), /Ctrl\+Enter to send now/);
         await composer.fill('Queued question');
         await composer.press('Enter');
         const now = page.locator('.sw-main [data-steer-now]').first();
@@ -294,6 +328,8 @@ test('sessions sidebar and page: chat, chips, tabs, queue, images, layout', { sk
           return s.turn >= 2 && ['starting', 'running', 'idle'].includes(s.status) ? s : null;
         }, 40000);
         assert.deepEqual(after.steer_queue.filter((item) => item.status === 'queued').map((item) => item.text), ['Second, stays queued']);
+        // The delivered message left the card; the waiting one is still there.
+        await until(async () => (await page.locator('.sw-main [data-steer-now]').count()) === 1);
         // Ctrl+Enter sends at once (interrupting the new turn, once it runs).
         await until(async () => (await api(base, 'GET', `/api/agent-sessions/${streamed.id}`)).session.status === 'running', 20000);
         await page.locator('.sw-main .sw-status.running').first().waitFor({ timeout: 20000 });
@@ -364,6 +400,111 @@ test('sessions page and sidebar stay responsive with a 6k-event stream', { skip:
     assert.ok(await page.locator('.sw-column > *').count() < 200, 'a window of blocks is drawn, not the whole history');
     assert.deepEqual(errors, []);
     await context.close();
+  } finally {
+    if (browser) await browser.close();
+    await stopServer(base, server, ids);
+    try { rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 500 }); } catch { /* see above */ }
+  }
+});
+
+test('runs page: chat only, tabs for sub-agents and forks, standard properties', { skip: !chromium || !SERVER, timeout: 420000 }, async () => {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'ark-ssb-r6-'));
+  const shots = process.env.ARK_TEST_SHOTS || dir;
+  const { base, server } = await startServer(dir, { ARK_TASK_CUSTOM_LABEL: 'Recorded Claude stream', ARK_TASK_CUSTOM_FOLLOWUP: '0' });
+  const ids = [];
+  let browser;
+  try {
+    await api(base, 'POST', '/api/projects', { name: 'Runs test' });
+    const unit = (await api(base, 'POST', '/api/units', { type: 'task', title: 'Inspector compare' })).unit;
+    browser = await chromium.launch({ headless: true,
+      ...(process.env.ARK_TEST_BROWSER ? { executablePath: process.env.ARK_TEST_BROWSER } : {}) });
+    // Empty state: one line and a New session button in the chat area, no page header.
+    {
+      const { context, page, errors } = await newPage(browser, 'en', { width: 1280, height: 900 });
+      await page.goto(`${base}/?lang=en#/execute/sessions`);
+      await dismissTour(page);
+      await page.locator('.sw-empty-line [data-new-session]').waitFor({ timeout: 30000 });
+      assert.equal(await page.locator('.session-chat-page .page-head').count(), 0, 'no page header');
+      await page.screenshot({ path: path.join(shots, 'r6-runs-empty-en-1280.png') });
+      assert.deepEqual(errors, []);
+      await context.close();
+    }
+    const streamed = (await api(base, 'POST', '/api/agent-sessions', { platform: 'custom', title: 'Recorded stream', prompt: 'go' })).session;
+    ids.push(streamed.id);
+    await until(async () => (await api(base, 'GET', `/api/agent-sessions/${streamed.id}/transcript`)).items.some((i) => i.id === 'toolu_H'));
+    const echo = (await api(base, 'POST', '/api/agent-sessions', { platform: 'echo', title: 'Echo parent', prompt: 'hello' })).session;
+    ids.push(echo.id);
+    for (const lang of ['en', 'zh']) {
+      const zh = lang === 'zh';
+      const { context, page, errors } = await newPage(browser, lang, { width: 1600, height: 960 });
+      await page.goto(`${base}/?lang=${lang}&session=${streamed.id}#/execute/sessions`);
+      await dismissTour(page);
+      await page.locator('.sw-main h2').waitFor({ timeout: 30000 });
+      assert.equal(await page.locator('[data-composer-hint]').count(), 0, 'no shortcut row in the composer');
+      // A sub-agent from Session properties > Sub-agents opens as a tab.
+      const props = page.locator('[data-view="sessionprops"]');
+      await props.locator('.sw-side-tab', { hasText: zh ? '子智能体' : 'Subagents' }).click();
+      await props.locator('.sa-row', { hasText: 'Survey session code' }).click();
+      await page.locator('[data-session-tab="toolu_A"].on').waitFor();
+      for (const width of [1280, 1600]) {
+        await page.setViewportSize({ width, height: 960 });
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: path.join(shots, `r6-runs-tabs-${lang}-${width}.png`) });
+      }
+      await page.locator('[data-session-tab="main"]').click();
+      await props.locator('.sw-side-tab').first().click();
+      // Sidebar widths 320 / 420.
+      for (const width of [320, 420]) {
+        await page.evaluate((w) => document.documentElement.style.setProperty('--wb-left-w', `${w}px`), width);
+        await page.waitForTimeout(300);
+        await page.screenshot({ path: path.join(shots, `r6-sidebar-${lang}-${width}.png`) });
+      }
+      await page.evaluate(() => window.dispatchEvent(new Event('resize')));
+      // The section headers have the same height and font.
+      const heads = await page.evaluate(() => [...document.querySelectorAll('.ssb-list .sw-block-head, .ssb-list .ctx-panel.compact > .panel-head')]
+        .filter((el) => el.offsetParent).map((el) => { const cs = getComputedStyle(el); return [Math.round(el.getBoundingClientRect().height), cs.fontSize, cs.fontWeight]; }));
+      assert.ok(heads.length >= 3, `three section headers (${heads.length})`);
+      assert.ok(heads.every((x) => JSON.stringify(x) === JSON.stringify(heads[0])), `headers differ: ${JSON.stringify(heads)}`);
+      // Search, segments and selects share one height.
+      const heights = await page.evaluate(() => [...document.querySelectorAll('.ssb-list .sw-rail-tools input[type=search], .ssb-list .sw-rail-tools select, .ssb-list .sw-filterbar, .ssb-list .ctx-tools .sw-search, .ssb-list .ctx-tools .sw-filterbar')]
+        .filter((el) => el.offsetParent).map((el) => Math.round(el.getBoundingClientRect().height)));
+      assert.ok(heights.length >= 3 && heights.every((x) => x === heights[0]), `control heights ${heights}`);
+      // Session properties: tabs and values at the inspector's body size.
+      await page.setViewportSize({ width: 1600, height: 960 });
+      const propSizes = await props.evaluate((el) => ({
+        tab: getComputedStyle(el.querySelector('.sw-side-tab')).fontSize,
+        value: getComputedStyle(el.querySelector('.sw-fact .v') || el).fontSize,
+      }));
+      await page.screenshot({ path: path.join(shots, `r6-props-${lang}.png`) });
+      if (!zh) {
+        // Fork in new tab (Echo cannot copy its history: a seeded fork).
+        await page.goto(`${base}/?lang=${lang}&session=${echo.id}#/execute/sessions`);
+        await page.locator('.sw-main h2', { hasText: 'Echo parent' }).waitFor({ timeout: 20000 });
+        await page.locator('.sw-main [data-session-menu]').click();
+        await page.locator('.graph-menu-item', { hasText: 'Fork in new tab' }).click();
+        const forkTab = page.locator('[data-tab-kind="session"].on');
+        await forkTab.waitFor({ timeout: 30000 });
+        const forkId = await forkTab.getAttribute('data-session-tab');
+        ids.push(forkId);
+        const fork = (await api(base, 'GET', `/api/agent-sessions/${forkId}`)).session;
+        assert.equal(fork.forked_from, echo.id);
+        assert.equal(fork.fork_method, 'seeded');
+        assert.equal(await page.locator('.sw-composer').isVisible(), true, 'a fork tab has its own composer');
+        await page.screenshot({ path: path.join(shots, 'r6-fork-tab-en.png') });
+        await page.locator('[data-session-tab="main"]').click();
+        await page.locator('.sw-main h2', { hasText: 'Echo parent' }).waitFor();
+        assert.equal(await page.locator(`[data-session-tab="${forkId}"]`).count(), 1, 'the fork tab stays in the strip');
+        // Node inspector, same viewport, for comparison.
+        await page.goto(`${base}/?lang=${lang}&unit=${unit.uid}#/map`);
+        await page.locator('.drawer-body').first().waitFor({ timeout: 20000 });
+        await page.screenshot({ path: path.join(shots, 'r6-node-inspector-en.png') });
+        const nodeBody = await page.locator('.drawer-body').first().evaluate((el) => getComputedStyle(el).fontSize);
+        assert.equal(propSizes.value, nodeBody, `values ${propSizes.value} vs inspector ${nodeBody}`);
+        assert.equal(propSizes.tab, nodeBody, 'tab labels at body size');
+      }
+      assert.deepEqual(errors, [], lang);
+      await context.close();
+    }
   } finally {
     if (browser) await browser.close();
     await stopServer(base, server, ids);

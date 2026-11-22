@@ -250,6 +250,8 @@ export function persistFilters() {
 export function setTab(tab, sub = null) {
   persistFilters();
   S.tab = tab;
+  // Nodes revealed by "Locate in research map" are shown only while on the Map.
+  if (tab !== "map") S.mapReveal = [];
   if (tab === "plan") S.sub = PLAN_SUBS.includes(sub) ? sub : S.sub || "story";
   S.view = VIEW_BY_TAB[routeKey(tab, S.sub)] || "list";
   filterScope = currentScope();

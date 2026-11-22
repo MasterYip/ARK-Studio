@@ -14,6 +14,7 @@ import {
 } from "../needs-model.js";
 import {
   NEEDS_CHANGED, applyToEach, closeNeedsFilters, needsEntryCard, needsFilterBar, needsFilterFor, needsProjectKey, saveNeedsFilter,
+  watchNeedsSeen,
 } from "../needs-ui.js";
 import { currentUsername } from "../users.js";
 import { assigneeChip } from "../assignee.js";
@@ -124,6 +125,7 @@ function waitingView(page, ctx, all, projectKey) {
       },
     },
   }), { initial: REVIEW_ROWS, chunk: REVIEW_ROWS, previous: shownRows, onCount: (n) => { shownRows = n; } });
+  watchNeedsSeen(ctx, list, list, groupNeeds(items), { filtered: needsFilterActive(filter) });
 }
 
 const REVIEW_ROWS = 25;

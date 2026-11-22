@@ -97,7 +97,7 @@ func TestDefaultsCompose(t *testing.T) {
 		"P4. Task files go in the task's folder YYYYMMDD_<task ID> inside a task space from GET /api/agent/v1/setup.",
 		"\"YYYY-MM-DD HH:MM UTC · what ran",
 		"SELF-CHECK before every reply to me",
-		"P1-P4?",
+		"P1-P5?",
 	} {
 		if !strings.Contains(en, want) {
 			t.Fatalf("missing %q in\n%s", want, en)

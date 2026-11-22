@@ -163,7 +163,13 @@ func Open(path string, readers int) (*Manager, error) {
 		err = db.Exec(lastWriterSchema) // Go only (people.go)
 	}
 	if err == nil {
+		err = db.Exec(reviewSeenSchema) // Go only (reviewseen.go)
+	}
+	if err == nil {
 		err = db.Exec(inviteSchema) // Go only (invites.go)
+	}
+	if err == nil {
+		err = db.Exec(starterSecretSchema) // Go only (starter_tokens.go)
 	}
 	if err != nil {
 		db.Close()

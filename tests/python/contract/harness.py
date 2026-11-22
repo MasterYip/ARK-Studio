@@ -396,6 +396,7 @@ def desktop_link_auth(ctx):
     check(any(p["id"] == fixture["project"] for p in body["projects"]), "fixture project listed")
     base = {"id", "name", "description", "created", "updated", "permission", "created_by_me"}
     people = {"creator", "last_actor"}  # only when known (project_people.go)
+    people |= {"review_new", "review_total"}  # projects the person may write to (project_reviews.go)
     check(all(base <= set(p) <= base | people for p in body["projects"]), "row keys")
     made = app.post("/api/desktop/projects", {"name": "Desktop made"}, headers=dev, same_origin=False)
     eq((made.status, made.json()["project"]["name"]), (200, "Desktop made"), "create")

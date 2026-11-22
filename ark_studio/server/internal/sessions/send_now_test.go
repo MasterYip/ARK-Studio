@@ -73,11 +73,23 @@ func TestSendSteerNowChecks(t *testing.T) {
 	if _, err := m.SendSteerNow(nil, id, "st_1", ""); err == nil || !strings.Contains(err.Error(), "already") {
 		t.Errorf("delivered item: %v", err)
 	}
+	// A failed delivery can be retried (here the retry fails further on: no agent configured).
+	m.mu.Lock()
+	s.Meta.Set("steer_queue", append(objectsAny(s.Meta.Value("steer_queue")), pyjson.NewObject("id", "st_9", "text", "c", "status", "failed", "error", "stdin closed")))
+	m.mu.Unlock()
+	if _, err := m.SendSteerNow(nil, id, "st_9", ""); err != nil && strings.Contains(err.Error(), "already") {
+		t.Errorf("a failed item is retried: %v", err)
+	}
 	// KeepQueue: a continue that sends one message leaves the others queued.
 	m.mu.Lock()
 	drained := m.drainSteerLocked(s)
 	m.mu.Unlock()
-	if len(drained) != 1 || drained[0] != "b" {
+	if len(drained) != 2 || drained[0] != "b" || drained[1] != "c" { // queued and failed, in order
 		t.Errorf("drain sends queued messages in order: %v", drained)
 	}
+}
+
+func objectsAny(v any) []any {
+	list, _ := v.([]any)
+	return append([]any{}, list...)
 }

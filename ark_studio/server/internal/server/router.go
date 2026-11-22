@@ -160,6 +160,8 @@ func init() {
 		exact("/api/health", (*reqCtx).getHealth, PortedRoute{"exact:/api/health", "GET,HEAD"}),
 		exact("/api/project", (*reqCtx).getProject, PortedRoute{"exact:/api/project", "GET,HEAD"}),
 		exact("/api/resources/graph", func(c *reqCtx) error { return c.resourcesHandlers().Graph(c) }, PortedRoute{"exact:/api/resources/graph", "GET,HEAD"}),
+		// Go only (routes_resources.go: SSH connections of the graph's devices).
+		exact(resourcesConnectPath, func(c *reqCtx) error { return c.resourcesHandlers().Connect(c) }),
 		exact("/api/search/nodes", (*reqCtx).searchNodes, PortedRoute{"exact:/api/search/nodes", "GET,HEAD"}),
 		exact("/api/revision", (*reqCtx).getRevision, PortedRoute{"exact:/api/revision", "GET,HEAD"}),
 		exact("/api/units", (*reqCtx).getUnits, PortedRoute{"exact:/api/units", "GET,HEAD"}),
@@ -169,6 +171,12 @@ func init() {
 		exact("/api/blackbox", (*reqCtx).blackboxGet, PortedRoute{"exact:/api/blackbox", "GET,HEAD"}),
 		// Go only (routes_trash.go; ids in GoOnlyRoutes).
 		exact(trashPath, (*reqCtx).trashGet),
+		// Go only (routes_projectmove.go, T-0068).
+		when(isProjectMovePath, func(c *reqCtx, path string) error {
+			return c.projectMoveRoute(strings.TrimPrefix(path, projectMoveBase), false)
+		}),
+		// Go only (notifications.go; ids in GoOnlyRoutes).
+		exact(notificationsPath, (*reqCtx).getNotifications),
 		// Go only (routes_importark.go, T-0070: import from another ARK project).
 		when(isImportArkPath, (*reqCtx).importArkGet),
 		// Go only (routes_reviews.go; ids in GoOnlyRoutes).
@@ -186,6 +194,8 @@ func init() {
 		exact(humanMessagesPath, (*reqCtx).humanMessages),
 		// Go only (routes_agentrules.go, T-0053).
 		exact(agentRulesPath, (*reqCtx).agentRules),
+		// Go only (routes_prompts.go: the Home prompt library).
+		exact(promptsPath, (*reqCtx).prompts),
 		sub((*reqCtx).providersGet,
 			PortedRoute{"exact:/api/providers", "GET,HEAD"},
 			PortedRoute{"exact:/api/worktrees", "GET,HEAD"}),
@@ -217,6 +227,12 @@ func init() {
 		exact(humanMessagesPath, (*reqCtx).humanMessages),
 		// Go only (routes_agentrules.go, T-0053).
 		exact(agentRulesPath, (*reqCtx).agentRules),
+		// Go only (routes_projectmove.go, T-0068: split and merge projects).
+		when(isProjectMovePath, func(c *reqCtx, path string) error {
+			return c.projectMoveRoute(strings.TrimPrefix(path, projectMoveBase), true)
+		}),
+		// Go only (routes_prompts.go: the Home prompt library).
+		exact(promptsPath, (*reqCtx).prompts),
 		// Go only (routes_importark.go, T-0070).
 		when(isImportArkPath, (*reqCtx).importArkPost),
 		// Go only (routes_invites.go: project invite links).
@@ -246,6 +262,8 @@ func init() {
 		prefix("/api/skills/", func(c *reqCtx, path string) error { return c.skillsPost(path, c.body, c.writer) }, skillsPorted...),
 		exact("/api/projects", func(c *reqCtx) error { return c.createProject(c.body) }, PortedRoute{"exact:/api/projects", "POST"}),
 		exact("/api/projects/open", func(c *reqCtx) error { return c.openProject(c.body) }, PortedRoute{"exact:/api/projects/open", "POST"}),
+		// Go only (project_reviews.go; ids in GoOnlyRoutes).
+		exact(needsSeenPath, (*reqCtx).postNeedsSeen),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.blackboxPost(path, c.body) },
 			PortedRoute{"exact:/api/blackbox", "POST"},
 			PortedRoute{`regex:^/api/blackbox/([^/]+)/restore$`, "POST"}),
@@ -261,6 +279,8 @@ func init() {
 		sub(func(c *reqCtx, path string) (bool, error) { return c.assistantConfigPost(path, c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.resourcesHandlers().DevicePost(c, path, c.body) },
 			PortedRoute{"fullmatch:/api/resources/devices/([^/]+)", "POST"}),
+		// Go only (routes_resources.go).
+		sub(func(c *reqCtx, path string) (bool, error) { return c.resourcesHandlers().ConnectPost(c, path, c.body) }),
 	}
 
 	writeProfileRoutes = []route{profile}

@@ -134,6 +134,7 @@ outer:
 			}
 		}
 	}
+	var partOfTask func(u *pyjson.Object) bool
 	has := func(list []link, rels ...string) bool {
 		for _, l := range list {
 			for _, r := range rels {
@@ -149,6 +150,84 @@ outer:
 			simple("orphan", "orphan-idea", "medium", "Unlinked idea: "+str(u, "title"),
 				"No edge enters or leaves this idea. Connect it to a question, a claim, or an experiment.", u,
 				pyjson.NewObject("tab", "ideas", "unit_id", id(u)))
+		}
+	}
+	// Tasks, results and decisions without a part_of parent: the Mind and
+	// tree views follow part_of only, so they show these on their own
+	// (T-0091).  A task that has tasks part_of it is a line and may be a
+	// root.  The suggested parent is the unit it derives from.
+	byID := map[int64]*pyjson.Object{}
+	for _, u := range units {
+		byID[id(u)] = u
+	}
+	partOfTask = func(u *pyjson.Object) bool {
+		for _, l := range outgoing[id(u)] {
+			if l.relation == "part_of" && byID[l.other] != nil && str(byID[l.other], "type") == "task" {
+				return true
+			}
+		}
+		return false
+	}
+	derivedParent := func(u *pyjson.Object, types ...string) *pyjson.Object {
+		for _, l := range outgoing[id(u)] {
+			if l.relation != "derived_from" {
+				continue
+			}
+			if p := byID[l.other]; p != nil {
+				for _, t := range types {
+					if str(p, "type") == t {
+						return p
+					}
+				}
+			}
+		}
+		return nil
+	}
+	hasTaskChild := func(u *pyjson.Object) bool {
+		for _, l := range incoming[id(u)] {
+			if l.relation == "part_of" && byID[l.other] != nil && str(byID[l.other], "type") == "task" {
+				return true
+			}
+		}
+		return false
+	}
+	parentCount := map[string]int{}
+	noParent := func(prefix, kind, title string, u, parent *pyjson.Object) {
+		if parentCount[kind] >= 5 {
+			return
+		}
+		parentCount[kind]++
+		ops := []any{}
+		detail := "No part_of parent, so the Mind and tree views show it on its own. Link it part_of the line, topic or task it belongs to."
+		if parent != nil {
+			title += " → attach to “" + str(parent, "title") + "”"
+			detail = "No part_of parent, so the Mind and tree views show it on its own. Apply links it part_of “" +
+				str(parent, "title") + "”, the unit it derives from."
+			ops = append(ops, pyjson.NewObject("op", "link", "source", id(u), "target", id(parent), "relation", "part_of"))
+		}
+		suggestions = append(suggestions, pyjson.NewObject("id", sid(prefix, id(u)), "kind", kind, "severity", "medium",
+			"title", title, "detail", detail, "unit_ids", []any{id(u)}, "ops", ops,
+			"action", pyjson.NewObject("tab", "map", "unit_id", id(u))))
+	}
+	for _, u := range units {
+		st, typ := str(u, "status"), str(u, "type")
+		if st == "archived" || st == "abandoned" || has(outgoing[id(u)], "part_of") {
+			continue
+		}
+		switch typ {
+		case "task":
+			if !hasTaskChild(u) {
+				noParent("task-parent", "task-no-parent", "Task has no parent: "+str(u, "title"), u,
+					derivedParent(u, "task", "topic", "story", "idea", "question"))
+			}
+		case "artifact", "evidence", "decision", "experiment":
+			if typ == "experiment" && (st == "active" || st == "open") && !has(incoming[id(u)], "part_of") {
+				continue // reported as experiment-no-task
+			}
+			if typ == "experiment" && has(incoming[id(u)], "part_of") {
+				continue // a task part_of the experiment
+			}
+			noParent("result-parent", "result-no-parent", "No parent task: "+str(u, "title"), u, derivedParent(u, "task"))
 		}
 	}
 	for _, u := range units {
@@ -181,7 +260,9 @@ outer:
 		if str(u, "type") != "experiment" || (st != "active" && st != "open") {
 			continue
 		}
-		if !has(incoming[id(u)], "part_of") {
+		// A task part_of the experiment, or (core rule C4) the experiment
+		// part_of its task.
+		if !has(incoming[id(u)], "part_of") && !partOfTask(u) {
 			simple("exp-task", "experiment-no-task", "medium", "Experiment has no task: "+str(u, "title"),
 				"An active experiment needs at least one task that can be scheduled and stopped.", u,
 				pyjson.NewObject("tab", "plan", "sub", "experiment", "unit_id", id(u)))

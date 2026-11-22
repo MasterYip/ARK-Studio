@@ -176,6 +176,7 @@ func approvalState(meta *pyjson.Object) (items []any, pending int64, rules []any
 
 // Public is SessionManager.public(session, detail).
 func (m *Manager) Public(s *Session, detail bool) *pyjson.Object {
+	m.Busy(s)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.publicLocked(s, detail)
@@ -277,6 +278,15 @@ func (m *Manager) publicLocked(s *Session, detail bool) *pyjson.Object {
 		payload.Set("prompt", or(meta.Value("prompt"), "")).Set("read_token", or(meta.Value("read_token"), "")).
 			Set("command_preview", or(meta.Value("command_preview"), "")).Set("workspace", s.Workspace()).
 			Set("read_env", objOr(meta.Value("read_env")))
+	}
+	if pyjson.Truthy(meta.Value("closed")) {
+		payload.Set("closed", true)
+	}
+	if m := meta.Value("fork_method"); m != nil {
+		payload.Set("fork_method", m)
+	}
+	if waitingStreamLocked(s) && s.busy.Any() {
+		payload.Set("busy", s.busy.public()) // between turns, sub-agents or background tasks still run
 	}
 	if pyjson.Truthy(meta.Value("stream_input")) {
 		// A long-lived Claude Code process: messages go to its stdin at once.

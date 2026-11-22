@@ -110,6 +110,9 @@ func cleanName(value any, field string, limit int) (string, error) {
 	return text, nil
 }
 
+// seenVersionRe is prefs.seen_version: a release version.
+var seenVersionRe = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]{1,20})?$`)
+
 func (m *Manager) userIDFor(ctx context.Context, username string) string {
 	id, _ := m.UserIDFor(ctx, username)
 	return id
@@ -382,6 +385,9 @@ func (m *Manager) DeleteUser(ctx context.Context, actor, userID string) (*pyjson
 		return nil, err
 	}
 	if err := m.exec(ctx, "DELETE FROM agent_tokens WHERE user_id=?", id); err != nil {
+		return nil, err
+	}
+	if err := m.exec(ctx, "DELETE FROM starter_token_secrets WHERE user_id=?", id); err != nil {
 		return nil, err
 	}
 	if err := m.Log(ctx, m.userIDFor(ctx, actor), "org.user.delete", "", pyjson.NewObject("user", target.Get("username"))); err != nil {
@@ -1042,10 +1048,22 @@ func (m *Manager) UpdateProfile(ctx context.Context, username string, body *pyjs
 				merged.Delete("home_filter")
 			}
 		}
+		if prefs.Has("seen_version") {
+			// Go-only: the server version this person last saw ("This
+			// server was updated to ..." once per version); null clears it.
+			seen := prefs.Value("seen_version")
+			if seen == nil {
+				merged.Delete("seen_version")
+			} else if v, isStr := seen.(string); !isStr || !seenVersionRe.MatchString(v) {
+				return nil, orgErr(400, "seen_version must be a version number", "PROFILE_INVALID")
+			} else {
+				merged.Set("seen_version", v)
+			}
+		}
 		var extra []string
 		for _, k := range prefs.Keys() {
 			if k != "lang" && k != "theme" && k != "display" && k != "appearance" && k != "workbench" && k != "projects" &&
-				k != "mind_layout" && k != "home_filter" {
+				k != "mind_layout" && k != "home_filter" && k != "seen_version" {
 				extra = append(extra, k)
 			}
 		}
@@ -1215,75 +1233,6 @@ const (
 	maxTokenLabel   = 80
 )
 
-// Home starter-prompt tokens (Go-only, UX-18).  Each Copy prompt on Home
-// mints a token, and only its hash is stored, so an existing value can never
-// be handed out again.  A create with {"purpose": "starter", "project": <id>}
-// therefore rotates instead: the new token is labelled
-// "Home starter prompt (<project>) – <date>", and every older starter token
-// of the same user and project is revoked except the newest one, so an agent
-// started from the previous copy keeps working.  At most two starter tokens
-// per user and project stay active, and copying never runs into the
-// per-account limit.  A create without "purpose" is unchanged (Python parity).
-const (
-	starterLabelPrefix = "Home starter prompt"
-	starterKeep        = 1 // previous starter tokens kept active per project
-)
-
-var reStarterProject = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9_.-]{0,39}$`)
-
-// starterPurpose reads the optional "purpose"/"project" members of a create.
-func starterPurpose(body *pyjson.Object) (bool, string, error) {
-	purpose := pytext.Lower(pytext.Strip(strArg(body.Value("purpose"))))
-	if purpose == "" {
-		return false, "", nil
-	}
-	if purpose != "starter" {
-		return false, "", orgErr(400, "purpose must be starter (or omitted)", "AGENT_TOKEN_PURPOSE_INVALID")
-	}
-	project := pytext.Strip(strArg(body.Value("project")))
-	if !reStarterProject.MatchString(project) {
-		return false, "", orgErr(400, "a starter token needs the project id", "AGENT_TOKEN_PROJECT_INVALID")
-	}
-	return true, project, nil
-}
-
-func starterLabelFor(project string) string {
-	return starterLabelPrefix + " (" + project + ")"
-}
-
-func starterLabel(project string, now float64) string {
-	return starterLabelFor(project) + " – " + time.Unix(0, int64(now*1e9)).UTC().Format("2006-01-02")
-}
-
-// starterTokensToRetire lists the user's unrevoked starter tokens for the
-// project that a new one replaces (all but the newest starterKeep), and how
-// many of them still count as active (not expired).
-func (m *Manager) starterTokensToRetire(ctx context.Context, userID, project string) ([]string, int, error) {
-	rows, err := m.rows(ctx, "SELECT * FROM agent_tokens WHERE user_id=? AND revoked_at IS NULL "+
-		"ORDER BY created_at DESC, rowid DESC", userID)
-	if err != nil {
-		return nil, 0, err
-	}
-	prefix := starterLabelFor(project) + " – "
-	var out []string
-	kept, active := 0, 0
-	for _, r := range rows {
-		if !strings.HasPrefix(r.Str("label"), prefix) {
-			continue
-		}
-		expired := m.tokenPublic(r).Value("expired") == true
-		if !expired && kept < starterKeep {
-			kept++
-			continue
-		}
-		out = append(out, r.Str("id"))
-		if !expired {
-			active++
-		}
-	}
-	return out, active, nil
-}
-
 // TokenClock is the agent-token clock (AgentTokenStore._now); the replay pins it.
 var TokenClock = func() float64 {
 	if t, ok := clock.Replay(); ok {
@@ -1390,25 +1339,47 @@ func (m *Manager) CreateAgentToken(ctx context.Context, username string, body *p
 	if label == "" {
 		label = "Agent token"
 	}
-	starter, project, err := starterPurpose(body)
+	req, starter, err := starterRequest(body)
 	if err != nil {
 		return nil, err
 	}
-	var retire []string
-	retireActive := 0
 	if starter {
-		label = starterLabel(project, TokenClock())
-		if retire, retireActive, err = m.starterTokensToRetire(ctx, user.Str("id"), project); err != nil {
-			return nil, err
-		}
+		return m.starterToken(ctx, user, username, req, scope, days)
 	}
 	_, active, err := m.tokenList(ctx, user.Str("id"))
 	if err != nil {
 		return nil, err
 	}
-	if active-retireActive >= maxActiveTokens {
-		return nil, orgErr(409, fmt.Sprintf("You already have %d active agent tokens. Revoke one before creating another.", maxActiveTokens), "AGENT_TOKEN_LIMIT")
+	if active >= maxActiveTokens {
+		return nil, tokenLimitErr()
 	}
+	var minted newToken
+	err = m.DB.Write(ctx, func(q sqlitedb.Querier) error {
+		var err error
+		minted, err = insertToken(ctx, q, user.Str("id"), label, scope, days)
+		return err
+	}, nil)
+	if err != nil {
+		return nil, err
+	}
+	if err := m.Log(ctx, user.Str("id"), "personal.agent_token.create", "", pyjson.NewObject("token", minted.id, "scope", scope)); err != nil {
+		return nil, err
+	}
+	return m.withTokenList(ctx, username, pyjson.NewObject("token", minted.secret, "item", minted.item))
+}
+
+func tokenLimitErr() error {
+	return orgErr(409, fmt.Sprintf("You already have %d active agent tokens. Revoke one before creating another.", maxActiveTokens), "AGENT_TOKEN_LIMIT")
+}
+
+// newToken is a token insertToken just stored; secret is shown once.
+type newToken struct {
+	id, secret string
+	item       *pyjson.Object
+}
+
+// insertToken mints and stores one personal token (agent_tokens.create).
+func insertToken(ctx context.Context, q sqlitedb.Querier, userID, label, scope string, days int64) (newToken, error) {
 	secret := tokenPrefix + rnd.URLSafe("agent_tokens", 30)
 	now := TokenClock()
 	id := "tok_" + rnd.Hex("agent_tokens", 8)
@@ -1418,46 +1389,23 @@ func (m *Manager) CreateAgentToken(ctx context.Context, username string, body *p
 	}
 	created := isoAt(now)
 	prefix := secret[:len(tokenPrefix)+4]
-	if err := m.exec(ctx, "INSERT INTO agent_tokens(id,user_id,label,token_hash,prefix,scope,created_at,expires_at,last_used_at,revoked_at) "+
-		"VALUES(?,?,?,?,?,?,?,?,NULL,NULL)", id, user.Str("id"), label, tokenHashOf(secret), prefix, scope, created, expires); err != nil {
-		return nil, err
+	if _, err := q.ExecContext(ctx, "INSERT INTO agent_tokens(id,user_id,label,token_hash,prefix,scope,created_at,expires_at,last_used_at,revoked_at) "+
+		"VALUES(?,?,?,?,?,?,?,?,NULL,NULL)", id, userID, label, tokenHashOf(secret), prefix, scope, created, expires); err != nil {
+		return newToken{}, err
 	}
 	item := pyjson.NewObject("id", id, "label", label, "prefix", prefix, "scope", scope, "created_at", created,
 		"expires_at", expires, "last_used_at", nil, "expired", false)
 	if expires != nil {
 		item.Set("expired", now+float64(days*86400) <= TokenClock())
 	}
-	if err := m.Log(ctx, user.Str("id"), "personal.agent_token.create", "", pyjson.NewObject("token", id, "scope", scope)); err != nil {
-		return nil, err
-	}
-	rotated := []any{}
-	if len(retire) > 0 {
-		at := isoAt(TokenClock())
-		for _, old := range retire {
-			n, err := m.execCount(ctx, "UPDATE agent_tokens SET revoked_at=? WHERE id=? AND user_id=? AND revoked_at IS NULL",
-				at, old, user.Str("id"))
-			if err != nil {
-				return nil, err
-			}
-			if n > 0 {
-				rotated = append(rotated, old)
-			}
-		}
-		if len(rotated) > 0 {
-			if err := m.Log(ctx, user.Str("id"), "personal.agent_token.rotate", "",
-				pyjson.NewObject("token", id, "project", project, "revoked", rotated)); err != nil {
-				return nil, err
-			}
-		}
-	}
+	return newToken{id: id, secret: secret, item: item}, nil
+}
+
+// withTokenList adds the ListAgentTokens members to out.
+func (m *Manager) withTokenList(ctx context.Context, username string, out *pyjson.Object) (*pyjson.Object, error) {
 	list, err := m.ListAgentTokens(ctx, username)
 	if err != nil {
 		return nil, err
-	}
-	out := pyjson.NewObject("token", secret, "item", item)
-	if starter {
-		// Go-only (tests/python/contract/go_only.py "agent-token-starter-rotation").
-		out.Set("rotated", rotated)
 	}
 	for _, k := range list.Keys() {
 		out.Set(k, list.Value(k))
@@ -1479,6 +1427,9 @@ func (m *Manager) RevokeAgentToken(ctx context.Context, username, tokenID string
 	if n == 0 {
 		return nil, orgErr(404, "agent token not found", "AGENT_TOKEN_NOT_FOUND")
 	}
+	if err := m.exec(ctx, "DELETE FROM starter_token_secrets WHERE token_id=?", tokenID); err != nil {
+		return nil, err
+	}
 	if err := m.Log(ctx, user.Str("id"), "personal.agent_token.revoke", "", pyjson.NewObject("token", tokenID)); err != nil {
 		return nil, err
 	}
@@ -1494,6 +1445,9 @@ func (m *Manager) RevokeAgentToken(ctx context.Context, username, tokenID string
 }
 
 func (m *Manager) revokeTokensOf(ctx context.Context, userID string) (int64, error) {
+	if err := m.exec(ctx, "DELETE FROM starter_token_secrets WHERE user_id=?", userID); err != nil {
+		return 0, err
+	}
 	return m.execCount(ctx, "UPDATE agent_tokens SET revoked_at=? WHERE user_id=? AND revoked_at IS NULL", isoAt(TokenClock()), userID)
 }
 

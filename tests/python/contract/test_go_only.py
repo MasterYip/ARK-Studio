@@ -75,6 +75,8 @@ class ApkReleaseTest(unittest.TestCase):
                                           "ARK Studio Web")):
             app = {"available": False, "url": f"./download/{file}", "file": file, "app_id": app_id,
                    "title": title, "size": 0, "updated": None}
+            if go and key == "webapp":
+                continue  # Go no longer lists the WebView app
             if go:
                 app.update(available=True, url=cls.PAGE, file="", direct=False, version="", qr_svg="<svg/>",
                            local=False, local_url=f"./download/{file}")
@@ -461,7 +463,7 @@ class HomeOnboardingTest(unittest.TestCase):
 
 
 class StarterTokenTest(unittest.TestCase):
-    """UX-18 (ark_studio/server/internal/org/admin.go): starter-token rotation."""
+    """UX-18 (ark_studio/server/internal/org/starter_tokens.go): one starter token per project."""
 
     PATH = "/api/personal/agent-tokens"
 
@@ -499,7 +501,7 @@ class StarterTokenTest(unittest.TestCase):
         self.assertIsNone(go_only.fix_for("POST", self.PATH, py, resp(200, body(extra))))
 
     def test_label_matches_go(self):
-        source = (REPO / "ark_studio/server/internal/org/admin.go").read_text(encoding="utf-8")
+        source = (REPO / "ark_studio/server/internal/org/starter_tokens.go").read_text(encoding="utf-8")
         self.assertIn('starterLabelPrefix = "Home starter prompt"', source)
         self.assertIn('return starterLabelPrefix + " (" + project + ")"', source)
         self.assertEqual(go_only.STARTER_LABEL, "Home starter prompt (")

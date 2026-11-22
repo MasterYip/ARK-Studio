@@ -8,7 +8,8 @@
 //   node scripts/release/version.mjs --tag v2.1.0 exit 1 unless the tag matches
 //
 // Copies: ark_studio/desktop/package.json, ark_studio/desktop/src-tauri/Cargo.toml,
-// ark_studio/desktop/src-tauri/tauri.conf.json, and the frozen Python server's
+// ark_studio/desktop/src-tauri/tauri.conf.json, ark_studio/server/cmd/ark-server/release.go
+// (Settings > About on server pages), and the frozen Python server's
 // ark_studio/python/pyproject.toml and arkstudio/__init__.py when that folder is
 // present (it is not in the public export). ark-server gets it at build time:
 // go build -ldflags "-X main.version=<VERSION>".
@@ -26,6 +27,7 @@ export const TARGETS = [
   ["ark_studio/desktop/package.json", /^ {2}"version": "([^"]*)"/m, (v) => `  "version": "${v}"`],
   ["ark_studio/desktop/src-tauri/Cargo.toml", /^version = "([^"]*)"/m, (v) => `version = "${v}"`],
   ["ark_studio/desktop/src-tauri/tauri.conf.json", /^ {2}"version": "([^"]*)"/m, (v) => `  "version": "${v}"`],
+  ["ark_studio/server/cmd/ark-server/release.go", /^const release = "([^"]*)"/m, (v) => `const release = "${v}"`],
 ];
 
 export function readVersion(base = root) {

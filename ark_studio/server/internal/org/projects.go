@@ -53,7 +53,7 @@ func (m *Manager) SetProjectGrant(ctx context.Context, projectID, userID, permis
 func (m *Manager) UnregisterProject(ctx context.Context, projectID string) error {
 	return m.DB.Write(ctx, func(q sqlitedb.Querier) error {
 		for _, sql := range []string{"DELETE FROM project_grants WHERE project_id=?",
-			"DELETE FROM team_grants WHERE project_id=?", "DELETE FROM project_last_writer WHERE project_id=?",
+			"DELETE FROM team_grants WHERE project_id=?", "DELETE FROM project_last_writer WHERE project_id=?", "DELETE FROM review_seen WHERE project_id=?",
 			"DELETE FROM project_invites WHERE project_id=?",
 			"DELETE FROM projects WHERE id=?"} {
 			if _, err := q.ExecContext(ctx, sql, projectID); err != nil {

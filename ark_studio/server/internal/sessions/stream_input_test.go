@@ -20,6 +20,9 @@ import (
 //	are taken into that turn; "crash" exits with code 2; a control_request
 //	interrupt ends the running turn; EOF on stdin exits 0.
 func TestMain(m *testing.M) {
+	if len(os.Args) > 1 && os.Args[1] == "session-relay" { // the relay of a relayed session (relay.go)
+		os.Exit(RelayMain(os.Args[2:]))
+	}
 	if os.Getenv("ARK_FAKE_CLAUDE") == "1" {
 		fakeClaude()
 		return
@@ -103,6 +106,25 @@ func fakeClaude() {
 			os.Exit(2)
 		}
 		say(fmt.Sprintf("echo: %s (images: %d)", firstLine(text), images))
+		if strings.HasPrefix(text, "start background") { // a background command and the ARK watcher outlive the turn
+			for _, bg := range [][2]string{{"sh_1", "npm run build"}, {"sh_w", "sh ark-watch.sh"}} {
+				id := "toolu_" + bg[0]
+				out(map[string]any{"type": "assistant", "message": map[string]any{"content": []any{map[string]any{
+					"type": "tool_use", "id": id, "name": "Bash", "input": map[string]any{"command": bg[1], "run_in_background": true}}}}})
+				out(map[string]any{"type": "system", "subtype": "task_started", "task_id": bg[0], "tool_use_id": id,
+					"description": bg[1], "task_type": "local_bash", "is_backgrounded": true})
+				out(map[string]any{"type": "user", "message": map[string]any{"content": []any{map[string]any{
+					"type": "tool_result", "tool_use_id": id, "content": "Command running in background with ID: " + bg[0]}}}})
+			}
+			result("success")
+			continue
+		}
+		if strings.HasPrefix(text, "finish background") {
+			out(map[string]any{"type": "system", "subtype": "task_notification", "task_id": "sh_1", "tool_use_id": "toolu_sh_1",
+				"status": "completed", "summary": "Build finished"})
+			result("success")
+			continue
+		}
 		if !strings.HasPrefix(text, "slow") {
 			result("success")
 			continue
@@ -370,4 +392,41 @@ func TestClaudeStreamLimits(t *testing.T) {
 	if got, ok := claudeStreamArgv([]string{"claude", "-p", "do it"}, "do it"); !ok || strings.Join(got, " ") != "claude --input-format stream-json --output-format stream-json --verbose -p" {
 		t.Errorf("stream argv: %v", got)
 	}
+}
+
+// Between turns, a running background command keeps the session busy (the
+// ARK watcher does not); the public record says so until it finishes.
+func TestClaudeStreamBusyBetweenTurns(t *testing.T) {
+	m := streamManager(t)
+	s, err := m.Start(nil, pyjson.NewObject("platform", "claude", "prompt", "hello"), "http://127.0.0.1:1", "alice")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer killSession(m, s)
+	waitFor(t, "first turn", func() bool { return metaOf(m, s, "turn_state") == "waiting" })
+	if m.Public(s, false).Value("busy") != nil {
+		t.Fatal("nothing runs yet")
+	}
+	if _, err := m.Steer(nil, s.ID, "start background", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "busy", func() bool {
+		b, _ := m.Public(s, false).Value("busy").(*pyjson.Object)
+		return metaOf(m, s, "turn_state") == "waiting" && b != nil
+	})
+	pub := m.Public(s, false)
+	b := pub.Value("busy").(*pyjson.Object)
+	if pub.Value("status") != "idle" || b.Value("background") != int64(1) || b.Value("subagents") != int64(0) {
+		t.Fatalf("busy: %v %v (the watcher does not count)", pub.Value("status"), b)
+	}
+	if got := m.Busy(s); got.Background != 1 {
+		t.Fatalf("Busy: %+v", got)
+	}
+	if _, err := m.Steer(nil, s.ID, "finish background", nil); err != nil {
+		t.Fatal(err)
+	}
+	waitFor(t, "quiet", func() bool {
+		return metaOf(m, s, "turn_state") == "waiting" && m.Public(s, false).Value("busy") == nil &&
+			strings.Contains(logText(m, s), "Build finished")
+	})
 }

@@ -1,6 +1,9 @@
 // Strings of the bundled desktop pages (English, Simplified Chinese).
 const EN = {
-  "settings.window_title": "ARK Studio · Settings",
+  "settings.window_title": "ARK Studio · App settings",
+  "scope.title": "Settings of this app",
+  "scope.lead": "Servers, start-up, data and updates of ARK Studio on this computer. Project, personal and admin settings belong to each ARK server: open them from Settings in ARK.",
+  "scope.open_web": "Open the settings of this computer's ARK",
   "local.title": "This computer",
   "local.lead": "ARK runs on this computer and opens its Home when ARK Studio starts.",
   "local.running": "Running on port {port}",
@@ -68,7 +71,7 @@ const EN = {
   "about.installing": "Downloading the update. ARK Studio restarts when it is installed.",
   "about.download": "Download",
   "about.releases": "Releases on GitHub",
-  "about.auto_check": "Check for updates when ARK Studio starts (once a day)",
+  "about.auto_check": "Check for updates automatically (at start and every 12 hours)",
   "about.check_failed": "Could not check for updates: {error}",
   "about.install_failed": "The update was not installed: {error}",
   "tray.open": "Open ARK Studio",
@@ -87,7 +90,10 @@ const EN = {
 };
 
 const ZH = {
-  "settings.window_title": "ARK Studio · 设置",
+  "settings.window_title": "ARK Studio · 应用设置",
+  "scope.title": "此应用的设置",
+  "scope.lead": "本机 ARK Studio 的服务器、启动、数据和更新。项目、个人和管理设置属于各个 ARK 服务器，在 ARK 页面的「设置」里打开。",
+  "scope.open_web": "打开本机 ARK 的设置",
   "local.title": "本机",
   "local.lead": "ARK 在本机运行，ARK Studio 启动时打开本机 Home。",
   "local.running": "运行中，端口 {port}",
@@ -155,7 +161,7 @@ const ZH = {
   "about.installing": "正在下载更新，安装完成后 ARK Studio 会自动重启。",
   "about.download": "下载",
   "about.releases": "GitHub 上的所有版本",
-  "about.auto_check": "ARK Studio 启动时检查更新（每天最多一次）",
+  "about.auto_check": "自动检查更新（启动时和运行期间每 12 小时一次）",
   "about.check_failed": "无法检查更新：{error}",
   "about.install_failed": "更新未能安装：{error}",
   "tray.open": "打开 ARK Studio",

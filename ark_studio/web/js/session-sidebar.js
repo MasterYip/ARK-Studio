@@ -21,16 +21,18 @@ import {
 } from "./session-stream.js";
 import { transcriptKey } from "./session-stream-model.js";
 import { openContextMenu } from "./context-menu.js";
+import { closeDeleteItems } from "./session-menu.js";
 import { readImages, releaseImages, imageTray, bindImageInput, imagePicker, turnImages } from "./session-images.js";
 import {
-  threadBlocks, blockSignature, liveActivity, isActiveSession, shownStatus, toolGroupSummary, modelOptions,
+  threadBlocks, blockSignature, liveActivity, isActiveSession, shownStatus, busyReason, pendingSteerItems, toolGroupSummary, modelOptions,
   composerMode as composerModeEn, sessionTitle as sessionTitleEn,
 } from "./session-model.js";
 import { createActivityChips } from "./session-activity.js";
 import { blockKeyFor } from "./session-activity-model.js";
 import { fmtDuration, renderToolGroup as renderToolGroupRow, inlineRename } from "./session-thread-parts.js";
 import {
-  loadSidebarPrefs, saveSidebarPrefs, rememberSessionChoice, pickPreset, recentSessions, sidebarSelection,
+  loadSidebarPrefs, saveSidebarPrefs, rememberSessionChoice, pickPreset, recentSessions,
+  withProjectSession, sessionForList,
   contextCandidates, pendingUnitContext, windowBlocks, composerAction, newSessionTitle, createPaintScheduler,
   BLOCK_WINDOW, NEW_SESSION, drawLimit, composerKeyAction, composerHintKey, sendNowMode, imageContext, turnRunning, stopLabelKey,
   loadAgentTabs, saveAgentTabs, openAgentTab as openAgentTabIn, closeAgentTab, activateAgentTab,
@@ -108,7 +110,6 @@ export function createSessionSidebar(ctx) {
   const chips = h("div", { class: "ssb-chips" });
   const queueHost = h("div", { class: "ssb-queue" });
   const tray = h("div", { class: "ssb-tray" });
-  const hint = h("div", { class: "sw-composer-hint", "data-composer-hint": "" });
   const picker = h("div", { class: "ssb-picker", hidden: true });
   const input = h("textarea", {
     class: "ssb-input", rows: "2", "aria-label": t("tasks.thread.composer_label"), title: t("tasks.thread.composer_keys"),
@@ -117,7 +118,7 @@ export function createSessionSidebar(ctx) {
   const options = h("div", { class: "ssb-options" });
   const foot = h("div", { class: "ssb-foot" }, options, h("span", { class: "spacer" }), sendButton);
   const imageInput = imagePicker((files) => addImages(files));
-  const composer = h("div", { class: "ssb-composer" }, imageInput.input, picker, queueHost, chips, tray, input, hint, foot);
+  const composer = h("div", { class: "ssb-composer" }, imageInput.input, picker, queueHost, chips, tray, input, foot);
   bindImageInput(input, (files) => addImages(files));
   const activityChips = createActivityChips({
     onOpenItem: (itemId) => revealItem(itemId),
@@ -132,7 +133,9 @@ export function createSessionSidebar(ctx) {
   const onRunsPage = () => ctx.S.tab === "tasks" && ctx.S.taskView === "sessions";
   function syncListMode() {
     const list = Boolean(listOwner?.isConnected && onRunsPage());
+    const changed = el.classList.contains("list-mode") !== list;
     el.classList.toggle("list-mode", list);
+    if (changed) window.dispatchEvent(new CustomEvent("ark:view-actions"));
     listSlot.hidden = !list;
     for (const part of [head, thread, activityChips.el, composer]) part.classList.toggle("ssb-off", list);
   }
@@ -151,14 +154,22 @@ export function createSessionSidebar(ctx) {
   }
 
   // ------------------------------------------------------------ the stream
+  let listProject = null;   // the project of the list shown (null: none yet)
   sessionStream.subscribeSessions((data) => {
+    const project = ctx.S.project?.id || "";
+    // A list read for the project before a switch: the next one follows.
+    if (data.project && data.project !== project) return;
     sessions = data.sessions || [];
     syncFollow();     // the view may have been hidden by a route change
     const first = !listLoaded;
     listLoaded = true;
-    if (selectedId && !sessions.some((session) => session.id === selectedId)) {
-      // The open session is gone (deleted, or another project): start a new one.
-      selected(sidebarSelection(sessions, selectedId));
+    const switched = listProject !== null && listProject !== project;
+    listProject = project;
+    const next = sessionForList(sessions, { selected: selectedId, prefs, project, switched });
+    if (next !== selectedId) {
+      // The open session is gone (deleted), or another project's session
+      // was open: the one last open in this project, else a new one.
+      selected(next);
       return;
     }
     if (mainData) activityChips.update(mainData.activity || mainData.items || [], { session: current(), sessions });
@@ -265,7 +276,7 @@ export function createSessionSidebar(ctx) {
   function selected(id) {
     drafts.set(selectedId, input.value);
     selectedId = id;
-    prefs = saveSidebarPrefs({ sessionId: id });
+    prefs = saveSidebarPrefs(withProjectSession(prefs, ctx.S.project?.id || "", id));
     mainData = selectedId ? sessionStream.cachedTranscript(selectedId) : null;
     transcript = selectedId ? sessionStream.cachedTranscript(viewKey()) : null;
     transcriptFor = transcript ? selectedId : "";
@@ -318,7 +329,7 @@ export function createSessionSidebar(ctx) {
   let statusSignature = "";
   function paintStatus() {
     const session = current();
-    const signature = session ? [session.id, session.status, session.platform, session.model, session.task_ref,
+    const signature = session ? [session.id, session.status, JSON.stringify(session.busy || null), session.platform, session.model, session.task_ref,
       relativeTime(session.last_activity_at)].join("|") : `new|${listLoaded}`;
     if (signature === statusSignature) return;
     statusSignature = signature;
@@ -330,6 +341,8 @@ export function createSessionSidebar(ctx) {
     const active = isActiveSession(session);
     statusLine.append(...[
       h("span", { class: `sw-status ${shownStatus(session)}`.trim() }, h("i"), statusText(shownStatus(session))),
+      busyReason(session).length ? h("span", { class: "sw-busy-note", "data-busy-note": "" },
+        busyReason(session).map((r) => t(r.key, { n: r.n })).join(" · ")) : null,
       h("span", { class: "ssb-meta", title: [session.platform_label || session.platform, session.model].filter(Boolean).join(" · ") },
         [session.platform_label || session.platform, session.model].filter(Boolean).join(" · ")),
       session.task_ref ? unitReference(session.task_ref) : null,
@@ -365,7 +378,8 @@ export function createSessionSidebar(ctx) {
       session.task_ref ? { label: t("tasks.open_task"), icon: "target", onClick: () => ctx.openUnit?.(session.task_ref) } : null,
       { label: t("session.copy_id"), icon: "copy", onClick: () => copy(session.id) },
       { label: t("session.copy_replies"), icon: "copy", onClick: () => copy(replies()) },
-      isActiveSession(session) ? { label: t("tasks.stop"), icon: "x", danger: true, onClick: stop } : null,
+      turnRunning(session) ? { label: t(stopLabelKey(session)), icon: "stop", onClick: stop } : null,
+      ...closeDeleteItems(ctx, session, sessionTitle(session), { onDeleted: () => select(NEW_SESSION) }),
     ].filter(Boolean) });
   }
   // Rename in place of the switcher.
@@ -399,7 +413,8 @@ export function createSessionSidebar(ctx) {
   });
 
   head.addEventListener("contextmenu", (event) => {
-    if (event.target.closest("select, input")) return;
+    // A unit link (the task chip) has the node menu (unit-menu.js).
+    if (event.target.closest("select, input, [data-unit-ref]")) return;
     event.preventDefault();
     openMenu(event.clientX, event.clientY, head);
   });
@@ -786,7 +801,7 @@ export function createSessionSidebar(ctx) {
     sendButton.classList.toggle("stop", stop);
     sendButton.classList.toggle("empty", action === "none");
     sendButton.disabled = busy;
-    sendButton.title = label;
+    sendButton.title = `${label} · ${t(composerHintKey(turnRunning(current())))}`;
     sendButton.setAttribute("aria-label", label);
     clear(sendButton);
     sendButton.appendChild(busy ? h("span", { class: "spinner" }) : icon(stop ? "stop" : "arrowUp", "sm"));
@@ -818,15 +833,15 @@ export function createSessionSidebar(ctx) {
   function paintQueue() {
     clear(queueHost);
     const session = current();
-    const queued = (session?.steer_queue || []).filter((item) => item.status === "queued");
+    const queued = pendingSteerItems(session || {});
     if (!queued.length) return;
     const interrupt = sendNowMode(session) === "interrupt" && isActiveSession(session);
     queueHost.append(h("div", { class: "ssb-queue-head" }, icon("send", "sm"), t("session.steer.queue_waiting", { n: queued.length })),
       ...queued.map((item) => h("div", { class: "ssb-queue-item" },
-        h("span", { class: "ssb-queue-text", title: item.text }, item.text),
+        h("span", { class: `ssb-queue-text ${item.status}`.trim(), title: item.error || item.text }, item.text),
         h("button", {
           class: "btn sm ghost", type: "button", "data-steer-now": item.id,
-          title: t(interrupt ? "session.steer.send_now_interrupt" : "session.steer.send_now_hint"),
+          title: item.status === "failed" ? (item.error || t("session.steer.retry")) : t(interrupt ? "session.steer.send_now_interrupt" : "session.steer.send_now_hint"),
           onclick: async (event) => {
             event.currentTarget.disabled = true;
             try {
@@ -835,7 +850,12 @@ export function createSessionSidebar(ctx) {
               stickToBottom = true;
             } catch (err) { ctx.toast?.(err.message, "err"); }
           },
-        }, t(interrupt ? "session.steer.send_now_interrupt_short" : "session.steer.send_now")))));
+        }, t(item.status === "failed" ? "session.steer.retry" : interrupt ? "session.steer.send_now_interrupt_short" : "session.steer.send_now")),
+        item.status === "failed" ? h("button", {
+          class: "icon-btn", type: "button", title: t("session.steer.remove"), "aria-label": t("session.steer.remove"),
+          onclick: () => api.sessionRemoveSteer(session.id, item.id).then((data) => { if (data.session) sessionStream.patchSession(data.session); })
+            .catch((err) => ctx.toast?.(err.message, "err")),
+        }, icon("x", "sm")) : null)));
   }
 
   function paintComposer(force = false) {
@@ -852,7 +872,7 @@ export function createSessionSidebar(ctx) {
     input.placeholder = !session ? t("session.sidebar.placeholder_new")
       : mode.mode === "steer" ? t("session.sidebar.placeholder_steer") : t("session.sidebar.placeholder_continue");
     if (pickerOpen !== !picker.hidden || pickerOpen) paintPicker();
-    hint.textContent = t(composerHintKey(turnRunning(session)));
+    input.title = t(composerHintKey(turnRunning(session)));
     paintQueue();
     paintTray();
     paintChips();
@@ -955,6 +975,10 @@ export function createSessionSidebar(ctx) {
       syncListMode();
     },
     get listMode() { return el.classList.contains("list-mode"); },
+    refreshList() {
+      sessionStream.refreshSessions().catch(() => {});
+      listOwner?.querySelector("[data-session-library]")?.reload?.();
+    },
     // The view became visible (first show included).
     shown() {
       syncFollow();

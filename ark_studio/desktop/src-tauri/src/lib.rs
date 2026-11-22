@@ -51,11 +51,14 @@
 //! once a day at start, and on demand. Installer builds update
 //! themselves; the Windows portable build links to the release instead.
 
+mod changelog;
+mod downloads;
 mod external;
 mod links;
 mod measure;
 mod paths;
 mod probe;
+mod remote_open;
 mod servers;
 mod settings;
 mod sidecar;
@@ -71,9 +74,10 @@ use serde_json::{json, Value};
 use tauri::ipc::CapabilityBuilder;
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::webview::NewWindowResponse;
+use tauri::webview::{DownloadEvent, NewWindowResponse};
 use tauri::{AppHandle, Manager, RunEvent, Url, WebviewUrl, WebviewWindow, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind, MessageDialogResult};
+use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 
 use links::Links;
@@ -112,6 +116,18 @@ const SERVER_PERMISSIONS: &[&str] = &[
     "allow-copy-image-png",
     "allow-device-id",
     "allow-measure-paths",
+    // Resources: open a location over SSH or in VS Code / Cursor (remote_open.rs).
+    "allow-open-ssh-terminal",
+    "allow-ssh-config-match",
+    "allow-open-editor-url",
+    // "Show in folder" on a finished download (shell.js, downloads.rs).
+    "allow-show-download",
+    // "ARK Studio 2.x.y is available" in the app window (shell.js) and the
+    // About dot: read the update state, "Later" for a version, and open the
+    // app's own settings at a section (Settings > App on any ARK page).
+    "allow-update-state",
+    "allow-dismiss-update",
+    "allow-open-app-settings",
 ];
 /// The desktop hub: only the local ARK page (and the bundled pages).
 const LOCAL_PERMISSIONS: &[&str] = &[
@@ -122,11 +138,13 @@ const LOCAL_PERMISSIONS: &[&str] = &[
     "allow-server-projects",
     "allow-create-server-project",
     "allow-unlink-server",
-    // The local Home's update banner: read the state, install (as About does)
-    // or open the release page (portable builds).
-    "allow-update-state",
+    // Settings > About and App on the local page: check, install, open the
+    // release page (portable builds), turn the automatic check on or off and
+    // close the "updated to" notice.
     "allow-check-update",
     "allow-open-releases",
+    "allow-set-update-auto-check",
+    "allow-dismiss-update-notice",
     // Settings > Project storage location: the native folder picker.
     "allow-choose-project-folder",
 ];
@@ -156,6 +174,11 @@ struct AppState {
     quitting: AtomicBool,
     /// The newer version the last update check found.
     update: Mutex<Option<String>>,
+    /// "ARK Studio was updated to ...": {version, previous, changes, url}
+    /// after the first start of a new version, until the person closes it.
+    notice: Mutex<Option<Value>>,
+    /// Page downloads of this run (downloads.rs).
+    downloads: downloads::Downloads,
 }
 
 struct TrayItems {
@@ -357,9 +380,13 @@ fn shell_script(app: &AppHandle, label: &str) -> String {
 }
 
 fn base_builder<'a>(app: &'a AppHandle, label: &'a str, url: WebviewUrl) -> WebviewWindowBuilder<'a, tauri::Wry, AppHandle> {
+    let handle = app.clone();
     let builder = WebviewWindowBuilder::new(app, label, url)
         .title("ARK Studio")
         .initialization_script(shell_script(app, label))
+        // Page downloads go to the Downloads folder and are shown by shell.js
+        // (downloads.rs); without this the click had no visible result.
+        .on_download(move |webview, event| on_download(&handle, &webview, event))
         // Tauri's native file-drop handler swallows HTML5 drag and drop on
         // Windows (workbench views, Mind/graph drags, file drops on the page
         // all went dead); the app reads no native drops, so turn it off.
@@ -436,6 +463,63 @@ fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     Ok(w)
 }
 
+// ---------------------------------------------------------------- downloads
+
+/// The Downloads folder (`ARK_DESKTOP_DOWNLOADS` overrides it for tests).
+fn download_dir(app: &AppHandle) -> PathBuf {
+    if let Some(dir) = std::env::var_os("ARK_DESKTOP_DOWNLOADS").filter(|v| !v.is_empty()) {
+        return PathBuf::from(dir);
+    }
+    app.path()
+        .download_dir()
+        .or_else(|_| app.path().home_dir().map(|h| h.join("Downloads")))
+        .unwrap_or_else(|_| std::env::temp_dir())
+}
+
+/// A download a page started (`<a download>`, an attachment response, a
+/// blob: URL): saved under a free name in the Downloads folder, with every
+/// step reported to the page (shell.js `__ARK_DOWNLOAD_EVENT__`).
+fn on_download(app: &AppHandle, webview: &tauri::Webview, event: DownloadEvent<'_>) -> bool {
+    let list = &state(app).downloads;
+    match event {
+        DownloadEvent::Requested { url, destination } => {
+            let dir = download_dir(app);
+            if let Err(e) = std::fs::create_dir_all(&dir) {
+                eprintln!("ark-studio: downloads folder {}: {e}", dir.display());
+            }
+            let path = downloads::target(&dir, destination, url.as_str(), |p| p.exists() || list.pending(p));
+            *destination = path.clone();
+            let id = list.started(url.as_str(), &path);
+            tell_download(webview, id, "started", &path);
+            true
+        }
+        DownloadEvent::Finished { url, path, success } => {
+            if let Some((id, path)) = list.finished(url.as_str(), path.as_deref(), success) {
+                tell_download(webview, id, if success { "done" } else { "failed" }, &path);
+            }
+            true
+        }
+        _ => true,
+    }
+}
+
+fn tell_download(webview: &tauri::Webview, id: u64, step: &str, path: &Path) {
+    let name = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let ev = json!({ "id": id.to_string(), "state": step, "name": name });
+    let _ = webview.eval(format!("window.__ARK_DOWNLOAD_EVENT__&&window.__ARK_DOWNLOAD_EVENT__({ev})"));
+}
+
+/// "Show in folder" on a finished download (by its id; pages never name a path).
+#[tauri::command]
+fn show_download(app: AppHandle, webview: tauri::Webview, id: String) -> Result<(), String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let id: u64 = id.parse().map_err(|_| "Unknown download.".to_string())?;
+    let path = state(&app).downloads.saved(id).ok_or_else(|| "The downloaded file is no longer there.".to_string())?;
+    app.opener().reveal_item_in_dir(path).map_err(|e| e.to_string())
+}
+
 /// Windows 11 draws a 1 px frame border around shadowed undecorated windows;
 /// drop it and keep the shadow and rounded corners. (Windows 10 has no such
 /// attribute: there the border only shows when the user enabled "Show accent
@@ -479,7 +563,7 @@ fn show_settings(app: &AppHandle, notice: Option<&str>, view: Option<&str>) {
     if let Some(n) = notice {
         q.append_pair("notice", n);
     }
-    if let Some(v) = view.filter(|v| matches!(*v, "connect" | "local" | "servers" | "about")) {
+    if let Some(v) = view.filter(|v| matches!(*v, "connect" | "local" | "servers" | "about" | "window" | "data")) {
         q.append_pair("view", v);
     }
     let q = q.finish();
@@ -601,7 +685,12 @@ fn start_local(app: &AppHandle, root: PathBuf, port: u16) -> Result<Value, Strin
 /// The local Home: at once when the server runs, else after starting it
 /// (with the "Starting ARK…" page meanwhile).
 fn go_local(app: &AppHandle) {
-    let claim = state(app).sidecar.lock().unwrap().as_mut().and_then(|s| s.alive().then(|| s.claim_url("/")));
+    go_local_at(app, "/");
+}
+
+/// The local ARK at `next` (a path of the local server, e.g. its Settings).
+fn go_local_at(app: &AppHandle, next: &str) {
+    let claim = state(app).sidecar.lock().unwrap().as_mut().and_then(|s| s.alive().then(|| s.claim_url(next)));
     if let Some(claim) = claim.and_then(|c| Url::parse(&c).ok()) {
         *state(app).current.lock().unwrap() = Current::Local;
         open_main(app, claim);
@@ -764,6 +853,8 @@ fn update_info(app: &AppHandle) -> Value {
         "available": state(app).update.lock().unwrap().clone(),
         "autoCheck": s.auto_update_check,
         "lastCheck": s.last_update_check,
+        "dismissed": s.dismissed_update,
+        "notice": state(app).notice.lock().unwrap().clone(),
     })
 }
 
@@ -928,13 +1019,94 @@ async fn fetch_update(app: &AppHandle) -> Result<Option<tauri_plugin_updater::Up
         let st = state(app);
         let mut current = st.update.lock().unwrap();
         let changed = *current != found;
-        *current = found;
+        *current = found.clone();
         changed
     };
     if changed {
         refresh_tray_menu(app);
+        update_tray_tooltip(app);
+        if let Some(v) = found.as_deref() {
+            announce_update(app, v);
+        }
     }
     Ok(update)
+}
+
+/// A system notification (best effort: the system may have them turned off).
+fn notify(app: &AppHandle, title: &str, body: &str) {
+    if let Err(e) = app.notification().builder().title(title).body(body).show() {
+        eprintln!("ark-studio: notification: {e}");
+    }
+}
+
+/// "ARK Studio 2.x.y is available": once per version.
+fn announce_update(app: &AppHandle, version: &str) {
+    let first = {
+        let st = state(app);
+        let mut s = st.settings.lock().unwrap();
+        let first = s.take_notification(version);
+        if first {
+            if let Err(e) = s.save() {
+                eprintln!("ark-studio: settings: {e}");
+            }
+        }
+        first
+    };
+    if first {
+        notify(app, &update_text("available_title", version), update_text("available_body", version).as_str());
+    }
+}
+
+/// The tray icon's tooltip names a newer version.
+fn update_tray_tooltip(app: &AppHandle) {
+    let Some(tray) = app.tray_by_id(TRAY) else { return };
+    let tip = match state(app).update.lock().unwrap().as_deref() {
+        Some(v) => format!("ARK Studio · {}", update_text("available_title", v)),
+        None => "ARK Studio".to_string(),
+    };
+    let _ = tray.set_tooltip(Some(tip));
+}
+
+/// Update notices in the system language (worded like ui/i18n.js).
+fn update_text(key: &str, version: &str) -> String {
+    let zh = system_zh();
+    match key {
+        "available_title" => if zh { format!("ARK Studio {version} 可用") } else { format!("ARK Studio {version} is available") },
+        "available_body" => if zh {
+            "打开 ARK Studio，点「更新」即可安装；托盘菜单里也有。".to_string()
+        } else {
+            "Open ARK Studio and choose Update to install it; it is also in the tray menu.".to_string()
+        },
+        "updated_title" => if zh { format!("ARK Studio 已更新到 {version}") } else { format!("ARK Studio was updated to {version}") },
+        "updated_body" => if zh { "首页列出了这次更新的主要内容。".to_string() } else { "The Home page lists what changed.".to_string() },
+        _ => String::new(),
+    }
+}
+
+/// First start of a new version: remember it, keep the "updated to" notice
+/// (key changes from the bundled CHANGELOG.md) and tell the system once.
+fn note_updated(app: &AppHandle) {
+    let current = app.package_info().version.to_string();
+    let previous = {
+        let st = state(app);
+        let mut s = st.settings.lock().unwrap();
+        let before = s.last_seen_version.clone();
+        let previous = s.note_version(&current);
+        if s.last_seen_version != before {
+            if let Err(e) = s.save() {
+                eprintln!("ark-studio: settings: {e}");
+            }
+        }
+        previous
+    };
+    let Some(previous) = previous else { return };
+    *state(app).notice.lock().unwrap() = Some(json!({
+        "version": current,
+        "previous": previous,
+        "changes": changelog::notes(changelog::CHANGELOG, &current, 6),
+        "url": release_page(Some(&current)),
+    }));
+    notify(app, &update_text("updated_title", &current), &update_text("updated_body", &current));
 }
 
 /// The update state for the local Home's banner (no network: what the last
@@ -975,6 +1147,20 @@ async fn check_update(app: AppHandle, install: bool) -> Result<Value, String> {
     Ok(update_info(&app))
 }
 
+/// Settings > About on the local ARK page: "Check for updates when ARK
+/// Studio starts". Returns the same shape as `update_info`.
+#[tauri::command]
+fn set_update_auto_check(app: AppHandle, webview: tauri::Webview, enabled: bool) -> Result<Value, String> {
+    require_hub(&app, &webview)?;
+    {
+        let st = state(&app);
+        let mut s = st.settings.lock().unwrap();
+        s.auto_update_check = enabled;
+        s.save()?;
+    }
+    Ok(update_info(&app))
+}
+
 /// About: a release page in the browser (`version`: that release, else the
 /// latest; the portable build's "Download").
 #[tauri::command]
@@ -985,17 +1171,75 @@ fn open_releases(app: AppHandle, version: Option<String>) -> Result<(), String> 
 /// The automatic check at start: once a day at most, when the updater is
 /// built in and the user left it on; a failure waits for the next start.
 fn spawn_update_check(app: &AppHandle) {
-    if !updater_enabled() || !settings_snapshot(app).update_check_due(now_secs()) {
+    if !updater_enabled() {
         return;
     }
     let handle = app.clone();
     tauri::async_runtime::spawn(async move {
-        // Leave the network to the local server's start first.
-        let _ = tauri::async_runtime::spawn_blocking(|| std::thread::sleep(Duration::from_secs(8))).await;
-        if let Err(e) = fetch_update(&handle).await {
-            eprintln!("ark-studio: update check: {e}");
+        // Leave the network to the local server's start first; then look
+        // every hour whether a check is due (every 12 hours while running).
+        let mut wait = Duration::from_secs(8);
+        loop {
+            let _ = tauri::async_runtime::spawn_blocking(move || std::thread::sleep(wait)).await;
+            wait = Duration::from_secs(60 * 60);
+            if !settings_snapshot(&handle).update_check_due(now_secs()) {
+                continue;
+            }
+            if let Err(e) = fetch_update(&handle).await {
+                eprintln!("ark-studio: update check: {e}");
+            }
         }
     });
+}
+
+/// "Later" in the app window's update notice: hide it for `version`.
+#[tauri::command]
+fn dismiss_update(app: AppHandle, webview: tauri::Webview, version: String) -> Result<Value, String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let version: String = version.trim().trim_start_matches('v').chars().take(40).collect();
+    {
+        let st = state(&app);
+        let mut s = st.settings.lock().unwrap();
+        s.dismissed_update = version;
+        s.save()?;
+    }
+    Ok(update_info(&app))
+}
+
+/// Closes the "ARK Studio was updated to ..." notice (local Home, About).
+#[tauri::command]
+fn dismiss_update_notice(app: AppHandle, webview: tauri::Webview) -> Result<Value, String> {
+    require_hub(&app, &webview)?;
+    *state(&app).notice.lock().unwrap() = None;
+    Ok(update_info(&app))
+}
+
+/// Settings > App on any ARK page: the app's own settings window at a
+/// section ("about", "servers", "local", "window", "data").
+#[tauri::command]
+async fn open_app_settings(app: AppHandle, webview: tauri::Webview, view: Option<String>) -> Result<(), String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || show_settings(&handle, None, view.as_deref()))
+        .await
+        .map_err(|e| e.to_string())
+}
+
+/// The app's settings window: "Settings of this server" opens the local
+/// ARK's own Settings (project, personal and admin settings).
+#[tauri::command]
+async fn open_local_settings(app: AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    if !matches!(caller(&app, &webview), Caller::Bundled) {
+        return Err("Only the app's own pages may use this.".into());
+    }
+    let handle = app.clone();
+    tauri::async_runtime::spawn_blocking(move || go_local_at(&handle, "/?settings=overview#/settings"))
+        .await
+        .map_err(|e| e.to_string())
 }
 
 // ---------------------------------------------------------------- server pages
@@ -1409,6 +1653,41 @@ async fn measure_paths(app: AppHandle, webview: tauri::Webview, paths: Vec<Strin
     result.map_err(|e| e.to_string())
 }
 
+// ---------------------------------------------------------------- remote open
+
+/// "Open SSH terminal" (remote_open.rs): a terminal window running ssh to
+/// the device, in the location's folder. Parts only, checked there.
+#[tauri::command]
+fn open_ssh_terminal(app: AppHandle, webview: tauri::Webview, target: remote_open::SshTarget, path: Option<String>) -> Result<(), String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let args = remote_open::ssh_args(&target, path.as_deref())?;
+    let script = remote_open::script_path();
+    let launch = remote_open::terminal_launch(remote_open::Os::current(), &args, &remote_open::find_program, &script)?;
+    remote_open::spawn(&launch, &script)
+}
+
+/// Which of `names` are Host aliases (or HostNames) in ~/.ssh/config.
+#[tauri::command]
+fn ssh_config_match(app: AppHandle, webview: tauri::Webview, names: Vec<String>) -> Result<Vec<remote_open::ConfigMatch>, String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let hosts = remote_open::parse_ssh_config(&remote_open::read_user_config());
+    Ok(remote_open::match_config(&hosts, &names))
+}
+
+/// Opens a VS Code / Cursor folder link (vscode://file/..., vscode://vscode-remote/ssh-remote+...).
+#[tauri::command]
+fn open_editor_url(app: AppHandle, webview: tauri::Webview, url: String) -> Result<(), String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let target = remote_open::check_editor_url(&url)?;
+    app.opener().open_url(target, None::<&str>).map_err(|e| format!("Could not open the editor: {e}"))
+}
+
 // ---------------------------------------------------------------- tray
 
 fn open_in_browser(app: &AppHandle) {
@@ -1701,6 +1980,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         // The plugin's own "open links on click" script calls the IPC, which
         // the ARK page (served by the local or a remote server, not the app)
         // may not use: the click was swallowed and nothing opened. Without it,
@@ -1740,9 +2020,18 @@ pub fn run() {
             unlink_server,
             open_local_path,
             update_state,
+            set_update_auto_check,
+            dismiss_update,
+            dismiss_update_notice,
+            open_app_settings,
+            open_local_settings,
             copy_image_png,
             device_id,
             measure_paths,
+            open_ssh_terminal,
+            ssh_config_match,
+            open_editor_url,
+            show_download,
             choose_project_folder,
             tray_menu_ready,
             tray_menu_action,
@@ -1751,6 +2040,7 @@ pub fn run() {
             let handle = app.handle().clone();
             drop_stale_links(&handle);
             build_tray(&handle)?;
+            note_updated(&handle);
             spawn_monitor(handle.clone());
             spawn_update_check(&handle);
             startup(handle);

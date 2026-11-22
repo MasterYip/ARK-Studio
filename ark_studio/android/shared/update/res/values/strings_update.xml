@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- App updates (android/shared/update). -->
+<resources>
+    <string name="update_title">About and updates</string>
+    <string name="update_back">Back</string>
+    <string name="update_version">Version %1$s (%2$d)</string>
+    <string name="update_built_from">Built from ARK %1$s</string>
+    <string name="update_source_line">Updates come from %1$s, or from the GitHub release when that server has none.</string>
+    <string name="update_source_github_only">Updates come from the GitHub release.</string>
+    <string name="update_auto">Check for updates every day</string>
+    <string name="update_auto_detail">Shows a notification once per new version.</string>
+    <string name="update_check">Check for updates</string>
+    <string name="update_checking">Checking for updates…</string>
+    <string name="update_last_check">Last checked %1$s</string>
+    <string name="update_latest">You have the latest version.</string>
+    <string name="update_available">Version %1$s is available.</string>
+    <string name="update_unknown">Build %1$s is available. The version is checked after the download.</string>
+    <string name="update_none_found">No downloadable build was found.</string>
+    <string name="update_offline">Could not reach the server or GitHub. Try again later.</string>
+    <string name="update_from_server">From this server</string>
+    <string name="update_from_github">From the GitHub release</string>
+    <string name="update_install">Download and install</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_verifying">Checking the download…</string>
+    <string name="update_installing">Installing…</string>
+    <string name="update_bad_checksum">The download does not match its published SHA-256 checksum and was deleted. Try again.</string>
+    <string name="update_no_checksum">no SHA-256 checksum is published for this build</string>
+    <string name="update_failed">Update failed: %1$s</string>
+    <string name="update_unreadable">Android could not read the downloaded APK.</string>
+    <string name="update_wrong_package">The download is a different app (%1$s).</string>
+    <string name="update_not_newer">The downloaded build (%1$d) is not newer than the installed one (%2$d).</string>
+    <string name="update_mismatch_title">This update is signed with a different key</string>
+    <string name="update_mismatch_body">Android installs an update only when it is signed with the same key as the installed app. This build (%1$s) was signed with another key, for example a test build and a release build. To switch, uninstall ARK Studio and install the new APK from the download page; you then sign in again on this phone.</string>
+    <string name="update_permission_title">Allow installing updates</string>
+    <string name="update_permission_body">To install updates, Android needs your permission once: turn on "Allow from this source" for this app, then come back.</string>
+    <string name="update_permission_go">Open setting</string>
+    <string name="update_channel">App updates</string>
+    <string name="update_channel_desc">A new version of the app is available</string>
+    <string name="update_notify_title">Update available</string>
+    <string name="update_notify_text">Version %1$s is ready to install.</string>
+</resources>

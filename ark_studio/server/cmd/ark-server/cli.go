@@ -23,6 +23,7 @@ import (
 	"arkstudio/go/internal/mobile"
 	"arkstudio/go/internal/org"
 	"arkstudio/go/internal/project"
+	"arkstudio/go/internal/sessions"
 	"arkstudio/go/internal/skillbrief"
 	"arkstudio/go/internal/skillkit"
 	"arkstudio/go/internal/store"
@@ -121,6 +122,8 @@ func run(argv []string) int {
 			return routes(argv[1:])
 		case "docs-check": // Go only: the binary embeds the agent docs (release builds)
 			return docsCheck(argv[1:])
+		case "session-relay": // Go only: keeps an agent session running across server restarts
+			return sessions.RelayMain(argv[1:])
 		case "demo-agent": // the echo preset's agent (arkstudio/demo_agent.py)
 			return demoagent.Main(argv[1:], os.Stdin, os.Stdout, os.Stderr)
 		case "agent": // Go only: `agent watch` (cli_agentwatch.go); `agent context` is the Python parser's

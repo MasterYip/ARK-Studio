@@ -546,6 +546,65 @@ func previousRound(prev *sqlitedb.Row, since any, comments []sqlitedb.Row) *pyjs
 // Relations that tie the units of one delivery together.
 var reviewGroupRelations = []any{"part_of", "derived_from", "produces", "supports", "validates", "supersedes"}
 
+// needsRelations reads the parents (part_of / derived_from targets) and the
+// links between the listed units, by unit id.
+func needsRelations(ctx context.Context, q sqlitedb.Querier, rows []sqlitedb.Row) (parents, links map[int64][]any, err error) {
+	parents, links = map[int64][]any{}, map[int64][]any{}
+	allArgs := make([]any, len(rows))
+	byID := map[int64]int{}
+	for i, r := range rows {
+		allArgs[i] = r.Int("id")
+		byID[r.Int("id")] = i
+	}
+	lrows, err := groupRows(ctx, q, `SELECT l.source_id, l.target_id, l.relation, t.uid tuid, t.title ttitle, t.type ttype,
+                   t.status tstatus FROM unit_links l JOIN units t ON t.id=l.target_id
+                   WHERE l.source_id IN ({marks}) AND t.archived=0 ORDER BY l.id`, allArgs)
+	if err != nil {
+		return nil, nil, err
+	}
+	for _, l := range lrows {
+		src, dst, rel := l.Int("source_id"), l.Int("target_id"), l.Str("relation")
+		if rel == "part_of" || rel == "derived_from" {
+			parents[src] = append(parents[src], pyjson.NewObject("uid", l.Get("tuid"), "title", l.Get("ttitle"),
+				"type", l.Get("ttype"), "status", l.Get("tstatus"), "relation", rel))
+		}
+		if j, ok := byID[dst]; ok && containsAny(reviewGroupRelations, rel) && dst != src {
+			links[src] = append(links[src], pyjson.NewObject("uid", rows[j].Get("uid"), "relation", rel, "dir", "out"))
+			links[dst] = append(links[dst], pyjson.NewObject("uid", rows[byID[src]].Get("uid"), "relation", rel, "dir", "in"))
+		}
+	}
+	return parents, links, nil
+}
+
+// needsCandidateOf is what the automatic grouping reads of one Needs you
+// row: since is when it entered review, delivery is deliveryOf's value.
+func needsCandidateOf(r sqlitedb.Row, since, delivery any, parents, links []any) *needsCandidate {
+	c := &needsCandidate{uid: r.Str("uid"), typ: r.Str("type"), kind: "review", title: r.Str("title")}
+	if c.typ == "decision" {
+		c.kind = "decision"
+	}
+	c.since = parseNeedsTime(since)
+	if d, ok := delivery.(*pyjson.Object); ok {
+		c.branch, _ = d.Value("branch").(string)
+		c.commit, _ = d.Value("commit").(string)
+		c.label, _ = d.Value("label").(string)
+	}
+	for _, p := range parents {
+		o := p.(*pyjson.Object)
+		uid, _ := o.Value("uid").(string)
+		title, _ := o.Value("title").(string)
+		c.parents = append(c.parents, needsRef{uid: uid, title: title})
+	}
+	for _, l := range links {
+		o := l.(*pyjson.Object)
+		uid, _ := o.Value("uid").(string)
+		rel, _ := o.Value("relation").(string)
+		dir, _ := o.Value("dir").(string)
+		c.links = append(c.links, needsLink{uid: uid, relation: rel, dir: dir})
+	}
+	return c
+}
+
 // enrichReviews adds the review fields to the Needs you items (rows and
 // items in the same order).
 func (s *Store) enrichReviews(ctx context.Context, q sqlitedb.Querier, rows []sqlitedb.Row, items []*pyjson.Object) error {
@@ -559,12 +618,6 @@ func (s *Store) enrichReviews(ctx context.Context, q sqlitedb.Querier, rows []sq
 		}
 	}
 	idArgs := sqlitedb.Args(reviewIDs)
-	allArgs := make([]any, len(rows))
-	byID := map[int64]int{}
-	for i, r := range rows {
-		allArgs[i] = r.Int("id")
-		byID[r.Int("id")] = i
-	}
 	rounds, err := reviewRoundsFor(ctx, q, idArgs)
 	if err != nil {
 		return err
@@ -590,25 +643,9 @@ func (s *Store) enrichReviews(ctx context.Context, q sqlitedb.Querier, rows []sq
 	for _, m := range mrows {
 		mediaIDs[m.Int("unit_id")] = append(mediaIDs[m.Int("unit_id")], m.Int("id"))
 	}
-	// Parents (part_of / derived_from targets) and links between listed units.
-	parents := map[int64][]any{}
-	links := map[int64][]any{}
-	lrows, err := groupRows(ctx, q, `SELECT l.source_id, l.target_id, l.relation, t.uid tuid, t.title ttitle, t.type ttype,
-                   t.status tstatus FROM unit_links l JOIN units t ON t.id=l.target_id
-                   WHERE l.source_id IN ({marks}) AND t.archived=0 ORDER BY l.id`, allArgs)
+	parents, links, err := needsRelations(ctx, q, rows)
 	if err != nil {
 		return err
-	}
-	for _, l := range lrows {
-		src, dst, rel := l.Int("source_id"), l.Int("target_id"), l.Str("relation")
-		if rel == "part_of" || rel == "derived_from" {
-			parents[src] = append(parents[src], pyjson.NewObject("uid", l.Get("tuid"), "title", l.Get("ttitle"),
-				"type", l.Get("ttype"), "status", l.Get("tstatus"), "relation", rel))
-		}
-		if j, ok := byID[dst]; ok && containsAny(reviewGroupRelations, rel) && dst != src {
-			links[src] = append(links[src], pyjson.NewObject("uid", rows[j].Get("uid"), "relation", rel, "dir", "out"))
-			links[dst] = append(links[dst], pyjson.NewObject("uid", rows[byID[src]].Get("uid"), "relation", rel, "dir", "in"))
-		}
 	}
 	for i, r := range rows {
 		id := r.Int("id")
@@ -663,35 +700,11 @@ func (s *Store) enrichReviews(ctx context.Context, q sqlitedb.Querier, rows []sq
 	// One card for the units of one delivery (needsgroups.go).
 	cands := make([]*needsCandidate, len(rows))
 	for i, r := range rows {
-		id := r.Int("id")
-		c := &needsCandidate{uid: r.Str("uid"), typ: r.Str("type"), kind: "review", title: r.Str("title")}
-		if c.typ == "decision" {
-			c.kind = "decision"
-		}
 		since := items[i].Value("review_since")
 		if since == nil {
 			since = r.Get("updated_at")
 		}
-		c.since = parseNeedsTime(since)
-		if d, ok := items[i].Value("delivery").(*pyjson.Object); ok {
-			c.branch, _ = d.Value("branch").(string)
-			c.commit, _ = d.Value("commit").(string)
-			c.label, _ = d.Value("label").(string)
-		}
-		for _, p := range parents[id] {
-			o := p.(*pyjson.Object)
-			uid, _ := o.Value("uid").(string)
-			title, _ := o.Value("title").(string)
-			c.parents = append(c.parents, needsRef{uid: uid, title: title})
-		}
-		for _, l := range links[id] {
-			o := l.(*pyjson.Object)
-			uid, _ := o.Value("uid").(string)
-			rel, _ := o.Value("relation").(string)
-			dir, _ := o.Value("dir").(string)
-			c.links = append(c.links, needsLink{uid: uid, relation: rel, dir: dir})
-		}
-		cands[i] = c
+		cands[i] = needsCandidateOf(r, since, items[i].Value("delivery"), parents[r.Int("id")], links[r.Int("id")])
 	}
 	cards := needsAutoGroups(cands)
 	for i, c := range cands {

@@ -326,6 +326,9 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 			"ARK_TASK_API_BASE", apiBase),
 		"counts", pyjson.NewObject("stdout", int64(0), "stderr", int64(0), "bytes", int64(0)), "actor", actor)
 	s := &Session{ID: sessionID, Folder: folder, Meta: meta, m: m}
+	if native := pytext.Strip(bodyStr(body, "fork_native_id")); native != "" {
+		meta.Set("fork_native_id", native)
+	}
 	if len(startImages) > 0 {
 		entries, err := m.contextEntries(h, s, startImages)
 		if err != nil {
@@ -431,6 +434,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	}
 	effort := strOr(meta.Value("effort"))
 	resumeID := strOr(meta.Delete("resume_native_id"))
+	forkID := strOr(meta.Delete("fork_native_id"))
 	pending := s.pendingEntries
 	s.pendingEntries = nil
 	m.mu.Unlock()
@@ -445,6 +449,13 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	presetID := pyjson.Str(preset.Value("id"))
 	if resumeID != "" {
 		argv = resumeArgv(argv, presetID, resumeID, prompt)
+	} else if forkID != "" {
+		if next, ok := forkArgv(argv, presetID, forkID, prompt); ok {
+			argv = next
+			m.mu.Lock()
+			meta.Set("forked_native_from", forkID)
+			m.mu.Unlock()
+		}
 	}
 	if presetID == "codex" && model != "" && !contains(argv, "-m") && !contains(argv, "--model") {
 		at := 1
@@ -535,7 +546,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	m.mu.Lock()
 	meta.Set("command_preview", preview(argv, prompt))
 	m.mu.Unlock()
-	proc, err := startProcess(argv, cwdDir, env)
+	proc, err := m.startProcess(s, argv, cwdDir, env)
 	if err != nil {
 		text := osErrorText(err, argv[0])
 		m.failSpawn(s, "could not start process: "+text)

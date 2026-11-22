@@ -23,6 +23,7 @@ import {
 } from "./resources-model.js";
 import { sizeView, formatSize, graphHostId, isLocalPath } from "./location-size-model.js";
 import { sizeBadge, refreshLocationSize } from "./location-size.js";
+import { connectionStore, openMenuItems } from "./resource-open.js";
 
 const REFRESH_MS = 30000;
 const FILTER_KEY = "ark.resourcesGraph.filters";
@@ -116,6 +117,8 @@ export function resourcesGraphPanel(ctx) {
     collapsed: new Set(loadJSON(COLLAPSED_KEY, [])),
     positions: new Map(Object.entries(loadJSON(POSITIONS_KEY, {}))),
     selectBox: null, anim: 0 };
+  // SSH connections for "Open in VS Code" / "Open SSH terminal" (resource-open.js).
+  const connections = connectionStore();
   const canvas = h("canvas", { class: "resources-canvas", "aria-label": t("resources.title") });
   const tooltip = h("div", { class: "graph-tooltip hidden resources-tooltip" });
   const details = h("aside", { class: "resources-details hidden", "aria-live": "polite" });
@@ -165,6 +168,7 @@ export function resourcesGraphPanel(ctx) {
       await cachedThenFresh("/api/resources/graph", (options) => api.resourcesGraph(options), (payload) => {
         state.payload = mergeProbeDetails(payload, dashboard);
         state.error = "";
+        connections.refresh(state.payload.devices || []);
         rebuild();
         status.textContent = t("resources.updated", { when: ago(state.payload.generated_at) });
       });
@@ -1104,6 +1108,11 @@ export function resourcesGraphPanel(ctx) {
       if (card.device.kind === "gpu-server") {
         items.push({ label: t("resources.open_gpu_board"), icon: "cpu", onClick: () => ctx.navigateWorkspace?.("execute", "gpu") });
       }
+      // A location opens in its folder; a card (or a row without a path) at the device.
+      const res = target.resource;
+      const located = res && !res.redacted && typeof res.path === "string" && res.path;
+      const opens = many ? [] : openMenuItems(connections, { device: card.device, path: located ? res.path : null });
+      if (opens.length) items.push({ separator: true }, ...opens);
       items.push({ separator: true });
       items.push({ label: t("graph.help.select_visible"), icon: "layers", shortcut: "Ctrl+A", onClick: () => selectAll() });
     }

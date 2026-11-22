@@ -73,15 +73,39 @@ test("dock side, width and open state persist with the workbench layout", () => 
 // -------------------------------------------------------------- stored state
 test("sidebar prefs: the open session and the provider/model for a new one", () => {
   const store = memoryStore();
-  assert.deepEqual(model.loadSidebarPrefs(store), { sessionId: "", platform: "", model: "" });
+  assert.deepEqual(model.loadSidebarPrefs(store), { sessionId: "", platform: "", model: "", byProject: {} });
   model.saveSidebarPrefs({ sessionId: "s_1" }, store);
   model.rememberSessionChoice({ platform: "claude", model: "opus" }, store);
-  assert.deepEqual(model.loadSidebarPrefs(store), { sessionId: "s_1", platform: "claude", model: "opus" });
+  assert.deepEqual(model.loadSidebarPrefs(store), { sessionId: "s_1", platform: "claude", model: "opus", byProject: {} });
   model.rememberSessionChoice({ platform: "", model: "x" }, store);
   assert.equal(model.loadSidebarPrefs(store).platform, "claude", "an empty choice keeps the last one");
   store.setItem(model.SIDEBAR_STORE_KEY, "{broken");
-  assert.deepEqual(model.loadSidebarPrefs(store), { sessionId: "", platform: "", model: "" });
+  assert.deepEqual(model.loadSidebarPrefs(store), { sessionId: "", platform: "", model: "", byProject: {} });
   assert.equal(model.normalizeSidebarPrefs({ sessionId: "x".repeat(200) }).sessionId.length, 80);
+});
+
+test("sidebar session per project: a switch back reopens that project's session", () => {
+  const store = memoryStore();
+  let prefs = model.loadSidebarPrefs(store);
+  prefs = model.saveSidebarPrefs(model.withProjectSession(prefs, "pA", "a1"), store);
+  prefs = model.saveSidebarPrefs(model.withProjectSession(prefs, "pB", "b1"), store);
+  assert.deepEqual(model.loadSidebarPrefs(store).byProject, { pA: "a1", pB: "b1" });
+  const listA = [{ id: "a1" }, { id: "a2" }];
+  // Back in A after B: A's session, not B's (gone from this list) or a new one.
+  assert.equal(model.sessionForList(listA, { selected: "b1", prefs, project: "pA", switched: true }), "a1");
+  // A switch replaces even a session id the other project happens to list.
+  assert.equal(model.sessionForList(listA, { selected: "a2", prefs, project: "pA", switched: true }), "a1");
+  // No switch: the open session stays while it exists.
+  assert.equal(model.sessionForList(listA, { selected: "a2", prefs, project: "pA" }), "a2");
+  // The remembered session ended and was deleted: a new session.
+  assert.equal(model.sessionForList([{ id: "a2" }], { selected: "b1", prefs, project: "pA", switched: true }), "");
+  // First visit of a project: a new session.
+  assert.equal(model.sessionForList(listA, { selected: "b1", prefs, project: "pC", switched: true }), "");
+  // Capped: the newest projects stay.
+  let many = model.normalizeSidebarPrefs({});
+  for (let i = 0; i < model.MAX_PROJECT_SESSIONS + 5; i++) many = model.normalizeSidebarPrefs({ ...many, ...model.withProjectSession(many, `p${i}`, `s${i}`) });
+  assert.equal(Object.keys(many.byProject).length, model.MAX_PROJECT_SESSIONS);
+  assert.equal(many.byProject[`p${model.MAX_PROJECT_SESSIONS + 4}`], `s${model.MAX_PROJECT_SESSIONS + 4}`);
 });
 
 test("provider pick: the remembered one when available, else the first available", () => {
@@ -374,12 +398,12 @@ test("sub-agent tabs per session: open, activate, close, remembered", () => {
   let tabs = model.openAgentTab({}, "s1", { id: "toolu_A", label: "Survey" });
   tabs = model.openAgentTab(tabs, "s1", { id: "toolu_B", label: "Tests" });
   tabs = model.openAgentTab(tabs, "s1", { id: "toolu_A", label: "Survey" });
-  assert.deepEqual(tabs.s1, { tabs: [{ id: "toolu_A", label: "Survey" }, { id: "toolu_B", label: "Tests" }], active: "toolu_A" });
+  assert.deepEqual(tabs.s1, { tabs: [{ id: "toolu_A", label: "Survey", kind: "agent" }, { id: "toolu_B", label: "Tests", kind: "agent" }], active: "toolu_A" });
   tabs = model.activateAgentTab(tabs, "s1", "");
   assert.equal(tabs.s1.active, "", "the main conversation");
   tabs = model.activateAgentTab(tabs, "s1", "toolu_B");
   tabs = model.closeAgentTab(tabs, "s1", "toolu_B");
-  assert.deepEqual(tabs.s1, { tabs: [{ id: "toolu_A", label: "Survey" }], active: "toolu_A" });
+  assert.deepEqual(tabs.s1, { tabs: [{ id: "toolu_A", label: "Survey", kind: "agent" }], active: "toolu_A" });
   model.saveAgentTabs(tabs, store);
   assert.deepEqual(model.loadAgentTabs(store), tabs);
   assert.deepEqual(model.closeAgentTab(tabs, "s1", "toolu_A"), {});
@@ -478,10 +502,115 @@ test("one turn state drives the badge, the indicator, the composer and Stop", ()
   assert.equal(sessionModel.turnRunning({ status: "stopped" }), false);
 });
 
+// ------------------------------------- background work keeps a session running
+test("between turns, running sub-agents or background tasks keep the session running", () => {
+  const waiting = (extra = {}) => ({ id: "s", status: "idle", capabilities: { stream_input: true }, ...extra });
+  const bash = (id, command, status = "running") => ({ id, type: "tool", name: "Bash", status: "completed",
+    input: { command, run_in_background: true }, task: { id: `sh-${id}`, type: "command", status, background: true } });
+  const agent = (id, status = "running") => ({ id, type: "tool", name: "Task", status: "completed",
+    input: { description: "Survey" }, task: { id: `t-${id}`, type: "agent", status, background: true } });
+  // Turn ended, a sub-agent runs: running, with the reason as a sub-label.
+  let activity = activityModel.sessionActivity([agent("a"), agent("b", "completed")], { session: waiting() });
+  assert.equal(sessionModel.shownStatus(waiting(), activity), "running");
+  assert.deepEqual(JSON.parse(JSON.stringify(sessionModel.busyReason(waiting(), activity))),
+    [{ key: "session.busy.subagents_one", n: 1 }]);
+  assert.equal(sessionModel.turnRunning(waiting()), false, "Enter still sends at once");
+  assert.equal(sessionModel.liveActivity([], waiting()), null, "no typing indicator for background work");
+  assert.equal(model.stopBackgroundMode(waiting(), sessionModel.busyWork(waiting(), activity)), true, "Stop background tasks…");
+  assert.equal(model.stopBackgroundMode(waiting(), sessionModel.busyWork(waiting(), activity), { hasContent: true }), false);
+  // Two background tasks, from the server's count (a list row).
+  const listed = waiting({ busy: { subagents: 0, background: 2 } });
+  assert.equal(sessionModel.shownStatus(listed), "running");
+  assert.deepEqual(JSON.parse(JSON.stringify(sessionModel.busyReason(listed))), [{ key: "session.busy.background_n", n: 2 }]);
+  // Only the ARK watcher runs: idle.  The chip still shows it.
+  activity = activityModel.sessionActivity([bash("w", "powershell -NoProfile -File ark-watch.ps1")], { session: waiting() });
+  assert.equal(activity.runningBackground, 1);
+  assert.equal(activity.busyBackground, 0);
+  assert.equal(sessionModel.shownStatus(waiting(), activity), "idle");
+  assert.deepEqual(sessionModel.busyReason(waiting(), activity).length, 0);
+  assert.equal(model.stopBackgroundMode(waiting(), sessionModel.busyWork(waiting(), activity)), false);
+  // A background command and the watcher: one background task.
+  activity = activityModel.sessionActivity([bash("w", "sh ark-watch.sh"), bash("b", "npm run build")], { session: waiting() });
+  assert.equal(activity.busyBackground, 1);
+  // Everything stopped by an error, a stop or a close: that state, never idle.
+  for (const status of ["errored", "stopped", "closed"]) {
+    const ended = { id: "s", status, capabilities: { stream_input: true }, busy: { subagents: 1, background: 0 } };
+    activity = activityModel.sessionActivity([agent("a")], { session: ended });
+    assert.equal(sessionModel.shownStatus(ended, activity), status);
+    assert.equal(sessionModel.busyReason(ended, activity).length, 0);
+  }
+  // A running turn is just running (no sub-label).
+  const turn = { id: "s", status: "running", capabilities: { stream_input: true } };
+  activity = activityModel.sessionActivity([agent("a")], { session: turn });
+  assert.equal(sessionModel.shownStatus(turn, activity), "running");
+  assert.equal(sessionModel.busyReason(turn, activity).length, 0);
+  assert.equal(model.stopBackgroundMode(turn, sessionModel.busyWork(turn, activity)), false, "Stop stops the turn");
+});
+
 test("a session without a title shows New session · provider", () => {
   assert.equal(sessionModel.sessionTitle({ title: "", platform_label: "Claude Code" }), "New session · Claude Code");
   assert.equal(sessionModel.sessionTitle({ title: "HOI survey", platform_label: "Claude Code" }), "HOI survey");
   assert.equal(sessionModel.sessionTitle({}), "Untitled session");
   const zh = (key, vars) => (key === "session.new_title" ? `新会话 · ${vars.provider}` : key);
   assert.equal(sessionModel.sessionTitle({ platform: "codex" }, { t: zh }), "新会话 · codex");
+});
+
+// ------------------------------------------- stored contexts, blocks
+test("stored contexts: count matches the rows shown, sizes go to the listed sessions", () => {
+  const items = [
+    { id: "s_1", source: "internal", bytes: 10240 },
+    { id: "s_2", source: "internal", bytes: 2048 },
+    { id: "s_gone", source: "internal", bytes: 512 },
+    { id: "ark-ses-x", source: "external", bytes: 4096 },
+  ];
+  const section = model.contextSection(items, ["s_1", "s_2"]);
+  assert.deepEqual(section.rows.map((r) => r.id), ["s_gone", "ark-ses-x"], "listed ARK sessions are one row: in the list");
+  assert.equal(section.count, section.rows.length, "the count is the rows shown");
+  assert.equal(section.total, 10240 + 2048 + 512 + 4096, "the stored total counts ARK transcripts too");
+  assert.deepEqual(section.sizes, { s_1: 10240, s_2: 2048 });
+  assert.deepEqual(section.listed.map((r) => r.id), ["s_1", "s_2"]);
+  // Nothing listed: every stored context is a row (never "4" over an empty list).
+  const all = model.contextSection(items, []);
+  assert.equal(all.count, 4);
+  assert.equal(all.rows.length, 4);
+});
+
+test("queued turns: delivered messages leave the card; failed ones stay for retry", () => {
+  const session = { steer_queue: [
+    { id: "st_1", text: "a", status: "delivered", channel: "stdin" },
+    { id: "st_2", text: "b", status: "queued", channel: "next_turn" },
+    { id: "st_3", text: "c", status: "failed", error: "stdin closed" },
+  ] };
+  assert.deepEqual(sessionModel.pendingSteerItems(session).map((item) => item.id), ["st_2", "st_3"]);
+  assert.deepEqual(sessionModel.pendingSteerItems({ steer_queue: [{ id: "x", status: "delivered" }] }), [], "nothing pending: no card");
+  assert.deepEqual(sessionModel.pendingSteerItems({}), []);
+});
+
+test("collapsible blocks of the Sessions view remember their state", () => {
+  const store = memoryStore();
+  assert.deepEqual(model.loadBlocks(store), { list: true, groups: false, contexts: true });
+  assert.equal(model.toggleBlock("groups", store).groups, true);
+  assert.equal(model.toggleBlock("list", store).list, false);
+  assert.deepEqual(model.loadBlocks(store), { list: false, groups: true, contexts: true });
+  store.setItem(model.BLOCKS_STORE_KEY, "{bad");
+  assert.deepEqual(model.loadBlocks(store), model.BLOCK_DEFAULTS);
+});
+
+test("tab groups: forks open as tabs of the session they came from", () => {
+  let tabs = model.openAgentTab({}, "s_main", { id: "toolu_A", label: "Survey" });
+  tabs = model.openForkTab(tabs, "s_main", { id: "s_fork1", label: "Fork · main" });
+  assert.deepEqual(tabs.s_main.tabs.map((tab) => [tab.id, tab.kind]), [["toolu_A", "agent"], ["s_fork1", "session"]]);
+  assert.equal(tabs.s_main.active, "s_fork1", "the new fork is focused");
+  assert.equal(model.tabRoot(tabs, "s_fork1"), "s_main", "a fork shows its parent's strip");
+  assert.equal(model.tabRoot(tabs, "s_main"), "s_main");
+  assert.equal(model.tabRoot(tabs, "s_other"), "s_other");
+  assert.deepEqual(model.activeTabOf(tabs, "s_main"), { kind: "session", id: "s_fork1" });
+  tabs = model.activateAgentTab(tabs, "s_main", "toolu_A");
+  assert.deepEqual(model.activeTabOf(tabs, "s_main"), { kind: "agent", id: "toolu_A" });
+  tabs = model.activateAgentTab(tabs, "s_main", "");
+  assert.deepEqual(model.activeTabOf(tabs, "s_main"), { kind: "main", id: "" });
+  // Remembered, and closing the fork tab drops it from the group.
+  assert.deepEqual(model.normalizeAgentTabs(JSON.parse(JSON.stringify(tabs))), tabs);
+  tabs = model.closeAgentTab(tabs, "s_main", "s_fork1");
+  assert.equal(model.tabRoot(tabs, "s_fork1"), "s_fork1");
 });

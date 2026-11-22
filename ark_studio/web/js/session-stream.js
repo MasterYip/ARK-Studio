@@ -2,12 +2,16 @@
 // and the session actions both the Sessions page and the Sessions sidebar
 // view use: attach context, send a message, stop, start a new session.
 
-import { api } from "./api.js";
+import { api, tabProjectId } from "./api.js";
 import { t } from "./i18n.js";
 import { createSessionStream, splitTranscriptKey } from "./session-stream-model.js";
 
 export const sessionStream = createSessionStream({
-  listSessions: () => api.agentSessions({ fresh: true }),
+  // The list names the project it was read for (a switch may be on its way).
+  listSessions: () => {
+    const project = tabProjectId();
+    return api.agentSessions({ fresh: true }).then((data) => (data && project ? { ...data, project } : data));
+  },
   fetchTranscript: (key, { tail, known } = {}) => {
     const { id, agent } = splitTranscriptKey(key);
     return api.sessionTranscript(id, { fresh: true, query: { tail, known, agent } });
@@ -105,6 +109,22 @@ export async function renameAgentSession(sessionId, title) {
   const data = await api.renameSession(sessionId, title);
   if (data.session) sessionStream.patchSession(data.session);
   return data.session;
+}
+
+// 关闭 / End: stop the process; ARK leaves the session alone afterwards.
+export async function closeAgentSession(sessionId) {
+  const data = await api.closeSession(sessionId);
+  if (data.session) sessionStream.patchSession(data.session);
+  sessionStream.refreshSessions().catch(() => {});
+  return data.session;
+}
+
+// 删除 / Delete: off the list; the transcript stays in the sessions folder
+// unless `withFiles`.
+export async function deleteAgentSession(sessionId, { withFiles = false } = {}) {
+  const data = withFiles ? await api.deleteSessionEnded(sessionId) : await api.archiveSessionEnded(sessionId);
+  await sessionStream.refreshSessions().catch(() => {});
+  return data;
 }
 
 export const sessionImages = new Map();   // session id ("" = new session) -> [{ id, name, size, data, url }]

@@ -1,11 +1,13 @@
 // Execute > Runs > Session context: internal and uploaded external agent
 // sessions of this project, with transcript view, Continue and housekeeping.
 // See docs/agents/session-context.md and docs/guide/session-context.md.
+import { contextSection } from "./session-sidebar-model.js";
 import { h, clear, richText, relativeTime, fmtDateTime, copyText, emptyState } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api, cachedThenFresh } from "./api.js";
 import { openModal, confirmDialog, toast } from "./components.js";
+import { openDownload } from "./download-link.js";
 import { contextLinks, continueOptions, filterContexts, formatBytes, parseLinks, visibilityKey } from "./session-context-model.js";
 
 const OPEN_KEY = "ark.sessionLibrary.open";
@@ -101,7 +103,7 @@ export async function openTranscript(item) {
     body: h("div", { class: "stack" }, meta, body),
     actions: [
       { label: t("ctx.copy_context"), ghost: true, close: false, onClick: () => copyContext(item) },
-      { label: t("ctx.download"), ghost: true, close: false, onClick: () => { window.open(sessionContextApi.rawUrl(item.id), "_blank"); } },
+      { label: t("ctx.download"), ghost: true, close: false, onClick: () => { openDownload(sessionContextApi.rawUrl(item.id), { filename: `${item.id}.jsonl` }); } },
       { label: t("action.close"), primary: true },
     ],
   });
@@ -241,8 +243,11 @@ function row(ctx, item, reload) {
       more));
 }
 
-// `skip(item)`: rows already shown elsewhere (an ARK session in the list).
-export function sessionLibraryPanel(ctx, { skip = null } = {}) {
+// `listed()`: ids of sessions shown in the session list (their stored
+// context belongs to that row, not here); `onData(section)` gets the
+// stored sizes for those rows.  `compact`: the Sessions view (a collapsible
+// block with a chevron header).
+export function sessionLibraryPanel(ctx, { listed = null, onData = null, compact = false } = {}) {
   let data = null;
   let source = "all";
   let query = "";
@@ -282,16 +287,20 @@ export function sessionLibraryPanel(ctx, { skip = null } = {}) {
     h("div", { class: "ctx-tools" }, search, filterBar, h("span", { class: "spacer" }), consentLabel),
     list,
     h("p", { class: "muted ctx-foot" }, t("ctx.foot")));
-  const toggle = h("button", { class: "link", type: "button", "data-ctx-toggle": "",
-    onclick: () => {
-      open = !open;
-      bodyEl.hidden = !open;
-      localStorage.setItem(OPEN_KEY, open ? "1" : "0");
-      toggle.textContent = open ? t("start.hide") : t("start.show");
-      if (open && !data) load();
-    } }, open ? t("start.hide") : t("start.show"));
-  const panel = h("section", { class: "panel ctx-panel", "data-session-library": "" },
-    h("div", { class: "panel-head" },
+  const flip = () => {
+    open = !open;
+    bodyEl.hidden = !open;
+    localStorage.setItem(OPEN_KEY, open ? "1" : "0");
+    if (!compact) toggle.textContent = open ? t("start.hide") : t("start.show");
+    panel.classList.toggle("collapsed", !open);
+    if (open && !data) load();
+  };
+  const toggle = h("button", { class: compact ? "icon-btn ctx-chev" : "link", type: "button", "data-ctx-toggle": "",
+    "aria-expanded": open ? "true" : "false", title: t(open ? "start.hide" : "start.show"),
+    onclick: (event) => { event.stopPropagation(); flip(); toggle.setAttribute("aria-expanded", open ? "true" : "false"); } },
+  compact ? icon("chevronRight", "sm") : (open ? t("start.hide") : t("start.show")));
+  const panel = h("section", { class: `panel ctx-panel ${compact ? "compact" : ""} ${open ? "" : "collapsed"}`.trim(), "data-session-library": "" },
+    h("div", { class: "panel-head", onclick: compact ? () => toggle.click() : null },
       h("div", { class: "ctx-title" }, icon("layers", "sm"), h("h3", null, t("ctx.title")), count, usage),
       h("div", { class: "row tight" },
         h("button", { class: "icon-btn", type: "button", title: t("action.refresh"), "aria-label": t("action.refresh"), onclick: () => load() }, icon("refresh", "sm")),
@@ -300,11 +309,18 @@ export function sessionLibraryPanel(ctx, { skip = null } = {}) {
 
   function paint() {
     clear(list);
-    const items = filterContexts(data?.sessions || [], { source, query }).filter((item) => !skip?.(item));
-    count.textContent = String((data?.sessions || []).length);
+    const section = contextSection(data?.sessions || [], listed ? listed() : []);
+    const shownIds = new Set(section.rows.map((item) => item.id));
+    const items = filterContexts(data?.sessions || [], { source, query }).filter((item) => shownIds.has(item.id));
+    count.textContent = String(section.count);
+    usage.textContent = data ? t("ctx.usage_total", { total: formatBytes(section.total),
+      used: formatBytes(data.usage?.bytes), limit: formatBytes(data.usage?.limit) }) : "";
+    onData?.(section);
     if (!data) { list.appendChild(h("p", { class: "muted" }, t("ctx.loading"))); return; }
     if (!items.length) {
-      list.appendChild(emptyState(t("ctx.empty"), t(data.settings?.accept_uploads ? "ctx.empty_hint_on" : "ctx.empty_hint_off")));
+      list.appendChild(compact
+        ? h("p", { class: "muted ctx-empty-line" }, t(section.count ? "ctx.no_match" : "ctx.empty_compact"))
+        : emptyState(t("ctx.empty"), t(data.settings?.accept_uploads ? "ctx.empty_hint_on" : "ctx.empty_hint_off")));
       return;
     }
     for (const item of items) list.appendChild(row(ctx, item, load));
@@ -317,7 +333,6 @@ export function sessionLibraryPanel(ctx, { skip = null } = {}) {
       await cachedThenFresh("/api/session-contexts", (options) => api.sessionContexts(options), (value, { cached }) => {
         data = value;
         consent.checked = Boolean(data.settings?.accept_uploads);
-        usage.textContent = t("ctx.usage", { used: formatBytes(data.usage?.bytes), limit: formatBytes(data.usage?.limit) });
         if (cached) paint();
       });
     } catch (err) {
@@ -334,6 +349,7 @@ export function sessionLibraryPanel(ctx, { skip = null } = {}) {
   let activeTimer = null;
 
   paint();
-  if (open) load();
+  if (open || onData) load();
+  panel.reload = load;
   return panel;
 }

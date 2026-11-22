@@ -6,6 +6,133 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.2] - 2026-11-22
+
+### Added
+
+- Split and merge projects: move weakly linked branches into a new project,
+  or merge a whole project into another. ARK suggests what to split, an
+  agent proposes the plan as a decision in Needs you, and nothing moves until
+  a person approves it. Moves can be undone for 30 days; node details show
+  where a node came from and links to other projects.
+- Agents can copy nodes from another project into this one with an import
+  plan that a person approves first (`/api/agent/v1/import-ark`); the agent
+  guide "Project content" explains inspecting, planning, applying and
+  reporting.
+- Home prompt library: More prompts opens built-in prompts (organize
+  project content, sort the review backlog, continue a task, plan an idea,
+  status check, resume interrupted work, set up this device) in English and
+  Chinese. Pin the ones you use to Home, reorder them, and write your own
+  personal or project prompts with `{project}`, `{unit}` and `{user}`;
+  export and import them as JSON. Agents can save a prompt for you.
+- Node markers: choosing a marker a node already has removes it; stars,
+  flags, priority and progress allow one marker each per node. Settings >
+  Appearance > Node markers edits the project's marker groups; the graph
+  menu has Remove marker and Clear markers.
+- Android app: About and updates with a daily check. The app downloads the
+  update from your ARK server when the server has the APK, else from GitHub,
+  and checks the download's SHA-256 and signing key before installing. From
+  2.1.2 on, releases are signed with one fixed key, so each one installs over
+  the last. An APK from 2.1.1 or earlier has a different key: uninstall it
+  once, then install 2.1.2.
+- Android app: system notifications for new reviews (a review already opened
+  in the browser does not notify), decisions, approval requests and session
+  errors across the account's projects, grouped per project, with quiet hours
+  and per-project mute (no push service: checked every 15 minutes and when the
+  app opens).
+- Runs on phones: full-screen conversation with one compact header, tabs, a
+  composer that stays above the keyboard, the session list and session
+  properties as bottom sheets, long press for menus and larger touch targets.
+- Agent sessions keep running when the Linux server restarts or is updated;
+  the server reconnects to them when it starts again.
+- Runs: the page is the conversation, with tabs for sub-agents and forks.
+  Fork in new tab continues a session in a separate conversation (Claude
+  Code and Codex fork natively).
+- Locate in map in every node menu (Alt+M): opens the Map, shows the node
+  even when filters hide it, centers it and opens it in Details. Filter chips
+  have Only this, Select all and Invert (right click or long press;
+  Alt+click is Only this).
+- Resources: open a location in VS Code or Cursor (local folders and Remote
+  SSH), open an SSH terminal (desktop app), or copy the SSH command or path.
+- Desktop app: downloads such as "Download project ZIP" are saved to
+  Downloads and shown in the app window, with Show in folder.
+- Sessions: a session whose sub-agents or background tasks still run shows
+  Running with the reason ("Running · 2 sub-agents").
+- One delivery, one review (project preference, on by default): when an
+  agent puts several nodes up for review at once, they arrive as one review
+  group with a note that says what to look at.
+- Desktop app: Settings > App inside ARK lists the app's own settings
+  (version and updates, saved servers, start-up, window, data) next to the
+  server's settings; the Settings header says whose settings you are looking
+  at. The app's settings window links back to the server's Settings.
+- Desktop app: when a newer version is found, a system notification (once
+  per version) and a notice with Update / Later on every page in the app
+  window, local or remote. The app checks at start and every 12 hours while
+  it runs (can be turned off).
+- Desktop app: after an update, the local Home and Settings > About show
+  "ARK Studio was updated to ..." with the main changes of the release.
+- Servers: after an upgrade, each person sees "This server was updated to
+  ..." once on Home.
+- Switching projects keeps each project's page: back in a project you get
+  the page you left with its view, the node open in Details and its scroll
+  position, the graph's zoom, position and layout, the selected run and its
+  list filters, and the session open in the Sessions view. A project you
+  open for the first time starts at Home. After the page hung, ARK still
+  starts at Home and forgets that project's page.
+- Project picker: each project shows how many items in Needs you are new
+  for you since you last looked ("3 new") and how many there are in all;
+  the project selector shows a dot when another project has new ones.
+  Opening Needs you or an item marks it seen, on every device.
+
+### Changed
+
+- Servers: `ARK_DOWNLOAD_DIR` names a folder with the Android app's APK;
+  phones then download the app and its updates from the server instead of
+  GitHub, which some networks cannot reach.
+- Home: Copy prompt reuses one personal token per project instead of creating
+  a new one on every copy, so copies no longer run into the 10-token limit.
+  The dialog has a New token button (revokes the previous one) and, at the
+  limit, offers to revoke the project's older prompt tokens. Settings >
+  Personal > Agent access can revoke old starter-prompt tokens at once.
+
+- Settings > About is a top-level page next to the overview (it was under
+  Personal; old links still open it). It shows the version, and in the
+  desktop app the install type, the last update check, "Check for updates",
+  "Update and restart" (or "Download" for the portable build) and the
+  start-up check switch. On a server it shows the server's version.
+- The Settings overview starts with an "About ARK Studio" card: version and
+  update state at a glance.
+- The activity bar has an About button above Settings; a dot marks a newer
+  version of the desktop app.
+
+### Fixed
+
+- Settings no longer repaints every few seconds on a public server, and a
+  change made elsewhere refreshes Settings only when the data it shows
+  changed, never over unsaved edits. The status bar says "Syncing" only
+  for requests that take longer than a moment.
+- Search palette: clicking a result opens it again (hovering no longer
+  replaced the row under the pointer).
+- Settings: unticking "enabled" for a project coding agent stays unticked
+  after Save.
+- Needs you no longer lists closed decisions (done, abandoned or archived).
+- Phones: the session list and session details sheets on Runs respond to
+  taps again.
+- Node details opens in Read at every start; only the Read/Edit buttons
+  change what it remembers.
+- Queued messages leave the queued-turns list once delivered; a failed one
+  can be retried or removed.
+- Graph checks find tasks without a parent and can attach them.
+- Android app updates work on servers that cannot reach GitHub's download
+  host: the checksum comes from the release itself.
+
+### Removed
+
+- The WebView Android app (ARK Studio Web, `com.masteryip.arkstudio.web`) is
+  no longer built or attached to releases; the Android app is ARK Studio
+  (`com.masteryip.arkstudio`). `/download/ARK-Studio-webapp.apk` now downloads
+  ARK Studio.
+
 ## [2.1.1] - 2026-11-21
 
 ### Added

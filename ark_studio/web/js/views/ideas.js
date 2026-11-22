@@ -69,7 +69,7 @@ function graphPanel(ctx, S, onReady = null) {
   const host = h("div", { class: "graph-host" });
   panel.appendChild(host);
   const graph = new GraphView(host, {
-    cameraKey: `ideas:${S.view}`,
+    cameraKey: `${ctx.S.project?.id || ""}:ideas:${S.view}`,
     nodeGraphKey: `ark.nodeGraph.v1:${ctx.S.project?.path || ""}:ideas:${S.view}`,
     isInspectorOpen: () => Boolean(ctx.S.inspectorPane !== false || ctx.S.drawerOpen),
     onSelect: (node, dbl, event) => { if (node) ctx.openUnit(node.uid || node.id, event ? { x: event.clientX, y: event.clientY } : null); },

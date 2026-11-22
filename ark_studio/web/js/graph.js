@@ -4,12 +4,14 @@ import { icon, drawStatusIcon } from "./icons.js";
 import { normalizeGraphPhysics, GRAPH_DEFAULTS } from "./physics.js";
 import { getMindSettings } from "./mind-settings.js";
 import { getTagShortcuts, shortcutMatches } from "./shortcuts.js";
-import { MARKERS, markersFor, markerArc } from "./markers.js";
+import { markersFor, markerArc, markerMenuChildren, toggleMarkerChange, isMarkerTag } from "./markers.js";
 import { openContextMenu } from "./context-menu.js";
 import { imageCopyMenuItems } from "./image-copy.js";
 import { assignMenuItem } from "./assign-menu.js";
 import { exportBundleMenuItem } from "./export-menu.js";
 import { historyMenuItem } from "./node-history.js";
+import { locateInMapItem, isLocateShortcut, locateShortcut, locateUnit } from "./locate-map.js";
+import { locateCamera } from "./locate-map-model.js";
 import { authenticatedUrl } from "./api.js";
 import { applyRepulsion } from "./graph-force.js";
 import {
@@ -23,10 +25,35 @@ import { mindHierarchy, mindLayout, TREE_GAP } from "./mind-layout.js";
 import { assignNodeData, classifyGraphUpdate, classifyNodeChange, DRAWN_NODE_FIELDS, edgeKey } from "./graph-change.js";
 import { attachPresenceOverlay, createPresenceChip } from "./presence-ui.js";
 import { siblingGroup, groupDefaults } from "./selection-model.js";
+import { rememberMode, savedMode } from "./read-edit-mode.js";
 
 const POS_CACHE = new Map(); // graphId -> Map(nodeId -> {x,y})
 const GRAPH_INSTANCES = new Set();
+// Camera per view (cameraKey "<project>:<view>"): zoom, pan and layout when
+// the view was left, reused when it opens again (project-state-model.js
+// keeps a project's cameras across a project switch and a reload).
 const GRAPH_CAMERAS = new Map();
+
+/** Every remembered camera as [key, {zoom, pan, layout}], plus the live graphs' current ones. */
+/** The live graph views (browser tests and the console look at their state). */
+export function liveGraphs() {
+  return [...GRAPH_INSTANCES];
+}
+
+export function graphCameraEntries() {
+  const out = new Map(GRAPH_CAMERAS);
+  for (const graph of GRAPH_INSTANCES) {
+    if (graph.cameraKey && graph._fitted) out.set(graph.cameraKey, { zoom: graph.zoom, pan: { ...graph.pan }, layout: graph.layout });
+  }
+  return [...out.entries()];
+}
+
+/** Remember cameras (project-state-model.js snapshot) for views opened next. */
+export function seedGraphCameras(cameras = {}) {
+  for (const [key, camera] of Object.entries(cameras || {})) {
+    if (camera?.pan) GRAPH_CAMERAS.set(key, { zoom: camera.zoom, pan: { ...camera.pan }, layout: camera.layout });
+  }
+}
 let ACTIVE_PHYSICS = normalizeGraphPhysics(GRAPH_DEFAULTS);
 let GRAPH_SEQ = 0;
 let GRAPH_CLIPBOARD = null;
@@ -357,13 +384,9 @@ function addViewCubic(ctx, seg, view, whole, limit, sx, sy, state, depth = 0) {
 // relation: the Local graph roots its Mind layout at the focused node and
 // uses the breadth-first parents of its neighbourhood.
 // Read / Edit is one choice for every graph layout (and the Node details
-// panel follows it): remembered once, Read until the person switches.
-const GRAPH_MODE_KEY = "ark.graphMode";
+// panel follows it), Read until the person switches (read-edit-mode.js).
 export function savedGraphMode() {
-  try {
-    const saved = localStorage.getItem(GRAPH_MODE_KEY);
-    return saved === "edit" ? "edit" : "read";
-  } catch { return "read"; }
+  return savedMode();
 }
 
 // Largest scale of the decorative Home backdrop graph.
@@ -895,6 +918,7 @@ export class GraphView {
         row("← → ↑ ↓", t("graph.help.move_selection")),
         row("R / E", t("graph.help.read_edit_mode")),
         row("F", t("graph.help.fit_graph")),
+        this._locatesInMap() ? row(locateShortcut(), t("graph.help.locate_map")) : null,
         row("?", t("graph.help.this_help")),
         row("Esc", t("graph.help.clear_selection"))),
       h("div", { class: "graph-help-group" }, h("h5", null, t("graph.help.mouse")),
@@ -1489,7 +1513,9 @@ export class GraphView {
         const selected = this._selectedNodeObjects();
         if (!selected.length) return;
         event.preventDefault();
-        this._applyMindTag(shortcutTag);
+        // A marker shortcut toggles the marker (one per exclusive group).
+        if (isMarkerTag(shortcutTag)) this._applyMarkers(toggleMarkerChange(selected, shortcutTag), selected);
+        else this._applyMindTag(shortcutTag);
         return;
       }
     }
@@ -1510,6 +1536,11 @@ export class GraphView {
       if (!this._selectedNodeObjects().length) return;
       event.preventDefault();
       this._addMindNode("child");
+      return;
+    }
+    if (this._locatesInMap() && isLocateShortcut(event)) {
+      const node = this._selectedNodeObjects()[0];
+      if (node && locateUnit(node)) event.preventDefault();
       return;
     }
     if (event.altKey && !event.ctrlKey && !event.metaKey && event.key === "Enter") {
@@ -1676,6 +1707,42 @@ export class GraphView {
     this._draw();
   }
 
+  /**
+   * The Markers submenu: the groups with a check on markers every target
+   * node has (choosing one again removes it; in an exclusive group choosing
+   * another replaces it), then Remove marker and Clear markers.
+   */
+  _markerMenuItem(nodes, edit) {
+    const children = markerMenuChildren(nodes, (change) => edit(() => this._applyMarkers(change, nodes))());
+    return { label: t("graph.menu.markers"), icon: "sparkles", children };
+  }
+
+  /**
+   * Apply a marker change ({add, remove} tags) to `nodes` through
+   * opts.onMarkers (one batch: one activity entry per node), then update the
+   * drawn nodes; one Ctrl+Z step puts the tags back.
+   */
+  async _applyMarkers(change, nodes = this._selectedNodeObjects()) {
+    if (!nodes.length || !this.opts.onMarkers || (!change.add.length && !change.remove.length)) return;
+    try {
+      const result = await this.opts.onMarkers(nodes, change);
+      if (!result) return;
+      this._syncNodeTags(result.updated);
+      if (result.undo) this._pushHistory({ undo: async () => this._syncNodeTags(await result.undo()) });
+    } catch (err) {
+      this.opts.onError?.(err);
+    }
+  }
+
+  /** Take the tags of saved units onto the drawn nodes. */
+  _syncNodeTags(units) {
+    for (const unit of units || []) {
+      const node = this.byId.get(unit.id) || this.nodes.find((item) => item.uid && item.uid === unit.uid);
+      if (node && Array.isArray(unit.tags)) node.tags = [...unit.tags];
+    }
+    this._draw();
+  }
+
   async _applyMindTag(tag) {
     const nodes = this._selectedNodeObjects();
     if (!nodes.length || !this.opts.onAddTag) return;
@@ -1713,7 +1780,7 @@ export class GraphView {
     const item = hit.item;
     const node = hit.node;
     const edit = (action) => () => {
-      if (this.mode !== "edit") this.setMode("edit");
+      if (this.mode !== "edit") this.setMode("edit", { persist: false });
       action();
     };
     const pinned = node.pinnedMeta && String(node.pinnedMeta.item.id) === String(item.id);
@@ -1769,7 +1836,7 @@ export class GraphView {
       ? (this.selectedNodes.has(node.id) ? this._selectedNodeObjects() : [node])
       : [];
     const edit = (action) => () => {
-      if (this.mode !== "edit") this.setMode("edit");
+      if (this.mode !== "edit") this.setMode("edit", { persist: false });
       action();
     };
     const items = [];
@@ -1779,6 +1846,7 @@ export class GraphView {
       if (this.opts.onOpenEditor) {
         items.push({ label: t("editor.open_in_editor"), icon: "edit", shortcut: "Alt+Enter", onClick: () => this.opts.onOpenEditor(node) });
       }
+      if (this._locatesInMap()) items.push(locateInMapItem(node));
       items.push({ label: t("action.copy"), icon: "copy", shortcut: "Ctrl+C", onClick: () => this._copySelection(false) });
       items.push({ label: t("graph.menu.copy_subtree"), icon: "copy", shortcut: "Ctrl+Shift+C", onClick: () => this._copySelection(true) });
       items.push({ separator: true });
@@ -1792,12 +1860,7 @@ export class GraphView {
         items.push({ label: t("graph.menu.add_sibling_above"), icon: "plus", shortcut: "Shift+Enter", onClick: edit(() => this._addMindNode("above")) });
       }
       items.push({ separator: true });
-      items.push({
-        label: t("graph.menu.markers"), icon: "sparkles", children: MARKERS.map((marker) => ({
-          label: `${marker.glyph} ${marker.label}`,
-          onClick: edit(() => this._applyMindTag(marker.tag)),
-        })),
-      });
+      if (this.opts.onMarkers) items.push(this._markerMenuItem(nodes, edit));
       const tags = Object.keys(getTagShortcuts());
       if (tags.length) {
         items.push({
@@ -2035,6 +2098,10 @@ export class GraphView {
     if (camera && camera.layout === this.layout) {
       this.zoom = camera.zoom;
       this.pan = { ...camera.pan };
+      // The remembered camera is where the person left the view: no later
+      // fit (settling, a panel resizing the canvas) moves it.
+      this._userInteracted = true;
+      this._pendingForceFit = false;
       this._draw();
     }
     this._fitted = true;
@@ -2406,14 +2473,15 @@ export class GraphView {
     this.host.dataset.mode = this.mode;
     this.modeReadBtn?.classList.toggle("on", this.mode === "read");
     this.modeEditBtn?.classList.toggle("on", this.mode === "edit");
-    if (persist && this.opts.persistMode !== false) {
-      try { localStorage.setItem(GRAPH_MODE_KEY, this.mode); } catch { /* ignore */ }
-    }
+    // `persist`: the person used the Read / Edit control.  Edit actions that
+    // switch on their own pass false and last for this visit only.
+    const remember = persist && this.opts.persistMode !== false;
+    if (remember) rememberMode(this.mode);
     if (this.mode === "read") {
       this._closeEditor(true);
       this.cancelConnect?.();
     }
-    this.opts.onModeChange?.(this.mode);
+    this.opts.onModeChange?.(this.mode, { persist: remember });
     this._draw();
   }
 
@@ -5368,6 +5436,78 @@ export class GraphView {
     }
   }
 
+  // Project-unit graphs other than the Map itself (Research topics and mind
+  // maps, the Local graph) offer "Locate in research map".
+  _locatesInMap() {
+    return Boolean((this.opts.projectUnits || this.opts.localGraph) && !this.opts.mapGraph && !this.opts.backdrop);
+  }
+
+  /**
+   * "Locate in research map": select the node with `ref` (uid or id), open
+   * the mind-map branches that fold it away, glide the camera to it and
+   * pulse it once.  A force layout that is still settling is followed for a
+   * moment.  False when the graph does not have the node (or not placed yet).
+   */
+  locate(ref, { pulse = true } = {}) {
+    const key = String(ref ?? "");
+    const node = this.nodes.find((item) => String(item.uid) === key || String(item.id) === key);
+    if (!node) return false;
+    if (this.layout === "mind") {
+      const { parentOf } = this._mindTree();
+      let changed = false;
+      const seen = new Set();
+      for (let parent = parentOf.get(node.id); parent && !seen.has(parent); parent = parentOf.get(parent)) {
+        seen.add(parent);
+        if (this.collapsed.delete(parent)) changed = true;
+      }
+      if (changed) this._applyLayout(false);
+    }
+    if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return false;
+    this._setSelection([node], false);
+    // A pending "fit when the force layout settles" must not undo this.
+    this._userInteracted = true;
+    this._pendingForceFit = false;
+    const camera = locateCamera(node, this.zoom, this.layout);
+    this._animateCamera(camera.zoom, camera.pan);
+    clearTimeout(this._locateFollow);
+    const placed = { x: node.x, y: node.y };
+    this._locateFollow = setTimeout(() => {
+      // Still settling: centre again unless the user moved the camera meanwhile.
+      if (!this.host.isConnected || this._cameraFrame || this.selected !== node.id) return;
+      if (Math.hypot(node.x - placed.x, node.y - placed.y) * this.zoom < 24) return;
+      const again = locateCamera(node, this.zoom, this.layout);
+      this._animateCamera(again.zoom, again.pan, 260);
+    }, 700);
+    if (pulse) this._pulseNode(node);
+    return true;
+  }
+
+  // A ring that follows the node for a moment (CSS .graph-locate-pulse).
+  _pulseNode(node) {
+    this._pulseEl?.remove();
+    const el = h("div", { class: `graph-locate-pulse ${this.layout === "force" || this.layout === "tree" ? "round" : ""}`.trim(), "aria-hidden": "true" });
+    this.host.appendChild(el);
+    this._pulseEl = el;
+    const started = performance.now();
+    const follow = (now) => {
+      if (!el.isConnected) return;
+      if (now - started > 1800 || !this.byId.has(node.id)) {
+        el.remove();
+        if (this._pulseEl === el) this._pulseEl = null;
+        return;
+      }
+      const p = this._screen(node);
+      const card = this.layout === "mind" || this.layout === "node";
+      const w = card ? (node.w || (this.layout === "node" ? 200 : 160)) * this.zoom + 14 : this._nodeRadius(node) * 2 + 18;
+      const hgt = card ? (node.h || (this.layout === "node" ? 64 : 38)) * this.zoom + 14 : w;
+      el.style.width = `${w}px`;
+      el.style.height = `${hgt}px`;
+      el.style.transform = `translate(${p.x - w / 2}px, ${p.y - hgt / 2}px)`;
+      requestAnimationFrame(follow);
+    };
+    requestAnimationFrame(follow);
+  }
+
   focus(node) {
     this.selected = node.id;
     this.selectedNodes = new Set([node.id]);
@@ -5983,7 +6123,7 @@ export class GraphView {
     const targets = this._selectedNodeObjects();
     // Pasting is also a first-class way to add roots.  With no selected
     // target the imported nodes stay orphans, centered in the visible graph.
-    if (this.mode === "read") this.setMode("edit");
+    if (this.mode === "read") this.setMode("edit", { persist: false });
     this._pasting = true;
     try {
       const result = await this.opts.onPasteNodes(GRAPH_CLIPBOARD, targets);

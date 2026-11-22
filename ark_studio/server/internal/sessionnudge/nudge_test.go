@@ -127,3 +127,21 @@ func TestNudgeSkipsSessionsWithTheirOwnWatcher(t *testing.T) {
 		t.Fatalf("after the watcher stopped: %v", got)
 	}
 }
+
+// Between turns with sub-agents or background tasks running, a session is
+// busy: no nudge.  Once they finish, the pending updates are delivered.
+func TestNudgeWaitsForBackgroundWork(t *testing.T) {
+	f := &fake{enabled: true, epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
+	f.sessions = []Session{{ID: "s1", ProjectID: "p", Idle: true, Accepts: true, Busy: true}}
+	n := &Nudger{D: f.deps()}
+	ctx := context.Background()
+	n.Tick(ctx)
+	f.rows = append(f.rows, 2, 3)
+	if got := n.Tick(ctx); len(got) != 0 {
+		t.Fatal("a session whose background work runs is not nudged")
+	}
+	f.sessions[0].Busy = false
+	if got := n.Tick(ctx); len(got) != 1 || !strings.Contains(f.sent["s1"], "2 new update") {
+		t.Fatalf("nudge after the background work ended: %v %q", got, f.sent["s1"])
+	}
+}

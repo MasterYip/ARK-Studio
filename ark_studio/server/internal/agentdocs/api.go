@@ -130,6 +130,23 @@ func Capabilities() []any {
 				"409 LINK_AMBIGUOUS lists the relations when relation is omitted and there are several; 404 when there is none."),
 		pyjson.NewObject("id", "links.update", "kind", "write", "method", "PATCH", "path", "/api/agent/v1/links/{id}",
 			"summary", "Change a link's relation: {\"relation\": \"supports\"}."),
+		pyjson.NewObject("id", "project_move.clusters", "kind", "read", "method", "GET", "path", "/api/agent/v1/project-move/clusters",
+			"summary", "Branches of this project and groups of them that link to the rest only a little (split candidates). Docs: agents/project-content.md."),
+		pyjson.NewObject("id", "project_move.propose", "kind", "write", "method", "POST", "path", "/api/agent/v1/project-move/plans",
+			"summary", "Propose a split {mode: split, roots|clusters, new_project: {name}} or merge {mode: merge, target_project}; "+
+				"opens a decision for a person to approve. Nothing moves until then."),
+		pyjson.NewObject("id", "project_move.import", "kind", "write", "method", "POST", "path", "/api/agent/v1/import-ark/plans",
+			"summary", "Propose copying nodes from another project into this one {project: <source id>, units, with_children?}; "+
+				"opens a decision for a person to approve. Source reads: GET /api/agent/v1/import-ark/graph?project=<id>&<filters>."),
+		pyjson.NewObject("id", "project_move.plan", "kind", "read", "method", "GET", "path", "/api/agent/v1/project-move/plans/{id}",
+			"summary", "A move plan: state (proposed, approved, rejected, applied, undone) and summary."),
+		pyjson.NewObject("id", "project_move.apply", "kind", "write", "method", "POST", "path", "/api/agent/v1/project-move/plans/{id}/apply",
+			"summary", "Carry out an approved plan (409 MOVE_NOT_APPROVED before a person approved it)."),
+		pyjson.NewObject("id", "project_move.undo", "kind", "write", "method", "POST", "path", "/api/agent/v1/project-move/plans/{id}/undo",
+			"summary", "Undo an applied plan."),
+		pyjson.NewObject("id", "markers.list", "kind", "read", "method", "GET", "path", "/api/agent/v1/markers",
+			"summary", "The project's node marker groups. Mark a node with the tag marker:<id>; a node has each marker once and, "+
+				"in an exclusive group (stars, flags, priority, progress), one marker: the one written last replaces the others."),
 	}
 }
 

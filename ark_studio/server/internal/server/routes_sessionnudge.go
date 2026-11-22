@@ -53,8 +53,8 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 			for _, b := range a.Sessions.Brief() {
 				status := pyjson.Str(b.Value("status"))
 				s, err := a.Sessions.Get(pyjson.Str(b.Value("id")))
-				if err != nil {
-					continue
+				if err != nil || a.Sessions.NudgeExcluded(s) {
+					continue // ended or closed by a person: ARK leaves it alone
 				}
 				stopped := false
 				switch status {
@@ -74,7 +74,7 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 					watching = watching || a.tokenLongPolling(id)
 				}
 				out = append(out, sessionnudge.Session{ID: s.ID, ProjectID: a.Sessions.ProjectID(s), User: owner,
-					Idle: status == "idle", Accepts: true, Stopped: stopped, Watching: watching})
+					Idle: status == "idle", Busy: b.Value("busy") != nil, Accepts: true, Stopped: stopped, Watching: watching})
 			}
 			return out
 		},

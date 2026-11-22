@@ -66,21 +66,21 @@ export const START_SHARED = {
       zh: "文档：本提示词有意保持简短。先 GET {{url}}/api/agent/v1/docs（使用相同的 Authorization 和 X-ARK-Project 请求头）：它列出 ARK 的全部文档，并给出“从这里开始”的阅读顺序。需要时再用 GET /api/agent/v1/docs/<path> 读取相关文档（加上 ?section=<heading-slug> 只读一节）；文档比本提示词更详细的地方，以文档为准。如果 /api/agent/v1/docs 返回 404（旧版 ARK），改用 GET /api/agent/v1/interface 和 GET /api/agent/v1/skills。",
     },
   ],
-  // ARK defaults as composed by the server (internal/agentrules, rules r-e1794102).
+  // ARK defaults as composed by the server (internal/agentrules, rules r-d3c19ef1).
   // Used when the server cannot compose them (older ARK); agentrules_test.go
   // checks that these lines are the catalog's default composition.
   rules: [
     {
-      en: "CORE RULES (rules r-e1794102): they hold for this whole conversation, for every task. ARK is the record: work that is not in ARK did not happen. GET /api/agent/v1/rules returns the current rules; when you check updates and its version is not r-e1794102, follow the new rules. Details and examples: GET /api/agent/v1/docs/agents/working-mode.md.",
-      zh: "核心规则（规则 r-e1794102）：在整段对话中、对每个任务都有效。ARK 就是记录：没有写进 ARK 的工作等于没有发生。GET /api/agent/v1/rules 返回当前规则；查看 updates 时如果它的版本不是 r-e1794102，按新规则执行。细节和示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
+      en: "CORE RULES (rules r-d3c19ef1): they hold for this whole conversation, for every task. ARK is the record: work that is not in ARK did not happen. GET /api/agent/v1/rules returns the current rules; when you check updates and its version is not r-d3c19ef1, follow the new rules. Details and examples: GET /api/agent/v1/docs/agents/working-mode.md.",
+      zh: "核心规则（规则 r-d3c19ef1）：在整段对话中、对每个任务都有效。ARK 就是记录：没有写进 ARK 的工作等于没有发生。GET /api/agent/v1/rules 返回当前规则；查看 updates 时如果它的版本不是 r-d3c19ef1，按新规则执行。细节和示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
     },
     {
       en: "C1. Read before your first write: GET /api/agent/v1/context, GET /api/agent/v1/setup and the whole of working-mode.md (about 27 KB: read all of it, in parts if you must; do not cut it off with head or a byte limit).",
       zh: "C1. 第一次写入之前先读：GET /api/agent/v1/context、GET /api/agent/v1/setup，以及完整的 working-mode.md（约 27 KB：全部读完，必要时分段读；不要用 head 或字节上限截断）。",
     },
     {
-      en: "C2. One request is one task unit (POST /api/agent/v1/units, type: \"task\") with the plan in its body (goal, my request verbatim, steps, evaluation protocol, decision gates, timeline), linked derived_from the question or parent task it comes from (POST /api/agent/v1/links). Status: open → active → review or blocked → done.",
-      zh: "C2. 一个请求就是一个任务节点（POST /api/agent/v1/units，type: \"task\"），计划写在正文里（目标、我的原话请求、步骤、评估协议、决策关卡、时间线），以 derived_from 关联到它所来自的问题或上级任务（POST /api/agent/v1/links）。状态：open → active → review 或 blocked → done。",
+      en: "C2. One request is one task unit (POST /api/agent/v1/units, type: \"task\") with the plan in its body (goal, my request verbatim, steps, evaluation protocol, decision gates, timeline), linked part_of the line, topic or parent task it belongs to (POST /api/agent/v1/links; derived_from the question it comes from as well, for provenance). Status: open → active → review or blocked → done.",
+      zh: "C2. 一个请求就是一个任务节点（POST /api/agent/v1/units，type: \"task\"），计划写在正文里（目标、我的原话请求、步骤、评估协议、决策关卡、时间线），以 part_of 关联到它所属的主线、主题或上级任务（POST /api/agent/v1/links；另以 derived_from 关联它所来自的问题，记录来源）。状态：open → active → review 或 blocked → done。",
     },
     {
       en: "C3. Progress is a dated line in the task body (\"YYYY-MM-DD HH:MM UTC · what ran, problems, next step\"); re-read the body just before each write. Never post progress, plans or answers as comments.",
@@ -91,8 +91,8 @@ export const START_SHARED = {
       zh: "C4. 每个结果单独成一个节点（测量或分析用 type \"experiment\"，文档或审查用 \"artifact\"），part_of 并 derived_from 该任务；把文件附到它上面（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}），图以 ![caption](media:<id>) 嵌入。只有被结果支持或反驳的陈述才建论断节点。除非我要求，不要使用其他节点类型、子任务或 relates_to 关联。",
     },
     {
-      en: "C5. Needs you: whenever you hand me something (a result, a plan to approve, versions to choose from), set that unit's status to review so it appears in Needs you; a question for me is a decision unit left open. Never leave it only in chat, a comment or a body, and never set a review unit to done yourself: I Accept or Send back in ARK.",
-      zh: "C5. 待你处理：每当你交给我东西（结果、待批准的计划、待选择的版本），把那个节点的状态设为 review，让它出现在“待你处理”中；需要我回答的问题是一个保持未完成的决定节点。不要只写在对话、评论或正文里，也绝不要自己把 review 节点设为 done：由我在 ARK 中接受或退回。",
+      en: "C5. Needs you: whenever you hand me something (a result, a plan to approve, versions to choose from), set that unit's status to review so it appears in Needs you; a question for me is a decision unit left open. Each time you set status review, send review_note with it: one to three lines saying what to look at and what changed, with anchors to the exact places (`[heading](#slug)`, `T-0042#slug`, `media:<id>@0:08-0:12`); never just \"see the body\". Never leave it only in chat, a comment or a body, and never set a review unit to done yourself: I Accept or Send back in ARK.",
+      zh: "C5. 待你处理：每当你交给我东西（结果、待批准的计划、待选择的版本），把那个节点的状态设为 review，让它出现在“待你处理”中；需要我回答的问题是一个保持未完成的决定节点。每次设为 review 时同时提交 review_note（本次请看）：1–3 行，说明这次请看什么、改了什么，并用锚点指到具体位置（`[heading](#slug)`、`T-0042#slug`、`media:<id>@0:08-0:12`）；不要只写“见正文”。不要只写在对话、评论或正文里，也绝不要自己把 review 节点设为 done：由我在 ARK 中接受或退回。",
     },
     {
       en: "C6. Every decision I make (approving a plan, choosing an option, setting a scope), in chat, a comment or an answer, is one decision unit (type: \"decision\", status: \"done\") part_of and derived_from the task.",
@@ -135,18 +135,24 @@ export const START_SHARED = {
       zh: "P4. 任务文件放在 a task space from GET /api/agent/v1/setup 中的任务文件夹 YYYYMMDD_<task ID>。文件夹一建好，就在任务节点正文的 \"Resource paths\" 一节里写上我能直接打开的链接：[Task folder](file:///<absolute path>)。",
     },
     {
-      en: "SELF-CHECK before every reply to me: is everything I must look at in review or an open decision? Is progress in the task body? Is every new unit linked to its task? Is no finished work left active? Did you check updates? Did you follow the preference rules P1-P4?",
-      zh: "回复我之前自检：需要我看的东西是否都在 review 或未完成的决定节点里？进展是否写在任务正文里？每个新节点是否都关联到了它的任务？是否没有已完成的工作停留在 active？是否查看过 updates？是否遵守了偏好规则 P1-P4？",
+      en: "P5. One delivery, one review: when one delivery puts two or more different units up for review, submit one review group (POST /api/agent/v1/reviews {title, summary, review_note, members}) with an anchored review_note, and do not also set the members to review. A single unit is set to review with its review_note; never create a group of one.",
+      zh: "P5. 一次交付，一次审阅：一次交付让两个或更多不同节点需要审阅时，提交一个审阅组（POST /api/agent/v1/reviews {title, summary, review_note, members}），附带有锚点的 review_note，不要再把各成员设为 review。只有一个节点时把它设为 review 并附 review_note；绝不要建只有一个成员的组。",
+    },
+    {
+      en: "SELF-CHECK before every reply to me: is everything I must look at in review or an open decision? Is progress in the task body? Is every new unit linked to its task? Is no finished work left active? Did you check updates? Did you follow the preference rules P1-P5?",
+      zh: "回复我之前自检：需要我看的东西是否都在 review 或未完成的决定节点里？进展是否写在任务正文里？每个新节点是否都关联到了它的任务？是否没有已完成的工作停留在 active？是否查看过 updates？是否遵守了偏好规则 P1-P5？",
     },
   ],
 };
 
-// The two Home prompts.  Each renders START_SHARED, then its own sections
-// in order, then the session block.
+// The two Home starter prompts (pinned by default).  Each renders
+// START_SHARED, then its own sections in order, then the session block.
 export const STARTER_PROMPTS = [
   {
     id: "setup",
     icon: "settings",
+    title: { en: "Set up this environment", zh: "配置当前环境" },
+    desc: { en: "Once per machine: the agent sets up the environment, you confirm.", zh: "每台机器一次：智能体配置环境，由你确认。" },
     sections: {
       setup: [
         {
@@ -209,6 +215,8 @@ export const STARTER_PROMPTS = [
   {
     id: "team",
     icon: "tasks",
+    title: { en: "Start / continue research team", zh: "启动 / 继续研究团队" },
+    desc: { en: "Each new agent session: load the project context and coordinate the work.", zh: "每个新的智能体会话：加载项目上下文并协调工作。" },
     sections: {
       context: [
         {
@@ -270,6 +278,236 @@ export const STARTER_PROMPTS = [
   },
 ];
 
+// More prompts (Home → More prompts): built-in prompts for common jobs.
+// Each is short; the shared intro, token, docs and core rules come first
+// as in the two starter prompts.  {{unit}} is a unit chosen at copy time.
+export const LIBRARY_PROMPTS = [
+  {
+    id: "organize",
+    icon: "layers",
+    title: { en: "Organize or move project content", zh: "整理 / 迁移项目内容" },
+    desc: { en: "Restructure, merge or move units: inspect, plan, approval, apply, report.", zh: "重组、合并或迁移节点：检查、计划、批准、执行、汇报。" },
+    sections: {
+      main: [
+        {
+          en: "TASK: organize or move this project's content as I describe below. First GET /api/agent/v1/docs/agents/project-content.md and follow it.",
+          zh: "任务：按我下面的描述整理或迁移本项目的内容。先 GET /api/agent/v1/docs/agents/project-content.md 并照它执行。",
+        },
+        {
+          en: "1. Inspect: read the units, links and media involved, read only, and tell me what you found.",
+          zh: "1. 检查：以只读方式阅读涉及的节点、关联和媒体，告诉我你发现了什么。",
+        },
+        {
+          en: "2. Plan: write every move, merge, rename and deletion into one task unit with status review and an anchored review_note, then wait for my approval.",
+          zh: "2. 计划：把每一项移动、合并、重命名和删除写进一个任务节点，设为 review 并附有锚点的 review_note，然后等我批准。",
+        },
+        {
+          en: "3. Apply: only what I approved, in small steps, each recorded as a dated progress line.",
+          zh: "3. 执行：只做我批准的部分，分小步进行，每一步都记成一行带日期的进展。",
+        },
+        {
+          en: "4. Report: what changed, what was skipped and why; set the task to review with an anchored review_note.",
+          zh: "4. 汇报：改了什么、跳过了什么以及原因；把任务设为 review 并附有锚点的 review_note。",
+        },
+        { en: "What I want: <describe it>", zh: "我想要：<描述>" },
+      ],
+    },
+  },
+  {
+    id: "review-backlog",
+    icon: "inbox",
+    title: { en: "Sort the review backlog", zh: "审阅积压整理" },
+    desc: { en: "Group deliveries, write anchored review notes, point out stale reviews.", zh: "按交付分组，写有锚点的审阅说明，指出过时的审阅。" },
+    sections: {
+      main: [
+        {
+          en: "TASK: sort what waits for me in Needs you. GET /api/agent/v1/units?statuses=review (the units in review), the open review groups (GET /api/agent/v1/reviews) and each unit's review round (GET /api/agent/v1/units/<ID>/review).",
+          zh: "任务：整理“待你处理”里等我的内容。GET /api/agent/v1/units?statuses=review（处于 review 的节点）、未关闭的审阅组（GET /api/agent/v1/reviews），以及每个节点的审阅轮次（GET /api/agent/v1/units/<ID>/review）。",
+        },
+        {
+          en: "1. Put units that belong to one delivery into one review group (POST /api/agent/v1/reviews); never a group of one.",
+          zh: "1. 属于同一次交付的节点放进一个审阅组（POST /api/agent/v1/reviews）；绝不建只有一个成员的组。",
+        },
+        {
+          en: "2. Give every unit or group in review an anchored review_note: one to three lines, what to look at and what changed.",
+          zh: "2. 给每个处于 review 的节点或审阅组写有锚点的 review_note：1–3 行，看什么、改了什么。",
+        },
+        {
+          en: "3. Point out stale reviews (unchanged for 14 days, or replaced by newer work) and ask me before you take anything out of review; never set a review unit to done.",
+          zh: "3. 指出过时的审阅（14 天没有变化，或已被更新的工作取代），把任何东西移出 review 之前先问我；绝不要把 review 节点设为 done。",
+        },
+        { en: "4. Report the new order in under 10 lines.", zh: "4. 用不超过 10 行汇报整理后的顺序。" },
+      ],
+    },
+  },
+  {
+    id: "continue",
+    icon: "play",
+    unit: true,
+    title: { en: "Continue a task", zh: "继续某个任务" },
+    desc: { en: "Pick up one task from its last recorded step.", zh: "从任务最后记录的一步继续。" },
+    sections: {
+      main: [
+        {
+          en: "TASK: continue {{unit}}. GET /api/agent/v1/units/{{unit}} and GET /api/agent/v1/units/{{unit}}/comments; read its last progress line, its linked results and open decisions.",
+          zh: "任务：继续 {{unit}}。GET /api/agent/v1/units/{{unit}} 和 GET /api/agent/v1/units/{{unit}}/comments；阅读它最后一行进展、关联的结果和未完成的决定。",
+        },
+        {
+          en: "1. Tell me in under 8 lines where it stands and the next step it recorded; check read only that its running jobs are still alive.",
+          zh: "1. 用不超过 8 行告诉我它的现状和记录的下一步；以只读方式确认它的运行中作业仍然存活。",
+        },
+        {
+          en: "2. Answer and resolve open comments, then resume from that next step under the core rules. If the plan has to change, update the task body and ask me first.",
+          zh: "2. 回复并解决未处理的评论，然后按核心规则从那一步继续。如果计划需要改变，先更新任务正文并问我。",
+        },
+      ],
+    },
+  },
+  {
+    id: "plan-idea",
+    icon: "bulb",
+    title: { en: "Plan an idea", zh: "规划想法" },
+    desc: { en: "Turn an idea into a task plan and wait for approval.", zh: "把一个想法变成任务计划，并等待批准。" },
+    sections: {
+      main: [
+        { en: "TASK: plan this idea: <idea, paper or link>.", zh: "任务：规划这个想法：<想法、论文或链接>。" },
+        {
+          en: "Write one task unit: research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 steps, evaluation protocol and decision gates; link it derived_from the idea's unit if there is one.",
+          zh: "写一个任务节点：研究问题、2–3 个可检验的假设、需要证据的论断以及什么能判定它们、最初的 3–5 步、评估协议和决策关卡；如果这个想法已有节点，用 derived_from 关联到它。",
+        },
+        {
+          en: "Set the task to review with an anchored review_note and wait for my approval; run nothing before I approve.",
+          zh: "把任务设为 review 并附有锚点的 review_note，等我批准；批准之前不要运行任何东西。",
+        },
+      ],
+    },
+  },
+  {
+    id: "status",
+    icon: "eye",
+    title: { en: "Check the project status", zh: "检查项目状态" },
+    desc: { en: "A read-only summary: what runs, what is blocked, what waits for you.", zh: "只读总结：什么在运行、什么受阻、什么在等你。" },
+    sections: {
+      main: [
+        { en: "TASK: a read-only status check; change nothing in ARK or on disk.", zh: "任务：只读的状态检查；不修改 ARK 或磁盘上的任何东西。" },
+        {
+          en: "GET /api/agent/v1/context, the active, blocked and review units and the open decisions; verify external jobs read only, do not trust old notes.",
+          zh: "GET /api/agent/v1/context，以及进行中、受阻和 review 的节点和未完成的决定；以只读方式核实外部作业，不要相信旧记录。",
+        },
+        {
+          en: "Tell me in under 15 lines what runs, what is blocked or waits for me, what changed since the last report and the next 3 actions.",
+          zh: "用不超过 15 行告诉我：什么在运行、什么受阻或在等我、自上次汇报以来的变化，以及接下来 3 个行动。",
+        },
+      ],
+    },
+  },
+  {
+    id: "resume",
+    icon: "refresh",
+    title: { en: "Resume interrupted work", zh: "接手已有会话 / 恢复中断工作" },
+    desc: { en: "Pick up what an earlier session left unfinished.", zh: "接手之前的会话没有完成的工作。" },
+    sections: {
+      main: [
+        {
+          en: "TASK: pick up work that an earlier session left unfinished (it stopped, crashed or ran out of context).",
+          zh: "任务：接手之前的会话没有完成的工作（它停止了、崩溃了或上下文用完了）。",
+        },
+        {
+          en: "1. GET /api/agent/v1/updates and GET /api/agent/v1/context; find the active tasks and their last progress lines. If I give you an ARK session id, GET /api/agent/v1/sessions/<id> for that session's context.",
+          zh: "1. GET /api/agent/v1/updates 和 GET /api/agent/v1/context；找到进行中的任务和它们最后一行进展。如果我给你一个 ARK 会话 ID，用 GET /api/agent/v1/sessions/<id> 读取那个会话的上下文。",
+        },
+        {
+          en: "2. Compare what really happened (files, commits, running jobs; read only) with the last recorded step, and write a dated progress line that says where you resume.",
+          zh: "2. 对照最后记录的一步，核实实际发生了什么（文件、提交、运行中的作业；只读），并写一行带日期的进展，说明你从哪里继续。",
+        },
+        {
+          en: "3. Tell me what you found and what you will do next; if anything is unclear, wait for my answer before you continue.",
+          zh: "3. 告诉我你发现了什么、接下来要做什么；有任何不清楚的地方，等我回答之后再继续。",
+        },
+      ],
+    },
+  },
+  {
+    id: "device-setup",
+    icon: "monitor",
+    title: { en: "Set up this device", zh: "配置本设备" },
+    desc: { en: "Register this device's paths and start the watcher.", zh: "登记本设备的路径并启动监听。" },
+    sections: {
+      main: [
+        { en: "TASK: set up this device for this project; the project setup is already confirmed.", zh: "任务：为本项目配置这台设备；项目的配置已经确认。" },
+        {
+          en: "1. Work out this device's id (see the core rules) and GET /api/agent/v1/setup with X-ARK-Host: <this device's id>.",
+          zh: "1. 算出本设备 ID（见核心规则），带上 X-ARK-Host: <本设备 ID> 调用 GET /api/agent/v1/setup。",
+        },
+        {
+          en: "2. For each key in readiness.needs_location ask me for its path here, check that it exists, and add it with POST /api/agent/v1/setup/location.",
+          zh: "2. readiness.needs_location 中的每一项，问我它在这台设备上的路径，确认路径存在，再用 POST /api/agent/v1/setup/location 添加。",
+        },
+        {
+          en: "3. Save the token file and start the watcher as the core rules say (no watcher if ARK_WAKE=ark); then POST /api/agent/v1/setup/verify and tell me what is ready and what is still missing. Create no units while you do this.",
+          zh: "3. 按核心规则保存令牌文件并启动监听（如果 ARK_WAKE=ark 则不启动）；然后 POST /api/agent/v1/setup/verify，告诉我哪些已就绪、哪些还缺。期间不要创建任何节点。",
+        },
+      ],
+    },
+  },
+  {
+    id: "add-prompt",
+    icon: "plus",
+    title: { en: "Add a custom prompt", zh: "添加自定义提示词" },
+    desc: { en: "Your agent writes a new prompt with you and saves it to this library.", zh: "让智能体和你一起写一个新提示词，并保存到提示词库。" },
+    sections: {
+      main: [
+        {
+          en: "TASK: help me write a custom prompt for ARK's prompt library (Home → More prompts).",
+          zh: "任务：帮我为 ARK 的提示词库（首页 → 更多提示词）写一个自定义提示词。",
+        },
+        {
+          en: "1. Ask me what the prompt should make an agent do, when I would use it, and whether it is just for me or for the whole project.",
+          zh: "1. 问我这个提示词要让智能体做什么、我什么时候会用它，以及它只给我自己用还是给整个项目用。",
+        },
+        {
+          en: "2. Draft it: a title under 80 characters, a one-line description and a body of short numbered steps. The core rules and the project context are added when it is copied, so do not repeat them. Use the placeholders {project}, {unit} and {user} where they help.",
+          zh: "2. 起草：不超过 80 个字符的标题、一句话描述，以及由简短编号步骤组成的正文。复制时会自动加上核心规则和项目上下文，不要重复。需要时使用占位符 {project}、{unit} 和 {user}。",
+        },
+        {
+          en: "3. Show me the draft; after I agree, POST /api/agent/v1/prompts {\"title\": \"...\", \"description\": \"...\", \"body\": \"...\"}. It is personal by default; add \"scope\": \"project\" only if I ask for it and I am a project admin. GET /api/agent/v1/prompts lists the prompts; send \"id\" to change one.",
+          zh: "3. 把草稿给我看；我同意后，POST /api/agent/v1/prompts {\"title\": \"...\", \"description\": \"...\", \"body\": \"...\"}。默认只属于我个人；只有我要求且我是项目管理员时才加上 \"scope\": \"project\"。GET /api/agent/v1/prompts 列出已有提示词；要修改某一个，带上 \"id\"。",
+        },
+        {
+          en: "4. Tell me it is in Home → More prompts, where I can pin it.",
+          zh: "4. 告诉我它已在“首页 → 更多提示词”中，我可以在那里置顶。",
+        },
+      ],
+    },
+  },
+];
+
+/** Every built-in prompt: the two starter prompts first. */
+export const BUILTIN_PROMPTS = [...STARTER_PROMPTS, ...LIBRARY_PROMPTS];
+
+/** Pinned on Home until a person chooses otherwise. */
+export const DEFAULT_PINS = ["setup", "team"];
+
+// A custom prompt's body follows this line.
+export const CUSTOM_HEAD = { en: "TASK ({{title}}):", zh: "任务（{{title}}）：" };
+
+// Placeholders in a custom prompt (single braces, as people write them).
+export const CUSTOM_PLACEHOLDERS = ["{project}", "{unit}", "{user}"];
+
+const UNIT_HINT = { en: "<task ID>", zh: "<任务 ID>" };
+
+/** A custom prompt's body with {project}, {unit} and {user} filled; other
+ * braces (JSON, unknown names) stay as written. */
+export function fillCustomPrompt(body, { project = null, unit = "", user = "", lang = "en" } = {}) {
+  const name = project?.name || "ARK project";
+  const values = {
+    project: project?.id ? `${name} (${project.id})` : name,
+    unit: unit || UNIT_HINT[lang] || UNIT_HINT.en,
+    user: user || "",
+  };
+  return String(body || "").replace(/\{(project|unit|user)\}/g, (_, key) => values[key]);
+}
+
 export function starterPromptVars(project, { url = "", token = "" } = {}) {
   return {
     url,
@@ -289,17 +527,22 @@ export function ruleLines(rules, lang) {
   return START_SHARED.rules.map((line) => pickLine(line, lang));
 }
 
-/** One Home starter prompt; the core rules come first, the session block last. */
-export function starterPromptText(id, project, { url = "", token = "", sessionId = "", lang = "en", rules = null } = {}) {
-  const item = STARTER_PROMPTS.find((p) => p.id === id);
-  if (!item) return "";
+/** One library prompt (a built-in entry, or a custom one: {custom: true,
+ * title, body}); the core rules come first, the session block last. */
+export function libraryPromptText(entry, project, { url = "", token = "", sessionId = "", lang = "en", rules = null,
+  unit = "", user = "" } = {}) {
+  if (!entry) return "";
   const S = START_SHARED;
-  const vars = starterPromptVars(project, { url, token });
+  const vars = { ...starterPromptVars(project, { url, token }), unit: unit || UNIT_HINT[lang] || UNIT_HINT.en };
   const blocks = [
     renderLines([...S.intro, ...(token ? S.token : S.noToken), ...S.docs], lang, vars),
     ruleLines(rules, lang).join("\n"),
-    ...Object.values(item.sections).map((lines) => renderLines(lines, lang, vars)),
   ];
+  if (entry.custom) {
+    blocks.push(`${fillPrompt(pickLine(CUSTOM_HEAD, lang), { title: entry.title || "" })}\n${fillCustomPrompt(entry.body, { project, unit, user, lang })}`);
+  } else {
+    blocks.push(...Object.values(entry.sections || {}).map((lines) => renderLines(lines, lang, vars)));
+  }
   if (sessionId) {
     blocks.push(sessionPromptBlock({
       sessionId, url, projectId: project?.id || "", lang,
@@ -307,4 +550,9 @@ export function starterPromptText(id, project, { url = "", token = "", sessionId
     }));
   }
   return `${blocks.join("\n\n")}\n`;
+}
+
+/** One Home starter prompt (any built-in id). */
+export function starterPromptText(id, project, options = {}) {
+  return libraryPromptText(BUILTIN_PROMPTS.find((p) => p.id === id), project, options);
 }

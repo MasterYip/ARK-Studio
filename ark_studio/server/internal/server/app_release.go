@@ -30,18 +30,37 @@ const (
 )
 
 // releaseAsset matches the versioned release asset of each app
-// (ARK-Studio-<version>-android.apk, ARK-Studio-<version>-android-web.apk).
+// (ARK-Studio-<version>-android.apk).
 var releaseAsset = map[string]*regexp.Regexp{
 	"native": regexp.MustCompile(`^ARK-Studio-.+-android\.apk$`),
-	"webapp": regexp.MustCompile(`^ARK-Studio-.+-android-web\.apk$`),
 }
 
-// appRelease is the resolved latest release.  Assets maps "native"/"webapp"
+// appRelease is the resolved latest release.  Assets maps "native"
 // to the asset's file name and download URL; a missing key falls back to Page.
+// Sizes and Sums (from the release's SHA256SUMS.txt, best effort) are by
+// asset file name, for the update manifest (app_manifest.go).
 type appRelease struct {
 	Version string
 	Page    string
 	Assets  map[string][2]string
+	Sizes   map[string]int64
+	Sums    map[string]string
+}
+
+// releaseSumsAsset is the checksum file of a release (.github/workflows/release.yml).
+const releaseSumsAsset = "SHA256SUMS.txt"
+
+// parseSums reads "<sha256>  <file>" lines (sha256sum output).
+func parseSums(text string) map[string]string {
+	out := map[string]string{}
+	for _, line := range strings.Split(text, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) != 2 || len(fields[0]) != 64 {
+			continue
+		}
+		out[strings.TrimPrefix(fields[1], "*")] = strings.ToLower(fields[0])
+	}
+	return out
 }
 
 // url is the download URL of an app, or the release page without one.
@@ -147,13 +166,17 @@ func (r *releaseResolver) fetch(ctx context.Context, api, repo string) (*appRele
 		Assets  []struct {
 			Name string `json:"name"`
 			URL  string `json:"browser_download_url"`
+			Size int64  `json:"size"`
+			// "sha256:<hex>" (GitHub computes it for release assets).
+			Digest string `json:"digest"`
 		} `json:"assets"`
 	}
 	if err := json.NewDecoder(io.LimitReader(resp.Body, 4<<20)).Decode(&body); err != nil {
 		return nil, err
 	}
 	out := &appRelease{Version: body.TagName, Page: latestReleasePage(repo),
-		Assets: map[string][2]string{}}
+		Assets: map[string][2]string{}, Sizes: map[string]int64{}, Sums: map[string]string{}}
+	sumsURL := ""
 	if strings.HasPrefix(body.HTMLURL, "https://") {
 		out.Page = body.HTMLURL
 	}
@@ -161,11 +184,54 @@ func (r *releaseResolver) fetch(ctx context.Context, api, repo string) (*appRele
 		if !strings.HasPrefix(a.URL, "https://") {
 			continue
 		}
+		out.Sizes[a.Name] = a.Size
+		if hex, ok := strings.CutPrefix(a.Digest, "sha256:"); ok && len(hex) == 64 {
+			out.Sums[a.Name] = strings.ToLower(hex)
+		}
+		if a.Name == releaseSumsAsset {
+			sumsURL = a.URL
+		}
 		for key, re := range releaseAsset {
 			if _, seen := out.Assets[key]; !seen && re.MatchString(a.Name) {
 				out.Assets[key] = [2]string{a.Name, a.URL}
 			}
 		}
 	}
+	// The checksum file only for assets without a digest (the download host
+	// may be unreachable where the API is not).
+	missing := false
+	for key := range releaseAsset {
+		if a, ok := out.Assets[key]; ok && out.Sums[a[0]] == "" {
+			missing = true
+		}
+	}
+	if sumsURL != "" && missing {
+		if text, err := r.fetchText(ctx, client, sumsURL); err == nil {
+			for name, sum := range parseSums(text) {
+				if out.Sums[name] == "" {
+					out.Sums[name] = sum
+				}
+			}
+		}
+	}
 	return out, nil
+}
+
+// fetchText downloads a small release asset (the checksum file).
+func (r *releaseResolver) fetchText(ctx context.Context, client *http.Client, url string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("User-Agent", "ARK-Studio-server")
+	resp, err := client.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != 200 {
+		return "", fmt.Errorf("release asset: HTTP %d", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 256<<10))
+	return string(data), err
 }
