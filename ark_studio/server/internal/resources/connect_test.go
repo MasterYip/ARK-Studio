@@ -24,9 +24,9 @@ func TestCleanSSH(t *testing.T) {
 		`{"alias": "", "host": " "}`: `null`,
 		`{"alias": "gpu-a"}`:         `{"alias": "gpu-a"}`,
 		`{"host": "203.0.113.7", "user": "user", "port": 2222}`: `{"host": "203.0.113.7", "user": "user", "port": 2222}`,
-		`{"host": "box.example.com", "port": "2222"}`:            `{"host": "box.example.com", "port": 2222}`,
-		`{"host": "fe80::1%eth0", "user": "a.b_c-d"}`:            `{"host": "fe80::1%eth0", "user": "a.b_c-d"}`,
-		`{"alias": "a", "host": "h", "port": 22.0}`:              `{"alias": "a", "host": "h", "port": 22}`,
+		`{"host": "box.example.com", "port": "2222"}`:           `{"host": "box.example.com", "port": 2222}`,
+		`{"host": "fe80::1%eth0", "user": "a.b_c-d"}`:           `{"host": "fe80::1%eth0", "user": "a.b_c-d"}`,
+		`{"alias": "a", "host": "h", "port": 22.0}`:             `{"alias": "a", "host": "h", "port": 22}`,
 	}
 	for in, want := range good {
 		got, err := CleanSSH(obj(t, in))
