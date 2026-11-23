@@ -251,12 +251,20 @@ public class ShellActivity extends BaseActivity {
         if (current >= 0) pages[current].load(true);
     }
 
+    private final com.masteryip.arkstudio.model.BackGate backGate = new com.masteryip.arkstudio.model.BackGate();
+
+    /** Home tab: a second back within 2.5 s goes to the server list, still signed in. */
     @Override
     public void onBackPressed() {
         if (current != TAB_HOME) {
             select(TAB_HOME);
             return;
         }
-        super.onBackPressed();
+        if (backGate.press(System.currentTimeMillis())) {
+            startActivity(MainActivity.serverList(this));
+            finish();
+        } else {
+            toast(getString(R.string.back_again_servers));
+        }
     }
 }

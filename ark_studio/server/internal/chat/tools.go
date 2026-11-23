@@ -59,28 +59,52 @@ func integer(lo int64, hi int64) *pyjson.Object {
 
 func importance() *pyjson.Object { return enum([]any{"p0", "p1", "p2", "p3"}) }
 
-// toolSpecs is _tool_specs().
-func toolSpecs() []any {
+// toolSpecs is _tool_specs().  scoped adds the person's other projects:
+// list_projects, get_neighbors and an optional "project" argument on the
+// unit tools (the Assistant chat; plugin conversations stay unscoped).
+func toolSpecs(scoped ...bool) []any {
 	types, statuses, relations := sortedStrings(knownTypes()), sortedStrings(store.KnownStatuses), sortedStrings(store.Relations)
-	return []any{
-		fnSpec("get_context", "Read current ARK project stats, next actions and recent units.",
-			params(pyjson.NewObject())),
-		fnSpec("search_units", "Search ARK units by title/body/uid, optionally by type.",
-			params(pyjson.NewObject("query", str(), "type", str(), "limit", integer(1, 20)), "query")),
-		fnSpec("list_units", "List/filter any ARK units by type, status, importance or free-text query.",
-			params(pyjson.NewObject("type", enum(types), "status", enum(statuses), "importance", importance(),
+	other := len(scoped) > 0 && scoped[0]
+	props := func(kv ...any) *pyjson.Object {
+		o := pyjson.NewObject(kv...)
+		if other {
+			o.Set("project", projectParam())
+		}
+		return o
+	}
+	read, write := "", ""
+	if other {
+		read = " Reads the current project unless project names another one."
+		write = " Changes the current project unless project names another one you can write."
+	}
+	specs := []any{
+		fnSpec("get_context", "Read current ARK project stats, next actions and recent units."+read,
+			params(props())),
+		fnSpec("search_units", "Search ARK units by title/body/uid, optionally by type."+read,
+			params(props("query", str(), "type", str(), "limit", integer(1, 20)), "query")),
+		fnSpec("list_units", "List/filter any ARK units by type, status, importance or free-text query."+read,
+			params(props("type", enum(types), "status", enum(statuses), "importance", importance(),
 				"query", str(), "limit", integer(1, 50)))),
-		fnSpec("get_unit", "Read one ARK unit and its links by uid or numeric id.",
-			params(pyjson.NewObject("ref", str()), "ref")),
-		fnSpec("create_unit", "Create an ARK unit. Use only when the user asks to create/capture something.",
-			params(pyjson.NewObject("type", enum(types), "title", str(), "body", str(), "status", enum(statuses),
+		fnSpec("get_unit", "Read one ARK unit and its links by uid or numeric id."+read,
+			params(props("ref", str()), "ref")),
+		fnSpec("create_unit", "Create an ARK unit. Use only when the user asks to create/capture something."+write,
+			params(props("type", enum(types), "title", str(), "body", str(), "status", enum(statuses),
 				"importance", importance(), "tags", pyjson.NewObject("type", "array", "items", str())), "type", "title")),
-		fnSpec("update_unit", "Update title/status/importance/tags of an existing ARK unit.",
-			params(pyjson.NewObject("ref", str(), "title", str(), "status", enum(statuses), "importance", importance(),
+		fnSpec("update_unit", "Update title/status/importance/tags of an existing ARK unit."+write,
+			params(props("ref", str(), "title", str(), "status", enum(statuses), "importance", importance(),
 				"tags", pyjson.NewObject("type", "array", "items", str())), "ref")),
-		fnSpec("link_units", "Create a directed link between two ARK units.",
-			params(pyjson.NewObject("source", str(), "target", str(), "relation", enum(relations), "note", str()),
+		fnSpec("link_units", "Create a directed link between two ARK units."+write,
+			params(props("source", str(), "target", str(), "relation", enum(relations), "note", str()),
 				"source", "target", "relation")),
+	}
+	if other {
+		specs = append(specs,
+			fnSpec("list_projects", "List the ARK projects the user can read: id, name, the user's access (read, write or admin) and which one is current.",
+				params(pyjson.NewObject())),
+			fnSpec("get_neighbors", "Read the graph neighbourhood of one ARK unit: the units within depth links (1 or 2) and the links between them."+read,
+				params(props("ref", str(), "depth", integer(1, 2)), "ref")))
+	}
+	return append(specs,
 		fnSpec("get_infohub_context", "Read the current InfoHub graph scope: database path, active UI filter rules, node count and matching InfoHub topics. Use this before answering questions about what is currently visible in InfoHub.",
 			params(pyjson.NewObject())),
 		fnSpec("search_infohub", "Search the read-only InfoHub database by text, kind, tags, status or recent days. Returns topic keys and summaries.",
@@ -88,7 +112,12 @@ func toolSpecs() []any {
 				"days", integer(0, 0), "limit", integer(1, 100)))),
 		fnSpec("get_infohub_unit", "Read one InfoHub topic, its hierarchy, tags and a compact plain-text conversation sample.",
 			params(pyjson.NewObject("key", str()), "key")),
-	}
+	)
+}
+
+func projectParam() *pyjson.Object {
+	return pyjson.NewObject("type", "string",
+		"description", "Project id (or exact name) from list_projects. Leave out for the current project.")
 }
 
 // infohubPath is _infohub_path(context).
@@ -308,25 +337,47 @@ func (e *Env) executeTool(nameV any, argsV any) (*pyjson.Object, bool, error) {
 }
 
 func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
+	level := ""
 	switch name {
+	case "get_context", "search_units", "list_units", "get_unit", "get_neighbors":
+		level = "read"
+	case "create_unit", "update_unit", "link_units":
+		level = "write"
+	}
+	var t *Target
+	if level != "" {
+		var err error
+		if t, err = e.target(args, level); err != nil {
+			return nil, err
+		}
+	}
+	switch name {
+	case "list_projects":
+		return e.listProjects()
+	case "get_neighbors":
+		depth, err := intArg(args.Value("depth"), 1)
+		if err != nil {
+			return nil, err
+		}
+		return e.neighbors(t, orEmpty(args.Value("ref")), clampInt(depth, 1, 2))
 	case "get_context":
-		stats, err := e.Store.Stats(e.Ctx)
+		stats, err := t.Store.Stats(e.Ctx)
 		if err != nil {
 			return nil, err
 		}
-		actions, err := e.Store.NextActions(e.Ctx)
+		actions, err := t.Store.NextActions(e.Ctx)
 		if err != nil {
 			return nil, err
 		}
-		recent, err := e.list(listFilters("limit", int64(10), "sort", "updated"))
+		recentData, err := t.Store.ListUnits(e.Ctx, listFilters("limit", int64(10), "sort", "updated"), false)
 		if err != nil {
 			return nil, err
 		}
 		if actions == nil {
 			actions = []any{}
 		}
-		return pyjson.NewObject("stats", stats, "next_actions", actions,
-			"recent", briefUnits(items(recent), "uid", "type", "title", "status")), nil
+		recent := briefUnits(items(recentData), "uid", "type", "title", "status")
+		return e.withProject(t, pyjson.NewObject("stats", stats, "next_actions", actions, "recent", recent), recent), nil
 	case "search_units":
 		limit, err := intArg(args.Value("limit"), 8)
 		if err != nil {
@@ -336,11 +387,12 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 		if t := args.Value("type"); pyjson.Truthy(t) {
 			f.Types = []any{pyjson.Str(t)}
 		}
-		data, err := e.list(f)
+		data, err := t.Store.ListUnits(e.Ctx, f, false)
 		if err != nil {
 			return nil, err
 		}
-		return pyjson.NewObject("total", data.Value("total"), "items", briefUnits(items(data), "uid", "type", "title", "status")), nil
+		list := briefUnits(items(data), "uid", "type", "title", "status")
+		return e.withProject(t, pyjson.NewObject("total", data.Value("total"), "items", list), list), nil
 	case "list_units":
 		limit, err := intArg(args.Value("limit"), 20)
 		if err != nil {
@@ -359,18 +411,21 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 		if q := args.Value("query"); pyjson.Truthy(q) {
 			f.Q = pyjson.Str(q)
 		}
-		data, err := e.list(f)
+		data, err := t.Store.ListUnits(e.Ctx, f, false)
 		if err != nil {
 			return nil, err
 		}
-		return pyjson.NewObject("total", data.Value("total"), "items", briefUnits(items(data), "uid", "type", "title", "status", "importance")), nil
+		list := briefUnits(items(data), "uid", "type", "title", "status", "importance")
+		return e.withProject(t, pyjson.NewObject("total", data.Value("total"), "items", list), list), nil
 	case "get_unit":
-		unit, err := e.Store.GetUnit(e.Ctx, orEmpty(args.Value("ref")))
+		unit, err := t.Store.GetUnit(e.Ctx, orEmpty(args.Value("ref")))
 		if err != nil {
 			return nil, err
 		}
-		return pyjson.NewObject("unit", pick(unit, "uid", "id", "type", "title", "body", "status", "importance", "tags"),
-			"links_out", head(orV(unit.Value("links_out"), []any{}), 20), "links_in", head(orV(unit.Value("links_in"), []any{}), 20)), nil
+		brief := pick(unit, "uid", "id", "type", "title", "body", "status", "importance", "tags")
+		return e.withProject(t, pyjson.NewObject("unit", brief,
+			"links_out", head(orV(unit.Value("links_out"), []any{}), 20), "links_in", head(orV(unit.Value("links_in"), []any{}), 20)),
+			[]any{brief}), nil
 	case "create_unit":
 		tags := []any{}
 		if t := args.Value("tags"); pyjson.Truthy(t) {
@@ -381,15 +436,16 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 			tags = append(tags, list...)
 		}
 		tags = append(tags, "origin:chat")
-		unit, err := e.Store.CreateUnit(e.Ctx, pyjson.NewObject(
+		unit, err := t.Store.CreateUnit(e.Ctx, pyjson.NewObject(
 			"type", orV(args.Value("type"), "note"), "title", orV(args.Value("title"), "Untitled"),
 			"body", orV(args.Value("body"), ""), "status", orV(args.Value("status"), "open"),
 			"importance", orV(args.Value("importance"), "p2"), "tags", tags, "origin", "assistant"),
-			"assistant:deepseek", e.Who)
+			"assistant:deepseek", t.Who)
 		if err != nil {
 			return nil, err
 		}
-		return pick(unit, "uid", "id", "title", "type"), nil
+		out := pick(unit, "uid", "id", "title", "type")
+		return e.withProject(t, out, []any{out}), nil
 	case "update_unit":
 		patch := pyjson.NewObject()
 		for _, k := range []string{"title", "status", "importance", "tags"} {
@@ -397,11 +453,12 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 				patch.Set(k, v)
 			}
 		}
-		unit, err := e.Store.UpdateUnit(e.Ctx, orEmpty(args.Value("ref")), patch, "assistant:deepseek", e.Who)
+		unit, err := t.Store.UpdateUnit(e.Ctx, orEmpty(args.Value("ref")), patch, "assistant:deepseek", t.Who)
 		if err != nil {
 			return nil, err
 		}
-		return pick(unit, "uid", "title", "status"), nil
+		out := pick(unit, "uid", "title", "status")
+		return e.withProject(t, out, []any{out}), nil
 	case "link_units":
 		relation := orEmpty(args.Value("relation"))
 		if relation == "" {
@@ -411,11 +468,11 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 		if note == "" {
 			note = "Created by DeepSeek assistant"
 		}
-		l, err := e.Store.CreateLink(e.Ctx, orEmpty(args.Value("source")), orEmpty(args.Value("target")), relation, note, "assistant:deepseek")
+		l, err := t.Store.CreateLink(e.Ctx, orEmpty(args.Value("source")), orEmpty(args.Value("target")), relation, note, "assistant:deepseek")
 		if err != nil {
 			return nil, err
 		}
-		return pick(l, "id", "source", "target", "relation"), nil
+		return e.withProject(t, pick(l, "id", "source", "target", "relation")), nil
 	case "get_infohub_context":
 		data, err := e.infohubGraph()
 		if err != nil {

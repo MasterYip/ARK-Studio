@@ -40,6 +40,12 @@ var mobilePorted = []PortedRoute{
 
 var reMobileRevoke = pyRe(`^/api/mobile/pairs/([^/]+)/revoke$`, false)
 
+// reMobilePairPermission is Go only: Settings → Mobile sets a device to
+// full access as its user or read-only.
+var reMobilePairPermission = pyRe(`^/api/mobile/pairs/([^/]+)/permission$`, false)
+
+var mobileGoOnly = []PortedRoute{{`goonly:regex:^/api/mobile/pairs/([^/]+)/permission$`, "POST"}}
+
 // ----------------------------------------------------------- addresses
 
 type parsedV4 struct{ a, b, c, d byte }
@@ -588,7 +594,10 @@ func (c *reqCtx) requestHostPort() (string, int) {
 
 // ----------------------------------------------------------- guards
 
-// mobileSessionForProject is Handler._mobile_session_for_project.
+// mobileSessionForProject is Handler._mobile_session_for_project.  A
+// paired phone is signed in as its user (not into one project): the session
+// is valid while the account can read some project, and mobileProjectOf
+// moves it off a project that is gone or no longer readable.
 func (c *reqCtx) mobileSessionForProject() *mobile.Session {
 	token := c.mobileToken()
 	if token == "" {
@@ -598,19 +607,71 @@ func (c *reqCtx) mobileSessionForProject() *mobile.Session {
 	if s == nil {
 		return nil
 	}
-	p, err := c.projectByID(s.ProjectID)
-	if err != nil || p == nil {
+	if c.app.Auth != nil && s.User == "" {
 		return nil
 	}
-	if c.app.Auth != nil {
-		if s.User == "" {
-			return nil
-		}
-		if _, err := c.app.Org.RequireProjectPermission(c.ctx, s.User, p.ID(), "read"); err != nil {
-			return nil
-		}
+	if p, err := c.mobileProjectOf(s); err != nil || p == nil {
+		return nil
 	}
 	return s
+}
+
+// mobileProjectOf is the project a phone's session is on: its current
+// project while the account may read it, otherwise the account's first
+// readable project (the session moves there), or nil when there is none.
+func (c *reqCtx) mobileProjectOf(s *mobile.Session) (*project.Project, error) {
+	p, err := c.projectByID(s.ProjectID)
+	if err != nil {
+		return nil, err
+	}
+	if c.app.Auth == nil {
+		if p == nil {
+			c.app.mu.Lock()
+			p = c.app.project
+			c.app.mu.Unlock()
+		}
+		return p, nil
+	}
+	readable := func(q *project.Project) (bool, error) {
+		if q == nil || q.ID() == demoID {
+			return false, nil
+		}
+		perm, err := c.app.Org.ProjectPermission(c.ctx, s.User, q.ID())
+		return perm != "", err
+	}
+	ok, err := readable(p)
+	if err != nil || ok {
+		return p, err
+	}
+	if c.app.Mobile.IsDesktopLink(s) {
+		return nil, nil
+	}
+	visible, err := c.app.Org.VisibleProjectIDs(c.ctx, s.User)
+	if err != nil {
+		return nil, err
+	}
+	for _, summary := range c.app.Projects.ListProjects() {
+		id, _ := summary.Value("id").(string)
+		if id == demoID || !visible[id] {
+			continue
+		}
+		q, err := c.projectByID(id)
+		if err != nil {
+			return nil, err
+		}
+		ok, err := readable(q)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			continue
+		}
+		if err := c.app.Mobile.Move(s, q.ID(), q.Name()); err != nil {
+			return nil, nil
+		}
+		return q, nil
+	}
+	return nil, nil
 }
 
 func (c *reqCtx) bindMobile(user string, s *mobile.Session) {
@@ -681,11 +742,12 @@ func (c *reqCtx) guardMobile() error {
 			return apiErr(401, "The mobile session is invalid or has expired.", "MOBILE_TOKEN_INVALID")
 		}
 		var err error
-		if p, err = c.projectByID(ms.ProjectID); err != nil {
+		if p, err = c.mobileProjectOf(ms); err != nil {
 			return err
 		}
 		if p == nil {
-			return apiErr(404, "The paired project is no longer available.", "MOBILE_WRONG_PROJECT")
+			return apiErr(404, "No project is available for this account yet. Ask an "+
+				"organization admin for a project grant.", "NO_PROJECT_ACCESS")
 		}
 	}
 	session, err := c.authSession()
@@ -745,7 +807,8 @@ func (c *reqCtx) guardMobile() error {
 		case path == "/api/open":
 			return apiErr(403, "A paired phone cannot open files or applications on the host.", "MOBILE_HOST_ACTION_BLOCKED")
 		case path == "/api/projects/open":
-			return apiErr(403, "A paired phone stays on the project it was paired with.", "MOBILE_WRONG_PROJECT")
+			// The web app's project list: the session moves (switchProject).
+			return nil
 		}
 		if !mobileDevicePathAllowed(path, c.r.Method) {
 			return apiErr(403, "This API is not available to a paired device. Use the "+
@@ -827,11 +890,8 @@ func (c *reqCtx) mobileGet(path string) (bool, error) {
 		c.ok(info)
 		return true, nil
 	case "/api/mobile/pairs":
-		p, err := c.require("read")
-		if err != nil {
-			return true, err
-		}
-		c.ok(pyjson.NewObject("pairs", c.app.Mobile.List(p.ID())))
+		// The person's devices on every project (a pairing is the user's).
+		c.ok(pyjson.NewObject("pairs", c.userDevices(), "scope", "user"))
 		return true, nil
 	case "/api/mobile/session/projects":
 		out, err := c.mobileProjects()
@@ -875,19 +935,20 @@ func (c *reqCtx) mobileStatus(token string, required bool) (*pyjson.Object, erro
 		return nil, err
 	}
 	s := c.app.Mobile.SessionForToken(token)
-	authenticated := s != nil && s.ProjectID == p.ID()
+	authenticated := s != nil
 	reason := ""
 	if token != "" && s == nil {
 		reason = "invalid_or_expired"
-	} else if s != nil && !authenticated {
-		reason = "wrong_project"
 	}
 	info, _, err := c.app.connectionInfo(c.header("Host"), c.requestScheme())
 	if err != nil {
 		return nil, mobileErr(err)
 	}
-	var perm, readOnly, expires, source, user any
+	var perm, readOnly, expires, source, user, access any
+	switchable := false
 	if authenticated {
+		access = c.mobileAccess(s, p)
+		switchable = !c.app.Mobile.IsDesktopLink(s)
 		perm, readOnly, expires = s.Permission, s.Permission == "read_only", mobile.ISO(s.ExpiresAt)
 		source = "qr"
 		if r := c.app.Mobile.PairingFor(s); r != nil {
@@ -904,6 +965,7 @@ func (c *reqCtx) mobileStatus(token string, required bool) (*pyjson.Object, erro
 	return pyjson.NewObject("required", required, "authenticated", authenticated, "token_present", token != "",
 		"reason", reason, "permission", perm, "read_only", readOnly, "expires_at", expires,
 		"project", pyjson.NewObject("id", p.ID(), "name", p.Name()), "source", source, "user", user,
+		"scope", "user", "switchable", switchable, "access", access,
 		"auth_required", c.app.Auth != nil, "auth_user", authUser,
 		"cache_id", c.cacheIDOrNil(), "cache_schema", clientCacheSchema,
 		"connection", pyjson.NewObject("mode", info.Value("mode"), "loopback_only", info.Value("loopback_only"),
@@ -919,7 +981,10 @@ func (c *reqCtx) mobileAccountPermission(user string, p *project.Project) (strin
 	return c.app.Org.ProjectPermission(c.ctx, user, p.ID())
 }
 
-// devicePermission is Handler._device_permission.
+// devicePermission is what a new device may do on every project: "full"
+// (all its account may do in each project) unless read_only is asked for.
+// The account's role in each project still applies (checkProjectAccess), so
+// full never exceeds it.  An account without any project gets read_only.
 func devicePermission(requested any, account string) (string, error) {
 	text := mobile.DefaultPermission
 	if pyjson.Truthy(requested) {
@@ -929,20 +994,43 @@ func devicePermission(requested any, account string) (string, error) {
 	if wanted != "read_only" && wanted != "full" {
 		return "", apiErr(400, "permission must be read_only or full", "INVALID_PERMISSION")
 	}
-	rank, ok := org.PermissionRank[account]
-	if !ok {
-		rank = -1
+	if _, ok := org.PermissionRank[account]; !ok {
+		return "read_only", nil
 	}
-	if wanted == "full" && rank >= org.PermissionRank["write"] {
-		return "full", nil
+	return wanted, nil
+}
+
+// mobileAccess is what the phone may do on p now: the account's role there
+// ("read", "write", "admin"), read at most for a read-only device.
+func (c *reqCtx) mobileAccess(s *mobile.Session, p *project.Project) any {
+	if s == nil || p == nil {
+		return nil
 	}
-	return "read_only", nil
+	perm := "admin"
+	if c.app.Auth != nil {
+		var err error
+		if perm, err = c.mobileAccountPermission(s.User, p); err != nil || perm == "" {
+			return nil
+		}
+	}
+	if s.Permission == "read_only" {
+		return "read"
+	}
+	return perm
+}
+
+// userDevices lists the pairings of the signed-in person (every pairing on
+// a server without accounts).
+func (c *reqCtx) userDevices() []any {
+	return c.app.Mobile.UserDevices(c.actor(), c.app.Auth == nil)
 }
 
 // mobileProjectList is Handler._mobile_project_list.
 func (c *reqCtx) mobileProjectList(user string) ([]any, error) {
-	c.user = user
-	c.resolved = false
+	if c.app.Auth != nil {
+		c.user = user
+		c.resolved = false
+	}
 	visible, err := c.visibleProjects()
 	if err != nil {
 		return nil, err
@@ -958,7 +1046,8 @@ func (c *reqCtx) mobileProjectList(user string) ([]any, error) {
 	return out, nil
 }
 
-// mobileProjects is Handler._mobile_projects.
+// mobileProjects lists the projects a phone can switch to: every project
+// its account can read (all projects on a server without accounts).
 func (c *reqCtx) mobileProjects() (*pyjson.Object, error) {
 	s := c.mobileSession
 	if s == nil {
@@ -968,7 +1057,7 @@ func (c *reqCtx) mobileProjects() (*pyjson.Object, error) {
 	if r := c.app.Mobile.PairingFor(s); r != nil {
 		source = r.Source
 	}
-	switchable := c.app.Auth != nil && source == "password"
+	switchable := !c.app.Mobile.IsDesktopLink(s)
 	var projects []any
 	if switchable {
 		var err error
@@ -976,18 +1065,19 @@ func (c *reqCtx) mobileProjects() (*pyjson.Object, error) {
 			return nil, err
 		}
 	} else {
-		perm := "write"
-		if s.Permission == "read_only" {
-			perm = "read"
+		projects = []any{pyjson.NewObject("id", s.ProjectID, "name", s.ProjectName, "permission", "read")}
+	}
+	if s.Permission == "read_only" {
+		for _, item := range projects {
+			item.(*pyjson.Object).Set("permission", "read")
 		}
-		projects = []any{pyjson.NewObject("id", s.ProjectID, "name", s.ProjectName, "permission", perm)}
 	}
 	var user any
 	if s.User != "" {
 		user = s.User
 	}
 	return pyjson.NewObject("projects", projects, "current", s.ProjectID, "switchable", switchable,
-		"permission", s.Permission, "source", source, "user", user), nil
+		"permission", s.Permission, "source", source, "user", user, "scope", "user"), nil
 }
 
 // mobilePost handles the POST /api/mobile/* routes of do_POST.
@@ -1027,18 +1117,16 @@ func (c *reqCtx) mobilePost(path string, body *pyjson.Object) (bool, error) {
 		}
 		return true, err
 	case reMobileRevoke.MatchString(path):
-		p, err := c.require("write")
-		if err != nil {
-			return true, err
-		}
-		revoked, err := c.app.Mobile.Revoke(reMobileRevoke.FindStringSubmatch(path)[1], p.ID())
+		// A person revokes their own devices (a pairing is the user's, not a
+		// project's); audited in the org log.
+		revoked, err := c.app.Mobile.RevokeOwned(reMobileRevoke.FindStringSubmatch(path)[1], c.actor(), c.app.Auth == nil)
 		if err != nil {
 			return true, mobileErr(err)
 		}
-		if err := p.Store.LogActivity(c.ctx, "human:ui", "mobile.pair.revoke", nil, pyjson.NewObject("pair", revoked.Value("id"))); err != nil {
+		if err := c.auditPair("mobile.pair.revoke", revoked); err != nil {
 			return true, err
 		}
-		c.ok(pyjson.NewObject("revoked", revoked, "pairs", c.app.Mobile.List(p.ID())))
+		c.ok(pyjson.NewObject("revoked", revoked, "pairs", c.userDevices()))
 		return true, nil
 	}
 	return false, nil
@@ -1057,18 +1145,11 @@ func (c *reqCtx) createPairing(body *pyjson.Object, requestHost string, requestP
 	if err != nil {
 		return err
 	}
-	requested := pytext.Lower(pytext.Strip(strOrEmptyAny(body.Value("permission"))))
-	permission := requested
+	// "full" is all the account may do in each project (its role there
+	// still applies), so a viewer may pair a full-access phone too.
+	permission := pytext.Lower(pytext.Strip(strOrEmptyAny(body.Value("permission"))))
 	if permission == "" {
 		permission = mobile.DefaultPermission
-	}
-	if permission == "full" {
-		if _, err := c.require("write"); err != nil {
-			if _, isAPI := err.(*ApiError); !isAPI || requested != "" {
-				return err
-			}
-			permission = "read_only"
-		}
 	}
 	actor := c.actor()
 	overrideHost := strOrEmptyAny(body.Value("tunnel_host"))
@@ -1193,7 +1274,7 @@ func (c *reqCtx) claimPairing(body *pyjson.Object) (*pyjson.Object, error) {
 		"permission", result.Value("permission"))); err != nil {
 		return nil, err
 	}
-	result.Set("user", record.User)
+	result.Set("user", record.User).Set("scope", "user").Set("project_id", p.ID())
 	return result, nil
 }
 
@@ -1283,40 +1364,91 @@ func (c *reqCtx) mobileLogin(body *pyjson.Object) error {
 	return nil
 }
 
-// mobileSwitchProject is Handler._mobile_switch_project.
+// mobileSwitchProject moves a phone to another project of its account
+// (native project switcher).  Every paired phone may switch, QR or password:
+// the pairing is the user's.  The device permission does not change; the
+// account's role in the new project applies.
 func (c *reqCtx) mobileSwitchProject(body *pyjson.Object) (*pyjson.Object, error) {
 	s := c.mobileSession
 	if s == nil {
 		return nil, apiErr(401, "A mobile session is required.", "MOBILE_TOKEN_REQUIRED")
 	}
-	if c.app.Auth == nil {
-		return nil, apiErr(403, "This phone is pinned to its paired project.", "MOBILE_PROJECT_PINNED")
-	}
 	p, err := c.projectByID(strOrEmptyAny(body.Value("project_id")))
 	if err != nil {
 		return nil, err
 	}
-	account, err := c.mobileAccountPermission(s.User, p)
-	if err != nil {
-		return nil, err
-	}
-	if p == nil || account == "" {
+	if p == nil || p.ID() == demoID {
 		return nil, apiErr(404, "Project not found or not accessible for this account.", "PROJECT_NOT_ACCESSIBLE")
 	}
-	permission, err := devicePermission(body.Value("permission"), account)
-	if err != nil {
+	if c.app.Auth != nil {
+		account, err := c.mobileAccountPermission(s.User, p)
+		if err != nil {
+			return nil, err
+		}
+		if account == "" {
+			return nil, apiErr(404, "Project not found or not accessible for this account.", "PROJECT_NOT_ACCESSIBLE")
+		}
+	}
+	if err := c.moveMobile(p); err != nil {
 		return nil, err
 	}
-	moved, err := c.app.Mobile.Rebind(c.mobileToken(), p.ID(), p.Name(), permission)
-	if err != nil {
-		return nil, mobileErr(err)
-	}
-	if err := p.Store.LogActivity(c.ctx, "human:mobile", "mobile.switch_project", nil, pyjson.NewObject("pair", moved.PairingID,
-		"permission", permission)); err != nil {
+	if err := p.Store.LogActivity(c.ctx, "human:mobile", "mobile.switch_project", nil, pyjson.NewObject("pair", s.PairingID,
+		"permission", s.Permission)); err != nil {
 		return nil, err
 	}
-	return pyjson.NewObject("project_id", p.ID(), "project", p.Name(), "permission", moved.Permission,
-		"read_only", moved.Permission == "read_only"), nil
+	return pyjson.NewObject("project_id", p.ID(), "project", p.Name(), "permission", s.Permission,
+		"read_only", s.Permission == "read_only", "access", c.mobileAccess(s, p)), nil
+}
+
+// moveMobile points this request's phone session at p (the caller checked
+// access).  Without accounts the server has one current project, which the
+// phone's owner switches like on the desktop.
+func (c *reqCtx) moveMobile(p *project.Project) error {
+	s := c.mobileSession
+	if _, err := c.app.Mobile.Rebind(c.mobileToken(), p.ID(), p.Name()); err != nil {
+		return mobileErr(err)
+	}
+	if c.app.Auth == nil {
+		c.app.mu.Lock()
+		c.app.project = p
+		c.app.mu.Unlock()
+	} else if userID, err := c.app.Org.UserIDFor(c.ctx, s.User); err != nil {
+		return err
+	} else if userID != "" {
+		if err := c.app.Org.SetLastProject(c.ctx, userID, p.ID()); err != nil {
+			return err
+		}
+	}
+	c.forcedProject = p.ID()
+	c.project, c.resolved = p, true
+	return nil
+}
+
+// mobilePairPermission sets what one of the person's devices may do
+// (Settings → Mobile): full access as the user or read-only.
+func (c *reqCtx) mobilePairPermission(pairID string, body *pyjson.Object) error {
+	if c.mobileSession != nil {
+		return apiErr(403, "A paired phone cannot manage pairing codes.", "MOBILE_SCOPE")
+	}
+	changed, err := c.app.Mobile.SetPermission(pairID, c.actor(), c.app.Auth == nil, body.Value("permission"))
+	if err != nil {
+		return mobileErr(err)
+	}
+	if err := c.auditPair("mobile.pair.permission", changed); err != nil {
+		return err
+	}
+	c.ok(pyjson.NewObject("pair", changed, "pairs", c.userDevices()))
+	return nil
+}
+
+// auditPair writes a device change to the org log.
+func (c *reqCtx) auditPair(action string, pair *pyjson.Object) error {
+	actorID, err := c.app.Org.UserIDFor(c.ctx, c.actor())
+	if err != nil {
+		return err
+	}
+	return c.app.Org.Log(c.ctx, actorID, action, "", pyjson.NewObject("pair", pair.Value("id"),
+		"permission", pair.Value("permission")))
 }
 
 // mobileDelete is DELETE /api/mobile/session.

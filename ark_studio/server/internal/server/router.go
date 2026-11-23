@@ -247,6 +247,8 @@ func init() {
 		sub(func(c *reqCtx, path string) (bool, error) { return c.orgPost(path, c.body) }, orgPorted...),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.personalSettingsPost(path, c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.mobilePost(path, c.body) }, mobilePorted...),
+		// Go only (routes_mobile.go: what one of the person's devices may do).
+		match(reMobilePairPermission, func(c *reqCtx, m []string) error { return c.mobilePairPermission(m[1], c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.servicesPost(path, c.body, c.writer) }),
 		when(isWorkspacePath, func(c *reqCtx, path string) error { return c.workspacePost(path, c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.providersPost(path, c.body) },

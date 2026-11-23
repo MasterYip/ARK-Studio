@@ -44,6 +44,7 @@ package server
 // over the session list; no per-project activity reads.
 
 import (
+	"arkstudio/go/internal/mobile"
 	"net/url"
 	"sort"
 	"strconv"
@@ -93,7 +94,9 @@ func (c *reqCtx) notifyProjects() ([]notifyProject, string, error) {
 		if r := c.app.Mobile.PairingFor(s); r != nil {
 			source = r.Source
 		}
-		if c.app.Auth == nil || source != "password" {
+		// Phones cover their account's projects (a pairing is the user's);
+		// a linked desktop only its own.
+		if source == mobile.SourceDesktop {
 			scope, only = "project", s.ProjectID
 		}
 	}

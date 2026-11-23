@@ -150,7 +150,7 @@ public class SessionTest {
         assertEquals("qr", b.source);
         assertEquals("bo", b.user);
         assertTrue(b.isReadOnly());
-        assertFalse(b.canSwitchProjects());
+        assertTrue("a QR pairing is the user's too", b.canSwitchProjects());
         assertFalse(new AccountSession("http://h/", "nope", "", "", "", "", "", 0).isValid());
     }
 }

@@ -1,6 +1,8 @@
 import { h, richText, unitReference, copyText } from "./dom.js";
 import { icon } from "./icons.js";
 import { t } from "./i18n.js";
+import { S } from "./state.js";
+import { crossRefLabel, toolProjectName, toolUnitRef } from "./assistant-scope-model.js";
 
 const TOOL_KEYS = {
   create_unit: "chat.tool_step.create_unit", update_unit: "chat.tool_step.update_unit",
@@ -9,11 +11,28 @@ const TOOL_KEYS = {
   list_units: "chat.tool.list", get_context: "chat.tool.context",
   get_infohub_context: "chat.tool.infohub", search_infohub: "chat.tool.infohub",
   get_infohub_unit: "chat.tool.infohub",
+  list_projects: "chat.tool.projects", get_neighbors: "chat.tool.neighbors",
 };
 const toolLabel = (name) => TOOL_KEYS[name] ? t(TOOL_KEYS[name]) : name;
 
+// A unit from another project reads "Team · T-0042"; clicking it opens that
+// project and the unit (unit-references.js).
+function labelCrossRefs(root) {
+  for (const link of root.querySelectorAll("a.rich-unit-link[data-unit-ref]")) {
+    const ref = link.dataset.unitRef;
+    if (!ref.includes("/")) continue;
+    const label = link.querySelector(".rich-unit-label");
+    if (label) label.textContent = crossRefLabel(ref, S.projects, S.project?.id);
+  }
+  return root;
+}
+
+function unitLink(ref) {
+  return labelCrossRefs(h("span", null, unitReference(ref))).firstChild;
+}
+
 export function assistantRichText(text) {
-  const root = richText(text || "");
+  const root = labelCrossRefs(richText(text || ""));
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
     acceptNode: (node) => node.parentElement?.closest("a, pre, .math-inline, .math-block, .mermaid-block")
       ? NodeFilter.FILTER_REJECT : NodeFilter.FILTER_ACCEPT,
@@ -95,10 +114,13 @@ export function createAssistantResponse(message, { live = false, onPaint = () =>
     toolBody.replaceChildren(...[...tools.values()].map((tool) => {
       const label = toolLabel(tool.name), running = tool.state === "running";
       const target = tool.args?.ref || tool.args?.query || tool.args?.title || "";
+      const where = toolProjectName(tool, S.projects, S.project?.id);
+      const ref = toolUnitRef(tool.result);
       return h("div", { class: `assistant-tool-row ${running ? "running" : tool.ok === false ? "err" : ""}` },
         icon(running ? "clock" : tool.ok === false ? "alert" : "check", "sm"),
-        h("span", null, label), target ? h("span", { class: "assistant-tool-target" }, String(target)) : null,
-        tool.result?.uid ? unitReference(tool.result.uid) : null);
+        h("span", null, label), where ? h("span", { class: "assistant-tool-target" }, t("chat.in_project", { name: where })) : null,
+        target ? h("span", { class: "assistant-tool-target" }, String(target)) : null,
+        ref ? unitLink(ref) : null);
     }));
     failure.hidden = !error;
     failure.textContent = error;

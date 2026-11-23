@@ -7,9 +7,15 @@ scanning a QR code in **Settings → Project → Access → Mobile / Pair phone*
 Android app in `ark_studio/android/` (see [Android app](#android-app)). There is no external
 QR service, no telemetry and no phone-side SSH client.
 
-A pairing QR is bound to the open project and to the account that created it,
-so it lives under the project's **Access** tab next to the remote-access (SSH
-tunnel) panel. The server connection facts, the pairing list and the Android
+A pairing signs the phone in as the account that created the QR (or signed in
+with its password), not into one project. The phone switches between every
+project that account can open, in the web app's project list or the Android
+app's project switcher, and the account's role in each project decides what it
+may do there. The pairing's permission (full access or read-only) is a ceiling
+on every project. The QR lives under the **Access** tab next to the
+remote-access (SSH tunnel) panel; **Paired devices** there lists the person's
+devices on all projects, with the project each one is on, when it was last
+seen, a full access / read-only choice and Revoke. The server connection facts, the pairing list and the Android
 downloads are folded behind one-line summaries; open them from the summary row.
 Old `?settings=mobile` and `?settings=remote` links open the Access tab.
 
@@ -443,8 +449,9 @@ In multi-user mode every pairing record is bound to the account that created
 it. Claiming a code can only produce a session for that same user; a
 signed-in different account gets `403 PAIRING_WRONG_USER`, a code whose owner
 was deleted or lost access is rejected, and a mobile session can never exceed
-that user's project permission (a `read_only` pairing stays read-only, and the
-device is pinned to the project it was paired for).
+that user's permission in the project it is on (a `read_only` pairing stays
+read-only on every project). A session whose project is deleted or no longer
+readable for the account moves to another project the account can read.
 
 The phone stores only the mobile session token in `localStorage`
 (`ark.mobile.token`, plus permission/expiry hints) and strips `#pair=` from the
@@ -468,9 +475,16 @@ ends up in the login URL or Referer.
 
 ### Scopes and enforcement
 
-- The pairing record binds the current project id and the chosen permission.
-  Switching the desktop project makes the old phone fail with
-  `MOBILE_WRONG_PROJECT`.
+- The pairing record binds the account and the chosen permission. The project
+  it records is only where the phone is now: `POST /api/mobile/session/project`
+  and the web app's `POST /api/projects/open` move it to another project of the
+  account (switching is allowed for read-only devices too). Switching the
+  desktop project does not affect the phone.
+- The person changes a device's permission with
+  `POST /api/mobile/pairs/{id}/permission {"permission": "full"|"read_only"}`
+  (signed-in browser only; live sessions follow at once) and revokes it with
+  `POST /api/mobile/pairs/{id}/revoke`. `GET /api/mobile/pairs` lists the
+  person's own pairings on every project.
 - `read_only` allows `GET`/`HEAD`; any `POST`, `PATCH` or `DELETE` from that token
   returns `403 MOBILE_READ_ONLY`.
 - `full` allows writes, but never exposes the desktop agent token
@@ -608,9 +622,6 @@ cache stores no project data; offline mode only guarantees the app skeleton.
   TUIs may be awkward. PTY resize works when the optional backend is available.
 - **Session data is line-buffered.** The session workspace renders complete
   messages/tool cards; it is not token-level streaming. This matches desktop.
-- **One project per server.** A QR is scoped to the project open on the desktop
-  when it was generated. Switching projects invalidates the phone until you
-  generate a new code.
 - **Browser sign-in is in memory.** Restarting ARK signs browsers out
   (`ark_session`). Claimed device sessions (QR or app sign-in) are persisted as
   hashes in `.mobile-sessions.json` and survive restarts until revoked.
@@ -671,7 +682,7 @@ project permission.
 1. **Scan QR.** The app parses `<base>/#pair=<code>`, calls
    `POST <base>/api/mobile/pair/claim {"token": code}` once and keeps the
    returned `mobile_token`. The code is never stored; a replay fails with
-   `PAIRING_USED`. QR devices stay on the project the code was made for.
+   `PAIRING_USED`. The device starts on the project the code was made on.
 2. **Server URL + account + password.** The app calls
    `POST <base>/api/mobile/login` with JSON
    `{"username", "password", "permission": "full"|"read_only", "device"}`.
@@ -686,9 +697,10 @@ project permission.
 Why not reuse the `ark_session` cookie: it is in memory (a restart signs every
 client out), lasts 12 h by default, and isn't listed or revocable per device.
 A native app would then need the password again, which it must not store.
-Password-signed devices may switch projects
-(`GET /api/mobile/session/projects`, `POST /api/mobile/session/project`); QR
-devices return `MOBILE_PROJECT_PINNED`.
+Every paired device (QR or password) may switch projects
+(`GET /api/mobile/session/projects`, `POST /api/mobile/session/project`); only a
+linked ARK Studio desktop stays on its project (`MOBILE_PROJECT_PINNED`).
+Servers before 2.1.4 pinned QR devices to one project.
 
 ### Session storage and the WebView
 

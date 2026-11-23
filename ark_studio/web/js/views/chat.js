@@ -39,7 +39,8 @@ export function renderChat(host, ctx) {
     h("div", null,
       h("div", { class: "eyebrow" }, `${t("nav.chat")} · ${t("chat.project_agent")}`),
       h("h1", { class: "page-title" }, t("chat.title")),
-      h("p", { class: "page-sub" }, t("chat.subtitle"))),
+      h("p", { class: "page-sub" }, t("chat.subtitle")),
+      h("p", { class: "page-sub assistant-scope", title: t("chat.scope_hint") }, icon("layers", "sm"), t("chat.scope"))),
     h("div", { class: "head-actions" },
       h("button", { class: "ghost-btn", onclick: () => navigateSettings(ctx) },
         icon("settings", "sm"), t("chat.settings")),
@@ -140,6 +141,7 @@ export function renderChat(host, ctx) {
         h("div", null, icon("link", "sm"), h("span", null, t("chat.tool.link"))),
         h("div", null, icon("edit", "sm"), h("span", null, t("chat.tool.update"))),
         h("div", null, icon("search", "sm"), h("span", null, t("chat.tool.search"))),
+        h("div", null, icon("layers", "sm"), h("span", null, t("chat.tool.other_projects"))),
         h("div", null, icon("send", "sm"), h("span", null, t("chat.tool.dispatch")))));
   }
 

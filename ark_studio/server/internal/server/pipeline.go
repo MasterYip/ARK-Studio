@@ -125,6 +125,11 @@ func (c *reqCtx) guardProjectScope() error {
 	if path == promptsPath {
 		return nil
 	}
+	// A pairing is the person's, not the project's: creating a code needs
+	// read access (createPairing), and people manage their own devices.
+	if path == "/api/mobile/pair" || strings.HasPrefix(path, "/api/mobile/pairs/") {
+		return nil
+	}
 	// Marking Needs you items seen only writes the person's own marks, so
 	// read-only members may do it for their assignments (project_reviews.go).
 	if path == needsSeenPath && c.r.Method == "POST" {

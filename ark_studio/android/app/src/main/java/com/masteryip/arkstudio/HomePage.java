@@ -51,7 +51,12 @@ final class HomePage extends ShellActivity.Page {
         }, result -> render(result[0], result[1], result[2]), this::failed);
     }
 
+    private String access = "";
+
     private void render(JSONObject boot, JSONObject setup, JSONObject status) {
+        // The account's role in this project ("read", "write", "admin"); the
+        // device permission is a ceiling over every project.
+        access = status == null || status.isNull("access") ? "" : status.optString("access", "");
         if (status != null && status.optBoolean("authenticated")) {
             JSONObject project = status.optJSONObject("project");
             AccountSession updated = a.session.withStatus(status.optString("user", ""),
@@ -101,9 +106,9 @@ final class HomePage extends ShellActivity.Page {
         LinearLayout chips = Ui.row(a);
         chips.setPadding(0, Ui.dp(a, 8), 0, 0);
         chips.addView(Ui.chip(a, MainActivity.displayUser(a.session), Ui.text(a), Ui.codeBg(a)));
-        chips.addView(Ui.chip(a, a.getString(a.session.isReadOnly() ? R.string.perm_read_only : R.string.perm_full),
-                a.session.isReadOnly() ? Ui.warn(a) : Ui.ok(a),
-                a.session.isReadOnly() ? Ui.warnSoft(a) : Ui.okSoft(a)));
+        boolean readOnly = a.session.isReadOnly() || "read".equals(access);
+        chips.addView(Ui.chip(a, a.getString(readOnly ? R.string.perm_read_only : R.string.perm_full),
+                readOnly ? Ui.warn(a) : Ui.ok(a), readOnly ? Ui.warnSoft(a) : Ui.okSoft(a)));
         chips.addView(Ui.chip(a, com.masteryip.arkstudio.data.ServerUrl.displayHost(a.session.serverUrl),
                 Ui.muted(a), Ui.codeBg(a)));
         card.addView(chips);
@@ -195,7 +200,7 @@ final class HomePage extends ShellActivity.Page {
             if (!switchable || projects == null || projects.length() <= 1) {
                 new AlertDialog.Builder(a)
                         .setTitle(R.string.switch_project)
-                        .setMessage(switchable ? R.string.only_one_project : R.string.qr_pinned_project)
+                        .setMessage(switchable ? R.string.only_one_project : R.string.project_switch_unsupported)
                         .setPositiveButton(android.R.string.ok, null)
                         .show();
                 return;
@@ -218,7 +223,7 @@ final class HomePage extends ShellActivity.Page {
         }, error -> {
             if (error.getStatus() == 404 || error.getStatus() == 403) {
                 new AlertDialog.Builder(a).setTitle(R.string.switch_project)
-                        .setMessage(R.string.qr_pinned_project)
+                        .setMessage(R.string.project_switch_unsupported)
                         .setPositiveButton(android.R.string.ok, null).show();
             } else {
                 a.toastError(error);

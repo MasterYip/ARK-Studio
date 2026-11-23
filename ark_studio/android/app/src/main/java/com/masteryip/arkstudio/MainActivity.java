@@ -1,8 +1,11 @@
 package com.masteryip.arkstudio;
 
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.Intent;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
 import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
@@ -26,6 +29,7 @@ import com.masteryip.arkstudio.data.PairingLink;
 import com.masteryip.arkstudio.data.ServerEntry;
 import com.masteryip.arkstudio.data.ServerStore;
 import com.masteryip.arkstudio.data.ServerUrl;
+import com.masteryip.arkstudio.data.SessionStatus;
 import com.masteryip.arkstudio.platform.Accounts;
 import com.masteryip.arkstudio.platform.Notifications;
 import com.masteryip.arkstudio.ui.Async;
@@ -34,10 +38,18 @@ import com.masteryip.arkstudio.ui.Ui;
 import org.json.JSONObject;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /**
- * Launcher: saved servers and the two sign-in paths.
+ * Launcher: saved servers, the two sign-in paths and the app's settings.
+ *
+ * Like the former Web APK, every saved server shows its address and the
+ * signed-in account, can be refreshed, and opens with its saved session (no new
+ * sign-in). Sign-out and removing a server are explicit actions in the server's
+ * menu; back from the site only returns here.
  *
  * <ul>
  *   <li>Scan QR: the desktop pairing URL carries {@code #pair=<code>}; the code is
@@ -52,7 +64,16 @@ public class MainActivity extends AppCompatActivity {
     static final String ACTION_DEBUG_PAIR = "com.masteryip.arkstudio.DEBUG_PAIR";
 
     private LinearLayout list;
+    private LinearLayout settings;
     private boolean busy;
+    private boolean refreshedOnOpen;
+    private final Set<String> refreshing = new HashSet<>();
+
+    /** The server list, shown even when a server is signed in (back from the site). */
+    public static Intent serverList(Context c) {
+        return new Intent(c, MainActivity.class).setAction(ACTION_SETUP)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+    }
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -111,11 +132,86 @@ public class MainActivity extends AppCompatActivity {
         TextView tip = Ui.small(this, getString(R.string.pairing_tip));
         tip.setPadding(0, Ui.dp(this, 10), 0, 0);
         page.addView(tip);
+
+        page.addView(Ui.heading(this, getString(R.string.app_settings)));
+        settings = Ui.column(this);
+        page.addView(settings);
         setContentView(scroll);
         render();
+        if (!refreshedOnOpen) {
+            refreshedOnOpen = true;
+            for (ServerEntry entry : Accounts.servers(this).entries()) {
+                if (Accounts.session(this, entry.getUrl()) != null) refresh(entry, false);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------- settings
+
+    /** The native app's settings (also under More in native mode). */
+    private void renderSettings() {
+        if (settings == null) return;
+        settings.removeAllViews();
+        LinearLayout card = Ui.card(this);
+        settingRow(card, getString(R.string.app_mode_label), getString(Accounts.MODE_NATIVE.equals(Accounts.appMode(this))
+                ? R.string.app_mode_native : R.string.app_mode_web), v -> chooseAppMode());
+        Locale locale = getResources().getConfiguration().getLocales().get(0);
+        settingRow(card, getString(R.string.language), locale.getDisplayLanguage(locale), v -> openLanguageSettings());
+        boolean on = Accounts.notificationsEnabled(this) && Notifications.permitted(this);
+        settingRow(card, getString(R.string.notify_settings), getString(on ? R.string.notify_state_on : R.string.notify_state_off),
+                v -> startActivity(NotifySettingsActivity.intent(this)));
+        settingRow(card, getString(R.string.update_title), getString(R.string.version_short, BuildConfig.VERSION_NAME),
+                v -> startActivity(new Intent(this, com.masteryip.arkstudio.update.UpdateActivity.class)));
+        settings.addView(card);
+        TextView version = Ui.small(this, getString(R.string.version_line, BuildConfig.VERSION_NAME,
+                BuildConfig.VERSION_CODE));
+        version.setPadding(0, Ui.dp(this, 10), 0, 0);
+        settings.addView(version);
+    }
+
+    private void settingRow(LinearLayout card, String label, String value, View.OnClickListener open) {
+        if (card.getChildCount() > 0) card.addView(Ui.divider(this));
+        LinearLayout row = Ui.row(this);
+        row.setPadding(0, Ui.dp(this, 10), 0, Ui.dp(this, 10));
+        row.addView(Ui.body(this, label), Ui.lp(0, Ui.WRAP, 1));
+        row.addView(Ui.small(this, value));
+        row.addView(Ui.label(this, "  ›", 20, Ui.faint(this), false));
+        Ui.clickable(row, open);
+        card.addView(row);
+    }
+
+    private void chooseAppMode() {
+        String[] labels = {getString(R.string.app_mode_web), getString(R.string.app_mode_native)};
+        int checked = Accounts.MODE_NATIVE.equals(Accounts.appMode(this)) ? 1 : 0;
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.app_mode_label)
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    Accounts.setAppMode(this, which == 1 ? Accounts.MODE_NATIVE : Accounts.MODE_WEB);
+                    dialog.dismiss();
+                    renderSettings();
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
+    }
+
+    /** Android 13+: the per-app language page; older versions: the system language list. */
+    private void openLanguageSettings() {
+        Intent intent;
+        if (Build.VERSION.SDK_INT >= 33) {
+            intent = new Intent(Settings.ACTION_APP_LOCALE_SETTINGS)
+                    .setData(android.net.Uri.fromParts("package", getPackageName(), null));
+        } else {
+            intent = new Intent(Settings.ACTION_LOCALE_SETTINGS);
+        }
+        try {
+            startActivity(intent);
+        } catch (RuntimeException missing) {
+            startActivity(new Intent(Settings.ACTION_SETTINGS));
+        }
     }
 
     private void render() {
+        renderSettings();
         list.removeAllViews();
         ServerStore store = Accounts.servers(this);
         List<ServerEntry> entries = new ArrayList<>(store.entries());
@@ -163,20 +259,84 @@ public class MainActivity extends AppCompatActivity {
         if (chips.getChildCount() > 0) card.addView(chips);
 
         TextView who = Ui.small(this, session == null ? getString(R.string.not_signed_in)
+                : session.projectName.isEmpty() ? getString(R.string.signed_in_user, displayUser(session))
                 : getString(R.string.signed_in_as, displayUser(session), session.projectName,
                 getString(AccountSession.SOURCE_PASSWORD.equals(session.source)
                         ? R.string.via_password : R.string.via_qr)));
         who.setPadding(0, Ui.dp(this, 6), 0, 0);
         card.addView(who);
-        Ui.clickable(card, v -> {
-            if (session != null) {
-                Accounts.select(this, entry.getUrl());
-                openPreferred();
-            } else {
-                showSignIn(entry.getUrl(), null);
-            }
-        });
+        if (entry.getLastError() != null) {
+            TextView error = Ui.oneLine(Ui.small(this, entry.getLastError()));
+            error.setTextColor(Ui.danger(this));
+            card.addView(error);
+        }
+
+        LinearLayout buttons = Ui.row(this);
+        buttons.setPadding(0, Ui.dp(this, 10), 0, 0);
+        Button open = Ui.button(this, getString(session != null ? R.string.open : R.string.sign_in), true, false);
+        open.setOnClickListener(v -> openEntry(entry, session));
+        buttons.addView(open, Ui.lp(0, Ui.WRAP, 1));
+        if (session != null) {
+            boolean busyHere = refreshing.contains(entry.getUrl());
+            Button refresh = Ui.button(this, getString(busyHere ? R.string.refreshing : R.string.refresh), false, false);
+            refresh.setEnabled(!busyHere);
+            refresh.setOnClickListener(v -> refresh(entry, true));
+            LinearLayout.LayoutParams lp = Ui.lp(0, Ui.WRAP, 1);
+            lp.leftMargin = Ui.dp(this, 8);
+            buttons.addView(refresh, lp);
+        }
+        card.addView(buttons);
+        Ui.clickable(card, v -> openEntry(entry, session));
         return card;
+    }
+
+    /** Opens a server with its saved session (cookies included), or asks to sign in. */
+    private void openEntry(ServerEntry entry, AccountSession session) {
+        if (session != null) {
+            Accounts.select(this, entry.getUrl());
+            openPreferred();
+        } else {
+            showSignIn(entry.getUrl(), null);
+        }
+    }
+
+    /**
+     * Asks the server who this phone is signed in as ({@code GET /api/mobile/session})
+     * and updates the card: account, project, reachability. A token the server
+     * revoked is dropped (it no longer signs anything in); the server stays.
+     */
+    private void refresh(ServerEntry entry, boolean user) {
+        AccountSession session = Accounts.session(this, entry.getUrl());
+        if (session == null || !refreshing.add(entry.getUrl())) return;
+        if (list != null) render();
+        Async.run(this, () -> Accounts.client(session).withTimeouts(6000, 10000).get("/api/mobile/session"),
+                status -> {
+                    refreshing.remove(entry.getUrl());
+                    ServerStore store = Accounts.servers(this);
+                    store.clearError(entry.getUrl());
+                    Accounts.save(this, store);
+                    if (!SessionStatus.signedIn(status)) {
+                        Accounts.forget(this, entry.getUrl());
+                        Toast.makeText(this, R.string.signed_out_revoked, Toast.LENGTH_LONG).show();
+                    } else {
+                        Accounts.update(this, SessionStatus.apply(session, status));
+                        if (user) Toast.makeText(this, R.string.server_refreshed, Toast.LENGTH_SHORT).show();
+                    }
+                    if (list != null) render();
+                },
+                error -> {
+                    refreshing.remove(entry.getUrl());
+                    if (error.isSignedOut()) {
+                        Accounts.forget(this, entry.getUrl());
+                        Toast.makeText(this, R.string.signed_out_revoked, Toast.LENGTH_LONG).show();
+                    } else {
+                        ServerStore store = Accounts.servers(this);
+                        store.markError(entry.getUrl(), error.isNetwork() ? getString(R.string.state_offline)
+                                : error.getMessage());
+                        Accounts.save(this, store);
+                    }
+                    if (list != null) render();
+                });
     }
 
     static String displayUser(AccountSession session) {
@@ -188,10 +348,9 @@ public class MainActivity extends AppCompatActivity {
         List<Runnable> handlers = new ArrayList<>();
         if (session != null) {
             labels.add(getString(R.string.open));
-            handlers.add(() -> {
-                Accounts.select(this, entry.getUrl());
-                openPreferred();
-            });
+            handlers.add(() -> openEntry(entry, session));
+            labels.add(getString(R.string.refresh));
+            handlers.add(() -> refresh(entry, true));
             labels.add(getString(R.string.sign_out));
             handlers.add(() -> signOut(session));
         } else {

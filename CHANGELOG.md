@@ -6,6 +6,27 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.4] - 2026-11-23
+
+### Changed
+
+- Pairing a phone signs it in as you, not into one project: a paired phone
+  (QR code or password) switches between all projects you can open, in Web
+  mode and in Native mode, with your role in each. Settings → Mobile lists
+  your paired devices on every project with their current project and last
+  use, and sets each to full access or read-only, or revokes it. Phones paired
+  earlier switch projects too.
+- Android app: in Web mode the status and navigation bars follow the site's
+  light or dark theme. Back twice at the site's root returns to the server
+  list without signing out. The server list shows each server's address and
+  signed-in account with Open and Refresh, and holds the app settings (open
+  with Web or Native, language, notifications, updates and version).
+  Phones with 2.1.2 or 2.1.3 update in the app.
+- Assistant: it works on the open project by default and can also read
+  your other projects, with your access in each. It changes another project
+  only when you ask and your access there is write or admin. A node from
+  another project shows the project's name and opens it when clicked.
+
 ## [2.1.3] - 2026-11-23
 
 ### Added

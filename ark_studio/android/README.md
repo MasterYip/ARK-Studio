@@ -5,7 +5,7 @@ the full same-origin WebView workspace. Native mode opens the Android screens fo
 parts implemented natively, with the rest available through the Web button. Both modes
 use the same signed-in device session, so there's no second login.
 
-- Package `com.masteryip.arkstudio`, `versionCode 18`, `versionName 2.1.3` (the ARK release)
+- Package `com.masteryip.arkstudio`, `versionCode 19` (the ARK release sets `versionName`)
 - minSdk 26, target/compile 33, Java 11, AGP 7.4.2, Gradle 7.6
 - Server side: `POST /api/mobile/login` and the project-switch endpoints
   (see `docs/guide/mobile.md` → *Android app*)
@@ -18,7 +18,7 @@ mode selection is stored on the device and defaults to Web mode.
 
 | Native | Web app (WebView, deep links) |
 | --- | --- |
-| **Servers**: saved servers, account / permission / transport chips, sign-in, sign-out, delete | Map `#/map` |
+| **Servers**: saved servers with address, signed-in account and project, Open / Refresh, sign-in, sign-out and delete in the server menu; app settings (open with Web or Native, language, notifications, updates and version) | Map `#/map` |
 | **Home**: project switcher, setup status, counts, Needs you (the web's review cards: "Review this" note with anchors, round and previous round, changes since the last review, one card per delivery with a member table, review groups; Accept / Send back / Comment, Accept all with a checklist), recent activity | Editor `#/editor/unit%3A<uid>` |
 | **Tasks**: board by status (inbox, open, active, review, blocked, done); task detail, status change, notes linked to the task | Research · Ideas / Plan |
 | **Runs**: sessions list (5 s refresh); thread with Markdown, collapsible tool groups and outputs, steer / continue composer, stop (2 s polling while active) | Output, Assistant, Files |
@@ -34,6 +34,22 @@ Server codes (unit types, statuses, relations, activity) are labelled in `ui/Lab
 The WebView follows the phone's language too until a language is picked in ARK
 (`web/js/startup-graph.js`, `ark.langAuto`).
 Bottom navigation: Home, Tasks, Runs, GPU, More.
+
+## Web mode
+
+- The status and navigation bars take the site's background and light or dark
+  icons (`window.ARKAndroidTheme.setTheme` from `web/js/state.js`, plus a probe
+  of `data-theme`, `--bg` and theme-color after each load; `model/WebTheme.java`).
+  The native screens and the server list follow the system theme.
+- Back first closes the site's sheets and menus (`window.ARKAndroidBack`). At the
+  site's root a second back within 2.5 s opens the server list; the device token
+  and cookies stay (`model/BackGate.java`). Native mode's Home tab does the same.
+- Cookies are flushed after each page load and when the app pauses, so the site
+  stays signed in across restarts. When the site shows its sign-in page, the app
+  asks `GET /api/mobile/session`; only a token the server rejects signs the phone
+  out, otherwise the device cookie is set again and the site reloads.
+- A pairing is the user's: the site's project list and the native switcher move
+  the same device session, so both modes show the same project.
 
 ## Sign-in and security
 

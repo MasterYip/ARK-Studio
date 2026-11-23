@@ -1,8 +1,6 @@
 package mobile
 
 import (
-	"strings"
-
 	"arkstudio/go/internal/compat/pyjson"
 )
 
@@ -31,18 +29,7 @@ func (m *Manager) ProjectDevices(projectID string) []*pyjson.Object {
 			r.ClaimedAt == nil || *r.ClaimedAt == 0 {
 			continue
 		}
-		agent := strings.ToLower(agents[r.ID])
-		label := "Phone"
-		switch {
-		case r.Source == SourceDesktop:
-			label = "ARK Studio desktop"
-		case strings.Contains(agent, "iphone"):
-			label = "iPhone"
-		case strings.Contains(agent, "ipad"):
-			label = "iPad"
-		case strings.Contains(agent, "android"):
-			label = "Android phone"
-		}
+		label := deviceLabel(r, agents[r.ID])
 		var seen any
 		if v, ok := lastSeen[r.ID]; ok {
 			seen = v

@@ -48,8 +48,13 @@ public final class AccountSession {
         return "read_only".equals(permission);
     }
 
+    /**
+     * A device session belongs to the user, not to one project: QR-paired and
+     * password phones both switch between the account's projects (the server
+     * answers 403 MOBILE_PROJECT_PINNED on servers older than 2.1.4).
+     */
     public boolean canSwitchProjects() {
-        return SOURCE_PASSWORD.equals(source);
+        return true;
     }
 
     public boolean isValid() {

@@ -650,6 +650,7 @@ export const api = {
   claimPairing: (token) => request("/api/mobile/pair/claim", { method: "POST", body: { token } }),
   pairings: () => request("/api/mobile/pairs"),
   revokePairing: (id) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/revoke`, { method: "POST", body: {} }),
+  setPairPermission: (id, permission) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/permission`, { method: "POST", body: { permission } }),
   // ARK Studio desktop link code (Go-only route; desktop-hub.js).
   linkDesktop: ({ signal, ...body } = {}) => request("/api/desktop/link", { method: "POST", body, signal }),
   logoutMobile: () => request("/api/mobile/session", { method: "DELETE" }),

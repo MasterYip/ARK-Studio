@@ -38,6 +38,14 @@ func (c *reqCtx) demoProject(reset bool) (*project.Project, error) {
 // switchProject is App.switch.
 func (c *reqCtx) switchProject(p *project.Project) error {
 	a := c.app
+	// A paired phone is signed in as its user: the web app's project list
+	// moves its session (the caller checked read access).
+	if s := c.mobileSession; s != nil && !a.Mobile.IsDesktopLink(s) {
+		if p.ID() == demoID {
+			return apiErr(403, "The tutorial project is not available on a paired phone.", "PROJECT_NOT_ACCESSIBLE")
+		}
+		return c.moveMobile(p)
+	}
 	if a.Auth != nil {
 		if c.forcedProject != "" {
 			return apiErr(403, "A paired phone stays on its paired project.", "MOBILE_WRONG_PROJECT")

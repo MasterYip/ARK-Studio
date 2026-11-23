@@ -468,6 +468,11 @@ func (e *Env) systemPrompt() (string, error) {
 			return "", err
 		}
 	}
+	scope, err := e.scopePrompt()
+	if err != nil {
+		return "", err
+	}
+	lines = append(lines, scope...)
 	lines = append(lines, "Use at most 4-6 tool calls; do not repeatedly read the same unit. After inspecting enough evidence, answer the user directly.")
 	return strings.Join(lines, "\n"), nil
 }
@@ -539,7 +544,7 @@ func (e *Env) runDeepseek(text string, status *pyjson.Object) (*pyjson.Object, e
 	if err != nil {
 		return nil, err
 	}
-	tools := toolSpecs()
+	tools := toolSpecs(e.Scope != nil)
 	used := []any{}
 	reasoning, refresh := "", false
 	for round := 0; round < 8; round++ {
@@ -711,7 +716,7 @@ func (e *Env) Stream(message string, emit func(*pyjson.Object)) (*pyjson.Object,
 		}
 		var roundTools []any
 		if round < 7 {
-			roundTools = toolSpecs()
+			roundTools = toolSpecs(e.Scope != nil)
 		}
 		err := deepseekStream(e.Ctx, messages, roundTools, config, func(delta any) error {
 			d, ok := delta.(*pyjson.Object)

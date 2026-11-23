@@ -46,6 +46,7 @@ func valueErr(msg string) error { return &PyError{"ValueError", msg} }
 type Env struct {
 	Ctx         context.Context
 	Store       *store.Store
+	ProjectID   string
 	ProjectName string
 	ProjectPath string
 	Config      *pyjson.Object // the effective assistant config (App.effective_assistant)
@@ -56,6 +57,8 @@ type Env struct {
 	// HistoryLegacy adds the pre-v10 rows (empty user): local mode only.
 	HistoryLegacy bool
 	Who           store.Who
+	// Scope is the person's other projects (nil: the current project only).
+	Scope *Scope
 }
 
 var typeWords = map[string]string{

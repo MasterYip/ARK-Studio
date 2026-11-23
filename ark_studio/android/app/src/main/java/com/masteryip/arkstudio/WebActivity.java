@@ -26,11 +26,19 @@ import android.widget.FrameLayout;
 import android.widget.ProgressBar;
 import android.widget.Toast;
 
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
+
 import com.masteryip.arkstudio.api.ApiException;
+import com.masteryip.arkstudio.data.AccountSession;
 import com.masteryip.arkstudio.data.LinkPolicy;
 import com.masteryip.arkstudio.data.PairingLink;
+import com.masteryip.arkstudio.data.SessionStatus;
+import com.masteryip.arkstudio.model.BackGate;
 import com.masteryip.arkstudio.model.WebRoutes;
+import com.masteryip.arkstudio.model.WebTheme;
 import com.masteryip.arkstudio.platform.Accounts;
+import com.masteryip.arkstudio.ui.Async;
 import com.masteryip.arkstudio.ui.Ui;
 
 /**
@@ -42,6 +50,11 @@ import com.masteryip.arkstudio.ui.Ui;
  * it; navigation is restricted to that origin and every other link opens in the
  * system browser. The only JS interface reports the page theme and carries no
  * credentials, and it is reachable only by pages from the server's origin.
+ *
+ * Like the former Web APK: the status and navigation bars take the page's
+ * theme, back at the site's root goes to the server list after a second press
+ * (the session stays), and cookies are flushed so the site stays signed in
+ * across restarts.
  */
 public class WebActivity extends BaseActivity {
     private static final String EXTRA_ROUTE = "route";
@@ -53,17 +66,33 @@ public class WebActivity extends BaseActivity {
     private ValueCallback<Uri[]> pendingFiles;
     private String[] pendingDownload;
     private boolean backPending;
+    private final BackGate backGate = new BackGate();
+    private boolean checkingLogin;
 
     public static Intent intent(Context c, String route) {
         return new Intent(c, WebActivity.class).putExtra(EXTRA_ROUTE, route);
     }
 
+    /** {@code web/js/state.js} calls this whenever the site's theme changes. */
     private final class ThemeBridge {
         @JavascriptInterface
         public void setTheme(String theme, String background) {
-            // Theme follows the system on the native side; nothing to do. Kept so
-            // the web app's optional bridge call succeeds.
+            runOnUiThread(() -> applyWebTheme(theme, background));
         }
+    }
+
+    /** Bars and the frame behind the page follow the site's theme. */
+    private void applyWebTheme(String theme, String background) {
+        if (isFinishing() || root == null) return;
+        WebTheme t = WebTheme.of(theme, background, 0xFF0F141C, 0xFFF5F6F8);
+        if (t == null) return;
+        getWindow().setStatusBarColor(t.color);
+        getWindow().setNavigationBarColor(t.color);
+        WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
+        bars.setAppearanceLightStatusBars(!t.dark);
+        bars.setAppearanceLightNavigationBars(!t.dark);
+        root.setBackgroundColor(t.color);
+        stage.setBackgroundColor(t.color);
     }
 
     @Override
@@ -124,10 +153,9 @@ public class WebActivity extends BaseActivity {
             @Override
             public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
-                if (url != null && url.contains("/login")) {
-                    // The device cookie was rejected (revoked/expired).
-                    signedOut();
-                }
+                view.evaluateJavascript(WebTheme.PROBE_JS, null);
+                CookieManager.getInstance().flush();
+                if (url != null && url.contains("/login")) checkLogin();
             }
 
             @Override
@@ -259,6 +287,8 @@ public class WebActivity extends BaseActivity {
     protected void onPause() {
         super.onPause();
         if (web != null) web.onPause();
+        // Keep the site's cookies (sign-in, preferences) across app restarts.
+        CookieManager.getInstance().flush();
     }
 
     @Override
@@ -276,26 +306,58 @@ public class WebActivity extends BaseActivity {
         if (web != null) web.reload();
     }
 
-    /** Back first closes web sheets/menus (ARKAndroidBack), then history, then the screen. */
+    /**
+     * Back first closes web sheets and menus (ARKAndroidBack); at the site's
+     * root a second press within 2.5 s goes to the server list, still signed in.
+     */
     @Override
     public void onBackPressed() {
-        if (web == null || backPending) {
-            if (web == null) openNativeMode();
+        if (web == null) {
+            toServerList();
             return;
         }
+        if (backPending) return;
         backPending = true;
         web.evaluateJavascript("(window.ARKAndroidBack && window.ARKAndroidBack()) === true", value -> {
             backPending = false;
-            if ("true".equals(value)) return;
-            if (web.canGoBack()) web.goBack();
-            else openNativeMode();
+            if ("true".equals(value)) {
+                backGate.reset();
+                return;
+            }
+            if (backGate.press(System.currentTimeMillis())) toServerList();
+            else Toast.makeText(this, R.string.back_again_servers, Toast.LENGTH_SHORT).show();
         });
     }
 
-    /** Return to the native shell once the WebView has no page history left. */
-    private void openNativeMode() {
-        Accounts.setAppMode(this, Accounts.MODE_NATIVE);
-        startActivity(ShellActivity.intent(this, ShellActivity.TAB_HOME));
+    /** The server list without signing out (the device token and cookies stay). */
+    private void toServerList() {
+        CookieManager.getInstance().flush();
+        startActivity(MainActivity.serverList(this));
         finish();
+    }
+
+    /**
+     * The site showed its sign-in page. Only a token the server rejects signs
+     * the phone out; otherwise the device cookie is set again and the site
+     * reloads (a lost cookie, a server restart or no network never log out).
+     */
+    private void checkLogin() {
+        if (checkingLogin || session == null) return;
+        checkingLogin = true;
+        AccountSession current = session;
+        Async.run(this, () -> api.withTimeouts(6000, 10000).get("/api/mobile/session"), status -> {
+            checkingLogin = false;
+            if (!SessionStatus.signedIn(status)) {
+                signedOut();
+                return;
+            }
+            session = SessionStatus.apply(current, status);
+            Accounts.update(this, session);
+            Accounts.applyWebCookie(session);
+            if (web != null) web.loadUrl(WebRoutes.url(session.serverUrl, WebRoutes.HOME));
+        }, error -> {
+            checkingLogin = false;
+            if (error.isSignedOut()) signedOut();
+        });
     }
 }

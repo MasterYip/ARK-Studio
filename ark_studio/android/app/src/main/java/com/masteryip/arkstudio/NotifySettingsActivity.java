@@ -46,6 +46,12 @@ public final class NotifySettingsActivity extends BaseActivity {
         render();
     }
 
+    /** Opened from the server list too, before any server is signed in. */
+    @Override
+    protected boolean needsSession() {
+        return false;
+    }
+
     @Override
     protected void reload() {
         render();

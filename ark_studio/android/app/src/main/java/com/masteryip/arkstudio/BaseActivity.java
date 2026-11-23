@@ -45,14 +45,19 @@ public abstract class BaseActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         session = Accounts.active(this);
         if (session == null) {
-            toServers(null);
+            if (needsSession()) toServers(null);
             return;
         }
         api = Accounts.client(session);
     }
 
+    /** Screens that work without a signed-in server (settings) return {@code false}. */
+    protected boolean needsSession() {
+        return true;
+    }
+
     protected boolean ready() {
-        return session != null && !isFinishing();
+        return (session != null || !needsSession()) && !isFinishing();
     }
 
     /** Builds the frame; {@code back} shows the up arrow. */

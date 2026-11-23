@@ -221,8 +221,7 @@ func TestNotificationFeed(t *testing.T) {
 		}
 	}
 
-	// A phone signed in with the password sees the account; a QR pairing
-	// only its project.
+	// A phone signed in with the password sees the account's projects.
 	login := gpuCall(t, app, "POST", "/api/mobile/login", map[string]any{"username": "owner", "password": desktopPassword,
 		"project_id": team}, nil)
 	phone, _ := login.body["mobile_token"].(string)
@@ -243,13 +242,8 @@ func TestNotificationFeed(t *testing.T) {
 	if claim.code != 200 || qr == "" {
 		t.Fatalf("claim: %d %s", claim.code, claim.raw)
 	}
-	p := readFeed(t, app, "", mobileHeader(qr))
-	if p.Scope != "project" || len(p.Projects) != 1 || p.Projects[0]["id"] != solo {
+	// A QR pairing is the user's too (not one project's): same scope.
+	if p := readFeed(t, app, "", mobileHeader(qr)); p.Scope != "account" || len(p.Projects) < 2 {
 		t.Fatalf("QR phone scope: %s %v", p.Scope, p.Projects)
-	}
-	for _, it := range p.Items {
-		if it.Project["id"] != solo {
-			t.Errorf("QR phone sees another project: %+v", it)
-		}
 	}
 }

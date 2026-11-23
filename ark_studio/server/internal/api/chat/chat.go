@@ -34,6 +34,9 @@ type Handlers struct {
 	// LocalMode is a server without accounts: the local user's thread also
 	// holds the pre-v10 rows with an empty user (store.ChatHistory legacy).
 	LocalMode bool
+	// Scope is the viewer's other projects for the Assistant's tools, at
+	// their own access there (nil: the current project only).
+	Scope func(c api.Ctx, p *project.Project) *chat.Scope
 }
 
 // orDefault is `value or default`.
@@ -130,8 +133,13 @@ func (h *Handlers) chatEnv(c api.Ctx, p *project.Project, body *pyjson.Object, c
 	if o, ok := body.Value("infohub").(*pyjson.Object); ok {
 		hub = o
 	}
-	return &chat.Env{Ctx: c.RequestContext(), Store: p.Store, ProjectName: p.Name(), ProjectPath: p.Path, Config: config,
-		Infohub: hub, AgentToken: h.AgentToken(), BaseURL: baseURL, HistoryUser: &who, HistoryLegacy: h.LocalMode, Who: c.Who(p)}
+	var scope *chat.Scope
+	if h.Scope != nil {
+		scope = h.Scope(c, p)
+	}
+	return &chat.Env{Ctx: c.RequestContext(), Store: p.Store, ProjectID: p.ID(), ProjectName: p.Name(), ProjectPath: p.Path, Config: config,
+		Infohub: hub, AgentToken: h.AgentToken(), BaseURL: baseURL, HistoryUser: &who, HistoryLegacy: h.LocalMode, Who: c.Who(p),
+		Scope: scope}
 }
 
 // assistantMeta is the meta of the stored assistant reply.

@@ -1,6 +1,6 @@
 [package]
 name = "ark-studio"
-version = "2.1.3"
+version = "2.1.4"
 description = "ARK Studio desktop shell: tray, settings, saved servers and the bundled ark-server sidecar"
 authors = ["Raymon Yip"]
 license = "AGPL-3.0-only"

@@ -102,7 +102,8 @@ function mount(ctx) {
   const head = h("div", { class: "assistant-head" },
     h("span", { style: { color: "var(--accent-2)" } }, icon("sparkles", "sm")),
     h("div", null, h("div", { class: "assistant-title" }, t("nav.assistant")),
-      h("div", { class: "assistant-sub" }, t("session.dock.subtitle"))),
+      h("div", { class: "assistant-sub" }, t("session.dock.subtitle")),
+      h("div", { class: "assistant-sub assistant-scope", title: t("chat.scope_hint") }, icon("layers", "sm"), t("chat.scope"))),
     h("div", { class: "spacer" }),
     h("button", { class: "btn sm ghost", onclick: () => { toggleSessionDock(ctx, false); ctx.navigate("chat"); } }, t("session.dock.full_chat")),
     h("button", { class: "icon-btn", title: t("action.close"), onclick: () => toggleSessionDock(ctx, false) }, icon("x")));

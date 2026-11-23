@@ -949,23 +949,51 @@ export function renderSettings(host, ctx) {
     }
     for (const pair of pairs) {
       const revoked = Boolean(pair.revoked_at);
+      const desktop = pair.source === "desktop";
+      // A paired phone is signed in as this person on every project: its
+      // permission is changed here (full as the user, or read-only).
+      const permissionPick = !desktop && !revoked && pair.claimed_at
+        ? h("select", {
+          class: "select sm", "aria-label": t("settings.mobile.device_permission"),
+          onchange: (event) => setMobilePairPermission(pair.id, event.target.value),
+        },
+        h("option", { value: "full", selected: pair.permission === "full" }, t("settings.mobile.full_access")),
+        h("option", { value: "read_only", selected: pair.permission !== "full" }, t("settings.mobile.permission_read_only")))
+        : null;
+      const where = [pair.claimed_at && pair.project ? t("settings.mobile.device_project", { project: pair.project }) : "",
+        pair.last_seen_at ? t("settings.mobile.device_seen", { date: fmtDate(pair.last_seen_at) }) : ""].filter(Boolean).join(" · ");
       mobilePairsHost.appendChild(h("div", {
         class: "project-row", style: { alignItems: "center", gap: "8px" },
       },
         h("div", { class: "main" },
-          h("div", { class: "t" }, `${t(pair.source === "desktop" ? "settings.mobile.desktop_link"
-            : pair.permission === "full" ? "settings.mobile.full_access" : "settings.mobile.permission_read_only")} · ${pair.state}`),
+          h("div", { class: "t" }, `${desktop ? t("settings.mobile.desktop_link")
+            : (pair.claimed_at && pair.label ? pair.label + " · " : "")
+              + t(pair.permission === "full" ? "settings.mobile.full_access" : "settings.mobile.permission_read_only")} · ${pair.state}`),
+          where ? h("div", { class: "d" }, where) : null,
           h("div", { class: "d" },
             (pair.claimed_at
               ? (pair.session_permanent ? t("settings.mobile.pair_until_revoked") : t("settings.mobile.pair_session_hours", { n: Math.round((pair.session_ttl || 0) / 3600) }))
               : t("settings.mobile.pair_code_expires", { date: fmtDate(pair.expires_at) }))
             + " · " + t("settings.mobile.pair_created", { date: fmtDate(pair.created_at) })
             + (pair.claimed_at ? " · " + t("settings.mobile.pair_claimed", { date: fmtDate(pair.claimed_at) }) : ""))),
+        permissionPick,
         revoked ? h("span", { class: "pill" }, t("settings.mobile.revoked"))
           : h("button", {
             class: "btn sm danger", type: "button",
             onclick: () => revokeMobilePair(pair.id),
           }, icon("trash", "sm"), t("admin.revoke"))));
+    }
+  }
+
+  async function setMobilePairPermission(pairId, permission) {
+    try {
+      const data = await api.setPairPermission(pairId, permission);
+      mobileState.pairs = data.pairs || [];
+      renderMobilePairs();
+      ctx.toast(t("settings.mobile.permission_changed"), "ok");
+    } catch (err) {
+      ctx.toast(err.message, "err");
+      renderMobilePairs();
     }
   }
 

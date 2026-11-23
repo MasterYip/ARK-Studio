@@ -728,12 +728,18 @@ func (m *Manager) Authenticate(token, projectID, method, path string) (*Session,
 	// A desktop link is read-only on its project but may create projects
 	// (DesktopLinkPathAllowed; the server checks the account's role).
 	desktopWrite := r != nil && r.Source == SourceDesktop && DesktopLinkPathAllowed(path, verb)
-	if s.Permission == "read_only" && verb != "GET" && verb != "HEAD" && path != "/api/mobile/session/project" && !desktopWrite {
+	if s.Permission == "read_only" && verb != "GET" && verb != "HEAD" && !switchPath(path) && !desktopWrite {
 		return nil, merr(403, "This phone has read-only access. Generate a full-access pairing "+
 			"code on the desktop to allow edits.", "MOBILE_READ_ONLY")
 	}
 	s.LastSeenAt = now
 	return s, nil
+}
+
+// switchPath: moving the session to another project is not a write, so a
+// read-only phone may do it (native switcher or the web app's project list).
+func switchPath(path string) bool {
+	return path == "/api/mobile/session/project" || path == "/api/projects/open"
 }
 
 // SessionForToken is PairingManager.session_for_token.
@@ -773,8 +779,13 @@ func (m *Manager) PairingFor(s *Session) *Pairing {
 	return m.pairings[s.PairingID]
 }
 
-// Rebind is PairingManager.rebind.
-func (m *Manager) Rebind(token, projectID, projectName, permission string) (*Session, error) {
+// Rebind moves a phone's session to another project of its account.  A
+// pairing logs the phone in as the user, not into one project: the session's
+// project is only where it currently is, and the account's role in each
+// project decides what it may do there.  The pairing's permission (full or
+// read_only) stays a ceiling for every project.  Desktop links stay where
+// they are (they only list and create projects).
+func (m *Manager) Rebind(token, projectID, projectName string) (*Session, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	raw := pytext.Strip(token)
@@ -785,23 +796,37 @@ func (m *Manager) Rebind(token, projectID, projectName, permission string) (*Ses
 	if s == nil {
 		return nil, merr(401, "The mobile session is invalid or has expired.", "MOBILE_TOKEN_INVALID")
 	}
-	r := m.pairings[s.PairingID]
-	if r == nil || r.Source != "password" {
-		return nil, merr(403, "This phone was paired with a QR code for one project. "+
-			"Scan a new code from the other project instead.", "MOBILE_PROJECT_PINNED")
+	return s, m.moveLocked(s, projectID, projectName)
+}
+
+// Move is Rebind for a session the caller already holds (a project that
+// was deleted or is no longer readable for the account).
+func (m *Manager) Move(s *Session, projectID, projectName string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.sessions[s.TokenHash] != s {
+		return merr(401, "The mobile session is invalid or has expired.", "MOBILE_TOKEN_INVALID")
 	}
-	perm, err := Permission(permission)
-	if err != nil {
-		return nil, err
+	return m.moveLocked(s, projectID, projectName)
+}
+
+func (m *Manager) moveLocked(s *Session, projectID, projectName string) error {
+	r := m.pairings[s.PairingID]
+	if r != nil && r.Source == SourceDesktop {
+		return merr(403, "A linked desktop stays on its project.", "MOBILE_PROJECT_PINNED")
 	}
 	if projectName == "" {
 		projectName = "Project"
 	}
-	r.ProjectID, s.ProjectID = projectID, projectID
-	r.ProjectName, s.ProjectName = projectName, projectName
-	r.Permission, s.Permission = perm, perm
+	if s.ProjectID == projectID && s.ProjectName == projectName {
+		return nil
+	}
+	s.ProjectID, s.ProjectName = projectID, projectName
+	if r != nil {
+		r.ProjectID, r.ProjectName = projectID, projectName
+	}
 	m.save()
-	return s, nil
+	return nil
 }
 
 // Revoke is PairingManager.revoke.

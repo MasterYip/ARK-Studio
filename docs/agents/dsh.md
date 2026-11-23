@@ -26,6 +26,24 @@ project's `ark.sqlite3`, so they travel with the `.ark` folder.
 This local harness is intentionally not an LLM. It will not invent a general
 answer when no tool matches; it explains the available commands instead.
 
+## Model-backed assistant: which projects it can read
+
+With a model API key (Settings › Assistant API) the assistant works on the open
+project by default, and can also read your other projects, at your own access
+in each one:
+
+- `list_projects` lists the projects you can read, with your access there.
+- `get_context`, `search_units`, `list_units`, `get_unit` and `get_neighbors`
+  take an optional `project` (id or exact name). Without it they read the open
+  project.
+- `create_unit`, `update_unit` and `link_units` change the open project. With
+  `project` they change that one, and only where your access is write or admin.
+- Projects you cannot open are never listed or read.
+
+Unit ids repeat across projects, so a unit from another project is written as
+`[[prj_xxx/T-0042]]`. In the chat it shows the project's name and opens that
+project and unit when clicked.
+
 ## Optional: delegate turns to DeepSeek Harness (DSH)
 
 ARK ships an adapter for a DSH headless process. Install the DSH CLI from

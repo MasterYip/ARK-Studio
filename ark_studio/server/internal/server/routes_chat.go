@@ -8,6 +8,7 @@ import (
 	"arkstudio/go/internal/api"
 	chatapi "arkstudio/go/internal/api/chat"
 	"arkstudio/go/internal/assistcfg"
+	"arkstudio/go/internal/chat"
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/project"
 )
@@ -76,6 +77,7 @@ func (c *reqCtx) chatHandlers() *chatapi.Handlers {
 		EffectivePublic: func(api.Ctx) (*pyjson.Object, error) { return c.effectiveAssistantPublic() },
 		AgentToken:      c.app.AgentToken,
 		LocalMode:       c.app.Auth == nil,
+		Scope:           func(_ api.Ctx, p *project.Project) *chat.Scope { return c.assistantScope(p) },
 	}
 }
 

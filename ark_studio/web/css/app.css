@@ -1308,6 +1308,8 @@ body.inspector-pinned .assistant-dock{right:var(--inspector-w)}
 .assistant-head{display:flex;align-items:center;gap:8px;padding:8px 14px;border-bottom:1px solid var(--line-soft);flex:0 0 auto}
 .assistant-title{font-size:0.75rem;font-weight:700;line-height:1.2}
 .assistant-sub{font-size:0.59375rem;color:var(--mute);line-height:1.3}
+.assistant-scope{display:flex;align-items:center;gap:4px}
+.assistant-scope .icon{flex:none;opacity:.8}
 .assistant-head .spacer{flex:1}
 .assistant-thread{flex:1;min-height:0;overflow:auto;padding:10px 14px;display:flex;flex-direction:column;gap:7px}
 .assistant-msg{max-width:min(860px,86%);padding:7px 10px;border-radius:8px;font-size:0.71875rem;line-height:1.5;white-space:pre-wrap;word-break:break-word}

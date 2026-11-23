@@ -153,7 +153,7 @@ func (h *Handlers) PluginChat(c api.Ctx, body *pyjson.Object, actor string) erro
 	if !pluginChatLimit.allow(c.Actor() + "\x00" + req.Plugin) {
 		return api.Err(429, "Too many AI requests from this plugin; try again in a minute.", "RATE_LIMITED")
 	}
-	env := &chat.Env{Ctx: c.RequestContext(), Store: p.Store, ProjectName: p.Name(), ProjectPath: p.Path, Config: config,
+	env := &chat.Env{Ctx: c.RequestContext(), Store: p.Store, ProjectID: p.ID(), ProjectName: p.Name(), ProjectPath: p.Path, Config: config,
 		AgentToken: h.AgentToken(), Who: c.Who(p)}
 	result, err := env.PluginChat(req)
 	if err != nil {
