@@ -32,6 +32,10 @@ func TestMain(m *testing.M) {
 
 func fakeClaude() {
 	args := strings.Join(os.Args, " ")
+	if path := os.Getenv("ARK_FAKE_ARGS_FILE"); path != "" { // the full command line, for argv tests
+		b, _ := json.Marshal(os.Args[1:])
+		_ = os.WriteFile(path, b, 0o644)
+	}
 	if os.Getenv("ARK_FAKE_CLAUDE_OLD") == "1" && strings.Contains(args, "--input-format") {
 		fmt.Fprintln(os.Stderr, "error: unknown option '--input-format'")
 		os.Exit(1)

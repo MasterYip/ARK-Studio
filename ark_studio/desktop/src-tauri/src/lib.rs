@@ -120,6 +120,9 @@ const SERVER_PERMISSIONS: &[&str] = &[
     "allow-open-ssh-terminal",
     "allow-ssh-config-match",
     "allow-open-editor-url",
+    "allow-ssh-config-ensure",
+    "allow-ssh-key-candidates",
+    "allow-choose-ssh-key",
     // "Show in folder" on a finished download (shell.js, downloads.rs).
     "allow-show-download",
     // "ARK Studio 2.x.y is available" in the app window (shell.js) and the
@@ -1678,6 +1681,84 @@ fn ssh_config_match(app: AppHandle, webview: tauri::Webview, names: Vec<String>)
     Ok(remote_open::match_config(&hosts, &names))
 }
 
+/// Adds or updates `Host ark-<name>` in the ARK block of ~/.ssh/config
+/// (remote_open.rs upsert_managed), so VS Code Remote-SSH and ssh use the
+/// key, port and user. The person confirms each change in a native dialog
+/// that shows the entry. Returns {alias, changed}.
+#[tauri::command]
+async fn ssh_config_ensure(app: AppHandle, webview: tauri::Webview, entry: remote_open::ManagedHost) -> Result<Value, String> {
+    let origin = match caller(&app, &webview) {
+        Caller::Other => return Err("Not an ARK page of ARK Studio.".into()),
+        Caller::Remote(u) => u.origin().ascii_serialization(),
+        _ => "ARK Studio".to_string(),
+    };
+    // Key login: the key file must exist. Password login writes no key.
+    let key = entry.identity_file.as_deref().map(str::trim).filter(|k| !k.is_empty());
+    if let Some(k) = key.filter(|_| !remote_open::password_auth(entry.auth.as_deref())) {
+        let expanded = match k.strip_prefix("~/") {
+            Some(rest) => remote_open::user_ssh_dir().and_then(|d| d.parent().map(|h| h.join(rest))),
+            None => Some(PathBuf::from(k)),
+        };
+        if !expanded.is_some_and(|p| p.is_file()) {
+            return Err(format!("Key file not found: {k}"));
+        }
+    }
+    let dir = remote_open::user_ssh_dir().ok_or("No home folder.")?;
+    let config = dir.join("config");
+    let text = match std::fs::read(&config) {
+        Ok(b) if b.len() > 1 << 20 => return Err("~/.ssh/config is too large.".into()),
+        Ok(b) => String::from_utf8(b).map_err(|_| "~/.ssh/config is not UTF-8 text.".to_string())?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => return Err(format!("Could not read ~/.ssh/config: {e}")),
+    };
+    let Some(updated) = remote_open::upsert_managed(&text, &entry)? else {
+        return Ok(json!({ "alias": entry.alias, "changed": false }));
+    };
+    let shown = remote_open::managed_entry(&entry)?;
+    let zh = system_zh();
+    let message = if zh {
+        format!("{origin} 想在 {} 中添加或更新这个 SSH 条目（位于 ARK Studio 标记的区块内，其他内容不变）：\n\n{shown}", config.display())
+    } else {
+        format!("{origin} wants to add or update this SSH entry in {} (inside the ARK Studio block; nothing else changes):\n\n{shown}", config.display())
+    };
+    let (ok_label, cancel_label) = if zh { ("写入", "取消") } else { ("Write", "Cancel") };
+    let answer = app
+        .dialog()
+        .message(message)
+        .title("ARK Studio")
+        .kind(MessageDialogKind::Info)
+        .buttons(MessageDialogButtons::OkCancelCustom(ok_label.into(), cancel_label.into()))
+        .blocking_show_with_result();
+    let ok = matches!(answer, MessageDialogResult::Ok) || matches!(answer, MessageDialogResult::Custom(ref s) if s == ok_label);
+    if !ok {
+        return Err(if zh { "已取消，未修改 SSH 配置。".into() } else { "Cancelled; the SSH config was not changed.".into() });
+    }
+    remote_open::write_config(&config, &updated)?;
+    Ok(json!({ "alias": entry.alias, "changed": true }))
+}
+
+/// Private key files in ~/.ssh (paths only).
+#[tauri::command]
+fn ssh_key_candidates(app: AppHandle, webview: tauri::Webview) -> Result<Vec<String>, String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    Ok(remote_open::user_ssh_dir().map(|d| remote_open::key_candidates(&d)).unwrap_or_default())
+}
+
+/// A file picker for the SSH key (starts in ~/.ssh); the chosen path only.
+#[tauri::command]
+async fn choose_ssh_key(app: AppHandle, webview: tauri::Webview) -> Result<Option<String>, String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let mut dialog = app.dialog().file().set_title(if system_zh() { "选择 SSH 私钥文件" } else { "Choose the SSH private key" });
+    if let Some(dir) = remote_open::user_ssh_dir().filter(|d| d.is_dir()) {
+        dialog = dialog.set_directory(dir);
+    }
+    Ok(dialog.blocking_pick_file().and_then(|p| p.into_path().ok()).map(|p| p.to_string_lossy().to_string()))
+}
+
 /// Opens a VS Code / Cursor folder link (vscode://file/..., vscode://vscode-remote/ssh-remote+...).
 #[tauri::command]
 fn open_editor_url(app: AppHandle, webview: tauri::Webview, url: String) -> Result<(), String> {
@@ -2031,6 +2112,9 @@ pub fn run() {
             open_ssh_terminal,
             ssh_config_match,
             open_editor_url,
+            ssh_config_ensure,
+            ssh_key_candidates,
+            choose_ssh_key,
             show_download,
             choose_project_folder,
             tray_menu_ready,

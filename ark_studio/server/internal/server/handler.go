@@ -241,6 +241,9 @@ func (c *reqCtx) notPorted() {
 
 // checkHost is Handler._check_host.
 func (c *reqCtx) checkHost() error {
+	if viaTunnel(c.r) { // TunnelHandler admitted only the tunnel's own hostname
+		return nil
+	}
 	if !c.app.hostAllowed(c.r.Host) {
 		return apiErr(403, "Unexpected Host header", "HOST_REJECTED")
 	}
@@ -289,6 +292,10 @@ func (c *reqCtx) clientIP() string {
 
 // trustedLocal is Handler._trusted_local.
 func (c *reqCtx) trustedLocal() bool {
+	// Tunnel traffic reaches ARK from 127.0.0.1 but comes from the internet.
+	if viaTunnel(c.r) || cloudflareForwarded(c.r) {
+		return false
+	}
 	remote := c.clientIP()
 	loop := false
 	if ip := net.ParseIP(strings.Split(remote, "%")[0]); ip != nil {
@@ -301,6 +308,9 @@ func (c *reqCtx) trustedLocal() bool {
 
 // requestScheme is Handler._request_scheme.
 func (c *reqCtx) requestScheme() string {
+	if viaTunnel(c.r) { // Cloudflare serves the tunnel over HTTPS
+		return "https"
+	}
 	if c.app.Cfg.TrustProxy {
 		if strings.ToLower(pytext.Strip(strings.Split(c.header("X-Forwarded-Proto"), ",")[0])) == "https" {
 			return "https"

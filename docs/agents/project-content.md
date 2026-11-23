@@ -43,13 +43,23 @@ Every operation follows the same five steps. Nothing changes before step 4.
 | `applied` | done | report |
 | `undone` | reversed | report |
 
-`apply` before approval answers 409 `MOVE_NOT_APPROVED`. When what the plan
-covers changed after it was made, `apply` answers 409 `MOVE_PLAN_STALE`:
-propose a new plan; it needs a new approval. `POST .../plans/<id>/undo`
-reverses an applied plan; undo only when the person asks.
+The new IDs in a plan are provisional: they are assigned when the plan is
+applied, so new nodes in the target while the plan waits do no harm.
+
+`apply` before approval answers 409 `MOVE_NOT_APPROVED`. A plan goes stale
+only when what it covers changed: a planned node was edited, deleted or
+moved, nodes joined or left the planned tree, or the links, attachments or
+comments of the planned nodes changed. Edits elsewhere in either project do
+not count. `GET .../plans/<id>` then shows `stale` (`reasons`, `units`), and
+`approve` and `apply` answer 409 `MOVE_PLAN_STALE` with the same `reasons`
+and `units` in `error`. Call `POST .../plans/<id>/refresh`: the plan is made
+again from the projects as they are now, keeps its decision node and waits
+for approval again. Proposing a new plan works too.
+`POST .../plans/<id>/undo` reverses an applied plan; undo only when the
+person asks.
 
 Plans of a project: `GET /api/agent/v1/project-move/plans` (all kinds).
-`GET`, `apply` and `undo` of one plan work under either base below.
+`GET`, `apply`, `refresh` and `undo` of one plan work under either base below.
 
 ## IDs and references
 

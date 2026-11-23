@@ -120,20 +120,28 @@ func (c *reqCtx) apiGetViews() (bool, error) {
 		if err != nil {
 			return true, err
 		}
-		if c.mobileSession != nil {
-			// A paired device never enumerates other projects.
+		if s := c.mobileSession; s != nil {
+			// A paired phone is signed in as its user: the web app's project
+			// list (Android Web mode) offers every project the account can
+			// read, like the native switcher, except the tutorial project,
+			// which a phone cannot open. A read-only device reads them all.
+			// A desktop link only ever sees its current project.
+			link := c.app.Mobile.IsDesktopLink(s)
 			current, err := c.currentProject()
 			if err != nil {
 				return true, err
 			}
-			var kept []any
+			kept := []any{}
 			for _, item := range projects {
-				if current != nil && item.(*pyjson.Object).Value("id") == current.ID() {
-					kept = append(kept, item)
+				o := item.(*pyjson.Object)
+				id := o.Value("id")
+				if id == demoID || (link && (current == nil || id != current.ID())) {
+					continue
 				}
-			}
-			if kept == nil {
-				kept = []any{}
+				if s.Permission == "read_only" && o.Has("permission") {
+					o.Set("permission", "read")
+				}
+				kept = append(kept, o)
 			}
 			projects = kept
 		}

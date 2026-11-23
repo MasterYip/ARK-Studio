@@ -1,7 +1,7 @@
 {
   "name": "ark-studio-desktop",
   "private": true,
-  "version": "2.1.4",
+  "version": "2.1.5",
   "description": "ARK Studio desktop shell (Tauri 2)",
   "license": "AGPL-3.0-only",
   "type": "module",

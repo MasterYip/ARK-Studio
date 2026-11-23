@@ -32,6 +32,33 @@ pub struct SshTarget {
     pub user: Option<String>,
     #[serde(default)]
     pub port: Option<u32>,
+    /// The private key file on this computer (a path, never the key); used
+    /// as `-i` when there is no alias (an alias brings its own IdentityFile).
+    #[serde(default)]
+    pub identity_file: Option<String>,
+    /// "key" or "password" (ssh asks for it in the terminal; ARK never sees it).
+    #[serde(default)]
+    pub auth: Option<String>,
+}
+
+/// The auth mode: "password" turns the key off, anything else keeps it.
+pub fn password_auth(auth: Option<&str>) -> bool {
+    auth.map(str::trim) == Some("password")
+}
+
+/// A key file path for `ssh -i`: absolute (C:\..., /..., ~/...), no control
+/// characters, never option-like.
+pub fn check_identity(raw: &str) -> Result<String, String> {
+    let p = raw.trim();
+    if p.is_empty() || p.len() > MAX_PATH_LEN || p.chars().any(char::is_control) || p.starts_with('-') {
+        return Err("Invalid key file path.".into());
+    }
+    let b = p.as_bytes();
+    let drive = b.len() > 2 && b[0].is_ascii_alphabetic() && b[1] == b':' && (b[2] == b'\\' || b[2] == b'/');
+    if !(p.starts_with('/') || p.starts_with("~/") || drive) || p.starts_with("//") || p.starts_with("\\\\") {
+        return Err("The key file path must be absolute.".into());
+    }
+    Ok(p.to_string())
 }
 
 fn name_ok(s: &str, max: usize, extra: &[char]) -> bool {
@@ -120,6 +147,13 @@ pub fn ssh_args(t: &SshTarget, path: Option<&str>) -> Result<Vec<String>, String
         // An alias brings its own Port from ~/.ssh/config.
         if !has_alias && p != 22 {
             args.extend(["-p".to_string(), p.to_string()]);
+        }
+    }
+    // Key login without an alias: this key only. Password login: nothing
+    // (ssh prompts in the terminal).
+    if let Some(k) = t.identity_file.as_deref().map(str::trim).filter(|k| !k.is_empty()) {
+        if !has_alias && !password_auth(t.auth.as_deref()) {
+            args.extend(["-i".to_string(), check_identity(k)?, "-o".to_string(), "IdentitiesOnly=yes".to_string()]);
         }
     }
     args.push("--".into());
@@ -381,13 +415,197 @@ pub fn read_user_config() -> String {
         .unwrap_or_default()
 }
 
+// ------------------------------------------------- managed ~/.ssh/config hosts
+
+/// VS Code Remote-SSH only uses a key, a port and a user that ~/.ssh/config
+/// gives a Host alias. `ssh_config_ensure` keeps one entry per server
+/// (`Host ark-<name>`) inside a marked block at the end of the file; text
+/// outside the block is never changed. web/js/resource-open-model.js writes
+/// the same block for the browser's copy-and-paste snippet.
+pub const MANAGED_BEGIN: &str = "# >>> ARK Studio managed hosts (edits inside are replaced) >>>";
+pub const MANAGED_END: &str = "# <<< ARK Studio managed hosts <<<";
+pub const MANAGED_PREFIX: &str = "ark-";
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq)]
+pub struct ManagedHost {
+    pub alias: String,
+    pub host: String,
+    #[serde(default)]
+    pub user: Option<String>,
+    #[serde(default)]
+    pub port: Option<u32>,
+    /// The private key file on this computer (a path, never the key).
+    #[serde(default)]
+    pub identity_file: Option<String>,
+    /// "key" (IdentityFile + IdentitiesOnly) or "password" (neither: ssh and
+    /// VS Code show their own password prompt; ARK never handles it).
+    #[serde(default)]
+    pub auth: Option<String>,
+}
+
+/// A key file path for IdentityFile: absolute (or ~/...), no control
+/// characters or double quotes. Backslashes become "/" (OpenSSH reads "\"
+/// as an escape; Windows' ssh.exe takes "/" fine).
+pub fn identity_for_config(raw: &str) -> Result<String, String> {
+    let p = raw.trim();
+    if p.is_empty() || p.len() > MAX_PATH_LEN || p.chars().any(|c| c.is_control() || c == '"') {
+        return Err("Invalid key file path.".into());
+    }
+    let p = p.replace('\\', "/");
+    let drive = p.len() > 2 && p.as_bytes()[0].is_ascii_alphabetic() && &p[1..3] == ":/";
+    if !(p.starts_with('/') || p.starts_with("~/") || drive) || p.starts_with("//") {
+        return Err("The key file path must be absolute.".into());
+    }
+    Ok(if p.chars().any(char::is_whitespace) { format!("\"{p}\"") } else { p })
+}
+
+/// The checked entry's lines (no trailing newline).
+pub fn managed_entry(h: &ManagedHost) -> Result<String, String> {
+    check_alias(&h.alias)?;
+    if !h.alias.starts_with(MANAGED_PREFIX) {
+        return Err("ARK only manages ark-... aliases.".into());
+    }
+    check_host(h.host.trim())?;
+    let mut lines = vec![format!("Host {}", h.alias), format!("  HostName {}", h.host.trim())];
+    if let Some(p) = h.port {
+        if !(1..=65535).contains(&p) {
+            return Err("Invalid port.".into());
+        }
+        lines.push(format!("  Port {p}"));
+    }
+    if let Some(u) = h.user.as_deref().map(str::trim).filter(|u| !u.is_empty()) {
+        check_user(u)?;
+        lines.push(format!("  User {u}"));
+    }
+    let key = h.identity_file.as_deref().map(str::trim).filter(|k| !k.is_empty());
+    if let Some(k) = key.filter(|_| !password_auth(h.auth.as_deref())) {
+        lines.push(format!("  IdentityFile {}", identity_for_config(k)?));
+        lines.push("  IdentitiesOnly yes".into());
+    }
+    Ok(lines.join("\n"))
+}
+
+/// The managed block's entries: (alias, entry text).
+fn managed_entries(block: &str) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    for line in block.lines() {
+        let t = line.trim_end();
+        if let Some(alias) = t.strip_prefix("Host ") {
+            out.push((alias.trim().to_string(), t.to_string()));
+        } else if let Some(last) = out.last_mut() {
+            if !t.trim().is_empty() {
+                last.1.push('\n');
+                last.1.push_str(t);
+            }
+        }
+    }
+    out
+}
+
+/// `text` with `h` added to (or replaced in) the managed block. None when
+/// the file already has exactly that entry.
+pub fn upsert_managed(text: &str, h: &ManagedHost) -> Result<Option<String>, String> {
+    let entry = managed_entry(h)?;
+    let crlf = text.contains("\r\n");
+    let norm = text.replace("\r\n", "\n");
+    let (before, block, after) = match (norm.find(MANAGED_BEGIN), norm.find(MANAGED_END)) {
+        (Some(b), Some(e)) if b < e => {
+            let rest = &norm[e + MANAGED_END.len()..];
+            (norm[..b].to_string(), norm[b + MANAGED_BEGIN.len()..e].to_string(), rest.strip_prefix('\n').unwrap_or(rest).to_string())
+        }
+        (None, None) => (norm.clone(), String::new(), String::new()),
+        _ => return Err("The ARK Studio block in ~/.ssh/config is damaged; fix or remove its marker lines.".into()),
+    };
+    let mut entries = managed_entries(&block);
+    match entries.iter_mut().find(|(a, _)| a.eq_ignore_ascii_case(&h.alias)) {
+        Some(existing) if existing.1 == entry => return Ok(None),
+        Some(existing) => existing.1 = entry,
+        None => entries.push((h.alias.clone(), entry)),
+    }
+    let mut out = before;
+    if !out.is_empty() && !out.ends_with('\n') {
+        out.push('\n');
+    }
+    if !out.is_empty() && !out.ends_with("\n\n") {
+        out.push('\n');
+    }
+    out.push_str(MANAGED_BEGIN);
+    out.push('\n');
+    for (_, e) in &entries {
+        out.push_str(e);
+        out.push('\n');
+    }
+    out.push_str(MANAGED_END);
+    out.push('\n');
+    out.push_str(&after);
+    Ok(Some(if crlf { out.replace('\n', "\r\n") } else { out }))
+}
+
+/// ~/.ssh of this user.
+pub fn user_ssh_dir() -> Option<PathBuf> {
+    std::env::var_os(if cfg!(windows) { "USERPROFILE" } else { "HOME" }).map(|h| Path::new(&h).join(".ssh"))
+}
+
+/// Writes `text` to `config`: a one-time copy of the old file goes to
+/// config.ark-backup, the new text is written next to it and renamed.
+pub fn write_config(config: &Path, text: &str) -> Result<(), String> {
+    let dir = config.parent().ok_or("No ~/.ssh folder.")?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("Could not create {}: {e}", dir.display()))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+    }
+    let backup = dir.join("config.ark-backup");
+    if config.is_file() && !backup.exists() {
+        std::fs::copy(config, &backup).map_err(|e| format!("Could not back up ~/.ssh/config: {e}"))?;
+    }
+    let tmp = dir.join("config.ark-tmp");
+    std::fs::write(&tmp, text.as_bytes()).map_err(|e| format!("Could not write ~/.ssh/config: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600));
+    }
+    std::fs::rename(&tmp, config).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("Could not write ~/.ssh/config: {e}")
+    })
+}
+
+/// Private key files in `dir` (paths only; the files are not returned):
+/// not *.pub / config / known_hosts, starting with a PEM / OpenSSH header.
+pub fn key_candidates(dir: &Path) -> Vec<String> {
+    let Ok(read) = std::fs::read_dir(dir) else { return Vec::new() };
+    let mut out: Vec<String> = read
+        .filter_map(Result::ok)
+        .map(|e| e.path())
+        .filter(|p| p.is_file())
+        .filter(|p| {
+            let name = p.file_name().map(|n| n.to_string_lossy().to_ascii_lowercase()).unwrap_or_default();
+            !(name.ends_with(".pub") || name.starts_with("config") || name.starts_with("known_hosts") || name.starts_with("authorized_keys"))
+        })
+        .filter(|p| {
+            use std::io::Read;
+            let mut head = [0u8; 64];
+            let n = std::fs::File::open(p).and_then(|mut f| f.read(&mut head)).unwrap_or(0);
+            let head = String::from_utf8_lossy(&head[..n]);
+            head.starts_with("-----BEGIN") && head.contains("PRIVATE KEY")
+        })
+        .map(|p| p.to_string_lossy().to_string())
+        .take(32)
+        .collect();
+    out.sort();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     fn target(alias: &str, host: &str, user: &str, port: Option<u32>) -> SshTarget {
         let s = |v: &str| if v.is_empty() { None } else { Some(v.to_string()) };
-        SshTarget { alias: s(alias), host: s(host), user: s(user), port }
+        SshTarget { alias: s(alias), host: s(host), user: s(user), port, ..Default::default() }
     }
 
     fn v(items: &[&str]) -> Vec<String> {
@@ -530,5 +748,148 @@ mod tests {
         assert_eq!(m.iter().map(|x| (x.name.as_str(), x.host.alias.as_str())).collect::<Vec<_>>(), vec![("GPU-A", "gpu-a"), ("box.example.com", "box")]);
         let json = serde_json::to_value(&m[0]).unwrap();
         assert_eq!(json, serde_json::json!({"name": "GPU-A", "alias": "gpu-a", "hostname": "10.0.0.5", "user": "ana", "port": 2222}));
+    }
+
+    fn managed(alias: &str, key: Option<&str>) -> ManagedHost {
+        ManagedHost {
+            alias: alias.into(),
+            host: "203.0.113.7".into(),
+            user: Some("user".into()),
+            port: Some(2222),
+            identity_file: key.map(String::from),
+            auth: None,
+        }
+    }
+
+    #[test]
+    fn managed_block_is_added_once_and_kept_apart() {
+        let mine = "Host gpu-a\n  HostName 10.0.0.5\n";
+        let k = managed("ark-lab-1", Some(r"C:\Users\me\.ssh\id_rsa_lab_1"));
+        let once = upsert_managed(mine, &k).unwrap().unwrap();
+        assert_eq!(
+            once,
+            format!(
+                "Host gpu-a\n  HostName 10.0.0.5\n\n{MANAGED_BEGIN}\nHost ark-lab-1\n  HostName 203.0.113.7\n  Port 2222\n  User user\n  \
+                 IdentityFile C:/Users/me/.ssh/id_rsa_lab_1\n  IdentitiesOnly yes\n{MANAGED_END}\n"
+            )
+        );
+        // Same entry again: nothing to write.
+        assert_eq!(upsert_managed(&once, &k).unwrap(), None);
+        // A second host joins the block; a changed one is replaced in place.
+        let two = upsert_managed(&once, &managed("ark-b", None)).unwrap().unwrap();
+        assert_eq!(two.matches(MANAGED_BEGIN).count(), 1);
+        assert!(two.contains(&format!("Host ark-b\n  HostName 203.0.113.7\n  Port 2222\n  User user\n{MANAGED_END}")));
+        let moved = upsert_managed(&two, &managed("ark-lab-1", Some("/home/me/.ssh/k2"))).unwrap().unwrap();
+        assert!(moved.contains("IdentityFile /home/me/.ssh/k2") && !moved.contains("id_rsa_lab_1"));
+        assert!(moved.find("Host ark-lab-1").unwrap() < moved.find("Host ark-b").unwrap());
+        assert!(moved.starts_with(mine));
+        assert_eq!(upsert_managed(&moved, &managed("ark-b", None)).unwrap(), None);
+        // Text after the block stays; CRLF files stay CRLF; empty files work.
+        let after = format!("{once}Host z\n  User z\n");
+        let updated = upsert_managed(&after, &managed("ark-b", None)).unwrap().unwrap();
+        assert!(updated.ends_with(&format!("{MANAGED_END}\nHost z\n  User z\n")));
+        let crlf = upsert_managed("Host a\r\n  User a\r\n", &k).unwrap().unwrap();
+        assert!(crlf.contains("\r\n") && !crlf.replace("\r\n", "").contains('\n'));
+        assert_eq!(upsert_managed(&crlf, &k).unwrap(), None);
+        assert!(upsert_managed("", &k).unwrap().unwrap().starts_with(MANAGED_BEGIN));
+        // A half-removed block is not guessed at.
+        assert!(upsert_managed(&format!("{MANAGED_BEGIN}\nHost ark-x\n"), &k).is_err());
+    }
+
+    #[test]
+    fn managed_entries_refuse_bad_input() {
+        let ok = managed("ark-a", Some("~/.ssh/my key"));
+        assert!(managed_entry(&ok).unwrap().contains("IdentityFile \"~/.ssh/my key\""));
+        for bad in [
+            ManagedHost { alias: "gpu-a".into(), ..managed("x", None) },
+            ManagedHost { alias: "ark-a b".into(), ..managed("x", None) },
+            ManagedHost { alias: "ark-a\nHost *".into(), ..managed("x", None) },
+            ManagedHost { host: "h\n  ProxyCommand calc".into(), ..managed("ark-a", None) },
+            ManagedHost { host: "a b".into(), ..managed("ark-a", None) },
+            ManagedHost { host: "\"h\"".into(), ..managed("ark-a", None) },
+            ManagedHost { host: "-oProxyCommand=calc".into(), ..managed("ark-a", None) },
+            ManagedHost { user: Some("u\"x".into()), ..managed("ark-a", None) },
+            ManagedHost { user: Some("u x".into()), ..managed("ark-a", None) },
+            ManagedHost { port: Some(0), ..managed("ark-a", None) },
+            managed("ark-a", Some("relative/key")),
+            managed("ark-a", Some("C:/k\"ey")),
+            managed("ark-a", Some("/k\n  ProxyCommand calc")),
+            managed("ark-a", Some("//server/share/key")),
+        ] {
+            assert!(managed_entry(&bad).is_err(), "{bad:?}");
+        }
+    }
+
+    #[test]
+    fn key_files_are_found_by_header() {
+        let dir = std::env::temp_dir().join(format!("ark-keys-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("id_rsa_lab_1"), concat!("-----BEGIN OPENSSH ", "PRIVATE KEY-----\nxx\n")).unwrap();
+        std::fs::write(dir.join("id_rsa_lab_1.pub"), "ssh-rsa AAAA").unwrap();
+        std::fs::write(dir.join("config"), "Host x\n").unwrap();
+        std::fs::write(dir.join("notes.txt"), "hello").unwrap();
+        let found = key_candidates(&dir);
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(found.len(), 1);
+        assert!(found[0].ends_with("id_rsa_lab_1"));
+    }
+
+    #[test]
+    fn config_written_with_backup() {
+        let dir = std::env::temp_dir().join(format!("ark-sshcfg-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let config = dir.join("config");
+        std::fs::write(&config, "Host mine\n").unwrap();
+        let text = upsert_managed("Host mine\n", &managed("ark-a", None)).unwrap().unwrap();
+        write_config(&config, &text).unwrap();
+        write_config(&config, &text).unwrap();
+        let backup = std::fs::read_to_string(dir.join("config.ark-backup")).unwrap();
+        let now = std::fs::read_to_string(&config).unwrap();
+        let tmp_left = dir.join("config.ark-tmp").exists();
+        let _ = std::fs::remove_dir_all(&dir);
+        assert_eq!(backup, "Host mine\n");
+        assert_eq!(now, text);
+        assert!(!tmp_left);
+    }
+
+    #[test]
+    fn key_and_password_entries() {
+        let key = r"C:\Users\me\.ssh\id_rsa_lab_1";
+        // Key login: IdentityFile + IdentitiesOnly (no password prompt).
+        let with_key = managed_entry(&ManagedHost { auth: Some("key".into()), ..managed("ark-a", Some(key)) }).unwrap();
+        assert!(with_key.ends_with("\n  IdentityFile C:/Users/me/.ssh/id_rsa_lab_1\n  IdentitiesOnly yes"));
+        // Password login: neither line, even when a key path is remembered;
+        // ssh / VS Code show their own prompt.
+        let pwd = managed_entry(&ManagedHost { auth: Some("password".into()), ..managed("ark-a", Some(key)) }).unwrap();
+        assert_eq!(pwd, "Host ark-a\n  HostName 203.0.113.7\n  Port 2222\n  User user");
+        assert_eq!(managed_entry(&managed("ark-a", None)).unwrap(), pwd);
+        // Switching key -> password replaces the entry in place.
+        let text = upsert_managed("", &ManagedHost { auth: Some("key".into()), ..managed("ark-a", Some(key)) }).unwrap().unwrap();
+        let switched = upsert_managed(&text, &ManagedHost { auth: Some("password".into()), ..managed("ark-a", Some(key)) }).unwrap().unwrap();
+        assert!(!switched.contains("IdentityFile") && !switched.contains("IdentitiesOnly"));
+        assert_eq!(switched.matches("Host ark-a").count(), 1);
+    }
+
+    #[test]
+    fn terminal_with_key_or_password() {
+        let key = Some(r"C:\Users\me\.ssh\id_rsa_lab_1".to_string());
+        let t = SshTarget { identity_file: key.clone(), ..target("", "203.0.113.7", "user", Some(2222)) };
+        assert_eq!(
+            ssh_args(&t, None).unwrap(),
+            v(&["-t", "-p", "2222", "-i", r"C:\Users\me\.ssh\id_rsa_lab_1", "-o", "IdentitiesOnly=yes", "--", "user@203.0.113.7"])
+        );
+        // Password: no -i; ssh prompts in the terminal.
+        let p = SshTarget { auth: Some("password".into()), ..t.clone() };
+        assert_eq!(ssh_args(&p, None).unwrap(), v(&["-t", "-p", "2222", "--", "user@203.0.113.7"]));
+        // An alias carries its own key.
+        let a = SshTarget { identity_file: key, ..target("ark-lab-1", "203.0.113.7", "user", Some(2222)) };
+        assert_eq!(ssh_args(&a, None).unwrap(), v(&["-t", "--", "ark-lab-1"]));
+        for bad in ["-oProxyCommand=calc", "relative/key", "/k\nx", "//srv/share/k", r"\srv\share\k"] {
+            let b = SshTarget { identity_file: Some(bad.into()), ..target("", "h", "", None) };
+            assert!(ssh_args(&b, None).is_err(), "{bad:?}");
+        }
+        assert!(check_identity("~/.ssh/my key").is_ok());
     }
 }

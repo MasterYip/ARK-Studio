@@ -6,17 +6,19 @@ package main
 // to flag); it does what the watcher scripts do:
 //   - the token comes from ~/.ark/tokens/<project> or the environment;
 //   - --owner-pid (ARK_OWNER_PID) ties it to the agent: it stops when that
-//     process is gone;
+//     process is gone; without it, or when it is gone or only the shell,
+//     the nearest Codex or Claude Code process above the watcher (T-0109);
 //   - --wake codex with --codex-thread (ARK_WAKE, ARK_CODEX_THREAD) wakes a
 //     Codex session through `codex queue`, only when the owner process is
 //     Codex, the thread id is the one Codex gave this command
 //     (CODEX_THREAD_ID) and no Claude Code environment is present; it then
-//     detaches and keeps watching;
+//     detaches and keeps watching; when it cannot, it says why and exits 2;
 //   - messages start "ARK UPDATE for <agent>, ARK project <name> (<id>)".
 
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
@@ -45,19 +47,34 @@ func isCodexProcess(name string) bool {
 }
 
 // codexWakeBlocker says why the watcher must not queue into a Codex
-// session ("" = it may).  owner is the agent's process id.
-func codexWakeBlocker(o *watchOptions, owner int) string {
+// session ("" = it may).  owner is the agent's process id and name ("" =
+// look it up).
+func codexWakeBlocker(o *watchOptions, owner int, name string) string {
+	if name == "" && owner > 1 {
+		name = watchProcessName(owner)
+	}
 	switch {
 	case os.Getenv("CLAUDECODE") != "" || os.Getenv("CLAUDE_CODE_ENTRYPOINT") != "":
 		return "this is a Claude Code session"
 	case owner <= 1:
-		return "no --owner-pid (ARK_OWNER_PID) of your Codex process"
-	case !isCodexProcess(watchProcessName(owner)):
-		return "the owner process is not Codex"
+		return "owner process not found"
+	case !isCodexProcess(name):
+		return fmt.Sprintf("the owner process (pid %d) is not Codex", owner)
 	case o.CodexThread == "" || o.CodexThread != os.Getenv("CODEX_THREAD_ID"):
 		return "--codex-thread (ARK_CODEX_THREAD) is not this Codex session's thread"
 	}
 	return ""
+}
+
+// wakeHint says what to do about a codexWakeBlocker reason.
+func wakeHint(why string) string {
+	switch {
+	case strings.Contains(why, "Claude Code"):
+		return "Claude Code is woken when the watcher exits: drop --wake codex"
+	case strings.Contains(why, "thread"):
+		return "pass --codex-thread with your own CODEX_THREAD_ID (PowerShell: $env:CODEX_THREAD_ID)"
+	}
+	return "pass --owner-pid <codex pid>"
 }
 
 // findCodexQueue returns a codex that has `queue`: the one running this

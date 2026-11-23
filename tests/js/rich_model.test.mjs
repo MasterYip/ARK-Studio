@@ -29,6 +29,7 @@ test("URL resolution: remote, media, project-relative and rejected schemes", () 
   assert.equal(m.resolveRichUrl("//evil.example/x.png"), null);
   assert.equal(m.resolveRichUrl(""), null);
   assert.equal(m.resolveRichUrl("#sec").kind, "anchor");
+  assert.deepEqual(m.resolveRichUrl("?move_plan=pl_abc"), { kind: "query", href: "?move_plan=pl_abc" });
   assert.equal(m.resolveRichUrl("file:///C:/a.mp4").kind, "file");
   assert.equal(m.dirOf("docs/a/b.md"), "docs/a");
   assert.equal(m.dirOf("README.md"), "");

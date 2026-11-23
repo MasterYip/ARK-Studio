@@ -56,22 +56,39 @@ import java.util.Set;
  *   claimed once via {@code POST /api/mobile/pair/claim} and never stored.</li>
  *   <li>Account: server URL + username + password via {@code POST /api/mobile/login};
  *   the password is sent once and dropped, only the device token is kept.</li>
+ *   <li>Through a Cloudflare Tunnel the claim waits for the computer to confirm
+ *   a 6-digit code, and a quick tunnel's new address is re-linked after a
+ *   signature check ({@link TunnelFlows}).</li>
  * </ul>
  */
 public class MainActivity extends AppCompatActivity {
     public static final String EXTRA_MESSAGE = "message";
     public static final String ACTION_SETUP = "com.masteryip.arkstudio.SETUP";
     static final String ACTION_DEBUG_PAIR = "com.masteryip.arkstudio.DEBUG_PAIR";
+    static final String ACTION_RELINK = "com.masteryip.arkstudio.RELINK";
+    private static final String EXTRA_SERVER = "server";
 
     private LinearLayout list;
     private LinearLayout settings;
     private boolean busy;
     private boolean refreshedOnOpen;
     private final Set<String> refreshing = new HashSet<>();
+    private final Set<String> identityFetches = new HashSet<>();
+    private LinearLayout relinkBox;
+    private TunnelFlows tunnel;
+    /** The next scan re-links this server (Scan QR in the re-link dialog). */
+    private boolean relinkScan;
+    private String relinkFrom;
 
     /** The server list, shown even when a server is signed in (back from the site). */
     public static Intent serverList(Context c) {
         return new Intent(c, MainActivity.class).setAction(ACTION_SETUP)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
+    }
+
+    /** The server list with the re-link dialog open for {@code serverUrl}. */
+    public static Intent relink(Context c, String serverUrl) {
+        return new Intent(c, MainActivity.class).setAction(ACTION_RELINK).putExtra(EXTRA_SERVER, serverUrl)
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TASK);
     }
 
@@ -83,14 +100,35 @@ public class MainActivity extends AppCompatActivity {
         com.masteryip.arkstudio.update.UpdateWorker.sync(this);
         String message = getIntent().getStringExtra(EXTRA_MESSAGE);
         if (message != null) Toast.makeText(this, message, Toast.LENGTH_LONG).show();
+        tunnel = new TunnelFlows(this, new TunnelFlows.Host() {
+            @Override
+            public void paired(String base, JSONObject response) {
+                finishSignIn(base, response, AccountSession.SOURCE_QR);
+            }
+
+            @Override
+            public void scanForRelink(String fromUrl) {
+                relinkScan = true;
+                relinkFrom = fromUrl;
+                launchScanner();
+            }
+
+            @Override
+            public void changed(String newUrl) {
+                if (list != null) render();
+                ServerEntry entry = Accounts.servers(MainActivity.this).get(newUrl);
+                if (entry != null && Accounts.session(MainActivity.this, newUrl) != null) refresh(entry, false);
+            }
+        });
         boolean setup = ACTION_SETUP.equals(getIntent().getAction()) || message != null
-                || ACTION_DEBUG_PAIR.equals(getIntent().getAction());
+                || ACTION_DEBUG_PAIR.equals(getIntent().getAction()) || ACTION_RELINK.equals(getIntent().getAction());
         if (!setup && savedInstanceState == null && Accounts.active(this) != null) {
             openPreferred();
             return;
         }
         build();
         handleDebugPairing(getIntent());
+        handleRelinkIntent(getIntent());
     }
 
     @Override
@@ -129,6 +167,8 @@ public class MainActivity extends AppCompatActivity {
         Button account = Ui.button(this, getString(R.string.sign_in_account), false, false);
         account.setOnClickListener(v -> showSignIn(null, null));
         page.addView(account, Ui.margins(this, Ui.MATCH, Ui.WRAP, 0, 4, 0, 4));
+        relinkBox = Ui.column(this);
+        page.addView(relinkBox);
         TextView tip = Ui.small(this, getString(R.string.pairing_tip));
         tip.setPadding(0, Ui.dp(this, 10), 0, 0);
         page.addView(tip);
@@ -215,6 +255,7 @@ public class MainActivity extends AppCompatActivity {
         list.removeAllViews();
         ServerStore store = Accounts.servers(this);
         List<ServerEntry> entries = new ArrayList<>(store.entries());
+        renderRelinkButton(entries);
         entries.sort((a, b) -> Long.compare(b.getLastUsedAt(), a.getLastUsedAt()));
         if (entries.isEmpty()) {
             LinearLayout empty = Ui.card(this);
@@ -224,6 +265,19 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         for (ServerEntry entry : entries) list.addView(card(store, entry));
+    }
+
+    /** Re-link (scan or short code) once a tunnel server is saved. */
+    private void renderRelinkButton(List<ServerEntry> entries) {
+        if (relinkBox == null) return;
+        relinkBox.removeAllViews();
+        for (ServerEntry entry : entries) {
+            if (!entry.isTunnel()) continue;
+            Button relink = Ui.button(this, getString(R.string.relink), false, false);
+            relink.setOnClickListener(v -> tunnel.showRelink(null, null, null));
+            relinkBox.addView(relink, Ui.margins(this, Ui.MATCH, Ui.WRAP, 0, 4, 0, 4));
+            return;
+        }
     }
 
     private View card(ServerStore store, ServerEntry entry) {
@@ -253,6 +307,9 @@ public class MainActivity extends AppCompatActivity {
         if (PairingLink.isInsecurePublic(entry.getUrl())) {
             chips.addView(Ui.chip(this, getString(R.string.chip_unencrypted), Ui.danger(this), Ui.dangerSoft(this)));
         }
+        if (entry.isTunnel()) {
+            chips.addView(Ui.chip(this, getString(R.string.chip_tunnel), Ui.accent(this), Ui.accentSoft(this)));
+        }
         if (entry.getLastError() != null) {
             chips.addView(Ui.chip(this, getString(R.string.server_unreachable), Ui.danger(this), Ui.dangerSoft(this)));
         }
@@ -269,6 +326,15 @@ public class MainActivity extends AppCompatActivity {
             TextView error = Ui.oneLine(Ui.small(this, entry.getLastError()));
             error.setTextColor(Ui.danger(this));
             card.addView(error);
+            if (entry.isTunnel()) {
+                TextView prompt = Ui.label(this, getString(R.string.relink_prompt) + "  ›", 14, Ui.accent(this), true);
+                prompt.setPadding(0, Ui.dp(this, 8), 0, Ui.dp(this, 2));
+                Ui.clickable(prompt, v -> tunnel.showRelink(entry.getUrl(), null, null));
+                card.addView(prompt);
+                TextView note = Ui.small(this, getString(R.string.relink_network_note));
+                note.setTextColor(Ui.faint(this));
+                card.addView(note);
+            }
         }
 
         LinearLayout buttons = Ui.row(this);
@@ -321,6 +387,8 @@ public class MainActivity extends AppCompatActivity {
                     } else {
                         Accounts.update(this, SessionStatus.apply(session, status));
                         if (user) Toast.makeText(this, R.string.server_refreshed, Toast.LENGTH_SHORT).show();
+                        ServerEntry saved = store.get(entry.getUrl());
+                        if (saved != null && !saved.hasIdentity()) fetchIdentityLater(saved.getUrl());
                     }
                     if (list != null) render();
                 },
@@ -331,12 +399,21 @@ public class MainActivity extends AppCompatActivity {
                         Toast.makeText(this, R.string.signed_out_revoked, Toast.LENGTH_LONG).show();
                     } else {
                         ServerStore store = Accounts.servers(this);
-                        store.markError(entry.getUrl(), error.isNetwork() ? getString(R.string.state_offline)
+                        store.markError(entry.getUrl(), error.isUnreachable() ? getString(R.string.state_offline)
                                 : error.getMessage());
                         Accounts.save(this, store);
                     }
                     if (list != null) render();
                 });
+    }
+
+    /** Stores the server identity when it is missing (servers paired before it existed). */
+    private void fetchIdentityLater(String url) {
+        if (!identityFetches.add(url)) return;
+        Context app = getApplicationContext();
+        Async.run(this, () -> TunnelFlows.fetchIdentity(app, url), stored -> {
+            if (Boolean.TRUE.equals(stored) && list != null) render();
+        }, null);
     }
 
     static String displayUser(AccountSession session) {
@@ -356,6 +433,10 @@ public class MainActivity extends AppCompatActivity {
         } else {
             labels.add(getString(R.string.sign_in_account));
             handlers.add(() -> showSignIn(entry.getUrl(), null));
+        }
+        if (entry.isTunnel()) {
+            labels.add(getString(R.string.relink));
+            handlers.add(() -> tunnel.showRelink(entry.getUrl(), null, null));
         }
         labels.add(getString(R.string.delete));
         handlers.add(() -> confirmDelete(entry, session));
@@ -391,7 +472,7 @@ public class MainActivity extends AppCompatActivity {
                 },
                 error -> {
                     Accounts.forget(this, session.serverUrl);
-                    Toast.makeText(this, error.isNetwork() ? R.string.signed_out_offline : R.string.signed_out,
+                    Toast.makeText(this, error.isUnreachable() ? R.string.signed_out_offline : R.string.signed_out,
                             Toast.LENGTH_LONG).show();
                     render();
                 });
@@ -487,7 +568,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String signInError(ApiException error) {
-        if (error.isNetwork()) return getString(R.string.sign_in_unreachable);
+        if (error.isUnreachable()) return getString(R.string.sign_in_unreachable);
         switch (error.getCode()) {
             case "AUTH_INVALID": return getString(R.string.sign_in_invalid);
             case "AUTH_RATE_LIMITED": return getString(R.string.sign_in_rate_limited,
@@ -517,7 +598,17 @@ public class MainActivity extends AppCompatActivity {
                 getString(session.isReadOnly() ? R.string.perm_read_only : R.string.perm_full)),
                 Toast.LENGTH_SHORT).show();
         Notifications.sync(this);
-        openPreferred();
+        // The server identity (id + public key) lets a later re-link check a
+        // new tunnel address. Servers without it open all the same.
+        busy = true;
+        Context app = getApplicationContext();
+        Async.run(this, () -> TunnelFlows.fetchIdentity(app, session.serverUrl), stored -> {
+            busy = false;
+            openPreferred();
+        }, error -> {
+            busy = false;
+            openPreferred();
+        });
     }
 
     private void openShell() {
@@ -549,7 +640,21 @@ public class MainActivity extends AppCompatActivity {
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
         IntentResult scan = IntentIntegrator.parseActivityResult(requestCode, resultCode, data);
-        if (scan == null || scan.getContents() == null) return;
+        if (scan == null) return;
+        boolean forRelink = relinkScan;
+        String from = relinkFrom;
+        relinkScan = false;
+        relinkFrom = null;
+        if (scan.getContents() == null) return;
+        if (forRelink) {
+            PairingLink link = PairingLink.parseRelinkInput(scan.getContents());
+            if (link == null) {
+                Toast.makeText(this, R.string.scan_invalid, Toast.LENGTH_LONG).show();
+                return;
+            }
+            tunnel.relink(link, from, null);
+            return;
+        }
         handleScan(scan.getContents());
     }
 
@@ -558,6 +663,11 @@ public class MainActivity extends AppCompatActivity {
         PairingLink link = PairingLink.parse(contents);
         if (link == null) {
             Toast.makeText(this, R.string.scan_invalid, Toast.LENGTH_LONG).show();
+            return;
+        }
+        if (link.isRelink()) {
+            // A re-link QR: the new address of a server this phone paired with.
+            tunnel.relink(link, null, null);
             return;
         }
         if (!link.hasCode()) {
@@ -569,9 +679,14 @@ public class MainActivity extends AppCompatActivity {
         busy = true;
         Toast.makeText(this, R.string.pairing, Toast.LENGTH_SHORT).show();
         String code = link.getCode();
-        Async.run(this, () -> ArkClient.claim(link.getBaseUrl(), code),
+        Async.run(this, () -> ArkClient.claim(link.getBaseUrl(), code, Accounts.deviceName()),
                 response -> {
                     busy = false;
+                    if (ArkClient.isPending(response)) {
+                        // Through a Cloudflare Tunnel: the computer confirms first.
+                        tunnel.awaitConfirmation(link.getBaseUrl(), code, response);
+                        return;
+                    }
                     finishSignIn(link.getBaseUrl(), response, AccountSession.SOURCE_QR);
                 },
                 error -> {
@@ -590,6 +705,15 @@ public class MainActivity extends AppCompatActivity {
         setIntent(intent);
         if (list == null) build();
         handleDebugPairing(intent);
+        handleRelinkIntent(intent);
+    }
+
+    /** From an unreachable tunnel server in web or native mode: open the re-link dialog. */
+    private void handleRelinkIntent(Intent intent) {
+        if (intent == null || !ACTION_RELINK.equals(intent.getAction())) return;
+        String server = intent.getStringExtra(EXTRA_SERVER);
+        intent.setAction(ACTION_SETUP);
+        tunnel.showRelink(server, null, null);
     }
 
     /**

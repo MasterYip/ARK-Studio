@@ -5,6 +5,7 @@ import {
 import { t, serverErrorText } from "./i18n.js";
 import { clientCache } from "./client-cache.js";
 import { clearStarterTokens } from "./starter-token-store.js";
+import { awaitConfirmedClaim } from "./mobile-tunnel-model.js";
 import { createConnectivity, isProxyFailure } from "./connectivity.js";
 import {
   cacheRoute, mergeBodiesDelta, mergeSnapshotDelta, servePolicy, staleAfterDelta,
@@ -29,6 +30,13 @@ export function setMobileToken(token, extra = {}) {
     if (extra.expires_at) localStorage.setItem(MOBILE_EXPIRES_STORAGE_KEY, extra.expires_at);
   } catch { /* storage may be disabled */ }
 }
+
+// This page runs on a paired phone: the server confirmed a device token,
+// which the Android app's WebView sends only as an HttpOnly cookie (so
+// getMobileToken() is empty there).  Set from GET /api/mobile/session.
+let pairedDevice = false;
+export function isPairedDevice() { return pairedDevice || Boolean(getMobileToken()); }
+export function setPairedDevice(value) { pairedDevice = Boolean(value); }
 
 export function clearMobileToken() {
   try {
@@ -647,7 +655,24 @@ export const api = {
   connectionInfo: () => request("/api/mobile/connection"),
   mobileApps: () => request("/api/mobile/apps"),
   createPairing: (body) => request("/api/mobile/pair", { method: "POST", body }),
-  claimPairing: (token) => request("/api/mobile/pair/claim", { method: "POST", body: { token } }),
+  // Through a Cloudflare Tunnel the computer confirms the claim first: the
+  // reply is 202 {pending, confirm_code}; onPending shows the code while this
+  // waits for the token (mobile-tunnel-model.js).
+  claimPairing: async (token, { onPending, isCancelled } = {}) => {
+    const first = await request("/api/mobile/pair/claim", { method: "POST", body: { token } });
+    if (!first?.pending) return first;
+    return awaitConfirmedClaim(first, token, {
+      post: (path, body) => request(`/${path}`, { method: "POST", body }), onPending, isCancelled,
+    }).catch((err) => {
+      if (err.cancelled) err.message = t("mobile.confirm.cancelled");
+      else if (err.message === "expired") err.message = t("mobile.confirm.expired");
+      throw err;
+    });
+  },
+  mobileTunnel: () => request("/api/mobile/tunnel", { noCache: true }),
+  setMobileTunnel: (body) => request("/api/mobile/tunnel", { method: "POST", body, write: false }),
+  pendingClaims: () => request("/api/mobile/pairs/pending", { noCache: true }),
+  confirmClaim: (id, approve) => request(`/api/mobile/pairs/pending/${encodeURIComponent(id)}/confirm`, { method: "POST", body: { approve }, write: false }),
   pairings: () => request("/api/mobile/pairs"),
   revokePairing: (id) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/revoke`, { method: "POST", body: {} }),
   setPairPermission: (id, permission) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/permission`, { method: "POST", body: { permission } }),

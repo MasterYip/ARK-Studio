@@ -11,13 +11,14 @@ package store
 // open, so it waits in Needs you) that holds the summary and a link to the
 // approval view; approving or rejecting closes it, which the agent sees in
 // its update feed as "decided".  Only a person approves; the routes check
-// that (routes_projectmove.go).  The plan keeps the request, so apply plans
-// again and refuses when what moves changed since (plan_hash).
+// that (routes_projectmove.go).  The plan keeps the request and what it
+// depends on (moveplandeps.go), so apply plans again and refuses only when
+// what moves changed since (plan_hash); new uids are numbered at apply time.
+// A stale plan can be refreshed: planned again, back to proposed, with the
+// same decision unit.
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -53,6 +54,8 @@ type MovePlan struct {
 	Error      string
 	UpdatedAt  string
 	Created    []string // import: the uids of the copies
+	Deps       *planDeps
+	Refreshed  string // when the plan was last planned again (RefreshPlan)
 }
 
 var planIDRe = regexp.MustCompile(`^pl_[0-9a-f]{12}$`)
@@ -79,11 +82,22 @@ func (p *MovePlan) object() *pyjson.Object {
 		"decision", p.Decision, "created_by", p.CreatedBy, "created_at", p.CreatedAt,
 		"approved_by", p.ApprovedBy, "approved_at", p.ApprovedAt, "comment", p.Comment,
 		"move_id", p.MoveID, "applied_by", p.AppliedBy, "error", p.Error, "updated_at", p.UpdatedAt,
-		"created", stringsAny(p.Created))
+		"created", stringsAny(p.Created), "refreshed_at", p.Refreshed, "depends", p.depsObject())
 }
 
-// Public is the plan as the API returns it.
-func (p *MovePlan) Public() *pyjson.Object { return p.object() }
+func (p *MovePlan) depsObject() any {
+	if p.Deps == nil {
+		return nil
+	}
+	return p.Deps.object()
+}
+
+// Public is the plan as the API returns it (without the fingerprints).
+func (p *MovePlan) Public() *pyjson.Object {
+	o := p.object()
+	o.Delete("depends")
+	return o
+}
 
 func strList(v any) []string {
 	list, _ := v.([]any)
@@ -149,6 +163,9 @@ func LoadMovePlan(projectPath, id string) (*MovePlan, error) {
 	p.Request.WithChildren = r.Value("with_children") == true || p.Mode == "split"
 	p.Request.NewProject = p.Mode == "split"
 	p.Created = strList(o.Value("created"))
+	p.Refreshed = str(o, "refreshed_at")
+	deps, _ := o.Value("depends").(*pyjson.Object)
+	p.Deps = depsFrom(deps)
 	return p, nil
 }
 
@@ -196,15 +213,12 @@ func (s *Store) ProposeMove(ctx context.Context, dst *Store, p *MovePlan, withDe
 			p.Request.Exclude = append(p.Request.Exclude, p.Decision)
 		}
 	}
-	plan, err := s.PlanMove(ctx, dst, p.Request)
-	if err != nil {
+	if err := s.planAgain(ctx, dst, p); err != nil {
 		if p.Decision != "" {
 			s.ArchiveUnit(ctx, p.Decision, p.CreatedBy) //nolint:errcheck // the plan failed: its question goes too
 		}
 		return err
 	}
-	p.Hash, p.Summary = pyjson.Str(plan.Value("plan_hash")), plan
-	p.Request.CrossLinks = str(plan, "cross_link_mode")
 	if p.Decision != "" {
 		if _, err := s.UpdateUnit(ctx, p.Decision, pyjson.NewObject("body", p.decisionBody()), p.CreatedBy, Who{}); err != nil {
 			return err
@@ -284,6 +298,7 @@ var planTexts = map[string][2]string{
 	"how_import":   {"Nothing is copied until a person with write access here and read access to the source approves.", "在本项目有写权限、来源项目有读权限的人批准之前，不会复制任何内容。"},
 	"how":          {"Nothing moves until a person with admin access to both projects approves.", "在两个项目都有管理权限的人批准之前，不会移动任何内容。"},
 	"approved":     {"Approved by %s.", "%s 已批准。"},
+	"refreshed":    {"**Plan refreshed by %s: it needs approval again.**", "**%s 已刷新计划，需要重新批准。**"},
 	"rejected":     {"Rejected by %s.", "%s 已拒绝。"},
 }
 
@@ -359,43 +374,113 @@ func (p *MovePlan) importDecisionBody() string {
 	return b.String()
 }
 
-// importDigest is an import plan's plan_hash: what would be copied and how
-// (source uids, new uids, skips, links, attachments).
-func importDigest(sm *pyjson.Object) string {
-	h := sha256.New()
-	units, _ := sm.Value("units").([]any)
-	for _, u := range units {
-		o := u.(*pyjson.Object)
-		fmt.Fprintf(h, "%v=%v;%v\n", o.Value("uid"), o.Value("new_uid"), o.Value("skipped"))
-	}
-	fmt.Fprintf(h, "%v|%v|%v|%v", sm.Value("links"), sm.Value("media"), sm.Value("bytes"), sm.Value("source"))
-	return hex.EncodeToString(h.Sum(nil)[:8])
-}
-
 // ProposeImport is a new import plan on s (the target): the decision unit
-// (when withDecision), then the preview of copying from src.
+// first (when withDecision, so the numbers the preview shows leave its uid
+// out), then the preview of copying from src, then the unit's text.
 func (s *Store) ProposeImport(ctx context.Context, src *Store, p *MovePlan, withDecision bool) error {
 	p.ID, p.State, p.CreatedAt, p.Mode = newPlanID(), "proposed", clock.UTCNow(), "import"
 	if p.Lang != "zh" {
 		p.Lang = "en"
 	}
-	req := p.importRequest()
-	sm, err := s.ImportFrom(ctx, src, req, true, p.CreatedBy)
-	if err != nil {
-		return err
+	if _, err := s.planImport(ctx, src, p.importRequest()); err != nil {
+		return err // a request that cannot be planned opens no decision
 	}
-	p.Summary, p.Hash = sm, importDigest(sm)
 	if withDecision {
-		title := p.Title
-		if title == "" {
-			title = planText(p.Lang, "title_import", "", p.Request.SourceName, sm.Value("unit_count"))
-		}
-		u, err := s.CreateUnit(ctx, pyjson.NewObject("type", "decision", "title", title, "status", "open",
-			"importance", "p1", "body", p.decisionBody()), p.CreatedBy, Who{})
+		u, err := s.CreateUnit(ctx, pyjson.NewObject("type", "decision", "title", planText(p.Lang, "title_import", "", p.Request.SourceName, "…"),
+			"status", "open", "importance", "p1", "body", p.Note), p.CreatedBy, Who{})
 		if err != nil {
 			return err
 		}
 		p.Decision = pyjson.Str(u.Value("uid"))
+	}
+	if err := s.planAgain(ctx, src, p); err != nil {
+		if p.Decision != "" {
+			s.ArchiveUnit(ctx, p.Decision, p.CreatedBy) //nolint:errcheck // the plan failed: its question goes too
+		}
+		return err
+	}
+	if p.Decision != "" {
+		title := p.Title
+		if title == "" {
+			title = planText(p.Lang, "title_import", "", p.Request.SourceName, p.Summary.Value("unit_count"))
+		}
+		if _, err := s.UpdateUnit(ctx, p.Decision, pyjson.NewObject("title", title, "body", p.decisionBody()), p.CreatedBy, Who{}); err != nil {
+			return err
+		}
+	}
+	return SaveMovePlan(s.Path, p)
+}
+
+// planAgain fills the plan's summary, plan_hash and dependencies from the
+// projects as they are now.  s holds the plan; other is the target of a
+// merge (nil for a split) or the source of an import.
+func (s *Store) planAgain(ctx context.Context, other *Store, p *MovePlan) error {
+	if p.Mode == "import" {
+		ip, err := s.planImport(ctx, other, p.importRequest())
+		if err != nil {
+			return err
+		}
+		p.Deps = ip.deps()
+		p.Summary, p.Hash = ip.summary(), p.Deps.digest()
+		p.Summary.Set("plan_hash", p.Hash)
+		return nil
+	}
+	mp, err := s.planMove(ctx, other, p.Request)
+	if err != nil {
+		return err
+	}
+	p.Deps = mp.deps()
+	p.Summary, p.Hash = mp.summary(), mp.hash
+	p.Request.CrossLinks = mp.req.CrossLinks
+	return nil
+}
+
+// CheckPlan compares a plan with the projects as they are now: nil when
+// nothing it depends on changed, else a *MoveStaleError naming what did.
+func (s *Store) CheckPlan(ctx context.Context, other *Store, p *MovePlan) error {
+	var now *planDeps
+	if p.Mode == "import" {
+		ip, err := s.planImport(ctx, other, p.importRequest())
+		if err != nil {
+			return &MoveStaleError{Reasons: []StaleReason{{Code: "unavailable", Detail: err.Error()}}}
+		}
+		now = ip.deps()
+	} else {
+		mp, err := s.planMove(ctx, other, p.Request)
+		if err != nil {
+			return &MoveStaleError{Reasons: []StaleReason{{Code: "unavailable", Detail: err.Error()}}}
+		}
+		now = mp.deps()
+	}
+	if p.Deps == nil || now.digest() != p.Hash {
+		r := diffDeps(p.Deps, now)
+		if len(r) == 0 {
+			r = []StaleReason{{Code: "outdated"}}
+		}
+		return &MoveStaleError{Reasons: r}
+	}
+	return nil
+}
+
+// RefreshPlan plans a waiting or approved plan again from the projects as
+// they are now.  It goes back to proposed (a person approves what it now
+// covers) and keeps its decision unit, which opens again with the new text.
+func (s *Store) RefreshPlan(ctx context.Context, other *Store, p *MovePlan, who string) error {
+	if p.State != "proposed" && p.State != "approved" {
+		return storeErr("move plan %s is %s; only a waiting or approved plan can be refreshed", p.ID, p.State)
+	}
+	if err := s.planAgain(ctx, other, p); err != nil {
+		return err
+	}
+	p.State, p.ApprovedBy, p.ApprovedAt, p.Comment, p.Error = "proposed", "", "", "", ""
+	p.Refreshed = clock.UTCNow()
+	if p.Decision != "" {
+		if _, err := s.GetUnit(ctx, p.Decision); err == nil {
+			body := p.decisionBody() + "\n" + planText(p.Lang, "refreshed", strings.TrimPrefix(strings.TrimPrefix(who, "human:"), "agent:")) + "\n"
+			if _, err := s.UpdateUnit(ctx, p.Decision, pyjson.NewObject("body", body, "status", "open"), who, Who{}); err != nil {
+				return err
+			}
+		}
 	}
 	return SaveMovePlan(s.Path, p)
 }
@@ -405,17 +490,25 @@ func (p *MovePlan) importRequest() ImportRequest {
 		WithChildren: p.Request.WithChildren, Lang: p.Lang}
 }
 
-// ApplyImport carries out an approved import plan on s (the target).
+// ApplyImport carries out an approved import plan on s (the target).  The
+// copies are numbered inside the write transaction; the plan is stale only
+// when what it copies changed (planDeps).
 func (s *Store) ApplyImport(ctx context.Context, src *Store, p *MovePlan, actor string) (*pyjson.Object, error) {
-	req := p.importRequest()
-	check, err := s.ImportFrom(ctx, src, req, true, actor)
-	if err != nil {
+	check := func(ip *importPlan) error {
+		now := ip.deps()
+		if p.Deps != nil && now.digest() == p.Hash {
+			return nil
+		}
+		r := diffDeps(p.Deps, now)
+		if len(r) == 0 {
+			r = []StaleReason{{Code: "outdated"}}
+		}
+		return &MoveStaleError{Reasons: r}
+	}
+	if err := s.CheckPlan(ctx, src, p); err != nil {
 		return nil, err
 	}
-	if importDigest(check) != p.Hash {
-		return nil, &MoveStaleError{}
-	}
-	out, err := s.ImportFrom(ctx, src, req, false, actor)
+	out, err := s.importFrom(ctx, src, p.importRequest(), false, actor, check)
 	if err != nil {
 		return nil, err
 	}

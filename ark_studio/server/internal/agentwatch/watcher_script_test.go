@@ -163,14 +163,18 @@ func TestWatcherInheritedCodexThreadNeverQueues(t *testing.T) {
 	for i, extra := range cases {
 		os.Remove(rg.env[4][len("ARK_WATCH_STATE="):])
 		out, code := runWatcher(t, rg, extra...)
-		if code != 0 || !strings.Contains(out, "ARK UPDATE for tester, ARK project Test Proj (prj_t)") {
-			t.Fatalf("case %d: exit %d\n%s", i, code, out)
-		}
 		if q := rg.queued(); len(q) != 0 {
 			t.Fatalf("case %d queued into a foreign Codex session: %q", i, q)
 		}
-		if strings.Contains(strings.Join(extra, " "), "ARK_WAKE") && !strings.Contains(out, "not waking through codex queue") {
-			t.Fatalf("case %d does not say why it will not queue:\n%s", i, out)
+		// Asked to wake Codex and cannot: say why and fail (T-0109).
+		if strings.Contains(strings.Join(extra, " "), "ARK_WAKE") {
+			if code != 2 || !strings.Contains(out, "ARK: cannot wake codex: ") {
+				t.Fatalf("case %d: exit %d, does not say why it will not queue:\n%s", i, code, out)
+			}
+			continue
+		}
+		if code != 0 || !strings.Contains(out, "ARK UPDATE for tester, ARK project Test Proj (prj_t)") {
+			t.Fatalf("case %d: exit %d\n%s", i, code, out)
 		}
 	}
 }
@@ -209,8 +213,8 @@ func TestWatcherQueuesOnlyIntoItsOwnCodex(t *testing.T) {
 	for _, m := range mustGlob(t, rg.queueLog+".*") {
 		os.Remove(m)
 	}
-	out, _ := runWatcher(t, rg, "CODEX_THREAD_ID=th-mine", "ARK_WAKE=codex", "ARK_CODEX_THREAD=th-forged")
-	if len(rg.queued()) != 0 || !strings.Contains(out, "not waking through codex queue") {
+	out, code := runWatcher(t, rg, "CODEX_THREAD_ID=th-mine", "ARK_WAKE=codex", "ARK_CODEX_THREAD=th-forged")
+	if len(rg.queued()) != 0 || code != 2 || !strings.Contains(out, "cannot wake codex") {
 		t.Fatalf("forged thread id: %q\n%s", rg.queued(), out)
 	}
 }

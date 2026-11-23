@@ -65,7 +65,8 @@
         var text = function (v) { return v === undefined || v === null || v === "" ? null : String(v); };
         return invoke("open_ssh_terminal", {
           target: { alias: text(target.alias), host: text(target.host), user: text(target.user),
-            port: target.port ? Number(target.port) : null },
+            port: target.port ? Number(target.port) : null, identity_file: text(target.identityFile),
+            auth: text(target.auth) },
           path: text(path)
         });
       },
@@ -73,6 +74,19 @@
         return invoke("ssh_config_match", { names: (names || []).map(function (n) { return String(n || ""); }) });
       },
       openEditor: function (url) { return invoke("open_editor_url", { url: String(url || "") }); },
+      // Host ark-<name> in the ARK block of ~/.ssh/config (the app shows the
+      // entry and asks before writing): {alias, host, user, port, identityFile, auth}.
+      sshConfigEnsure: function (entry) {
+        entry = entry || {};
+        var text = function (v) { return v === undefined || v === null || v === "" ? null : String(v); };
+        return invoke("ssh_config_ensure", {
+          entry: { alias: String(entry.alias || ""), host: String(entry.host || ""), user: text(entry.user),
+            port: entry.port ? Number(entry.port) : null, identity_file: text(entry.identityFile),
+            auth: text(entry.auth) }
+        });
+      },
+      sshKeyCandidates: function () { return invoke("ssh_key_candidates"); },
+      chooseSshKey: function () { return invoke("choose_ssh_key"); },
       hub: Object.freeze({
         // {role: "local" | "remote" | "bundled", version, server?}
         context: function () { return invoke("desktop_context"); },

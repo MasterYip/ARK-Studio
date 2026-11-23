@@ -19,6 +19,7 @@ import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
+import android.webkit.WebResourceResponse;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
@@ -30,9 +31,13 @@ import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.masteryip.arkstudio.api.ApiException;
+import com.masteryip.arkstudio.api.ArkClient;
 import com.masteryip.arkstudio.data.AccountSession;
 import com.masteryip.arkstudio.data.LinkPolicy;
 import com.masteryip.arkstudio.data.PairingLink;
+import com.masteryip.arkstudio.data.ServerEntry;
+import com.masteryip.arkstudio.data.ServerIdentity;
+import com.masteryip.arkstudio.data.ServerUrl;
 import com.masteryip.arkstudio.data.SessionStatus;
 import com.masteryip.arkstudio.model.BackGate;
 import com.masteryip.arkstudio.model.WebRoutes;
@@ -112,9 +117,40 @@ public class WebActivity extends BaseActivity {
         progress.setIndeterminate(true);
         stage.addView(progress, new FrameLayout.LayoutParams(Ui.MATCH, Ui.dp(this, 4)));
         configure();
+        ServerEntry entry = Accounts.servers(this).get(session.serverUrl);
+        if (savedInstanceState == null && entry != null && entry.isTunnel() && entry.getServerId() != null) {
+            // A quick tunnel's address dies with the tunnel and may later lead elsewhere: the
+            // server proves its stored key before the WebView sends the device cookie there.
+            checkTunnelThenLoad(entry, route);
+            return;
+        }
         Accounts.applyWebCookie(session);
         if (savedInstanceState != null) web.restoreState(savedInstanceState);
         else web.loadUrl(WebRoutes.url(session.serverUrl, route));
+    }
+
+    private void checkTunnelThenLoad(ServerEntry entry, String route) {
+        String nonce = ServerIdentity.newNonce();
+        String host = ServerUrl.displayHost(session.serverUrl);
+        Async.run(this, () -> ArkClient.identity(session.serverUrl, nonce), answer -> {
+            ServerIdentity.Check check = ServerIdentity.check(session.serverUrl, nonce, answer,
+                    entry.getServerId(), entry.getPublicKey());
+            if (!check.ok()) {
+                progress.setVisibility(View.GONE);
+                showLoadError(new ApiException(0, ApiException.TUNNEL_DOWN,
+                        getString(R.string.relink_bad_signature, host, entry.getName())));
+                return;
+            }
+            Accounts.applyWebCookie(session);
+            web.loadUrl(WebRoutes.url(session.serverUrl, route));
+        }, error -> {
+            progress.setVisibility(View.GONE);
+            // Network failure, or Cloudflare's edge answering for a tunnel that is gone.
+            boolean down = error.isNetwork() || ArkClient.cloudflareDown(error.getStatus(), "cloudflare", null);
+            showLoadError(down
+                    ? new ApiException(error.getStatus(), ApiException.TUNNEL_DOWN, getString(R.string.relink_unreachable, host))
+                    : error);
+        });
     }
 
     private void configure() {
@@ -151,9 +187,17 @@ public class WebActivity extends BaseActivity {
             }
 
             @Override
+            public void onPageCommitVisible(WebView view, String url) {
+                probeCloudflare(view); // Cloudflare's page keeps loading a beacon; don't wait for it
+            }
+
+            @Override
             public void onPageFinished(WebView view, String url) {
                 progress.setVisibility(View.GONE);
                 view.evaluateJavascript(WebTheme.PROBE_JS, null);
+                // A page served through ARK's service worker skips onReceivedHttpError, so a
+                // Cloudflare error page (stale tunnel address) is recognised by its content.
+                probeCloudflare(view);
                 CookieManager.getInstance().flush();
                 if (url != null && url.contains("/login")) checkLogin();
             }
@@ -163,16 +207,25 @@ public class WebActivity extends BaseActivity {
                 if (request == null || !request.isForMainFrame()) return;
                 progress.setVisibility(View.GONE);
                 CharSequence detail = error == null ? "" : error.getDescription();
-                stage.removeAllViews();
-                stage.addView(refresher);
-                content.removeAllViews();
-                content.addView(stateView(WebActivity.this, new ApiException(0, ApiException.NETWORK,
-                        String.valueOf(detail)), () -> {
-                    stage.removeAllViews();
-                    stage.addView(web, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
-                    stage.addView(progress, new FrameLayout.LayoutParams(Ui.MATCH, Ui.dp(WebActivity.this, 4)));
-                    web.reload();
-                }));
+                showLoadError(new ApiException(0, ApiException.NETWORK, String.valueOf(detail)));
+            }
+
+            @Override
+            public void onReceivedHttpError(WebView view, WebResourceRequest request,
+                                            WebResourceResponse response) {
+                if (request == null || !request.isForMainFrame() || response == null) return;
+                String server = null;
+                if (response.getResponseHeaders() != null) {
+                    for (java.util.Map.Entry<String, String> h : response.getResponseHeaders().entrySet()) {
+                        if ("server".equalsIgnoreCase(h.getKey())) server = h.getValue();
+                    }
+                }
+                // A Cloudflare error page (530 / 1033, 502 …): the tunnel address no longer leads to ARK.
+                if (ArkClient.cloudflareDown(response.getStatusCode(), server, null)) {
+                    progress.setVisibility(View.GONE);
+                    showLoadError(new ApiException(response.getStatusCode(), ApiException.TUNNEL_DOWN,
+                            "HTTP " + response.getStatusCode()));
+                }
             }
 
             @Override
@@ -218,6 +271,42 @@ public class WebActivity extends BaseActivity {
             }
             download();
         });
+    }
+
+    /** The offline / error state in place of the page, with Retry (and Re-link for a tunnel). */
+    /** "cloudflare-down" when the loaded page is Cloudflare's tunnel error page, not ARK. */
+    static final String CLOUDFLARE_PROBE_JS = "(function(){return document.getElementById('cf-error-details')"
+            + "&&document.getElementById('cf-wrapper')&&/cloudflare/i.test(document.title||'')"
+            + "?'cloudflare-down':'';})()";
+
+    private boolean cloudflareShown;
+
+    private void probeCloudflare(WebView view) {
+        view.evaluateJavascript(CLOUDFLARE_PROBE_JS, value -> {
+            if (value != null && value.contains("cloudflare-down") && !cloudflareShown) {
+                cloudflareShown = true;
+                view.stopLoading();
+                progress.setVisibility(View.GONE);
+                showLoadError(new ApiException(530, ApiException.TUNNEL_DOWN, "HTTP 530"));
+            }
+        });
+    }
+
+    private void showLoadError(ApiException error) {
+        stage.removeAllViews();
+        stage.addView(refresher);
+        content.removeAllViews();
+        content.addView(stateView(this, error, () -> {
+            if (web.getUrl() == null) { // nothing loaded yet (the tunnel check failed): start over
+                recreate();
+                return;
+            }
+            stage.removeAllViews();
+            stage.addView(web, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
+            stage.addView(progress, new FrameLayout.LayoutParams(Ui.MATCH, Ui.dp(this, 4)));
+            cloudflareShown = false;
+            web.reload();
+        }));
     }
 
     /** Same-origin http(s) stays; everything else leaves the WebView (LinkPolicy). */

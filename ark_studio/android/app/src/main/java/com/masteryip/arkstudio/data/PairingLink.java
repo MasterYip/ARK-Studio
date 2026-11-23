@@ -8,16 +8,25 @@ import java.util.regex.Pattern;
 /**
  * A scanned ARK QR: the server base URL plus the optional one-time
  * {@code #pair=<code>}. The code is used once for the claim and never stored.
+ * A re-link QR ({@code #relink=<server id>}) carries the new address of a
+ * server the phone already paired with (a Cloudflare quick tunnel that
+ * restarted).
  */
 public final class PairingLink {
     private static final Pattern PAIR = Pattern.compile("(?:^|[#?&/])pair=([A-Za-z0-9_\\-.~%]+)");
+    private static final Pattern RELINK = Pattern.compile("(?:^|[#?&/])relink=([0-9A-Fa-f]{20})(?![0-9A-Za-z])");
+    /** The label of a quick-tunnel host, e.g. {@code able-baker-charlie-delta}. */
+    private static final Pattern SHORT_CODE = Pattern.compile("^[a-z0-9]+(?:-[a-z0-9]+){1,9}$");
+    public static final String QUICK_TUNNEL_SUFFIX = ".trycloudflare.com";
 
     private final String baseUrl;
     private final String code;
+    private final String relinkId;
 
-    private PairingLink(String baseUrl, String code) {
+    private PairingLink(String baseUrl, String code, String relinkId) {
         this.baseUrl = baseUrl;
         this.code = code;
+        this.relinkId = relinkId;
     }
 
     /** Parses QR text; returns {@code null} when it holds no http(s) server URL. */
@@ -25,10 +34,13 @@ public final class PairingLink {
         if (qrContent == null) return null;
         String text = qrContent.trim().replace("\\/", "/");
         String code = null;
+        String relink = null;
         int hash = text.indexOf('#');
         if (hash >= 0) {
             Matcher matcher = PAIR.matcher(text.substring(hash));
             if (matcher.find()) code = decode(matcher.group(1));
+            Matcher again = RELINK.matcher(text.substring(hash));
+            if (again.find()) relink = again.group(1).toLowerCase(Locale.ROOT);
         }
         String url = ServerUrl.extractFromQr(text);
         if (url == null) return null;
@@ -37,7 +49,64 @@ public final class PairingLink {
         int query = base.indexOf('?');
         if (query >= 0) base = base.substring(0, query);
         if (!base.endsWith("/")) base = base + "/";
-        return new PairingLink(base, code == null || code.isEmpty() ? null : code);
+        base = quickTunnelHttps(base);
+        return new PairingLink(base, code == null || code.isEmpty() ? null : code, relink);
+    }
+
+    /**
+     * What a person typed or pasted in the re-link dialog: a re-link or plain
+     * URL, a quick-tunnel host, or the short code (the host's label, e.g.
+     * {@code able-baker-charlie-delta} for
+     * {@code https://able-baker-charlie-delta.trycloudflare.com/}).
+     */
+    public static PairingLink parseRelinkInput(String input) {
+        if (input == null) return null;
+        String text = halfWidth(input).trim();
+        String url = shortCodeUrl(text);
+        if (url != null) return new PairingLink(url, null, null);
+        PairingLink link = parse(text);
+        if (link == null || link.hasCode()) return link == null ? null : new PairingLink(link.baseUrl, null, link.relinkId);
+        return link;
+    }
+
+    /** Full-width letters, digits and punctuation (Chinese keyboards) as ASCII; 。 as a dot. */
+    static String halfWidth(String text) {
+        StringBuilder out = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c >= '！' && c <= '～') c = (char) (c - 0xFEE0);
+            else if (c == '。') c = '.';
+            else if (c == '　') c = ' ';
+            out.append(c);
+        }
+        return out.toString();
+    }
+
+    /** {@code https://<code>.trycloudflare.com/} for a short code, else {@code null}. */
+    public static String shortCodeUrl(String input) {
+        if (input == null) return null;
+        String code = input.trim().toLowerCase(Locale.ROOT);
+        if (!SHORT_CODE.matcher(code).matches() || code.length() > 63) return null;
+        return "https://" + code + QUICK_TUNNEL_SUFFIX + "/";
+    }
+
+    /** True for a Cloudflare quick-tunnel address ({@code *.trycloudflare.com}). */
+    public static boolean isQuickTunnel(String url) {
+        String host = ServerIdentity.hostOf(url == null ? "" : url);
+        return host.endsWith(QUICK_TUNNEL_SUFFIX) && host.length() > QUICK_TUNNEL_SUFFIX.length();
+    }
+
+    /** Quick tunnels only answer https; a typed host without a scheme becomes https. */
+    private static String quickTunnelHttps(String base) {
+        if (base.startsWith("http://") && isQuickTunnel(base)) {
+            String rest = base.substring("http://".length());
+            int slash = rest.indexOf('/');
+            String authority = slash < 0 ? rest : rest.substring(0, slash);
+            String path = slash < 0 ? "/" : rest.substring(slash);
+            if (authority.endsWith(":80")) authority = authority.substring(0, authority.length() - 3);
+            return "https://" + authority + path;
+        }
+        return base;
     }
 
     private static String decode(String value) {
@@ -59,6 +128,15 @@ public final class PairingLink {
 
     public boolean hasCode() {
         return code != null;
+    }
+
+    /** The server id of a re-link QR ({@code #relink=…}), or {@code null}. */
+    public String getRelinkId() {
+        return relinkId;
+    }
+
+    public boolean isRelink() {
+        return relinkId != null;
     }
 
     // ------------------------------------------------------------- transport

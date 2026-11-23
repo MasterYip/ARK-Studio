@@ -426,4 +426,33 @@
     <string name="server_refreshed">已刷新服务器</string>
     <string name="back_again_servers">再按一次返回服务器列表</string>
     <string name="project_switch_unsupported">此服务器还不支持手机切换项目。请将 ARK 服务器更新到 2.1.4 或更高版本。</string>
+
+    <!-- Cloudflare 隧道：确认与重新链接 -->
+    <string name="chip_tunnel">Cloudflare 隧道</string>
+    <string name="confirm_title">在电脑上确认</string>
+    <string name="confirm_body">电脑上会显示这次配对请求和同样的代码。在电脑上确认此代码后即可完成配对。</string>
+    <string name="confirm_waiting">等待确认 · 剩余 %1$s</string>
+    <string name="confirm_retrying">连接中断，正在重试 · 剩余 %1$s</string>
+    <string name="pair_rejected">电脑拒绝了这次配对请求。</string>
+    <string name="pair_confirm_expired">请求未在有效期内确认。请重新扫描二维码。</string>
+    <string name="relink">重新链接</string>
+    <string name="relink_title">重新链接到新地址</string>
+    <string name="relink_body">Cloudflare 快速隧道重启后地址会变化。此时电脑上的 设置 → 移动端 会显示重新链接二维码和短代码。手机会在新地址验证服务器密钥，验证通过后保留登录状态。</string>
+    <string name="relink_hint">短代码或新地址</string>
+    <string name="relink_scan">扫描二维码</string>
+    <string name="relink_network_note">部分网络访问 trycloudflare.com 可能较慢或无法访问。打不开时可换一个网络再试。</string>
+    <string name="relink_checking">正在验证 %1$s…</string>
+    <string name="relink_done">已重新链接到 %1$s</string>
+    <string name="relink_failed">未重新链接</string>
+    <string name="relink_invalid">请输入电脑上显示的短代码（例如 able-baker-charlie-delta）或新地址。</string>
+    <string name="relink_unknown">本手机尚未与该服务器配对。请先在电脑的 设置 → 移动端 扫描配对二维码。</string>
+    <string name="relink_no_key">本手机还没有 %1$s 的密钥，无法验证新地址。请用 设置 → 移动端 的二维码重新配对。</string>
+    <string name="relink_other_server">%1$s 上是另一台 ARK 服务器，而不是 %2$s。登录状态仍保留在旧地址。</string>
+    <string name="relink_bad_signature">%1$s 上的服务器无法证明自己是 %2$s。登录状态仍保留在旧地址。</string>
+    <string name="relink_no_identity">%1$s 没有响应身份验证。它可能运行的是旧版 ARK，或者不是你的服务器。</string>
+    <string name="relink_unreachable">无法连接 %1$s。部分网络访问 trycloudflare.com 较慢或被阻断，请重试或换一个网络。</string>
+    <string name="relink_https_only">重新链接需要 https 地址（或局域网地址）。</string>
+    <string name="relink_same">%1$s 已在使用这个地址。</string>
+    <string name="relink_prompt">地址可能已变化：重新链接</string>
+    <string name="state_tunnel_down_detail">Cloudflare 有响应，但通往 %1$s 上 ARK 的隧道没有运行。如果电脑上的 ARK 重启了快速隧道，请用新地址重新链接。</string>
 </resources>

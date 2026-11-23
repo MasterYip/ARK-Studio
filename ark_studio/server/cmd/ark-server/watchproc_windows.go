@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"syscall"
+	"unsafe"
 
 	"golang.org/x/sys/windows"
 )
@@ -36,6 +37,26 @@ func watchProcessName(pid int) string {
 		return ""
 	}
 	return filepath.Base(windows.UTF16ToString(buf[:n]))
+}
+
+// listProcesses reads every process's parent id and executable name from
+// one toolhelp snapshot.  Nothing else is read.
+func listProcesses() (procTable, error) {
+	snap, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPPROCESS, 0)
+	if err != nil {
+		return nil, err
+	}
+	defer windows.CloseHandle(snap)
+	var e windows.ProcessEntry32
+	e.Size = uint32(unsafe.Sizeof(e))
+	t := procTable{}
+	for err = windows.Process32First(snap, &e); err == nil; err = windows.Process32Next(snap, &e) {
+		t[int(e.ProcessID)] = procInfo{PPID: int(e.ParentProcessID), Name: windows.UTF16ToString(e.ExeFile[:])}
+	}
+	if len(t) == 0 {
+		return nil, err
+	}
+	return t, nil
 }
 
 // detachProcess starts the child without a console, in its own group.

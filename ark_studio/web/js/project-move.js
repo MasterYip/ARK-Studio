@@ -62,6 +62,7 @@ function planList(plan) {
   if (plan.note) parts.unshift(h("p", { class: "hint" }, plan.note));
   if (renamed.length) {
     parts.push(h("details", null, h("summary", null, t("project_move.uids", { n: renamed.length })),
+      plan.state === "proposed" || plan.state === "approved" ? h("p", { class: "hint" }, t("project_move.uids_note")) : null,
       h("ul", null, ...renamed.slice(0, 200).map((u) => h("li", null, `${u.uid} → ${u.new_uid} · ${u.title}`)))));
   }
   if (cross.length) {
@@ -73,6 +74,15 @@ function planList(plan) {
   }
   if (notes.length) parts.push(list(notes));
   return parts;
+}
+
+// What made a plan stale (GET .../plans/<id> "stale").
+function staleNotice(stale) {
+  const units = (list) => (list || []).slice(0, 10).join(", ") + ((list || []).length > 10 ? " …" : "");
+  return h("div", { class: "hint err", "data-move-stale": "" },
+    h("p", null, t("project_move.stale")),
+    h("ul", null, ...(stale.reasons || []).map((r) => h("li", null,
+      t(`project_move.stale.${r.code}`, { units: units(r.units), detail: r.message || "" })))));
 }
 
 // The plan view: summary, then the actions its state allows.
@@ -92,7 +102,22 @@ export async function openMovePlan(ctx, id) {
     duration: 15000, action: { label: t("project_move.undo"), onClick: () => openMovePlan(ctx, plan.id) },
   });
   const actions = [{ label: t("action.close"), ghost: true }, { spacer: true }];
-  if (plan.state === "proposed") {
+  const refresh = async (event, close) => {
+    try {
+      await api.movePlanAction(plan.id, "refresh", {});
+      close(true);
+      toast(t("project_move.refreshed"), "ok");
+      ctx.refresh?.();
+      openMovePlan(ctx, plan.id);
+    } catch (err) { toast(err.message, "err"); }
+    return false;
+  };
+  if (plan.stale && (plan.state === "proposed" || plan.state === "approved")) {
+    if (plan.state === "proposed") {
+      actions.push({ label: t("project_move.reject"), danger: true, close: false, onClick: act("reject", {}, () => toast(t("project_move.rejected"), "ok")) });
+    }
+    actions.push({ label: t("project_move.refresh"), primary: true, close: false, onClick: refresh });
+  } else if (plan.state === "proposed") {
     actions.push(
       { label: t("project_move.reject"), danger: true, close: false, onClick: act("reject", {}, () => toast(t("project_move.rejected"), "ok")) },
       { label: t("project_move.approve"), close: false, onClick: act("approve", {}, () => toast(t("project_move.approved"), "ok")) },
@@ -107,8 +132,9 @@ export async function openMovePlan(ctx, id) {
     body: h("div", { class: "project-move" },
       h("p", null, h("span", { class: "pill" }, t(`project_move.state.${plan.state}`)),
         plan.created_by ? h("small", null, ` ${t("project_move.by", { who: plan.created_by })}`) : null),
+      plan.stale ? staleNotice(plan.stale) : null,
       ...planList(plan),
-      plan.error ? h("p", { class: "hint err" }, plan.error) : null),
+      plan.error && !plan.stale ? h("p", { class: "hint err" }, plan.error) : null),
     actions,
   });
 }

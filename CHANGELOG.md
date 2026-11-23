@@ -6,6 +6,59 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.5] - 2026-11-23
+
+### Added
+
+- Settings → Mobile on the desktop app (or any local `ark-server`) can let
+  phones connect through a free Cloudflare quick tunnel, or your own named
+  tunnel, without a public address and without an ARK relay. A new phone is
+  confirmed on the computer with a 6-digit code. When the quick tunnel's
+  address changes, phones re-link with a QR code or a short code and keep
+  their access. The address may be slow or unreachable on some networks.
+- GPU tab and Resources: Open in VS Code and Open SSH terminal sign in with
+  your key or password. ARK uses a matching Host entry in `~/.ssh/config`,
+  or offers to add one (key login or password login; ARK never stores the
+  password). The SSH button works on Windows too.
+
+### Changed
+
+- Android app: phones with 2.1.2, 2.1.3 or 2.1.4 update in the app.
+- Run an agent in ARK: the dialog shows platform, model, reasoning effort,
+  access (read only or full access), task and an optional first message;
+  title, worktree, working subfolder and agent setup are under Advanced.
+  Reasoning effort works for Claude Code and Codex, with the provider's
+  default named ("Default (High)"); the model list names the configured
+  default. The task is filled in from the open node, the title from the task,
+  and the last platform, model, effort, access and worktree are remembered
+  per person and project, also for "Run with agent". "Agent setup" lists
+  Claude Code agents and Codex profiles instead of a free-text field.
+- Codex sessions read Codex's event stream: messages, commands with their
+  output, file changes and plans show as in Claude Code sessions, without
+  Codex's log lines, escape codes or repeated answers.
+- Phones in Web mode, the default, list and switch between all projects
+  your account can open. Settings > Mobile on a phone shows the app
+  downloads instead of the pairing settings.
+
+### Fixed
+
+- Import, split and merge plans that include decision nodes can be applied
+  again; before, the plan's own approval decision took one of the new IDs
+  and the plan was always refused as out of date. New IDs are assigned when
+  a plan is applied, so work in either project while a plan waits no longer
+  makes it out of date. A plan goes out of date only when the nodes it
+  covers, their links, attachments or comments change; the plan view then
+  lists what changed and offers "Refresh plan", which keeps the approval
+  request.
+- Links to a split, merge or import plan in a decision node open the plan
+  view instead of an error page.
+- Agents on the same address are no longer locked out because another agent
+  keeps using a revoked token: a valid token is never rate-limited.
+- Codex sessions on Windows are woken by the ARK watcher again. When a
+  wake-up cannot be given, the watcher says why. Sessions started by ARK
+  are woken for reviews whatever the old "Nudge idle sessions" setting
+  was; the setting is gone.
+
 ## [2.1.4] - 2026-11-23
 
 ### Changed

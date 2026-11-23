@@ -242,6 +242,71 @@ If no base URL can be derived (for example an unusual network with no detected
 interface and no request Host), Settings says so and asks for
 `--public-url`/`ARK_PUBLIC_URL`; it does not fabricate a reachable address.
 
+## Cloudflare Tunnel (local ARK, no public address)
+
+The desktop app and `ark-server serve` listen on 127.0.0.1 only. To reach them
+from a phone on any network, turn on **Settings › Mobile › Let phones reach this
+computer through a Cloudflare Tunnel**. ARK then runs `cloudflared` and gets a
+free HTTPS address on `trycloudflare.com` (a *quick tunnel*; no Cloudflare
+account). Pairing QR codes use that address. Cloudflare carries the traffic;
+ARK runs no relay of its own. The switch is off by default and is only shown on
+a local server (loopback bind, no `--public-url`).
+
+- **cloudflared**: taken from PATH, from the path set under *Advanced*, or
+  downloaded on first use from the official GitHub release (version pinned in
+  `internal/platform/cftunnel`) into `tools/` of the data folder
+  (`ARK_TOOLS_DIR` overrides). The download is checked against the release's
+  SHA-256 and discarded if it differs. cloudflared ends with ARK (Windows job
+  object, Linux parent-death signal) and is restarted with back-off if it exits.
+- **Named tunnel** (*Advanced*): your own tunnel token and hostname give a fixed
+  address. The token is stored in `cf-tunnel-token` in the private folder (mode
+  0600) and passed to cloudflared in the environment, never on its command line.
+  Route the hostname to the local address Settings shows (`http://127.0.0.1:<port>`).
+- **Network**: `trycloudflare.com` may be slow or unreachable on some networks,
+  including some mobile networks in mainland China. Test from the phone first.
+
+### What tunnel requests may do
+
+cloudflared forwards to a second loopback listener used only for the tunnel.
+Requests arriving there are treated as remote, even though they come from
+127.0.0.1:
+
+- they are never the local owner of a server without sign-in, and forwarding
+  headers they carry are dropped;
+- their `Host` must be the tunnel's own hostname; the app port never accepts that
+  name, and requests with Cloudflare headers are never trusted as local there;
+- before the phone holds a device token (or a signed-in session on a server with
+  accounts) they can only load the web app, `GET /api/health`,
+  `GET /api/mobile/session`, `GET /api/mobile/identity`,
+  `POST /api/mobile/pair/claim` and `POST /api/mobile/pair/claim/status`;
+- claims, identity checks and sign-ins are rate-limited per phone address
+  (`Cf-Connecting-Ip`) and for the whole tunnel;
+- after pairing, the usual paired-device scope applies, and revoking the device
+  in Settings › Mobile cuts it off at once.
+
+### Confirming a new phone
+
+A pairing code claimed through the tunnel is not enough on its own (on by
+default; *Confirm each new phone on this computer*). The phone gets
+`202 {pending, claim_id, claim_secret, confirm_code}` and shows the 6-digit code;
+Settings › Mobile lists the request with the same code, the phone's address and
+user agent. **Approve** issues the device token on the phone's next
+`POST /api/mobile/pair/claim/status`; other requests for the same code are
+declined. A request expires after 3 minutes. Someone who photographs the QR code
+therefore still needs the owner to approve a code that only their phone shows.
+
+### When the quick-tunnel address changes
+
+A quick tunnel gets a new address every time cloudflared starts. Paired phones
+keep their device tokens. Each server has a P-256 identity key
+(`.ark-server-identity.json` in the project root); the phone stores the server
+id and public key when it pairs. After a change Settings shows a re-link QR
+(`https://<new>/#relink=<server id>`) and a short re-link code (the four words of
+the new hostname). Before the app sends its token to the new address it calls
+`GET /api/mobile/identity?nonce=<random>` and checks the ECDSA-SHA256 signature
+over `ark-server-identity/1`, the server id, the host and the nonce against the
+stored key.
+
 ## SSH LAN tunnel (loopback ARK)
 
 Run ARK on the server, loopback-bound (the default):

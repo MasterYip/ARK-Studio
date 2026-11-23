@@ -1,0 +1,11 @@
+# Automatically generated - DO NOT EDIT!
+
+[[permission]]
+identifier = "allow-choose-ssh-key"
+description = "Enables the choose_ssh_key command without any pre-configured scope."
+commands.allow = ["choose_ssh_key"]
+
+[[permission]]
+identifier = "deny-choose-ssh-key"
+description = "Denies the choose_ssh_key command without any pre-configured scope."
+commands.deny = ["choose_ssh_key"]

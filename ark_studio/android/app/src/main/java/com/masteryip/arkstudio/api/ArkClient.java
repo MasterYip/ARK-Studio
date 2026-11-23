@@ -109,15 +109,74 @@ public final class ArkClient {
         return new ArkClient(baseUrl, null).request("POST", "/api/mobile/login", body);
     }
 
-    /** {@code POST /api/mobile/pair/claim}: one-time QR code in, device token out. */
+    /**
+     * {@code POST /api/mobile/pair/claim}: one-time QR code in, device token out.
+     * Through a Cloudflare Tunnel the server answers 202 with {@code pending},
+     * {@code claim_id}, {@code claim_secret} and {@code confirm_code} instead
+     * (see {@link #isPending}); the phone then polls {@link #claimStatus}.
+     */
     public static JSONObject claim(String baseUrl, String code) throws ApiException {
+        return claim(baseUrl, code, null);
+    }
+
+    public static JSONObject claim(String baseUrl, String code, String device) throws ApiException {
         JSONObject body = new JSONObject();
         try {
             body.put("token", code == null ? "" : code);
+            if (device != null && !device.isEmpty()) body.put("device", device);
         } catch (JSONException impossible) {
             throw new IllegalStateException(impossible);
         }
         return new ArkClient(baseUrl, null).request("POST", "/api/mobile/pair/claim", body);
+    }
+
+    /**
+     * {@code POST /api/mobile/pair/claim/status}: still pending (202, same shape
+     * without the secret), the claim result with {@code mobile_token} once the
+     * computer confirmed, 403 {@code PAIRING_REJECTED} or 401
+     * {@code PAIRING_CONFIRM_EXPIRED}.
+     */
+    public static JSONObject claimStatus(String baseUrl, String code, String claimId, String claimSecret)
+            throws ApiException {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("code", code == null ? "" : code);
+            body.put("claim_id", claimId == null ? "" : claimId);
+            body.put("claim_secret", claimSecret == null ? "" : claimSecret);
+        } catch (JSONException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        return new ArkClient(baseUrl, null).withTimeouts(10000, 15000)
+                .request("POST", "/api/mobile/pair/claim/status", body);
+    }
+
+    /** Withdraws a claim that waits for the computer (the phone cancelled). */
+    public static JSONObject cancelClaim(String baseUrl, String claimId, String claimSecret) throws ApiException {
+        JSONObject body = new JSONObject();
+        try {
+            body.put("claim_id", claimId == null ? "" : claimId);
+            body.put("claim_secret", claimSecret == null ? "" : claimSecret);
+            body.put("cancel", true);
+        } catch (JSONException impossible) {
+            throw new IllegalStateException(impossible);
+        }
+        return new ArkClient(baseUrl, null).withTimeouts(10000, 15000)
+                .request("POST", "/api/mobile/pair/claim/status", body);
+    }
+
+    /** A claim waiting for the computer's confirmation (no token yet). */
+    public static boolean isPending(JSONObject response) {
+        return response != null && response.optBoolean("pending", false)
+                && response.optString("mobile_token", "").isEmpty();
+    }
+
+    /**
+     * {@code GET /api/mobile/identity?nonce=…} without the device token: a new
+     * address is checked before the token is sent there.
+     */
+    public static JSONObject identity(String baseUrl, String nonce) throws ApiException {
+        return new ArkClient(baseUrl, null).withTimeouts(10000, 15000)
+                .get("/api/mobile/identity?nonce=" + enc(nonce));
     }
 
     // ------------------------------------------------------------- transport
@@ -153,6 +212,10 @@ public final class ArkClient {
                 throw new ApiException(401, "AUTH_REQUIRED", "Sign in again.");
             }
             JSONObject json = parse(text);
+            if (json == null && cloudflareDown(status, connection.getHeaderField("Server"), text)) {
+                throw new ApiException(status, ApiException.TUNNEL_DOWN,
+                        "Cloudflare could not reach this server (HTTP " + status + ").");
+            }
             if (status >= 400) {
                 throw errorFrom(status, json, connection.getHeaderField("Retry-After"));
             }
@@ -166,6 +229,23 @@ public final class ArkClient {
         } finally {
             if (connection != null) connection.disconnect();
         }
+    }
+
+    /**
+     * A Cloudflare error page instead of ARK's JSON: the tunnel behind the
+     * address is gone (530 / error 1033 when a quick tunnel stopped) or
+     * cloudflared cannot reach ARK (502, 504, 52x).
+     */
+    public static boolean cloudflareDown(int status, String serverHeader, String body) {
+        if (status < 400) return false;
+        String server = serverHeader == null ? "" : serverHeader.toLowerCase(java.util.Locale.ROOT);
+        String text = body == null ? "" : body.toLowerCase(java.util.Locale.ROOT);
+        boolean cloudflare = server.contains("cloudflare") || text.contains("cloudflare");
+        if (status == 530) return true;
+        if (!cloudflare) return false;
+        return status == 502 || status == 503 || status == 504 || (status >= 520 && status <= 527)
+                || status == 404 && (text.contains("error 1033") || text.contains("tunnel"))
+                || text.contains("error 1033") || text.contains("error code: 1033");
     }
 
     static ApiException errorFrom(int status, JSONObject json, String retryAfter) {

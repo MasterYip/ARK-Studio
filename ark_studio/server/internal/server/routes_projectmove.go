@@ -14,7 +14,12 @@ package server
 //   POST {base}/plans/{id}/approve       a person only: {comment?, apply?: true}
 //   POST {base}/plans/{id}/reject        a person only: {comment?}
 //   POST {base}/plans/{id}/apply         once approved (agents included)
+//   POST {base}/plans/{id}/refresh       plan a stale plan again (back to proposed, same decision unit)
 //   POST {base}/plans/{id}/undo          a person, or an agent once the plan was approved
+//
+// A plan is stale only when what it covers changed (store/moveplandeps.go);
+// GET shows that as "stale" ({reasons, units}), and approve and apply answer
+// 409 MOVE_PLAN_STALE with the same reasons and unit ids.
 //
 //   Import (a copy into this project; T-0070 rules, store/importark.go):
 //   POST /api/agent/v1/import-ark/plans  {project: <source id>, units, with_children?, note?, lang?}
@@ -48,7 +53,7 @@ const (
 	agentImportArkBase   = "/api/agent/v1/import-ark"
 )
 
-var reMovePlanPath = regexp.MustCompile(`^/(clusters|plans)(?:/(pl_[0-9a-f]{12})(?:/(approve|reject|apply|undo))?)?$`)
+var reMovePlanPath = regexp.MustCompile(`^/(clusters|plans)(?:/(pl_[0-9a-f]{12})(?:/(approve|reject|apply|refresh|undo))?)?$`)
 
 // projectMoveGoOnly are the Go-only ids of this file (GoOnlyRoutes).
 var projectMoveGoOnly = []PortedRoute{
@@ -169,6 +174,8 @@ func (c *reqCtx) projectMoveRoute(rest string, post bool) error {
 	case m[3] == "" && !post:
 		c.ok(pyjson.NewObject("plan", c.planView(src, plan)))
 		return nil
+	case m[3] == "refresh" && post:
+		return c.refreshMove(src, plan)
 	case !post:
 		return apiErr(405, "Method not allowed", "")
 	case m[3] == "approve" || m[3] == "reject":
@@ -205,7 +212,69 @@ func (c *reqCtx) planView(src *project.Project, plan *store.MovePlan) *pyjson.Ob
 			out.Set("move_state", j.State)
 		}
 	}
+	if plan.State == "proposed" || plan.State == "approved" {
+		var stale any
+		if other, err := c.planOther(plan); err == nil {
+			var se *store.MoveStaleError
+			if errors.As(src.Store.CheckPlan(c.ctx, other, plan), &se) {
+				stale = staleObject(se)
+			}
+		}
+		out.Set("stale", stale)
+	}
 	return out
+}
+
+// planOther is the other store a plan reads: the source of an import, the
+// target of a merge, nil for a split (its project is made on apply).
+func (c *reqCtx) planOther(plan *store.MovePlan) (*store.Store, error) {
+	switch {
+	case plan.Mode == "import":
+		p, err := c.projectByID(plan.Request.SourceID)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, apiErr(404, "source project not found", "PROJECT_NOT_ACCESSIBLE")
+		}
+		return p.Store, nil
+	case plan.Mode == "merge" || plan.Request.All:
+		p, err := c.projectByID(plan.Request.TargetID)
+		if err != nil {
+			return nil, err
+		}
+		if p == nil {
+			return nil, apiErr(404, "target project not found", "PROJECT_NOT_ACCESSIBLE")
+		}
+		return p.Store, nil
+	}
+	return nil, nil
+}
+
+func staleObject(se *store.MoveStaleError) *pyjson.Object {
+	reasons := []any{}
+	for _, r := range se.Reasons {
+		reasons = append(reasons, r.Object())
+	}
+	units := []any{}
+	for _, u := range se.Units() {
+		units = append(units, u)
+	}
+	return pyjson.NewObject("reasons", reasons, "units", units)
+}
+
+// refreshMove is POST {base}/plans/{id}/refresh: plan again from the
+// projects as they are now; the plan waits for approval again.
+func (c *reqCtx) refreshMove(src *project.Project, plan *store.MovePlan) error {
+	other, err := c.planOther(plan)
+	if err != nil {
+		return err
+	}
+	if err := src.Store.RefreshPlan(c.ctx, other, plan, c.actorForMove()); err != nil {
+		return err
+	}
+	c.ok(pyjson.NewObject("plan", c.planView(src, plan)))
+	return nil
 }
 
 // proposeMove is POST {base}/plans.
@@ -319,6 +388,16 @@ func (c *reqCtx) decideMove(src *project.Project, plan *store.MovePlan, approve 
 		return apiErr(403, "only a person approves or rejects a move plan", "MOVE_NEEDS_PERSON")
 	}
 	comment, _ := c.body.Value("comment").(string)
+	if approve && plan.State == "proposed" {
+		// Approve what the plan covers now, not what it covered once.
+		other, err := c.planOther(plan)
+		if err != nil {
+			return err
+		}
+		if err := src.Store.CheckPlan(c.ctx, other, plan); err != nil {
+			return c.moveErr(err)
+		}
+	}
 	if err := src.Store.DecidePlan(c.ctx, plan, approve, c.actorForMove(), comment); err != nil {
 		return err
 	}
@@ -341,32 +420,33 @@ func (c *reqCtx) applyMove(src *project.Project, plan *store.MovePlan) error {
 	req := plan.Request
 	req.PlanID = plan.ID
 	var dst *project.Project
-	hash := plan.Hash
+	staleErr := func(err error) error {
+		plan.Error = err.Error()
+		store.SaveMovePlan(src.Path, plan) //nolint:errcheck
+		return c.moveErr(err)
+	}
 	if plan.Mode == "split" {
-		// Planned against an empty project: check, create it, plan again.
-		check, err := src.Store.PlanMove(c.ctx, nil, req)
-		if err != nil {
-			return c.moveErr(err)
+		// Check before the new project is made; the uids are numbered for
+		// it when the move runs.
+		if err := src.Store.CheckPlan(c.ctx, nil, plan); err != nil {
+			return staleErr(err)
 		}
-		if pyjson.Str(check.Value("plan_hash")) != plan.Hash {
-			return c.moveErr(&store.MoveStaleError{})
-		}
+		var err error
 		dst, err = c.createProjectRecord(pyjson.NewObject("name", plan.NewName, "description", plan.NewDesc))
 		if err != nil {
 			return err
 		}
 		req.TargetID, req.TargetName = dst.ID(), dst.Name()
-		fresh, err := src.Store.PlanMove(c.ctx, dst.Store, req)
-		if err != nil {
-			return c.moveErr(err)
-		}
-		hash = pyjson.Str(fresh.Value("plan_hash"))
 	} else {
 		var err error
 		if dst, err = c.moveTarget(req.TargetID); err != nil {
 			return err
 		}
+		if err := src.Store.CheckPlan(c.ctx, dst.Store, plan); err != nil {
+			return staleErr(err)
+		}
 	}
+	hash := plan.Hash
 	// The move is the approver's act: its activity rows (and so the update
 	// feed of agents working on the moved nodes) name the person.
 	actor := plan.ApprovedBy
@@ -463,10 +543,18 @@ func (c *reqCtx) undoMove(src *project.Project, plan *store.MovePlan) error {
 	return nil
 }
 
+// moveErr answers a stale plan with 409 MOVE_PLAN_STALE, the reasons and
+// the unit ids concerned (refresh or propose again).
 func (c *reqCtx) moveErr(err error) error {
 	var stale *store.MoveStaleError
 	if errors.As(err, &stale) {
-		return apiErr(409, stale.Error()+" (propose a new plan)", "MOVE_PLAN_STALE")
+		e := pyjson.NewObject("status", int64(409), "code", "MOVE_PLAN_STALE",
+			"message", stale.Error()+" (refresh the plan, or propose a new one)")
+		so := staleObject(stale)
+		e.Set("reasons", so.Value("reasons")).Set("units", so.Value("units"))
+		c.drainUnreadBody()
+		c.sendJSON(409, pyjson.NewObject("ok", false, "error", e), headerList{{"Connection", "close"}})
+		return nil
 	}
 	return err
 }

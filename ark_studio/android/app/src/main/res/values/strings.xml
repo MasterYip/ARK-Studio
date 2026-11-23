@@ -440,4 +440,33 @@
     <string name="server_refreshed">Server refreshed</string>
     <string name="back_again_servers">Press back again for the server list</string>
     <string name="project_switch_unsupported">This server does not let phones switch projects yet. Update the ARK server to 2.1.4 or later.</string>
+
+    <!-- Cloudflare Tunnel: confirmation and re-link -->
+    <string name="chip_tunnel">CLOUDFLARE TUNNEL</string>
+    <string name="confirm_title">Confirm on the computer</string>
+    <string name="confirm_body">The computer shows this pairing request with the same code. Confirm it there to finish pairing.</string>
+    <string name="confirm_waiting">Waiting for confirmation · %1$s left</string>
+    <string name="confirm_retrying">Connection lost, trying again · %1$s left</string>
+    <string name="pair_rejected">The computer declined this pairing request.</string>
+    <string name="pair_confirm_expired">The request was not confirmed in time. Scan the QR code again.</string>
+    <string name="relink">Re-link</string>
+    <string name="relink_title">Re-link to a new address</string>
+    <string name="relink_body">A Cloudflare quick tunnel gets a new address when it restarts. Settings → Mobile on the computer then shows a re-link QR and a short code. The phone checks the server\'s key at the new address and keeps its sign-in.</string>
+    <string name="relink_hint">Short code or new address</string>
+    <string name="relink_scan">Scan QR</string>
+    <string name="relink_network_note">trycloudflare.com can be slow or unreachable on some networks. If it does not load, try another network.</string>
+    <string name="relink_checking">Checking %1$s…</string>
+    <string name="relink_done">Re-linked to %1$s</string>
+    <string name="relink_failed">Not re-linked</string>
+    <string name="relink_invalid">Enter the short code shown on the computer (for example able-baker-charlie-delta) or the new address.</string>
+    <string name="relink_unknown">This phone has not paired with that server yet. Scan the pairing QR in Settings → Mobile on the computer first.</string>
+    <string name="relink_no_key">This phone has no key for %1$s yet, so the new address cannot be checked. Pair again with the QR in Settings → Mobile.</string>
+    <string name="relink_other_server">The server at %1$s is a different ARK server, not %2$s. Your sign-in stays with the old address.</string>
+    <string name="relink_bad_signature">The server at %1$s could not prove it is %2$s. Your sign-in stays with the old address.</string>
+    <string name="relink_no_identity">%1$s does not answer the identity check. It may run an older ARK, or it is not your server.</string>
+    <string name="relink_unreachable">Can\'t reach %1$s. trycloudflare.com can be slow or blocked on some networks; try again or use another network.</string>
+    <string name="relink_https_only">Re-link needs an https address (or one on your local network).</string>
+    <string name="relink_same">%1$s already uses this address.</string>
+    <string name="relink_prompt">The address may have changed: re-link</string>
+    <string name="state_tunnel_down_detail">Cloudflare answered, but the tunnel to ARK at %1$s is not running. If ARK on the computer restarted its quick tunnel, re-link with the new address.</string>
 </resources>

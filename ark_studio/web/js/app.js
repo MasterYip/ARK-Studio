@@ -1,5 +1,5 @@
 import {
-  api, exportUrl, getMobileToken, setMobileToken, clearMobileToken, setTabProject, tabProjectId,
+  api, exportUrl, getMobileToken, setMobileToken, clearMobileToken, setTabProject, tabProjectId, setPairedDevice,
   configureClientCache, clearClientData, clientCache, prefetchUnits, prefetchRoute, qs,
   startEarlyGet, adoptBootRequests, prefetchProject, dropProjectPrefetch, checkConnectivity, syncState,
 } from "./api.js";
@@ -21,7 +21,7 @@ import {
   MOBILE_PRIMARY_TABS, MOBILE_SECONDARY_TABS, parsePairHash,
 } from "./mobile-core.js";
 import {
-  initPwa, renderPairGate, promptInstall, pwaSnapshot, syncThemeColor, watchKeyboard,
+  initPwa, renderPairGate, promptInstall, pwaSnapshot, syncThemeColor, watchKeyboard, confirmCodeOverlay,
 } from "./mobile-ui.js";
 import {
   toast, openModal, openProjectModal, openCreateUnit, openImportModal, openAssistant, openLinkModal, openDispatchModal,
@@ -357,6 +357,7 @@ const ctx = {
   openDispatch: (unit) => openDispatchModal(ctx, unit),
   dispatchTaskSession: (unit) => loadTasks().then((view) => view.dispatchTaskSession(ctx, unit)).catch((err) => toast(err.message, "err")),
   openSessionLaunch: (prefill) => loadTasks().then((view) => view.openLaunchSession(ctx, prefill)).catch((err) => toast(err.message, "err")),
+  openSettingsAt: (id) => openSettingsAt(id),
   openProject: () => openProjectModal(ctx, "open"),
   openPalette: () => openPalette(),
   openExport,
@@ -1024,6 +1025,7 @@ async function init() {
     }
     let unreachable = false;
     const session = await api.mobileSession().catch((error) => { unreachable = Boolean(error.network); return null; });
+    setPairedDevice(session?.authenticated && session?.token_present);
     await bindClientCache(session, { unreachable });
     // A stale/expired token must not poison the loopback desktop UI: if this
     // request did not need pairing, drop the unusable token and continue.
@@ -1100,8 +1102,14 @@ function rememberProject() {
 }
 
 async function claimPairCode(token, session) {
+  const prompt = confirmCodeOverlay();
   try {
-    const claim = await api.claimPairing(token);
+    let claim;
+    try {
+      claim = await api.claimPairing(token, prompt);
+    } finally {
+      prompt.close();
+    }
     setMobileToken(claim.mobile_token, claim);
     clearPairHash();
     try { localStorage.setItem("ark.mobile.paired_at", new Date().toISOString()); } catch { /* ignore */ }
@@ -1111,6 +1119,10 @@ async function claimPairCode(token, session) {
     location.reload();
     return "claimed";
   } catch (err) {
+    if (err.cancelled) {
+      clearPairHash();
+      return "ignored";
+    }
     if (session?.required) {
       showPairGate(session, err.message);
       return "failed";
@@ -2942,7 +2954,8 @@ function openSettingsAt(id) {
   if (!target) return;
   try {
     localStorage.setItem("ark.settingsScope", target.scope);
-    localStorage.setItem("ark.settingsTab", target.tab);
+    // A section id opens its tab scrolled to the section.
+    localStorage.setItem("ark.settingsTab", target.section || target.tab);
   } catch { /* storage unavailable */ }
   if (S.tab !== "settings") { navigateWorkspace("settings"); return; }
   // A #/settings?settings=… link would win over the stored tab.

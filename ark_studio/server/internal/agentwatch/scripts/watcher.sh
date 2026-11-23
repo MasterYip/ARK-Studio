@@ -12,10 +12,12 @@
 #   optional: ARK_AGENT_LABEL (your name in messages), ARK_HOST (this
 #        device's id), ARK_WATCH_STATE (cursor file, default .ark-watch-state),
 #        ARK_WATCH_MAX (seconds to wait, default 6900; 0 = check once),
-#        ARK_OWNER_PID (the agent process this watcher belongs to).
+#        ARK_OWNER_PID (the agent process this watcher belongs to; default:
+#        the nearest Codex or Claude Code process above the watcher).
 #   Codex only: ARK_WAKE=codex ARK_CODEX_THREAD="$CODEX_THREAD_ID".  The
 #        watcher then checks that it runs under that Codex session, detaches,
-#        keeps watching and wakes the session with `codex queue`.
+#        keeps watching and wakes the session with `codex queue`; when it
+#        cannot, it says why and exits 2.
 # The watcher stops when the agent that started it is gone, and does not
 # start in a session ARK launched and wakes itself (ARK_SESSION_ID with
 # ARK_WAKE=ark).
@@ -50,24 +52,19 @@ ark_get() { # path, max seconds; prints body, newline, HTTP status
 }
 
 # ---------------------------------------------------------------- the owner
-# agent_kind PID: claude, codex or nothing.
+# The agent's process: ARK_OWNER_PID when it is Codex or Claude Code, or a
+# live process that is not above this watcher.  Otherwise (gone, the shell
+# that ran this command, or not set) the nearest codex or claude process
+# above the watcher, else its nearest node process (a CLI wrapper).  Only
+# parent ids and process names are read.
+# agent_kind NAME: claude, codex, node or nothing.
 agent_kind() {
-  if [ -r "/proc/$1/comm" ]; then
-    comm=$(cat "/proc/$1/comm" 2>/dev/null)
-    args=$(tr '\0' ' ' < "/proc/$1/cmdline" 2>/dev/null)
-  else
-    comm=$(ps -o comm= -p "$1" 2>/dev/null)
-    args=$(ps -o args= -p "$1" 2>/dev/null)
-  fi
-  comm=${comm##*/}
-  set -f; set -- $args; set +f
-  a0=${1##*/}; a1=${2##*/}
-  case "$comm" in claude|claude.exe) echo claude; return ;; codex|codex.exe|codex-linux-san*) echo codex; return ;; esac
-  case "$a0" in claude|claude.exe) echo claude; return ;; codex|codex.exe|codex-linux-sandbox) echo codex; return ;; esac
-  case "$comm" in node|node.exe|bun)
-    case "$a1 $args" in claude\ *|*/claude-code/*|*/claude-agent-sdk/*) echo claude; return ;;
-      codex\ *|codex.js\ *|*/@openai/codex/*) echo codex; return ;; esac ;;
-  esac
+  n=${1##*/}; n=${n%.exe}
+  case "$n" in codex|codex-linux-san*) echo codex ;; claude) echo claude ;; node|bun) echo node ;; esac
+}
+proc_name() {
+  if [ -r "/proc/$1/comm" ]; then cat "/proc/$1/comm" 2>/dev/null
+  else ps -o comm= -p "$1" 2>/dev/null; fi
 }
 parent_of() {
   if [ -r "/proc/$1/stat" ]; then sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f2
@@ -76,25 +73,44 @@ parent_of() {
 owner=""; owner_kind=""
 if [ -n "$ARK_WATCH_DETACHED_OWNER" ]; then
   owner=$ARK_WATCH_DETACHED_OWNER
-  owner_kind=$(agent_kind "$owner")
-elif [ -n "$ARK_OWNER_PID" ]; then
-  owner=$ARK_OWNER_PID
-  owner_kind=$(agent_kind "$owner")
-else # the nearest agent among this watcher's ancestors
-  p=$PPID; i=0
-  while [ -n "$p" ] && [ "$p" -gt 1 ] 2>/dev/null && [ $i -lt 40 ]; do
-    k=$(agent_kind "$p")
-    if [ -n "$k" ]; then owner=$p; owner_kind=$k; break; fi
+else
+  chain=""; p=$PPID; i=0 # this watcher's ancestors, nearest first
+  while [ -n "$p" ] && [ "$p" -ge 1 ] 2>/dev/null && [ $i -lt 64 ]; do
+    case " $chain " in *" $p "*) break ;; esac
+    chain="$chain $p"
+    [ "$p" = 1 ] && break
     p=$(parent_of "$p"); i=$((i + 1))
   done
-  # In the Codex sandbox (its own PID namespace) the sandbox is pid 1.
-  if [ -z "$owner" ] && [ "$p" = 1 ] && [ "$(agent_kind 1)" = codex ]; then owner=1; owner_kind=codex; fi
-  [ -z "$owner" ] && [ "${PPID:-1}" -gt 1 ] && owner=$PPID
+  given=$ARK_OWNER_PID
+  if [ -n "$given" ] && kill -0 "$given" 2>/dev/null; then
+    case "$(agent_kind "$(proc_name "$given")")" in
+      codex|claude) owner=$given ;;
+      *) case " $chain " in *" $given "*) ;; *) owner=$given ;; esac ;;
+    esac
+  fi
+  if [ -z "$owner" ]; then
+    found=""; wrapper=""
+    for p in $chain; do
+      case "$(agent_kind "$(proc_name "$p")")" in
+        codex|claude) found=$p; break ;;
+        node) [ -z "$wrapper" ] && wrapper=$p ;;
+      esac
+    done
+    found=${found:-$wrapper}
+    if [ -n "$found" ]; then
+      [ -n "$given" ] && echo "ARK: pid $given is gone or not your agent; the watcher belongs to $(proc_name "$found") pid $found, the nearest agent above it."
+      owner=$found
+    elif [ -n "$given" ] && kill -0 "$given" 2>/dev/null; then owner=$given
+    elif [ -n "$given" ]; then echo "ARK: no process $given (ARK_OWNER_PID)"; exit 2
+    elif [ "${PPID:-1}" -gt 1 ]; then owner=$PPID
+    fi
+  fi
 fi
+[ -n "$owner" ] && owner_kind=$(agent_kind "$(proc_name "$owner")")
 owner_alive() {
   [ -z "$owner" ] && return 0
   kill -0 "$owner" 2>/dev/null || return 1
-  [ -z "$owner_kind" ] || [ "$(agent_kind "$owner")" = "$owner_kind" ]
+  [ -z "$owner_kind" ] || [ "$(agent_kind "$(proc_name "$owner")")" = "$owner_kind" ]
 }
 
 # ---------------------------------------------------------------- Codex wake-up
@@ -106,7 +122,8 @@ codex_bin=""; codex_thread=""
 if [ "$ARK_WAKE" = codex ]; then
   why=""
   if [ -n "$CLAUDECODE" ] || [ -n "$CLAUDE_CODE_ENTRYPOINT" ]; then why="this is a Claude Code session"
-  elif [ "$owner_kind" != codex ]; then why="no Codex process above the watcher"
+  elif [ -z "$owner" ]; then why="owner process not found"
+  elif [ "$owner_kind" != codex ]; then why="the owner process (pid $owner) is not Codex"
   elif [ -z "$ARK_CODEX_THREAD" ] || [ "$ARK_CODEX_THREAD" != "$CODEX_THREAD_ID" ]; then why="ARK_CODEX_THREAD is not this Codex session's thread"
   fi
   if [ -z "$why" ]; then
@@ -116,10 +133,17 @@ if [ "$ARK_WAKE" = codex ]; then
     [ -z "$codex_bin" ] && why="no codex with \`queue\` found"
   fi
   if [ -n "$why" ]; then
-    echo "ARK: not waking through codex queue ($why); the watcher exits on news instead."
-  else
-    codex_thread=$ARK_CODEX_THREAD
+    # Say it and fail: a watcher that cannot wake Codex is no use.
+    case "$why" in
+      *Claude*) hint="Claude Code is woken when the watcher exits: drop ARK_WAKE" ;;
+      *thread*) hint='set ARK_CODEX_THREAD="$CODEX_THREAD_ID" from your own session' ;;
+      *queue*) hint="update Codex" ;;
+      *) hint="set ARK_OWNER_PID=<codex pid>" ;;
+    esac
+    echo "ARK: cannot wake codex: $why; $hint"
+    exit 2
   fi
+  codex_thread=$ARK_CODEX_THREAD
 fi
 if [ -n "$codex_thread" ] && [ -z "$ARK_WATCH_DETACHED_OWNER" ]; then
   # Codex ends a command's process group when the command returns: start

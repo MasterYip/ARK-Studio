@@ -64,6 +64,10 @@ test("check-hosts: finds hosts and subdomains, ignores examples and loopback", (
   assert.deepEqual(findHosts("placeholder https://ark.example.com 127.0.0.1 localhost", forbiddenSet(["ark.example.com"])), []);
   // a parent domain on the list also catches its subdomains
   assert.deepEqual(findHosts("a.b.private-host.net", forbiddenSet(["private-host.net"])), ["a.b.private-host.net"]);
+  // The quick-tunnel service may be named; a concrete tunnel address may not.
+  const quick = ["try", "cloudflare.com"].join("");
+  assert.deepEqual(findHosts(`suffix .${quick} here`, forbiddenSet()), []);
+  assert.deepEqual(findHosts(`https://some-random-words.${quick}/`, forbiddenSet()), [`some-random-words.${quick}`]);
 });
 
 test("check-hosts: the developer's ~/.ark/desktop.json servers are forbidden too", () => {

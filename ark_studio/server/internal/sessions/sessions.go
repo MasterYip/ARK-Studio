@@ -120,9 +120,9 @@ type Hooks struct {
 	// AgentToken issues the agent token for one session run (T-0053): the
 	// secret for ARK_AGENT_TOKEN and its id for revocation; "" = none.
 	AgentToken func(actor, sessionID, access string) (secret, id string, err error)
-	// WakesIdle reports whether ARK wakes the project's idle sessions with
-	// people's updates (internal/sessionnudge); the session then gets
-	// ARK_WAKE=ark and starts no watcher of its own.
+	// WakesIdle reports whether ARK wakes the project's sessions with
+	// people's updates (internal/sessionnudge; the server: always); the
+	// session then gets ARK_WAKE=ark and starts no watcher of its own.
 	WakesIdle func(projectID string) bool
 }
 

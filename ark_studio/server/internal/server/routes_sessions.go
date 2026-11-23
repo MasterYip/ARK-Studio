@@ -253,15 +253,19 @@ func (c *reqCtx) resolveAgents(summary *pyjson.Object, username string) (*pyjson
 				env.Set(name, se.Value(name))
 			}
 		}
-		enabled := true
+		enabled, disabledBy := true, ""
 		if v, ok := projectItem.Get("enabled"); ok && v == false {
-			enabled = false
+			enabled, disabledBy = false, "project"
 		} else if v, ok := personalItem.Get("enabled"); ok && v != nil {
-			enabled = pyjson.Truthy(v)
+			enabled, disabledBy = pyjson.Truthy(v), "personal"
 		} else if v, ok := projectItem.Get("enabled"); ok && v != nil {
-			enabled = pyjson.Truthy(v)
+			enabled, disabledBy = pyjson.Truthy(v), "project"
 		}
-		presetsOut.Set(id, pyjson.NewObject("command", command, "env", env, "enabled", enabled, "command_source", source))
+		if enabled {
+			disabledBy = ""
+		}
+		presetsOut.Set(id, pyjson.NewObject("command", command, "env", env, "enabled", enabled, "command_source", source,
+			"disabled_by", disabledBy))
 		credential := "none"
 		if secretEnv[id] != nil && secretEnv[id].Len() > 0 {
 			credential = "personal"
@@ -355,8 +359,8 @@ func (c *reqCtx) sessionHooks() *sessions.Hooks {
 	return &sessions.Hooks{
 		AgentToken: c.app.sessionAgentToken,
 		WakesIdle: func(projectID string) bool {
-			p := c.app.nudgeProject(c.ctx, projectID)
-			return p != nil && NudgeEnabled(p)
+			// The nudger wakes every session ARK launched (T-0109).
+			return c.app.nudgeProject(c.ctx, projectID) != nil
 		},
 		Project: func() (*pyjson.Object, error) {
 			p, err := c.require("read")

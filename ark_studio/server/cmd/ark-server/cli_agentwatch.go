@@ -118,8 +118,8 @@ func agentWatchFlags(errw io.Writer) (*flag.FlagSet, *watchOptions, *string) {
 	fs.BoolVar(&o.Until, "until-update", false, "wait until there is news (a person's update on your units or new agent rules), print it and exit; run it in the background so it wakes you")
 	fs.Float64Var(&o.Max, "max", 6900, "with --until-update: give up after this many seconds (prints a line, exit 0)")
 	fs.StringVar(&o.Host, "host", os.Getenv("ARK_HOST"), "this device's id, sent as X-ARK-Host (env ARK_HOST; ark-server agent host-id)")
-	fs.IntVar(&o.OwnerPID, "owner-pid", watchEnvInt("ARK_OWNER_PID"), "your agent's process id: the watcher stops when it is gone (env ARK_OWNER_PID)")
-	fs.StringVar(&o.Wake, "wake", os.Getenv("ARK_WAKE"), "with --until-update: codex = wake your Codex session through `codex queue` (env ARK_WAKE)")
+	fs.IntVar(&o.OwnerPID, "owner-pid", watchEnvInt("ARK_OWNER_PID"), "your agent's process id: the watcher stops when it is gone; default: the nearest Codex or Claude Code process above the watcher (env ARK_OWNER_PID)")
+	fs.StringVar(&o.Wake, "wake", os.Getenv("ARK_WAKE"), "with --until-update: codex = wake your Codex session through `codex queue`; claude = check that Claude Code runs it (exits 2 when it cannot; env ARK_WAKE)")
 	fs.StringVar(&o.CodexThread, "codex-thread", os.Getenv("ARK_CODEX_THREAD"), "with --wake codex: your own thread id, $CODEX_THREAD_ID (env ARK_CODEX_THREAD)")
 	fs.Usage = func() {
 		fmt.Fprintln(errw, "usage: ark-server agent watch [--url URL] [--token-file F | --token-env NAME] [--project ID]\n"+
@@ -199,19 +199,50 @@ func agentWatch(argv []string, out, errw io.Writer) int {
 	if detached > 1 {
 		o.OwnerPID = detached
 	}
+	ownerKind, ownerName := "", ""
+	if detached <= 1 && (o.Until || o.OwnerPID > 1) {
+		// The agent's process: the given one, or the nearest agent above
+		// this watcher when that is gone or only the shell (T-0109).
+		if t, err := watchProcTable(); err == nil {
+			owner, kind, note := resolveOwner(t, os.Getpid(), o.OwnerPID)
+			if note != "" {
+				fmt.Fprintln(out, "ARK: "+note+".")
+			}
+			o.OwnerPID, ownerKind, ownerName = owner, kind, t[owner].Name
+		}
+	}
 	if o.OwnerPID > 1 && !watchProcessAlive(o.OwnerPID) {
 		fmt.Fprintf(errw, "ark-server agent watch: no process %d (--owner-pid)\n", o.OwnerPID)
 		return 2
 	}
-	if o.Until && o.Wake == "codex" {
-		why := codexWakeBlocker(o, o.OwnerPID)
+	if !o.Until || o.Wake == "ark" {
+		o.Wake = "" // ARK wakes the session (ARK_WAKE=ark), or nothing waits for news
+	}
+	switch o.Wake {
+	case "", "codex":
+	case "claude":
+		if os.Getenv("CLAUDECODE") == "" && os.Getenv("CLAUDE_CODE_ENTRYPOINT") == "" && ownerKind != "claude" {
+			fmt.Fprintln(errw, "ark-server agent watch: cannot wake claude: no Claude Code session above the watcher; run it from Claude Code's Bash tool with run_in_background")
+			return 2
+		}
+	default:
+		fmt.Fprintf(errw, "ark-server agent watch: unknown --wake %q (codex or claude)\n", o.Wake)
+		return 2
+	}
+	if o.Wake == "codex" {
+		why, hint := codexWakeBlocker(o, o.OwnerPID, ownerName), ""
 		if why == "" {
 			if o.codex = findCodexQueue(); o.codex == "" {
-				why = "no codex with `queue` found"
+				why, hint = "no codex with `queue` found", "update Codex"
 			}
 		}
 		if why != "" {
-			fmt.Fprintf(out, "ARK: not waking through codex queue (%s); the watcher exits on news instead.\n", why)
+			// Say it and fail: a watcher that cannot wake Codex is no use (T-0109).
+			if hint == "" {
+				hint = wakeHint(why)
+			}
+			fmt.Fprintf(errw, "ark-server agent watch: cannot wake codex: %s; %s\n", why, hint)
+			return 2
 		} else if detached <= 1 {
 			if err := startDetached(o.OwnerPID); err != nil {
 				fmt.Fprintln(errw, "ark-server agent watch: cannot start in the background:", err)

@@ -30,6 +30,13 @@ export const FORBIDDEN_SHA256 = new Set([
   "1dd7374c30bc17c46c3c552333ea37248ec00c9847de2acef426a80dd90de265", // quick-tunnel domain
 ]);
 
+// Domains whose bare name may appear (the product refers to the service) but
+// whose subdomains may not: a subdomain is one concrete address, such as a
+// quick tunnel someone ran. Settings › Mobile names the quick-tunnel suffix.
+export const SUBDOMAINS_ONLY_SHA256 = new Set([
+  "1dd7374c30bc17c46c3c552333ea37248ec00c9847de2acef426a80dd90de265", // quick-tunnel domain
+]);
+
 export const DEFAULT_PATHS = [
   "ark_studio/desktop/ui",
   "ark_studio/desktop/src-tauri/src",
@@ -88,7 +95,9 @@ export function findHosts(text, forbidden) {
     const labels = host.split(".");
     for (let i = 0; i < labels.length - 1; i++) {
       const candidate = labels.slice(i).join(".");
-      if (forbidden.has(sha(candidate))) {
+      const digest = sha(candidate);
+      if (i === 0 && SUBDOMAINS_ONLY_SHA256.has(digest)) break; // the bare service name
+      if (forbidden.has(digest)) {
         hits.add(host);
         break;
       }
@@ -104,7 +113,7 @@ function* files(path) {
     return;
   }
   for (const name of readdirSync(path)) {
-    if (SKIP_DIRS.has(name)) continue;
+    if (SKIP_DIRS.has(name) || name.endsWith("_test.go")) continue; // Go tests are never bundled
     yield* files(join(path, name));
   }
 }

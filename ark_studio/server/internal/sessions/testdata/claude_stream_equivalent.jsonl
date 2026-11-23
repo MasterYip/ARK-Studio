@@ -1,0 +1,7 @@
+{"type":"system","subtype":"init","session_id":"c-1","uuid":"u0"}
+{"type":"assistant","session_id":"c-1","uuid":"u1","message":{"content":[{"type":"text","text":"我先读取 `hello.txt`。"}]}}
+{"type":"assistant","session_id":"c-1","uuid":"u2","message":{"content":[{"type":"tool_use","id":"toolu_1","name":"Bash","input":{"command":"cat hello.txt"}}]}}
+{"type":"user","session_id":"c-1","uuid":"u3","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_1","content":"你好，世界 ARK\n"}]}}
+{"type":"assistant","session_id":"c-1","uuid":"u4","message":{"content":[{"type":"tool_use","id":"toolu_2","name":"Write","input":{"file_path":"notes.md","content":"# 会话测试 中文\n"}}]}}
+{"type":"user","session_id":"c-1","uuid":"u5","message":{"content":[{"type":"tool_result","tool_use_id":"toolu_2","content":"File created"}]}}
+{"type":"assistant","session_id":"c-1","uuid":"u6","message":{"content":[{"type":"text","text":"文件里写的是“你好，世界 ARK”。\n\n- 已创建 `notes.md`"}]}}

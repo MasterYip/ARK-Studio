@@ -14,6 +14,7 @@ var LOGIN_TEXT = {
     "pair.ok": "Paired. Opening ARK…",
     "pair.failed": "Pairing failed: {error} Sign in below.",
     "pair.invalid": "The pairing code is invalid or has expired.",
+    "pair.confirm": "Approve code {code} in ARK on the computer (Settings › Mobile).",
     "invite.loading": "Checking the invite link…",
     "invite.title": "Join a project",
     "invite.invited": "{name} invited you to {project}",
@@ -58,6 +59,7 @@ var LOGIN_TEXT = {
     "pair.ok": "已配对，正在打开 ARK…",
     "pair.failed": "配对失败：{error} 请在下方登录。",
     "pair.invalid": "配对码无效或已过期。",
+    "pair.confirm": "请在电脑上的 ARK（设置 › 移动端）批准代码 {code}。",
     "invite.loading": "正在检查邀请链接…",
     "invite.title": "加入项目",
     "invite.invited": "{name} 邀请你加入「{project}」",
@@ -209,20 +211,38 @@ function loginText(key, vars) {
   target = target.replace(/([#?&])pair=[^&]*/g, "").replace(/[?&]$/, "");
   if (!target) target = "/";
 
-  fetch("api/mobile/pair/claim", {
-    method: "POST",
-    credentials: "same-origin",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ token: code }),
-  }).then(function (response) {
-    return response.json().then(function (data) {
-      if (!response.ok) {
-        throw new Error((data && data.error && data.error.message)
-          || loginText("pair.invalid"));
-      }
-      return data;
+  function post(path, body) {
+    return fetch(path, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }).then(function (response) {
+      return response.json().then(function (data) {
+        if (!response.ok) {
+          throw new Error((data && data.error && data.error.message)
+            || loginText("pair.invalid"));
+        }
+        return data;
+      });
     });
-  }).then(function (data) {
+  }
+  // Through a Cloudflare Tunnel the computer confirms the 6-digit code first.
+  function confirmed(first) {
+    if (!first || !first.pending) return first;
+    var poll = function (data) {
+      if (!data || !data.pending) return data;
+      status.textContent = loginText("pair.confirm",
+        { code: String(first.confirm_code || "").replace(/^(\d{3})(\d{3})$/, "$1 $2") });
+      return new Promise(function (resolve) { setTimeout(resolve, 2000); }).then(function () {
+        return post("api/mobile/pair/claim/status",
+          { code: code, claim_id: first.claim_id, claim_secret: first.claim_secret });
+      }).then(poll);
+    };
+    return poll(first);
+  }
+
+  post("api/mobile/pair/claim", { token: code }).then(confirmed).then(function (data) {
     window.ARKEntryGraph?.progress(1);
     try {
       localStorage.setItem("ark.mobile.token", String(data.mobile_token || ""));

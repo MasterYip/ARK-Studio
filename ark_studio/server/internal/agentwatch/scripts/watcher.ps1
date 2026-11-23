@@ -10,12 +10,13 @@
 #        %USERPROFILE%\.ark\tokens\<ARK_PROJECT>) or ARK_TOKEN and handed to
 #        curl.exe on its standard input, never on a command line.
 #   optional: ARK_OWNER_PID (your agent's process id: the watcher stops when
-#        it is gone), ARK_AGENT_LABEL (your name in messages), ARK_HOST (this
+#        it is gone; default: the nearest Codex or Claude Code process above
+#        the watcher), ARK_AGENT_LABEL (your name in messages), ARK_HOST (this
 #        device's id), ARK_WATCH_STATE (cursor file, default .ark-watch-state),
 #        ARK_WATCH_MAX (seconds to wait, default 6900; 0 = check once).
-#   Codex only: ARK_WAKE=codex, ARK_CODEX_THREAD=$env:CODEX_THREAD_ID and
-#        ARK_OWNER_PID = your Codex process.  The watcher then runs in the
-#        background and wakes the session with `codex queue`.
+#   Codex only: ARK_WAKE=codex and ARK_CODEX_THREAD=$env:CODEX_THREAD_ID.
+#        The watcher then runs in the background and wakes the session with
+#        `codex queue`; when it cannot, it says why and exits 2.
 # It does not start in a session ARK launched and wakes itself
 # (ARK_SESSION_ID with ARK_WAKE=ark).
 if ($env:ARK_SESSION_ID -and $env:ARK_WAKE -eq 'ark') {
@@ -51,13 +52,52 @@ function Invoke-Ark([string]$path, [int]$timeout) {
 }
 
 # ---------------------------------------------------------------- the owner
-# Only the one process the agent named is checked; nothing else is listed.
-$owner = 0
+# The agent's process: ARK_OWNER_PID when it is Codex or Claude Code, or a
+# live process that is not above this watcher.  Otherwise (gone, the shell
+# that ran this command, or not set) the nearest codex or claude process
+# above the watcher, else its nearest node process (a CLI wrapper).  Only
+# parent ids and process names are read.
+function Get-AgentKind([string]$n) {
+    $n = $n.ToLower() -replace '\.exe$', ''
+    if ($n -eq 'codex' -or $n -like 'codex-linux-san*') { return 'codex' }
+    if ($n -eq 'claude') { return 'claude' }
+    if ($n -eq 'node' -or $n -eq 'bun') { return 'node' }
+    return ''
+}
+$owner = 0; $ownerKind = ''
 if ($env:ARK_WATCH_DETACHED_OWNER) { $owner = [int]$env:ARK_WATCH_DETACHED_OWNER }
-elseif ($env:ARK_OWNER_PID) { $owner = [int]$env:ARK_OWNER_PID }
+else {
+    if ($env:ARK_OWNER_PID) { $owner = [int]$env:ARK_OWNER_PID }
+    $procs = @{}
+    try { Get-CimInstance Win32_Process -Property ProcessId, ParentProcessId, Name -ErrorAction Stop | ForEach-Object { $procs[[int]$_.ProcessId] = $_ } } catch { }
+    if ($procs.Count) {
+        $chain = @(); $seen = @{}; $p = [int]$procs[[int]$PID].ParentProcessId
+        while ($p -ge 1 -and $procs.ContainsKey($p) -and -not $seen[$p] -and $chain.Count -lt 64) { $seen[$p] = 1; $chain += $p; $p = [int]$procs[$p].ParentProcessId }
+        $keep = $false
+        if ($owner -gt 1 -and $procs.ContainsKey($owner)) {
+            $k = Get-AgentKind $procs[$owner].Name
+            $keep = ($k -eq 'codex' -or $k -eq 'claude' -or $chain -notcontains $owner)
+        }
+        if (-not $keep) {
+            $found = 0; $wrapper = 0
+            foreach ($c in $chain) {
+                $k = Get-AgentKind $procs[$c].Name
+                if ($k -eq 'codex' -or $k -eq 'claude') { $found = $c; break }
+                if ($k -eq 'node' -and -not $wrapper) { $wrapper = $c }
+            }
+            if (-not $found) { $found = $wrapper }
+            if ($found) {
+                if ($owner -gt 1) { Write-Output "ARK: pid $owner is gone or not your agent; the watcher belongs to $($procs[$found].Name) pid $found, the nearest agent above it." }
+                $owner = $found
+            }
+        }
+        if ($owner -gt 1 -and $procs.ContainsKey($owner)) { $ownerKind = Get-AgentKind $procs[$owner].Name }
+    }
+}
 if ($owner -le 1) { $owner = 0 }
 function Get-OwnerName { if (-not $owner) { return '' }; $p = Get-Process -Id $owner -ErrorAction SilentlyContinue; if ($p) { return $p.ProcessName } else { return $null } }
 if ($owner -and $null -eq (Get-OwnerName)) { Write-Output "ARK: no process $owner (ARK_OWNER_PID)"; exit 2 }
+if (-not $ownerKind -and $owner) { $ownerKind = Get-AgentKind (Get-OwnerName) }
 
 # ---------------------------------------------------------------- Codex wake-up
 # Only when this Codex session asked for it (ARK_WAKE=codex with its own
@@ -67,8 +107,8 @@ $codex = $null; $codexThread = ''
 if ($env:ARK_WAKE -eq 'codex') {
     $why = ''
     if ($env:CLAUDECODE -or $env:CLAUDE_CODE_ENTRYPOINT) { $why = 'this is a Claude Code session' }
-    elseif (-not $owner) { $why = 'no ARK_OWNER_PID of your Codex process' }
-    elseif ((Get-OwnerName) -ne 'codex') { $why = 'the owner process is not Codex' }
+    elseif (-not $owner) { $why = 'owner process not found' }
+    elseif ($ownerKind -ne 'codex') { $why = "the owner process (pid $owner) is not Codex" }
     elseif (-not $env:ARK_CODEX_THREAD -or $env:ARK_CODEX_THREAD -ne $env:CODEX_THREAD_ID) { $why = "ARK_CODEX_THREAD is not this Codex session's thread" }
     if (-not $why) {
         foreach ($c in @(Get-Command codex -All -ErrorAction SilentlyContinue)) {
@@ -77,8 +117,13 @@ if ($env:ARK_WAKE -eq 'codex') {
         }
         if (-not $codex) { $why = 'no codex with `queue` found' }
     }
-    if ($why) { Write-Output "ARK: not waking through codex queue ($why); the watcher exits on news instead." }
-    else { $codexThread = $env:ARK_CODEX_THREAD }
+    if ($why) {
+        # Say it and fail: a watcher that cannot wake Codex is no use.
+        $hint = if ($why -like '*Claude Code*') { 'Claude Code is woken when the watcher exits: drop ARK_WAKE' } elseif ($why -like '*thread*') { 'set ARK_CODEX_THREAD=$env:CODEX_THREAD_ID from your own session' } elseif ($why -like '*queue*') { 'update Codex' } else { 'set ARK_OWNER_PID=<codex pid>' }
+        Write-Output "ARK: cannot wake codex: $why; $hint"
+        exit 2
+    }
+    $codexThread = $env:ARK_CODEX_THREAD
 }
 if ($codexThread -and -not $env:ARK_WATCH_DETACHED_OWNER) {
     if (-not $PSCommandPath) { Write-Output 'ARK: save the watcher as ark-watch.ps1 and run it with -File.'; exit 2 }

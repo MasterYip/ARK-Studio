@@ -154,7 +154,7 @@ final class MorePage extends ShellActivity.Page {
                 },
                 error -> {
                     Accounts.forget(a, s.serverUrl);
-                    a.toServers(a.getString(error.isNetwork() ? R.string.signed_out_offline : R.string.signed_out));
+                    a.toServers(a.getString(error.isUnreachable() ? R.string.signed_out_offline : R.string.signed_out));
                 });
     }
 }

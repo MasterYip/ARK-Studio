@@ -2,10 +2,12 @@
 // session sidebar) of people's replies in ARK while the agent sits idle
 // (T-0053, 2026-11-19).  An external agent watches the update feed itself
 // (GET /api/agent/v1/updates, the watcher scripts); a session ARK started
-// can also be woken from here when its project allows it: a running, idle
-// session that takes follow-up input gets the people's updates since the
-// last look as one short input turn, and a finished one-shot run (claude
-// -p, codex exec) that can be resumed natively is continued with it.
+// is woken from here: a running, idle session that takes follow-up input
+// gets the people's updates since the last look as one short input turn,
+// and a finished one-shot run (claude -p, codex exec) that can be resumed
+// natively is continued with it.  These are people's replies, not idle
+// reminders, so no project setting turns them off (T-0109): the session was
+// told at launch (ARK_WAKE=ark) that ARK wakes it and starts no watcher.
 //
 // The package knows nothing about the server: the caller supplies the
 // sessions, the update feed and the way to send input (Deps).
@@ -42,7 +44,6 @@ type Batch struct {
 // Deps connects the nudger to the server.
 type Deps struct {
 	Sessions func() []Session
-	Enabled  func(projectID string) bool
 	Top      func(ctx context.Context, projectID string) (epoch string, top int64, err error)
 	Since    func(ctx context.Context, s Session, after int64) (Batch, error)
 	Send     func(s Session, text string) error
@@ -77,7 +78,7 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 	live := map[string]bool{}
 	for _, s := range n.D.Sessions() {
 		live[s.ID] = true
-		if s.ProjectID == "" || (n.D.Enabled != nil && !n.D.Enabled(s.ProjectID)) {
+		if s.ProjectID == "" {
 			continue
 		}
 		c, ok := n.cursor[s.ID]

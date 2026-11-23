@@ -348,7 +348,7 @@ there:
 nothing is downloaded and run, which antivirus software tends to flag:
 
 ```bash
-ark-server agent watch --until-update --url "$URL" --project prj_... --name <your name> --owner-pid $PPID
+ark-server agent watch --until-update --url "$URL" --project prj_... --name <your name>
 ```
 
 It reads the token file (or `ARK_TOKEN`; `--token` would put it on the
@@ -376,24 +376,27 @@ that file.  Never pipe a download into a shell (`curl ... | sh`, `iex (irm
 ...)`).  The scripts take their settings from the environment:
 
 ```bash
-ARK_URL="$URL" ARK_PROJECT=prj_... ARK_AGENT_LABEL=<your name> ARK_OWNER_PID=$PPID sh ark-watch.sh
+ARK_URL="$URL" ARK_PROJECT=prj_... ARK_AGENT_LABEL=<your name> sh ark-watch.sh
 ```
 
 ```powershell
-$env:ARK_URL=$url; $env:ARK_PROJECT='prj_...'; $env:ARK_AGENT_LABEL='<your name>'; $env:ARK_OWNER_PID=<your agent process id>
+$env:ARK_URL=$url; $env:ARK_PROJECT='prj_...'; $env:ARK_AGENT_LABEL='<your name>'
 powershell -NoProfile -ExecutionPolicy Bypass -File ark-watch.ps1
 ```
 
 `watcher.ps1` makes its requests with `curl.exe` (headers on its standard
-input) and looks at no process but the one in `ARK_OWNER_PID`.
+input).
 `ARK_WATCH_MAX` sets the time limit (`0` checks once).
 
-**It belongs to the agent that started it.**  Pass your agent's process id
-(`--owner-pid`, `ARK_OWNER_PID`): in a POSIX shell that is `$PPID`; in
-PowerShell 7 `(Get-Process -Id $PID).Parent.Id`.  The watcher stops within
-a minute after that process ends.  (On Linux and macOS, `watcher.sh` without
-`ARK_OWNER_PID` looks for the nearest Claude Code or Codex process above
-it.)  Every message it prints or queues starts with `ARK UPDATE for
+**It belongs to the agent that started it.**  The watcher walks up its own
+parent processes to the nearest Codex or Claude Code process (or the node
+process of a CLI wrapper) and stops within a minute after that process
+ends.  It reads only parent process ids and names.  `--owner-pid`
+(`ARK_OWNER_PID`) is optional; if you pass it, give your agent's process,
+not the shell's: in a POSIX shell that is `$PPID`, never PowerShell's
+`$PID`, which is the short-lived shell that ran the command.  A given
+process that is gone, or is only the shell, is replaced by the nearest
+agent, and the watcher says so.  Every message it prints or queues starts with `ARK UPDATE for
 <agent>, ARK project <name> (<id>)`, as do the reminders ARK sends the
 sessions it launched.  A message that does not name your own project and
 session is not for you: ignore it.  Never read other processes' command
@@ -414,14 +417,17 @@ How each agent waits:
   explicitly with your own thread id and process:
 
   ```bash
-  ark-server agent watch --until-update --url "$URL" --project prj_... --name <your name> --owner-pid $PPID --wake codex --codex-thread "$CODEX_THREAD_ID"
+  ark-server agent watch --until-update --url "$URL" --project prj_... --name <your name> --wake codex --codex-thread "$CODEX_THREAD_ID"
   ```
 
-  (script: `ARK_WAKE=codex ARK_CODEX_THREAD="$CODEX_THREAD_ID"` with
-  `ARK_OWNER_PID`).  The watcher queues only when the owner process is
-  Codex, no Claude Code environment is present, and the thread id is the one
-  Codex gave this command.  An inherited `CODEX_THREAD_ID` alone never
-  wakes anything.  It then starts itself again on its own (Codex ends a
+  (PowerShell: `--codex-thread $env:CODEX_THREAD_ID`; script:
+  `ARK_WAKE=codex ARK_CODEX_THREAD="$CODEX_THREAD_ID"`).  The watcher
+  queues only when the owner process is Codex, no Claude Code environment
+  is present, and the thread id is the one Codex gave this command.  An
+  inherited `CODEX_THREAD_ID` alone never wakes anything.  When it cannot
+  wake you it prints `cannot wake codex: <reason>; <what to do>` and exits
+  with status 2: fix that and start it again, or check between steps as
+  below.  It then starts itself again on its own (Codex ends a
   command's process group when the command returns), keeps watching with no
   time limit unless one is set, stops when that Codex process ends, and on
   news queues a message listing the updates.  When it arrives, act on it
@@ -434,16 +440,17 @@ How each agent waits:
   you end every turn, and say in your last message that replies left in ARK
   are read when the user writes to you again.
 - **Sessions ARK launched** (Run panel, session sidebar) get
-  `ARK_SESSION_ID`, and `ARK_WAKE=ark` where ARK wakes them itself (project
-  setting *Remind idle agents of replies*, on by default, for Claude Code
-  and Codex runs).  Then start no watcher: ARK sends a running, idle
+  `ARK_SESSION_ID`, and `ARK_WAKE=ark` where ARK wakes them itself (Claude
+  Code and Codex runs).  Then start no watcher: ARK sends a running, idle
   session one short input turn listing people's new updates, and continues
   a finished run (`claude -p`, `codex exec`, within a day and natively
   resumable) with that turn.  The watcher scripts and `ark-server agent
-  watch --until-update` exit at once there.  Without `ARK_WAKE=ark` (the
-  setting is off) use the watcher as above.  ARK does not remind a session
-  whose own watcher is waiting on the feed, so each update wakes a session
-  once.
+  watch --until-update` exit at once there.  Processes the session starts
+  (sub-agents, helper runs) inherit both variables and start no watcher
+  either: they are part of the session, ARK's turn goes to the session ARK
+  launched, and it passes the work on.  Without `ARK_WAKE=ark` (other
+  platforms) use the watcher as above.  ARK does not remind a session whose
+  own watcher is waiting on the feed, so each update wakes a session once.
 
 ### The watcher
 

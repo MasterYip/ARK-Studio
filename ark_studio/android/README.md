@@ -5,7 +5,7 @@ the full same-origin WebView workspace. Native mode opens the Android screens fo
 parts implemented natively, with the rest available through the Web button. Both modes
 use the same signed-in device session, so there's no second login.
 
-- Package `com.masteryip.arkstudio`, `versionCode 19` (the ARK release sets `versionName`)
+- Package `com.masteryip.arkstudio`, `versionCode 20` (the ARK release sets `versionName`)
 - minSdk 26, target/compile 33, Java 11, AGP 7.4.2, Gradle 7.6
 - Server side: `POST /api/mobile/login` and the project-switch endpoints
   (see `docs/guide/mobile.md` → *Android app*)
@@ -59,6 +59,30 @@ Bottom navigation: Home, Tasks, Runs, GPU, More.
 2. **Server URL + account + password.** The app calls `POST /api/mobile/login` with
    JSON. The password is sent once, the response is a device token, and the password
    is dropped. "Read-only on this phone" asks for a read-only device.
+
+**Cloudflare Tunnel** (a local ARK reached through `*.trycloudflare.com` or a named
+tunnel; `server/internal/server/mobile_tunnel.go`, `TunnelFlows.java`):
+
+- A claim through the tunnel answers 202 with a 6-digit confirm code. The phone shows
+  the code and polls `POST /api/mobile/pair/claim/status` every 2 s until the computer
+  confirms (token), declines (`PAIRING_REJECTED`) or the request expires
+  (`PAIRING_CONFIRM_EXPIRED`). LAN servers still answer the claim with the token.
+- After pairing, and later for servers saved without it, the app asks
+  `GET /api/mobile/identity?nonce=…` (random nonce, no token), checks the P-256
+  signature over context, server id, host and nonce, and stores the server id and
+  public key with the saved server (`data/ServerIdentity.java`, `ServerStore` fields
+  `serverId`, `publicKey`, `tunnel`; older lists load unchanged).
+- Re-link: a quick tunnel gets a new address after a restart. A re-link QR
+  (`#relink=<server id>`, through Scan pairing QR or Scan QR in the dialog), the short
+  code (`able-baker-charlie-delta` → `https://able-baker-charlie-delta.trycloudflare.com/`)
+  or a pasted address moves the saved server, its device token and the WebView cookie
+  to the new address only after the new address signs a fresh nonce with the stored
+  key, with the stored server id and the host the phone connected to. Otherwise
+  nothing moves and the app explains why; an unknown server id asks to pair first.
+- Tunnel servers carry a Cloudflare Tunnel chip. When one is unreachable (DNS,
+  timeout, or a Cloudflare error page such as 530 / 1033 or 502), the server list,
+  native screens and web mode offer Re-link, with a note that trycloudflare.com can be
+  slow or blocked on some networks.
 
 - The device token (`arkm_…`) is sealed with AES-256-GCM using a non-exportable
   AndroidKeyStore key (`platform/SecureStorage.java`). Prefs hold only the ciphertext
@@ -147,6 +171,9 @@ JVM tests (`app/src/test`) cover:
 - the notification feed mapping (`NotifyFeedTest`) and the updater: versions, manifest
   and GitHub parsing, checksums, signature check (`UpdateModelTest`);
 - the saved server list (`ServerStoreTest`).
+- Cloudflare Tunnel pairing: the 202 confirm flow and Cloudflare error pages
+  (`TunnelClientTest`), `#relink=` links, short codes, identity signatures with a
+  generated P-256 key, saved identity fields and re-link moves (`TunnelPairingTest`).
 
 Dependencies added (Google Maven): `androidx.work:work-runtime:2.7.1` and
 `androidx.swiperefreshlayout:swiperefreshlayout:1.1.0`. The test-only `org.json:json:20180813` came

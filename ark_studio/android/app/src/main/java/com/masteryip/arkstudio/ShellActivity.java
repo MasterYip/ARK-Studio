@@ -115,7 +115,7 @@ public class ShellActivity extends BaseActivity {
                 a.signedOut();
                 return;
             }
-            if (loaded && !error.isNetwork()) {
+            if (loaded && !error.isUnreachable()) {
                 a.toastError(error);
                 return;
             }

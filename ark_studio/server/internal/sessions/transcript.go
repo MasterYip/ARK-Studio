@@ -88,7 +88,9 @@ var (
 		".txt": "text", ".xml": "xml", ".yaml": "yaml", ".yml": "yaml",
 	}
 
-	ansiRe            = pyre.MustCompile(`\x1b\[[0-9;]*m`, 0)
+	// CSI sequences (colours, cursor moves, erase), OSC sequences (titles,
+	// links) and the two-byte escapes terminals use.
+	ansiRe            = pyre.MustCompile(`\x1b\[[0-?]*[ -/]*[@-~]|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)|\x1b[()][A-Za-z0-9]|\x1b[=>78DEHMc]`, 0)
 	reasoningMarkerRe = pyre.MustCompile(`^\s*(?:dsh\s*:\s*)?(?:reasoning|thinking|thought)\s*:\s*$`, pyre.FlagIgnoreCase)
 	dshEventRe        = pyre.MustCompile(`^\s*dsh\s*:\s*([A-Za-z][\w-]*)\s*:\s*(.*)$`, 0)
 	codexHeaderRe     = pyre.MustCompile(`^\s*(?:OpenAI Codex v|--------|workdir:|model:|provider:|approval:|`+
@@ -157,7 +159,12 @@ func cleanLine(v any) string {
 			text = string(append(out, s[last:]...))
 		}
 	}
-	return pytext.RStrip(strings.ReplaceAll(text, "\r", ""))
+	// A line redrawn in place (spinners, progress bars) shows its last state.
+	text = strings.TrimRight(text, "\r\n")
+	if i := strings.LastIndex(text, "\r"); i >= 0 {
+		text = text[i+1:]
+	}
+	return pytext.RStrip(text)
 }
 
 func truncate(value string, limit int) string {
@@ -945,6 +952,8 @@ type transcriptBuilder struct {
 	// feed state between calls
 	reasoningStream, codexMode, codexUsageNumber, codexDone bool
 	codexSpeaker                                            string
+	codexItems                                              map[string]*pyjson.Object // Codex JSON items by id (transcript_codex.go)
+	codexSeen                                               map[string]bool           // Codex warnings already shown
 }
 
 func (b *transcriptBuilder) nextID(prefix string) string {
@@ -1233,6 +1242,9 @@ func (b *transcriptBuilder) feed(combined []transcriptRow) {
 			continue
 		}
 		if r.stream == "stderr" && codexMode {
+			if codexNoise(line) {
+				continue
+			}
 			marker := pytext.Strip(line)
 			low := pytext.Lower(marker)
 			switch {
@@ -1285,6 +1297,9 @@ func (b *transcriptBuilder) feed(combined []transcriptRow) {
 			continue
 		}
 		reasoningStream = false
+		if b.codexEventLine(line, at) {
+			continue
+		}
 		if b.claudeStreamLine(line, at) {
 			continue
 		}

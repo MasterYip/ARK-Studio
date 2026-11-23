@@ -10,7 +10,6 @@ import (
 
 type fake struct {
 	sessions []Session
-	enabled  bool
 	epoch    string
 	rows     []int64 // update ids with an item each
 	sent     map[string]string
@@ -19,7 +18,6 @@ type fake struct {
 func (f *fake) deps() Deps {
 	return Deps{
 		Sessions: func() []Session { return f.sessions },
-		Enabled:  func(string) bool { return f.enabled },
 		Top: func(context.Context, string) (string, int64, error) {
 			top := int64(0)
 			for _, r := range f.rows {
@@ -42,7 +40,7 @@ func (f *fake) deps() Deps {
 }
 
 func TestNudgeOnlyIdleSessionsWithNewUpdates(t *testing.T) {
-	f := &fake{enabled: true, epoch: "e1", rows: []int64{1, 2}, sent: map[string]string{}}
+	f := &fake{epoch: "e1", rows: []int64{1, 2}, sent: map[string]string{}}
 	f.sessions = []Session{{ID: "s1", ProjectID: "p", Idle: true, Accepts: true}}
 	n := &Nudger{D: f.deps()}
 	ctx := context.Background()
@@ -61,12 +59,6 @@ func TestNudgeOnlyIdleSessionsWithNewUpdates(t *testing.T) {
 	if got := n.Tick(ctx); len(got) != 0 {
 		t.Fatal("no repeat without new updates")
 	}
-	f.enabled = false
-	f.rows = append(f.rows, 4)
-	if got := n.Tick(ctx); len(got) != 0 {
-		t.Fatal("project switched off")
-	}
-	f.enabled = true
 	f.epoch = "e2"
 	if got := n.Tick(ctx); len(got) != 0 {
 		t.Fatal("a new history epoch restarts at now")
@@ -109,7 +101,7 @@ func TestTextFormat(t *testing.T) {
 // A session whose own watcher waits on the feed is not reminded as well;
 // its cursor follows the feed, so it is not reminded of those updates later.
 func TestNudgeSkipsSessionsWithTheirOwnWatcher(t *testing.T) {
-	f := &fake{enabled: true, epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
+	f := &fake{epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
 	f.sessions = []Session{{ID: "s1", ProjectID: "p", Idle: true, Accepts: true, Watching: true}}
 	n := &Nudger{D: f.deps()}
 	ctx := context.Background()
@@ -131,7 +123,7 @@ func TestNudgeSkipsSessionsWithTheirOwnWatcher(t *testing.T) {
 // The cursor is saved as it moves; a new nudger (a server restart) goes on
 // from the saved one, so updates held back while a turn ran are delivered.
 func TestNudgeCursorSurvivesRestart(t *testing.T) {
-	f := &fake{enabled: true, epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
+	f := &fake{epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
 	saved := map[string]cursor{}
 	d := f.deps()
 	d.Load = func(id string) (string, int64, bool) { c, ok := saved[id]; return c.epoch, c.after, ok }

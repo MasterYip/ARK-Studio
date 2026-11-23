@@ -112,14 +112,14 @@ func TestAgentWatchCodexWakeConditions(t *testing.T) {
 	me := os.Getpid()
 	o := &watchOptions{CodexThread: "th-1"}
 	t.Setenv("CODEX_THREAD_ID", "th-1")
-	if why := codexWakeBlocker(o, 0); !strings.Contains(why, "owner-pid") {
+	if why := codexWakeBlocker(o, 0, ""); !strings.Contains(why, "owner process not found") {
 		t.Fatalf("no owner: %q", why)
 	}
-	if why := codexWakeBlocker(o, me); !strings.Contains(why, "not Codex") {
+	if why := codexWakeBlocker(o, me, ""); !strings.Contains(why, "not Codex") {
 		t.Fatalf("owner is this test, not Codex: %q", why)
 	}
 	t.Setenv("CLAUDECODE", "1")
-	if why := codexWakeBlocker(o, me); !strings.Contains(why, "Claude Code") {
+	if why := codexWakeBlocker(o, me, ""); !strings.Contains(why, "Claude Code") {
 		t.Fatalf("Claude Code: %q", why)
 	}
 	for name, want := range map[string]bool{"codex": true, "codex.exe": true, "codex-linux-san": true, "Codex.EXE": true,
@@ -129,15 +129,15 @@ func TestAgentWatchCodexWakeConditions(t *testing.T) {
 		}
 	}
 	// End to end: an inherited CODEX_THREAD_ID under a non-Codex owner says
-	// why it will not queue and exits on news like any watcher.
+	// why it will not queue and fails (T-0109: exit 0 hid the refusal).
 	t.Setenv("CLAUDECODE", "")
 	srv, app := watchServer(t)
 	t.Setenv("ARK_TOKEN", app.AgentToken())
 	var out, errw bytes.Buffer
-	agentWatch([]string{"--url", srv.URL, "--state", filepath.Join(t.TempDir(), "c"), "--until-update", "--max", "1", "--wait", "1",
+	code := agentWatch([]string{"--url", srv.URL, "--state", filepath.Join(t.TempDir(), "c"), "--until-update", "--max", "1", "--wait", "1",
 		"--wake", "codex", "--codex-thread", "th-1", "--owner-pid", strconv.Itoa(me)}, &out, &errw)
-	if !strings.Contains(out.String(), "not waking through codex queue (the owner process is not Codex)") {
-		t.Fatalf("%q %q", out.String(), errw.String())
+	if code != 2 || !strings.Contains(errw.String(), "cannot wake codex: the owner process (pid "+strconv.Itoa(me)+") is not Codex; pass --owner-pid <codex pid>") {
+		t.Fatalf("%d %q %q", code, out.String(), errw.String())
 	}
 }
 

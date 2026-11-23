@@ -7,9 +7,14 @@ import (
 	"arkstudio/go/internal/compat/pyjson"
 )
 
-// TestTranscriptVectors compares BuildTranscript with CPython's
-// build_transcript (testdata from tests/python/contract/gen_transcript_vectors.py).
+// TestTranscriptVectors compares BuildTranscript with the recorded
+// transcripts (testdata, first from CPython's build_transcript via
+// tests/python/contract/gen_transcript_vectors.py).  The Go server owns the
+// behaviour now: Codex JSON events are mapped by transcript_codex.go since
+// 2026-11-23.  ARK_TRANSCRIPT_VECTORS_OUT=<file> writes Go's outputs there
+// (a JSON list) to review and merge.
 func TestTranscriptVectors(t *testing.T) {
+	var dumped []any
 	raw, err := os.ReadFile("testdata/transcript_vectors.json")
 	if err != nil {
 		t.Fatal(err)
@@ -33,6 +38,7 @@ func TestTranscriptVectors(t *testing.T) {
 			Stdout: stdout, Stderr: stderr, Error: strOr(in.Value("error")), Notice: strOr(in.Value("notice")),
 			Platform: strOr(in.Value("platform"))})
 		got.Set("generated_at", "<GEN>")
+		dumped = append(dumped, got)
 		want := string(pyjson.Dumps(item.Value("output")))
 		if g := string(pyjson.Dumps(got)); g != want {
 			n := 0
@@ -43,6 +49,9 @@ func TestTranscriptVectors(t *testing.T) {
 			t.Errorf("case %d (%s, %s) differs at %d:\n go: %s\n py: %s", i, in.Value("session_id"), in.Value("status"), n,
 				g[lo:min(len(g), n+120)], want[lo:min(len(want), n+120)])
 		}
+	}
+	if out := os.Getenv("ARK_TRANSCRIPT_VECTORS_OUT"); out != "" {
+		_ = os.WriteFile(out, pyjson.Dumps(dumped), 0o644)
 	}
 }
 

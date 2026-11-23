@@ -1474,6 +1474,36 @@ body.wb-on .topbar .layout-toggle[data-layout]{display:none}
 .launch-form .field{margin-bottom:0}
 .launch-form .session-hint{margin:3px 0 0}
 .launch-form .notice{margin:0}
+.launch-form .hidden{display:none}
+.launch-inline-notice{display:flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid color-mix(in srgb,var(--amber) 30%,transparent);background:color-mix(in srgb,var(--amber) 7%,transparent);border-radius:7px;font-size:0.6875rem;color:var(--sub);line-height:1.4}
+.launch-inline-notice .icon{color:var(--amber);flex:0 0 auto}
+.launch-inline-notice span{flex:1;min-width:0}
+.launch-inline-notice .link{white-space:nowrap;color:var(--accent-2);font-weight:600}
+.launch-platform-hint{display:flex;gap:8px;align-items:baseline}
+.launch-platform-hint>span:first-child,.launch-platform-hint>div:first-child{flex:1;min-width:0}
+.launch-refresh{white-space:nowrap;font-size:0.625rem;color:var(--mute)}
+.launch-refresh:hover{color:var(--accent-2)}
+.launch-form [data-launch-field="model"] .input{margin-top:5px}
+.launch-task-row{display:flex;gap:4px;align-items:center}
+.launch-task-row .input{flex:1;min-width:0}
+.launch-access{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.launch-access-option{display:flex;gap:8px;align-items:flex-start;padding:8px 10px;border:1px solid var(--line);border-radius:8px;cursor:pointer;background:var(--card)}
+.launch-access-option input{margin:2px 0 0;flex:0 0 auto}
+.launch-access-option span{display:flex;flex-direction:column;gap:2px;min-width:0}
+.launch-access-option b{font-size:0.71875rem;color:var(--ink)}
+.launch-access-option small{font-size:0.65625rem;color:var(--sub);line-height:1.4}
+.launch-access-option:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.launch-access-option.risky:has(input:checked){border-color:color-mix(in srgb,var(--amber) 60%,transparent);background:color-mix(in srgb,var(--amber) 9%,transparent)}
+.launch-advanced{border-top:1px solid var(--line-soft);padding-top:6px}
+.launch-advanced>summary{cursor:pointer;font-size:0.6875rem;font-weight:600;color:var(--sub);padding:2px 0;user-select:none}
+.launch-advanced[open]>summary{margin-bottom:8px}
+.launch-safety{display:flex;flex-wrap:wrap;align-items:baseline;gap:4px 7px;font-size:0.65625rem;color:var(--mute);line-height:1.45}
+.launch-safety>.icon{flex:0 0 auto;align-self:center}
+.launch-safety>span{flex:0 1 auto}
+.launch-more>summary{cursor:pointer;color:var(--accent-2);list-style:none;display:inline}
+.launch-more>summary::-webkit-details-marker{display:none}
+.launch-more[open]{flex-basis:100%}
+.launch-more p{margin:5px 0 0;color:var(--sub)}
 @media(max-width:1100px){
   .sessions-layout{grid-template-columns:1fr}
   .session-list-panel{max-height:300px;min-height:0}
@@ -1484,6 +1514,7 @@ body.wb-on .topbar .layout-toggle[data-layout]{display:none}
   .artifact-layout{grid-template-columns:1fr}
   .artifact-list{max-height:200px}
   .launch-form{grid-template-columns:1fr}
+  .launch-access{grid-template-columns:1fr}
   .session-facts{grid-template-columns:1fr 1fr}
 }
 
@@ -3088,7 +3119,7 @@ a.infohub-message-link:hover{text-decoration:underline}
 .task-gpu-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 10px; }
 .task-gpu-server { border: 1px solid var(--line); border-radius: 10px; padding: 10px; background: var(--card2); }
 .task-gpu-server-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 8px; margin-bottom: 8px; }
-.task-gpu-link { display: inline-flex; align-items: center; gap: 3px; color: var(--blue); font-size: 0.65625rem; text-decoration: none; }
+.task-gpu-link { display: inline-flex; align-items: center; gap: 3px; color: var(--blue); font-size: 0.65625rem; text-decoration: none; background: none; border: 0; padding: 0; font-family: inherit; cursor: pointer; }
 .task-gpu-link:hover { text-decoration: underline; }
 .task-gpu-meter { display: grid; grid-template-columns: 32px 1fr auto; gap: 6px; align-items: center; font-size: 0.65625rem; color: var(--sub); margin: 4px 0; }
 .task-gpu-track { height: 5px; border-radius: 3px; background: var(--line); overflow: hidden; }

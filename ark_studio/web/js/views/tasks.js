@@ -13,8 +13,14 @@ import { sessionLibraryPanel } from "../session-library.js";
 import { api, cachedThenFresh } from "../api.js";
 import { gpuOwnership } from "../gpu-model.js";
 import { resourcesGraphPanel } from "../resources-view.js";
+import { openServer } from "../resource-open.js";
 import { advancedEnabled } from "../advanced.js";
-import { PERMISSION_MODES, permissionModeLabel, permissionModeDescription } from "../session-model.js";
+import { modelOptions, modelEfforts } from "../session-model.js";
+import {
+  launchProviders, disabledProviders, providerCapabilities, modelChoices, defaultEffort, effortChoices, accessChoices, agentChoices,
+  loadLaunchDefaults, saveLaunchDefaults, initialChoice, taskOptions, parseTaskValue, contextTask, autoTitle,
+  splitPrefillPrompt, firstMessage, CUSTOM_MODEL,
+} from "../launch-dialog-model.js";
 import { assigneeChip } from "../assignee.js";
 
 const COLUMNS = ["inbox", "open", "active", "review", "blocked", "done"];
@@ -185,14 +191,17 @@ function gpuResourcesPanel(ctx, S, tasks) {
             server.host ? h("div", { class: "physics-hint" },
               `${server.user ? server.user + "@" : ""}${server.host}:${server.port}`) : null),
           !server.host ? null : h("div", { class: "row tight" },
-            h("a", {
-              class: "task-gpu-link", href: `ssh://${server.user ? server.user + "@" : ""}${server.host}:${server.port || 22}`,
+            // Through an ~/.ssh/config entry so the person's key is used
+            // (resource-open.js openServer); a browser copies the command.
+            h("button", {
+              type: "button", class: "task-gpu-link",
               title: t("tasks.gpu.open_ssh"),
+              onclick: () => openServer("ssh", { host: server.host, user: server.user, port: server.port }, { name: server.server }),
             }, icon("command", "sm"), "SSH"),
-            h("a", {
-              class: "task-gpu-link",
-              href: `vscode://vscode-remote/ssh-remote+${server.user ? server.user + "@" : ""}${server.host}:${server.port || 22}/`,
+            h("button", {
+              type: "button", class: "task-gpu-link",
               title: t("tasks.gpu.open_vscode"),
+              onclick: () => openServer("editor", { host: server.host, user: server.user, port: server.port }, { name: server.server }),
             }, icon("external", "sm"), "VS Code"))),
         h("div", { class: "task-gpu-meter", style: { display: "flex", alignItems: "center", gap: "7px", margin: "5px 0" } },
           h("span", { style: { color: "var(--sub)", fontSize: "9px", fontWeight: "600", width: "26px" } }, "CPU"),
@@ -354,39 +363,79 @@ function platformLabel(preset) {
   return translated === key ? (preset.label || preset.platform_label || id) : translated;
 }
 
+async function launchUser() {
+  try {
+    const data = await api.me();
+    const profile = data?.profile || data || {};
+    return String(profile.username || profile.id || profile.name || "");
+  } catch {
+    return "";
+  }
+}
+
+function launchStore() {
+  try { return globalThis.localStorage || null; } catch { return null; }
+}
+
+function launchCatalog(presets) {
+  const providers = launchProviders(presets);
+  const modelsFor = (preset) => (preset ? modelOptions(preset, providerCapabilities(preset)) : []);
+  const effortsFor = (preset, model) => (preset ? modelEfforts(preset, providerCapabilities(preset), model) : []);
+  return { providers, modelsFor, effortsFor };
+}
+
+function freeWorktrees(worktreeData) {
+  return (worktreeData?.worktrees || []).filter((item) => item.managed && !item.main);
+}
+
+// Settings › Personal › Coding agents (or the project's), scrolled to the section.
+function openPersonalAgents(ctx, section = "personalAgents") {
+  if (ctx.openSettingsAt) { ctx.openSettingsAt(section); return; }
+  try { localStorage.setItem("ark.settingsTab", section); } catch { /* storage unavailable */ }
+  ctx.navigate("settings");
+}
+
+// "Run with agent" on a task: starts at once with what this person last
+// chose in the dialog for this project (provider, model, reasoning, access,
+// worktree), else the first real provider with its defaults.
 export async function dispatchTaskSession(ctx, unit) {
   if (ctx.S.project?.demo || ctx.S.project?.id === "ark-demo") {
     ctx.toast(t("tasks.demo_disabled"), "info");
     return;
   }
+  const uid = unit.uid || unit.id;
   try {
-    const [data, presets] = await Promise.all([
-      api.dispatch(unit.uid || unit.id),
+    const [data, presets, worktreeData, user] = await Promise.all([
+      api.dispatch(uid),
       api.sessionPresets().then((value) => value.presets || []).catch(() => []),
+      api.worktrees().catch(() => null),
+      launchUser(),
     ]);
-    const available = presets.filter((preset) => preset.available);
-    const realAgent = available.find((preset) => ["dsh", "codex", "claude", "opencode", "cursor", "gemini"].includes(preset.id));
-    const agent = realAgent || available.find((preset) => preset.id === "echo") || available[0];
-    if (!agent) {
+    const { providers, modelsFor, effortsFor } = launchCatalog(presets);
+    const real = providers.filter((preset) => !preset.demo && preset.id !== "shell");
+    if (!real.length) {
       ctx.toast(t("tasks.dispatch_no_agent"), "err");
-      openLaunchSession(ctx, {
-        title: `${unit.uid} · ${unit.title}`,
-        task: unit.uid,
-        prompt: data.prompt,
-        notice: t("tasks.dispatch_no_agent"),
-      });
+      openLaunchSession(ctx, { task: uid, notice: t("tasks.dispatch_no_agent") });
       return;
     }
+    const free = freeWorktrees(worktreeData).filter((item) => !Number(item.active_count || 0)).map((item) => item.path);
+    const remembered = loadLaunchDefaults(launchStore(), user, ctx.S.project?.id);
+    const choice = initialChoice({ providers: real, remembered, modelsFor, effortsFor, worktrees: free });
     const session = await api.createSession({
-      platform: agent.id,
-      title: `${unit.uid} · ${unit.title}`,
-      task: unit.uid,
+      platform: choice.platform,
+      title: autoTitle({ task: unit }) || uid,
+      task: uid,
       prompt: data.prompt,
+      model: choice.model,
+      effort: choice.effort,
+      access_mode: choice.access,
+      worktree: choice.worktree,
+      agent: choice.agent,
     });
     ctx.S.selectedSessionId = session.session.id;
     ctx.S.taskView = "sessions";
     ctx.S.sessionThreadMode = "thread";
-    ctx.toast(realAgent ? t("tasks.dispatch_started") : t("tasks.dispatch_demo"), "ok");
+    ctx.toast(t("tasks.dispatch_started_with", { provider: platformLabel(real.find((p) => p.id === choice.platform) || {}) }), "ok");
     await ctx.refresh();
   } catch (err) {
     ctx.toast(err.message, "err");
@@ -406,34 +455,127 @@ export async function openLaunchSession(ctx, prefill = {}) {
   let presets = [];
   let worktreeData = null;
   let effective = null;
+  let user = "";
   try {
-    const [presetData, worktreeResult, effectiveData] = await Promise.all([
+    const [presetData, worktreeResult, effectiveData, who] = await Promise.all([
       api.sessionPresets(),
-      api.worktrees().catch((err) => ({ available: false, reason: err.message, worktrees: [] })),
+      api.worktrees().catch(() => ({ available: false, worktrees: [] })),
       api.effectiveSettings().catch(() => null),
+      launchUser(),
     ]);
     presets = presetData.presets || [];
     worktreeData = worktreeResult;
     effective = effectiveData;
+    user = who;
   } catch (err) {
     ctx.toast(err.message, "err");
     return;
   }
-  const available = presets.filter((preset) => preset.available);
-  if (!available.length) {
+  let catalog = launchCatalog(presets);
+  if (!catalog.providers.length) {
     openModal({
       title: t("tasks.launch_title"),
-      body: h("div", { class: "notice" }, icon("alert", "sm"), h("div", null, t("tasks.launch_no_platforms"))),
+      body: h("div", { class: "launch-form" },
+        h("div", { class: "full notice" }, icon("alert", "sm"), h("div", null, t("tasks.launch_no_platforms"))),
+        h("div", { class: "full" }, h("button", { class: "btn sm", type: "button", onclick: () => openPersonalAgents(ctx) },
+          icon("settings", "sm"), t("tasks.launcher.personal_open")))),
       actions: [{ label: t("action.close"), ghost: true }],
     });
     return;
   }
-  let ordered = [...presets].sort((a, b) => Number(b.available) - Number(a.available));
-  const managedWorktrees = (worktreeData?.worktrees || []).filter((item) => item.managed && !item.main);
-  const agents = (ctx.S.units || []).filter((u) => u.type === "agent");
-  const tasks = (ctx.S.units || []).filter((u) => u.type === "task").slice(0, 200);
+  const projectId = ctx.S.project?.id || "";
+  const store = launchStore();
+  const remembered = loadLaunchDefaults(store, user, projectId);
+  const managedWorktrees = freeWorktrees(worktreeData);
+  const pickableWorktrees = managedWorktrees.filter((item) => !Number(item.active_count || 0)).map((item) => item.path);
   const parent = prefill.parent || null;
+  const units = ctx.S.units || [];
+  const tasks = taskOptions(units);
+  const { prompt: draftPrompt, extra: draftExtra } = splitPrefillPrompt(prefill.prompt || "");
+  const choice = initialChoice({
+    providers: catalog.providers, remembered, prefill, parent,
+    modelsFor: catalog.modelsFor, effortsFor: catalog.effortsFor, worktrees: pickableWorktrees,
+  });
+  const field = (name, label, ...children) => h("div", { class: "field", "data-launch-field": name },
+    h("label", null, label), ...children);
+  const hint = (text = "") => h("div", { class: "session-hint" }, text);
+  const currentPreset = () => catalog.providers.find((item) => item.id === platformSelect.value) || catalog.providers[0];
 
+  // ---- provider
+  const providerLabel = (preset) => {
+    if (preset.provider_status === "unauthenticated") return t("tasks.launcher.provider_unauth", { provider: platformLabel(preset) });
+    if (preset.provider_status === "unknown") return t("tasks.launcher.provider_auth_unknown", { provider: platformLabel(preset) });
+    return platformLabel(preset);
+  };
+  const platformSelect = h("select", { class: "select", "aria-label": t("tasks.launch_platform") });
+  const platformHint = hint();
+  const providerRefresh = h("button", { class: "link launch-refresh", type: "button", title: t("tasks.launcher.refresh_providers_title") },
+    t("tasks.launcher.refresh_providers"));
+  function fillProviders(selected) {
+    platformSelect.replaceChildren(...catalog.providers.map((preset) => h("option", { value: preset.id }, providerLabel(preset))));
+    platformSelect.value = catalog.providers.some((preset) => preset.id === selected) ? selected : catalog.providers[0].id;
+  }
+
+  // ---- model
+  const modelSelect = h("select", { class: "select", "aria-label": t("tasks.launch_model") });
+  const customModel = h("input", { class: "input hidden", placeholder: t("tasks.launcher.model_custom_placeholder"), autocomplete: "off", spellcheck: "false" });
+  function fillModels(model = "", custom = false) {
+    const preset = currentPreset();
+    const caps = providerCapabilities(preset);
+    const options = catalog.modelsFor(preset);
+    const rows = modelChoices(options, { t, defaultModel: caps.default_model });
+    modelSelect.replaceChildren(...rows.map((row) => h("option", { value: row.value }, row.label)));
+    const known = rows.some((row) => row.value === model && row.value !== CUSTOM_MODEL);
+    modelSelect.value = custom || (model && !known) ? CUSTOM_MODEL : model;
+    customModel.value = modelSelect.value === CUSTOM_MODEL ? model : "";
+    customModel.classList.toggle("hidden", modelSelect.value !== CUSTOM_MODEL);
+  }
+  const chosenModel = () => (modelSelect.value === CUSTOM_MODEL ? customModel.value.trim() : modelSelect.value);
+
+  // ---- reasoning
+  const effortSelect = h("select", { class: "select", "aria-label": t("tasks.launcher.effort") });
+  const effortField = field("effort", t("tasks.launcher.effort"), effortSelect);
+  function fillEfforts(effort = effortSelect.value) {
+    const preset = currentPreset();
+    const caps = providerCapabilities(preset);
+    const model = chosenModel();
+    const efforts = catalog.effortsFor(preset, model);
+    const rows = effortChoices(efforts, { t, fallback: defaultEffort(catalog.modelsFor(preset), caps, model) });
+    effortSelect.replaceChildren(...rows.map((row) => h("option", { value: row.value }, row.label)));
+    effortSelect.value = efforts.includes(effort) ? effort : "";
+    effortField.classList.toggle("hidden", !rows.length);
+  }
+
+  // ---- access
+  const accessName = `launch-access-${Date.now()}`;
+  const accessBox = h("div", { class: "launch-access", role: "radiogroup", "aria-label": t("tasks.launcher.access") });
+  function fillAccess(access) {
+    const modes = accessChoices(currentPreset());
+    const value = modes.includes(access) ? access : modes[0];
+    accessBox.replaceChildren(...modes.map((mode) => h("label", { class: `launch-access-option ${mode === "full_access" ? "risky" : ""}`.trim() },
+      h("input", { type: "radio", name: accessName, value: mode, checked: mode === value }),
+      h("span", null, h("b", null, t(`tasks.launcher.access_${mode}_title`)), h("small", null, t(`tasks.launcher.access_${mode}_line`))))));
+  }
+  const chosenAccess = () => accessBox.querySelector("input:checked")?.value || "read_only";
+
+  // ---- task
+  const taskListId = `ark-launch-tasks-${Date.now()}`;
+  const taskInput = h("input", { class: "input", list: taskListId, placeholder: t("tasks.launcher.task_placeholder"), autocomplete: "off" });
+  const taskList = h("datalist", { id: taskListId }, tasks.map((task) => h("option", { value: task.label })));
+  const taskClear = h("button", { class: "icon-btn launch-task-clear", type: "button", title: t("tasks.launcher.task_clear"), "aria-label": t("tasks.launcher.task_clear") }, icon("x", "sm"));
+  const taskHint = hint();
+  const initialTask = contextTask({ prefill, parent, selectedId: ctx.S.drawerOpen ? ctx.S.selectedId : "", units });
+  const initialTaskOption = tasks.find((task) => task.uid === initialTask);
+  taskInput.value = initialTaskOption ? initialTaskOption.label : initialTask;
+  const chosenTask = () => parseTaskValue(taskInput.value, tasks) || (/^[A-Za-z]+-\d+$/.test(taskInput.value.trim()) ? taskInput.value.trim() : "");
+  const chosenTaskUnit = () => units.find((unit) => unit.uid === chosenTask()) || null;
+
+  // ---- prompt
+  const promptArea = h("textarea", { class: "textarea", style: { minHeight: "88px" }, placeholder: t("tasks.launcher.prompt_placeholder") });
+  promptArea.value = draftPrompt;
+
+  // ---- advanced
+  const titleInput = h("input", { class: "input", maxlength: "160" });
   const worktreeSelect = h("select", { class: "select" },
     h("option", { value: "" }, t("tasks.launcher.no_worktree")),
     ...managedWorktrees.map((item) => h("option", {
@@ -442,46 +584,30 @@ export async function openLaunchSession(ctx, prefill = {}) {
     }, t(item.clean ? "tasks.launcher.wt_option_clean" : "tasks.launcher.wt_option_changed",
       { branch: item.branch || item.name, n: item.dirty || 0 })
       + (item.active_count ? t("tasks.launcher.wt_option_active", { n: item.active_count }) : ""))));
-  const worktreeNote = h("div", { class: "session-hint" });
-  const launchProviderLabel = (preset) => {
-    if (!preset.available) return `${platformLabel(preset)} — ${t("tasks.launch_unavailable")}`;
-    if (preset.provider_status === "unauthenticated") return t("tasks.launcher.provider_unauth", { provider: platformLabel(preset) });
-    if (preset.provider_status === "unknown") return t("tasks.launcher.provider_auth_unknown", { provider: platformLabel(preset) });
-    return platformLabel(preset);
-  };
-  const platformSelect = h("select", { class: "select" },
-    ordered.map((preset) => h("option", {
-      value: preset.id,
-      disabled: !preset.available,
-    }, launchProviderLabel(preset))));
-  const providerRefresh = h("button", { class: "btn sm ghost", type: "button", title: t("tasks.launcher.refresh_providers_title") },
-    icon("refresh", "sm"), t("tasks.launcher.refresh_providers"));
-  const titleInput = h("input", { class: "input", placeholder: t("common.untitled") });
-  const modelInput = h("input", { class: "input", list: "ark-session-models", placeholder: t("tasks.models.default_tag"), autocomplete: "off" });
-  const modelList = h("datalist", { id: "ark-session-models" });
-  const effortSelect = h("select", { class: "select" }, h("option", { value: "" }, t("tasks.models.default_tag")));
-  const accessSelect = h("select", { class: "select" },
-    h("option", { value: "read_only" }, t("tasks.launcher.access_read_only")),
-    h("option", { value: "full_access" }, t("tasks.launcher.access_full")));
-  const accessNote = h("div", { class: "session-hint" });
-  const agentInput = h("input", { class: "input", list: "ark-session-agents", placeholder: t("tasks.launch_agent") });
-  const agentList = h("datalist", { id: "ark-session-agents" },
-    agents.map((agent) => h("option", { value: agent.title })));
-  const taskSelect = h("select", { class: "select" },
-    h("option", { value: "" }, t("tasks.no_task")),
-    tasks.map((task) => h("option", { value: task.uid }, `${task.uid} · ${task.title}`)));
+  const worktreeNote = hint();
   const cwdInput = h("input", { class: "input", placeholder: t("tasks.launcher.workspace_root") });
-  const promptArea = h("textarea", { class: "textarea", style: { minHeight: "96px" }, value: prefill.prompt || "" });
-  const description = h("div", { class: "session-hint" });
-  const platformNote = h("div", { class: "session-hint" });
-  const cwdHint = h("div", { class: "session-hint" }, t("tasks.launch_cwd_hint"));
+  const cwdHint = hint(t("tasks.launch_cwd_hint"));
+  const agentSelect = h("select", { class: "select" });
+  const agentHint = hint();
+  const agentField = field("agent", t("tasks.launcher.agent"), agentSelect, agentHint);
+  const extraArea = h("textarea", { class: "textarea", style: { minHeight: "72px" } });
+  extraArea.value = draftExtra;
+  const extraField = h("div", { class: `field full ${draftExtra ? "" : "hidden"}`.trim(), "data-launch-field": "extra" },
+    h("label", null, t("tasks.launcher.extra")), extraArea, hint(t("tasks.launcher.extra_hint")));
 
-  function selectedWorktree() {
-    return managedWorktrees.find((item) => item.path === worktreeSelect.value) || null;
+  function fillAgents(agent = agentSelect.value) {
+    const preset = currentPreset();
+    const list = agentChoices(preset, { worktree: worktreeSelect.value });
+    agentSelect.replaceChildren(h("option", { value: "" }, t("tasks.launcher.agent_none")),
+      ...list.map((item) => h("option", { value: item.id, title: item.description || "" },
+        item.description ? `${item.label || item.id} — ${item.description}` : (item.label || item.id))));
+    agentSelect.value = list.some((item) => item.id === agent) ? agent : "";
+    agentField.classList.toggle("hidden", !list.length);
+    agentHint.textContent = preset?.id === "codex" ? t("tasks.launcher.agent_hint_codex") : t("tasks.launcher.agent_hint_claude");
   }
 
   function syncWorktree() {
-    const target = selectedWorktree();
+    const target = managedWorktrees.find((item) => item.path === worktreeSelect.value) || null;
     cwdInput.disabled = Boolean(target);
     cwdInput.placeholder = target
       ? t("tasks.launcher.worktree_root", { path: target.path }) : t("tasks.launcher.workspace_root");
@@ -493,77 +619,58 @@ export async function openLaunchSession(ctx, prefill = {}) {
       worktreeNote.classList.toggle("danger", Number(target.dirty || 0) > 0);
     } else {
       cwdHint.textContent = t("tasks.launch_cwd_hint");
-      if (worktreeData?.available) {
-        worktreeNote.textContent = t("tasks.launcher.no_worktree_note");
-      } else {
-        worktreeNote.textContent = worktreeData?.reason || t("tasks.launcher.no_git");
-      }
+      worktreeNote.textContent = worktreeData?.available ? t("tasks.launcher.no_worktree_note_short") : t("tasks.launcher.no_git");
       worktreeNote.classList.remove("danger");
     }
+    fillAgents();
   }
 
-  function syncPreset() {
-    const preset = ordered.find((item) => item.id === platformSelect.value);
-    description.textContent = preset?.description || "";
-    const models = preset?.models || [];
-    modelInput.value = models[0] || "";
-    modelInput.placeholder = models[0] || t("tasks.launcher.provider_default");
-    modelInput.title = models.length
-      ? t("tasks.launcher.configured_models", { models: models.join(", ") })
-      : t("tasks.launcher.no_model_presets");
-    modelList.replaceChildren(...models.map((model) => h("option", { value: model })));
-    const efforts = preset?.efforts || [];
-    effortSelect.replaceChildren(
-      h("option", { value: "" }, efforts.length ? t("tasks.models.default_tag") : t("tasks.launcher.not_supported")),
-      ...efforts.map((effort) => h("option", { value: effort }, effort)));
-    effortSelect.disabled = !efforts.length;
-    const modes = (preset?.permission_modes || preset?.access_modes || ["read_only", "full_access"])
-      .filter((mode) => PERMISSION_MODES.includes(mode));
-    accessSelect.replaceChildren(...modes.map((mode) => h("option", {
-      value: mode, title: permissionModeDescription(mode, { t }),
-    }, `${permissionModeLabel(mode, { t })} — ${permissionModeDescription(mode, { t })}`)));
-    accessSelect.value = modes.includes("read_only") ? "read_only" : (modes[0] || "read_only");
-    accessSelect.disabled = modes.length < 2;
-    platformNote.textContent = preset?.followup
-      ? t("tasks.followup_hint")
-      : t("tasks.followup_disabled");
-    syncAccessNote();
+  function syncTitle() {
+    titleInput.placeholder = autoTitle({ task: chosenTaskUnit(), prompt: promptArea.value }) || t("common.untitled");
+    taskHint.textContent = taskInput.value.trim() && !chosenTask() ? t("tasks.launcher.task_unknown") : "";
+    taskHint.classList.toggle("danger", Boolean(taskHint.textContent));
   }
-  function syncAccessNote() {
-    const preset = ordered.find((item) => item.id === platformSelect.value);
-    const mode = accessSelect.value;
-    if (mode === "full_access") {
-      accessNote.textContent = t("tasks.launcher.note_full");
-    } else if (mode === "ask" || mode === "accept_edits") {
-      const supported = Boolean(preset?.supports_approval);
-      accessNote.textContent = supported
-        ? t("tasks.launcher.note_approval", { desc: permissionModeDescription(mode, { t }) })
-        : t("tasks.launcher.note_no_approval", { mode: permissionModeLabel(mode, { t }) });
-    } else if (mode === "plan") {
-      accessNote.textContent = t("tasks.launcher.note_plan");
-    } else {
-      accessNote.textContent = t("tasks.launcher.note_read_only");
-    }
-    accessNote.classList.toggle("danger", mode === "full_access" || (
-      (mode === "ask" || mode === "accept_edits") && !preset?.supports_approval));
+
+  function syncPlatform() {
+    const preset = currentPreset();
+    const key = `tasks.launcher.platform_hint.${preset.id}`;
+    const text = t(key);
+    platformHint.textContent = text === key ? "" : text;
   }
-  accessSelect.addEventListener("change", syncAccessNote);
-  platformSelect.addEventListener("change", syncPreset);
+
+  platformSelect.addEventListener("change", () => {
+    const keep = chosenAccess();
+    syncPlatform();
+    fillModels("");
+    fillEfforts("");
+    fillAccess(keep);
+    fillAgents("");
+  });
+  modelSelect.addEventListener("change", () => {
+    customModel.classList.toggle("hidden", modelSelect.value !== CUSTOM_MODEL);
+    if (modelSelect.value === CUSTOM_MODEL) customModel.focus();
+    fillEfforts();
+  });
+  customModel.addEventListener("change", () => fillEfforts());
   worktreeSelect.addEventListener("change", syncWorktree);
+  taskInput.addEventListener("input", syncTitle);
+  taskClear.addEventListener("click", () => { taskInput.value = ""; syncTitle(); taskInput.focus(); });
+  promptArea.addEventListener("input", syncTitle);
   providerRefresh.addEventListener("click", async () => {
     providerRefresh.disabled = true;
     try {
       await api.refreshProviders();
       presets = (await api.sessionPresets()).presets || [];
-      ordered = [...presets].sort((a, b) => Number(b.available) - Number(a.available));
-      const current = platformSelect.value;
-      platformSelect.replaceChildren(...ordered
-        .map((preset) => h("option", {
-          value: preset.id, disabled: !preset.available,
-        }, launchProviderLabel(preset))));
-      platformSelect.value = ordered.some((preset) => preset.id === current && preset.available)
-        ? current : (ordered.find((preset) => preset.available)?.id || current);
-      syncPreset();
+      catalog = launchCatalog(presets);
+      if (!catalog.providers.length) throw new Error(t("tasks.launch_no_platforms"));
+      const model = chosenModel();
+      const effort = effortSelect.value;
+      fillProviders(platformSelect.value);
+      syncPlatform();
+      fillModels(model);
+      fillEfforts(effort);
+      fillAccess(chosenAccess());
+      fillAgents();
       ctx.toast(t("tasks.launcher.providers_refreshed"), "ok");
     } catch (err) {
       ctx.toast(err.message, "err");
@@ -571,64 +678,100 @@ export async function openLaunchSession(ctx, prefill = {}) {
       providerRefresh.disabled = false;
     }
   });
-  syncPreset();
-  if (prefill.platform || parent?.platform) platformSelect.value = prefill.platform || parent.platform;
-  syncPreset();
-  if (prefill.worktree) worktreeSelect.value = prefill.worktree;
+
+  fillProviders(choice.platform);
+  syncPlatform();
+  fillModels(choice.model, choice.custom);
+  fillEfforts(choice.effort);
+  fillAccess(choice.access);
+  worktreeSelect.value = choice.worktree;
+  agentSelect.value = choice.agent;
   syncWorktree();
-  titleInput.value = prefill.title || (parent ? `Subagent · ${parent.title || "session"}` : "");
-  taskSelect.value = prefill.task || parent?.task_ref || "";
+  fillAgents(choice.agent);
+  titleInput.value = prefill.title || (parent ? t("tasks.launcher.subagent_title", { parent: parent.title || t("common.untitled") }) : "");
   cwdInput.value = prefill.cwd || (parent && parent.cwd !== "." ? parent.cwd : "");
-  promptArea.value = prefill.prompt || "";
-  if (prefill.notice) description.textContent = prefill.notice;
+  syncTitle();
+
+  const personalNeeded = effective?.agents?.personal_config_required;
+  const switchedOff = disabledProviders(presets);
+  const offByProject = switchedOff.some((preset) => preset.disabled === "project");
+  const setupNote = personalNeeded ? t("tasks.launcher.personal_needed")
+    : switchedOff.length ? t(offByProject ? "tasks.launcher.disabled_project" : "tasks.launcher.disabled_providers",
+      { names: switchedOff.map((preset) => platformLabel(preset)).join(t("tasks.launcher.list_sep")) }) : "";
+  const setupTarget = !personalNeeded && offByProject ? "projectAgents" : "personalAgents";
+  const advancedOpen = Boolean(draftExtra || prefill.cwd || prefill.title);
+  const advanced = h("details", { class: "launch-advanced full", "data-launch-advanced": "", open: advancedOpen || undefined },
+    h("summary", null, t("tasks.launcher.advanced")),
+    h("div", { class: "launch-form launch-advanced-body" },
+      field("title", t("tasks.launch_title_label"), titleInput, hint(t("tasks.launcher.title_hint"))),
+      field("worktree", t("tasks.launcher.worktree"), worktreeSelect, worktreeNote),
+      field("cwd", t("tasks.launch_cwd"), cwdInput, cwdHint),
+      agentField,
+      extraField));
 
   const body = h("div", { class: "launch-form" },
-    effective?.agents?.personal_config_required
-      ? h("div", { class: "full notice" }, icon("alert", "sm"), h("div", null,
-        h("b", null, t("common.sentence_lead", { text: t("settings.personal_config_required") })),
-        t("settings.personal_config_required_hint"),
-        h("button", {
-          class: "btn sm ghost", type: "button", style: { marginLeft: "8px" },
-          onclick: () => { ctx.navigate("settings"); },
-        }, icon("settings", "sm"), t("settings.personal_agents"))))
+    setupNote
+      ? h("div", { class: "full launch-inline-notice", "data-launch-personal": "" }, icon("alert", "sm"),
+        h("span", null, setupNote),
+        h("button", { class: "link", type: "button", onclick: () => openPersonalAgents(ctx, setupTarget) },
+          t(setupTarget === "projectAgents" ? "tasks.launcher.project_open" : "tasks.launcher.personal_open")))
       : null,
-    h("div", { class: "field" }, h("label", null, t("tasks.launch_platform")), platformSelect,
-      h("div", { class: "session-hint launch-provider-actions" }, providerRefresh), description, platformNote),
-    h("div", { class: "field" }, h("label", null, t("tasks.launch_title_label")), titleInput),
-    h("div", { class: "field" }, h("label", null, t("tasks.launch_model")), modelInput, modelList),
-    h("div", { class: "field" }, h("label", null, t("tasks.launcher.effort")), effortSelect),
-    h("div", { class: "field" }, h("label", null, t("tasks.launcher.access")), accessSelect, accessNote),
-    h("div", { class: "field" }, h("label", null, t("tasks.launcher.worktree")), worktreeSelect, worktreeNote),
-    h("div", { class: "field" }, h("label", null, t("tasks.launch_agent")), agentInput, agentList),
-    h("div", { class: "field" }, h("label", null, t("tasks.launch_task")), taskSelect),
-    h("div", { class: "field" }, h("label", null, t("tasks.launch_cwd")), cwdInput, cwdHint),
-    parent ? h("div", { class: "full notice" }, icon("plus", "sm"), h("div", null,
-      t("tasks.launcher.subagent_of", { parent: parent.title || parent.id }))) : null,
-    h("div", { class: "field full" }, h("label", null, t("tasks.launch_prompt")), promptArea),
-    h("div", { class: "full notice" }, icon("shield", "sm"), h("div", null,
-      t("tasks.launcher.safety_note"))));
+    prefill.notice ? h("div", { class: "full launch-inline-notice" }, icon("info", "sm"), h("span", null, prefill.notice)) : null,
+    parent ? h("div", { class: "full launch-inline-notice" }, icon("plus", "sm"),
+      h("span", null, t("tasks.launcher.subagent_of", { parent: parent.title || parent.id }))) : null,
+    field("platform", t("tasks.launch_platform"), platformSelect,
+      h("div", { class: "session-hint launch-platform-hint" }, platformHint, providerRefresh)),
+    field("model", t("tasks.launch_model"), modelSelect, customModel),
+    effortField,
+    h("div", { class: "field", "data-launch-field": "task" }, h("label", null, t("tasks.launcher.task")),
+      h("div", { class: "launch-task-row" }, taskInput, taskClear), taskList, taskHint),
+    h("div", { class: "field full", "data-launch-field": "access" }, h("label", null, t("tasks.launcher.access")), accessBox),
+    h("div", { class: "field full", "data-launch-field": "prompt" }, h("label", null, t("tasks.launcher.prompt")), promptArea),
+    advanced,
+    h("div", { class: "full launch-safety" }, icon("shield", "sm"),
+      h("span", null, t("tasks.launcher.safety_short")),
+      h("details", { class: "launch-more" }, h("summary", null, t("tasks.launcher.learn_more")),
+        h("p", null, t("tasks.launcher.safety_note")))));
 
   const launchAction = {
-    label: t("tasks.launch"),
+    label: t("tasks.launch_start"),
     primary: true,
     onClick: async () => {
+      const platform = platformSelect.value;
+      const model = chosenModel();
+      if (modelSelect.value === CUSTOM_MODEL && !model) {
+        ctx.toast(t("tasks.launcher.model_custom_empty"), "err");
+        customModel.focus();
+        return false;
+      }
+      const typedTask = taskInput.value.trim();
+      const task = chosenTask();
+      if (typedTask && !task) {
+        ctx.toast(t("tasks.launcher.task_unknown"), "err");
+        taskInput.focus();
+        return false;
+      }
+      const prompt = promptArea.value.trim();
+      const worktree = worktreeSelect.value;
+      const effort = effortField.classList.contains("hidden") ? "" : effortSelect.value;
+      const access = chosenAccess();
+      const agent = agentField.classList.contains("hidden") ? "" : agentSelect.value;
       try {
-        const prompt = promptArea.value.trim();
-        const worktree = worktreeSelect.value;
         const data = await api.createSession({
-          platform: platformSelect.value,
-          title: titleInput.value.trim(),
-          model: modelInput.value.trim(),
-          effort: effortSelect.value,
-          access_mode: accessSelect.value,
-          agent: agentInput.value.trim(),
-          task: taskSelect.value,
+          platform,
+          title: titleInput.value.trim() || autoTitle({ task: chosenTaskUnit(), prompt }),
+          model,
+          effort,
+          access_mode: access,
+          agent,
+          task,
           cwd: worktree ? "" : cwdInput.value.trim(),
           worktree,
-          prompt,
+          prompt: firstMessage(prompt, extraField.classList.contains("hidden") ? "" : extraArea.value),
           parent_id: parent?.id || "",
         });
-        rememberSessionChoice({ platform: platformSelect.value, model: modelInput.value.trim() });
+        saveLaunchDefaults(store, user, projectId, { platform, model, effort, access, worktree, agent });
+        rememberSessionChoice({ platform, model });
         ctx.S.selectedSessionId = data.session.id;
         ctx.S.taskView = "sessions";
         ctx.S.sessionThreadMode = "thread";

@@ -31,7 +31,6 @@ package store
 import (
 	"context"
 	"crypto/rand"
-	"crypto/sha256"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -158,6 +157,7 @@ type crossLink struct {
 
 type movePlan struct {
 	req          MoveRequest
+	orig         MoveRequest // the request as given (req.Units is filled in for a merge)
 	units        []*moveUnit
 	byID         map[int64]*moveUnit
 	uidMap       map[string]string
@@ -522,30 +522,12 @@ func (p *movePlan) readTarget(ctx context.Context, q sqlitedb.Querier) error {
 	return nil
 }
 
-// digest is the plan_hash: what the plan moves, as content (unit versions,
-// links, media, comments, tags, new uids), so a later write elsewhere in
-// either project does not make an approved plan stale, but any change to
-// what moves does.
-func (p *movePlan) digest() string {
-	h := sha256.New()
-	fmt.Fprintf(h, "%s|%s|%s|%t\n", p.req.SourceID, p.req.TargetID, p.req.CrossLinks, p.req.All)
-	for _, u := range p.units {
-		fmt.Fprintf(h, "u%d=%s;%s;%s\n", u.id, u.newUID, strings.Join(p.tags[u.id], ","), pyjson.Dumps(u.row.Vals))
-	}
-	for _, l := range p.links {
-		fmt.Fprintf(h, "l%d\n", l.Int("id"))
-	}
-	for _, c := range p.cross {
-		fmt.Fprintf(h, "x%d\n", c.row.Int("id"))
-	}
-	for _, m := range p.media {
-		fmt.Fprintf(h, "m%d\n", m.oldID)
-	}
-	for _, c := range p.comments {
-		fmt.Fprintf(h, "c%d:%s\n", c.Int("id"), c.Str("resolved_at"))
-	}
-	return hex.EncodeToString(h.Sum(nil)[:8])
-}
+// digest is the plan_hash: what the plan moves, as content (planDeps:
+// unit versions, links, media, comments, tags), so a later write elsewhere
+// in either project does not make an approved plan stale, but any change to
+// what moves does.  The new uids are not part of it: they are numbered
+// again when the plan is applied.
+func (p *movePlan) digest() string { return p.deps().digest() }
 
 func (s *Store) projectID() string { return pyjson.Str(s.Manifest.Get("id")) }
 
@@ -560,7 +542,7 @@ func (s *Store) planMove(ctx context.Context, dst *Store, req MoveRequest) (*mov
 	default:
 		return nil, storeErr("cross_links must be keep or drop")
 	}
-	p := &movePlan{req: req}
+	p := &movePlan{req: req, orig: req}
 	ctx = context.WithValue(ctx, srcPathKey{}, s.Path)
 	if err := s.read(ctx, func(q sqlitedb.Querier) error { return p.readSource(ctx, q) }); err != nil {
 		return nil, err
@@ -824,11 +806,36 @@ func (s *Store) ApplyMove(ctx context.Context, dst *Store, req MoveRequest, plan
 	return out, nil
 }
 
-// MoveStaleError: the projects changed since the plan was shown (HTTP 409).
-type MoveStaleError struct{}
+// MoveStaleError: what the plan covers changed since it was shown (HTTP
+// 409); Reasons name what (empty: only the plan_hash differs).
+type MoveStaleError struct {
+	Reasons []StaleReason
+}
 
-func (*MoveStaleError) Error() string {
-	return "the projects changed since this preview; preview the move again"
+func (e *MoveStaleError) Error() string {
+	if len(e.Reasons) == 0 {
+		return "the projects changed since this preview; preview the move again"
+	}
+	parts := make([]string, len(e.Reasons))
+	for i, r := range e.Reasons {
+		parts[i] = r.message()
+	}
+	return "the plan is out of date: " + strings.Join(parts, "; ")
+}
+
+// Units are the source uids the reasons name.
+func (e *MoveStaleError) Units() []string {
+	seen := map[string]bool{}
+	out := []string{}
+	for _, r := range e.Reasons {
+		for _, u := range r.Units {
+			if !seen[u] {
+				seen[u] = true
+				out = append(out, u)
+			}
+		}
+	}
+	return out
 }
 
 func (s *Store) moveOutTx(ctx context.Context, p *movePlan, j *MoveJournal, actor string) error {
@@ -837,7 +844,15 @@ func (s *Store) moveOutTx(ctx context.Context, p *movePlan, j *MoveJournal, acto
 		if n, err := changeCount(ctx, w.q); err != nil {
 			return err
 		} else if n != p.srcChanges {
-			return &MoveStaleError{}
+			// Something was written since the plan was read: stale only
+			// when it touched what moves.
+			fresh := &movePlan{req: p.orig, orig: p.orig}
+			if err := fresh.readSource(context.WithValue(ctx, srcPathKey{}, s.Path), w.q); err != nil {
+				return &MoveStaleError{Reasons: []StaleReason{{Code: "unavailable", Detail: err.Error()}}}
+			}
+			if r := diffDeps(p.deps(), fresh.deps()); len(r) > 0 {
+				return &MoveStaleError{Reasons: r}
+			}
 		}
 		if err := failAt("source"); err != nil {
 			return err
@@ -945,7 +960,19 @@ func (s *Store) moveInTx(ctx context.Context, p *movePlan, j *MoveJournal, actor
 		if n, err := changeCount(ctx, w.q); err != nil {
 			return err
 		} else if n != p.dstChanges {
-			return &MoveStaleError{}
+			// Units were written here since the uids were numbered: only a
+			// uid taken in the meantime stops the move.
+			var taken []string
+			for _, u := range p.units {
+				if _, ok, err := sqlitedb.QueryOne(ctx, w.q, "SELECT 1 FROM units WHERE uid=?", u.newUID); err != nil {
+					return err
+				} else if ok {
+					taken = append(taken, u.newUID)
+				}
+			}
+			if len(taken) > 0 {
+				return &MoveStaleError{Reasons: []StaleReason{{Code: "ids_taken", Units: taken}}}
+			}
 		}
 		if err := ensureAliasTable(ctx, w.q); err != nil {
 			return err

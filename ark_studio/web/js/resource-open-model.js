@@ -4,8 +4,9 @@
 // command itself from the same parts (desktop/src-tauri/src/remote_open.rs);
 // both refuse the same bad input.
 //
-// A connection is { alias?, host?, user?, port? }: an ~/.ssh/config alias
-// and/or the address (GET /api/resources/connect; never a key or password).
+// A connection is { alias?, host?, user?, port?, auth? }: an ~/.ssh/config
+// alias and/or the address, and "key" or "password" login
+// (GET /api/resources/connect; never a key or password).
 
 const HOST_RE = /^[A-Za-z0-9_][A-Za-z0-9._:%-]{0,252}$/;
 const USER_RE = /^[A-Za-z0-9_][A-Za-z0-9._-]{0,63}$/;
@@ -40,6 +41,8 @@ export function cleanConnection(raw) {
   if (host) out.host = host;
   if (user) out.user = user;
   if (port !== null) out.port = port;
+  // How the person logs in (a mode only; see authMode).
+  if (raw.auth === "key" || raw.auth === "password") out.auth = raw.auth;
   return out;
 }
 
@@ -90,6 +93,13 @@ export function sshArgs(conn, path = null) {
   if (path && !isRemotePosixPath(path)) path = null;
   const args = ["-t"];
   if (!c.alias && c.port && c.port !== 22) args.push("-p", String(c.port));
+  // Key login without an alias: this key only (an alias brings its own).
+  // Password login: nothing; ssh prompts in the terminal.
+  const key = text(conn?.identityFile);
+  if (key && !c.alias && authMode(conn) === "key") {
+    if (!validIdentity(key)) return null;
+    args.push("-i", key, "-o", "IdentitiesOnly=yes");
+  }
   args.push("--", destination(c));
   const cmd = remoteCommand(path);
   if (cmd) args.push(cmd);
@@ -162,6 +172,130 @@ export function remoteEditorUrl(conn, path, editor = "vscode") {
   return `${editor}://vscode-remote/ssh-remote+${authority}${encodePath(folder)}`;
 }
 
+// ---------------------------------------------------- managed ~/.ssh/config hosts
+// VS Code Remote-SSH (and plain ssh) only use a key, a port and a user that
+// ~/.ssh/config gives a Host alias.  ARK keeps `Host ark-<name>` entries in
+// a marked block; the desktop app writes it (remote_open.rs upsert_managed),
+// a browser shows the same text to paste.
+
+export const MANAGED_BEGIN = "# >>> ARK Studio managed hosts (edits inside are replaced) >>>";
+export const MANAGED_END = "# <<< ARK Studio managed hosts <<<";
+
+/**
+ * How a person logs in to a server: "key" or "password".  An explicit
+ * choice ({auth}) wins; else a key file path means "key".  ARK only ever
+ * stores the mode and the key's path: passwords are typed into ssh or VS
+ * Code and never pass through ARK.
+ */
+export function authMode({ auth = "", identityFile = "" } = {}) {
+  const a = text(auth);
+  if (a === "key" || a === "password") return a;
+  return text(identityFile) ? "key" : "password";
+}
+
+/** A key file path for `ssh -i`: absolute, no control characters, never option-like. */
+export function validIdentity(raw) {
+  const p = text(raw);
+  if (!p || p.length > MAX_PATH || CONTROL_RE.test(p) || p.startsWith("-")) return false;
+  if (p.startsWith("//") || p.startsWith("\\\\")) return false;
+  return p.startsWith("/") || p.startsWith("~/") || /^[A-Za-z]:[\\/]/.test(p);
+}
+
+/**
+ * Commands that set up key login for a password server: make a key, then
+ * append its public half to the server's authorized_keys (what ssh-copy-id
+ * does; Windows has no ssh-copy-id).  The person runs them; the second asks
+ * for the password once.  null for an invalid connection.
+ */
+export function keySetupCommands(conn, alias, { shell = "posix" } = {}) {
+  const c = cleanConnection(conn);
+  const a = text(alias);
+  if (!c?.host || !validAlias(a)) return null;
+  const dest = c.user ? `${c.user}@${c.host}` : c.host;
+  const port = c.port && c.port !== 22 ? ` -p ${c.port}` : "";
+  const remote = '"umask 077; mkdir -p ~/.ssh && cat >> ~/.ssh/authorized_keys"';
+  if (shell === "powershell") {
+    const key = `$env:USERPROFILE\\.ssh\\id_ed25519_${a}`;
+    return [
+      `ssh-keygen -t ed25519 -f "${key}"`,
+      `Get-Content "${key}.pub" | ssh${port} ${dest} ${remote}`,
+    ];
+  }
+  const key = `~/.ssh/id_ed25519_${a}`;
+  return [
+    `ssh-keygen -t ed25519 -f ${key}`,
+    c.port && c.port !== 22 ? `ssh-copy-id -i ${key}.pub -p ${c.port} ${dest}` : `ssh-copy-id -i ${key}.pub ${dest}`,
+  ];
+}
+
+/** The managed alias for a server / device name: ark-<name> (null when nothing usable is left). */
+export function managedAlias(name) {
+  const slug = text(name).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^[-.]+|[-.]+$/g, "").slice(0, 90);
+  if (!slug) return null;
+  const alias = slug.startsWith("ark-") ? slug : `ark-${slug}`;
+  return validAlias(alias) ? alias : null;
+}
+
+/**
+ * A key file path as written after IdentityFile: absolute (/..., ~/..., C:\...),
+ * no control characters or double quotes; "\" becomes "/"; quoted when it
+ * has spaces.  null when unusable.
+ */
+export function identityForConfig(raw) {
+  const p = text(raw);
+  if (!p || p.length > MAX_PATH || CONTROL_RE.test(p) || p.includes('"')) return null;
+  const s = p.replace(/\\/g, "/");
+  if (s.startsWith("//") || !(s.startsWith("/") || s.startsWith("~/") || /^[A-Za-z]:\//.test(s))) return null;
+  return /\s/.test(s) ? `"${s}"` : s;
+}
+
+/**
+ * One managed entry's lines: { alias, host, user?, port?, identityFile? }.
+ * null when a part is invalid (never a partial entry).
+ */
+export function sshConfigEntry({ alias, host, user = "", port = null, identityFile = "", auth = "" } = {}) {
+  const a = text(alias);
+  const c = cleanConnection({ host, user, port });
+  if (!validAlias(a) || !a.startsWith("ark-") || !c?.host) return null;
+  const lines = [`Host ${a}`, `  HostName ${c.host}`]; // i18n-ignore: ssh_config keywords
+  if (c.port) lines.push(`  Port ${c.port}`); // i18n-ignore: ssh_config keyword
+  if (c.user) lines.push(`  User ${c.user}`); // i18n-ignore: ssh_config keyword
+  // Password login: no IdentityFile, so ssh / VS Code show their own prompt.
+  if (text(identityFile) && authMode({ identityFile, auth }) === "key") {
+    const key = identityForConfig(identityFile);
+    if (!key) return null;
+    lines.push(`  IdentityFile ${key}`, "  IdentitiesOnly yes");
+  }
+  return lines.join("\n");
+}
+
+/** The managed block with these entries, ready to paste at the end of ~/.ssh/config. */
+export function sshConfigSnippet(entries) {
+  const lines = (entries || []).map(sshConfigEntry);
+  if (!lines.length || lines.some((l) => !l)) return null;
+  return [MANAGED_BEGIN, ...lines, MANAGED_END].join("\n") + "\n";
+}
+
+/**
+ * Whether an ~/.ssh/config match ({alias, hostname?, user?, port?}) reaches
+ * the same account as `conn`: same port (22 when unset) and, when both
+ * name one, the same user.
+ */
+export function configMatchFits(match, conn) {
+  const c = cleanConnection(conn);
+  if (!match || !validAlias(match.alias) || !c) return false;
+  if ((Number(match.port) || 22) !== (c.port || 22)) return false;
+  return !(match.user && c.user && match.user !== c.user);
+}
+
+/** The key file whose name mentions the server (id_rsa_lab_1 for "lab-1"), else "". */
+export function keySuggestion(paths, name) {
+  const norm = (s) => text(s).toLowerCase().replace(/[^a-z0-9]+/g, "");
+  const want = norm(String(name || "").replace(/^ark-/i, ""));
+  if (want.length < 2) return "";
+  return (paths || []).find((p) => norm(String(p).split(/[\\/]/).pop()).includes(want)) || "";
+}
+
 /** The ~/.ssh/config names to look up for a device: its label and its host. */
 export function configNames(device, conn) {
   const names = [device?.label, conn?.host].map(text).filter((n) => n && validHost(n));
@@ -208,7 +342,7 @@ export function openActions({ device, path = null, local = false, conn = null, t
     const folder = path === null || path === undefined ? "~" : remotePath;
     for (const editor of ["vscode", "cursor"]) {
       const url = folder ? remoteEditorUrl(conn, folder, editor) : null;
-      if (url) out.push({ id: editor, url });
+      if (url) out.push({ id: editor, url, folder, conn: cleanConnection(conn) });
     }
     const args = sshArgs(conn, remotePath);
     if (args) {

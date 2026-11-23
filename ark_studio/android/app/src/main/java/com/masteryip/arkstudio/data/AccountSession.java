@@ -73,6 +73,11 @@ public final class AccountSession {
                 name == null || name.isEmpty() ? projectName : name, source, signedInAt);
     }
 
+    /** The same device session at a new address (re-link; the server keeps the token). */
+    public AccountSession withServer(String newServerUrl) {
+        return new AccountSession(newServerUrl, token, user, permission, projectId, projectName, source, signedInAt);
+    }
+
     /** Metadata only: the token is stored separately, encrypted. */
     public JSONObject metadataJson() {
         JSONObject json = new JSONObject();

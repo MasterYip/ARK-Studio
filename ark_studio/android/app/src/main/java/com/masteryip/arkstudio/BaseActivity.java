@@ -17,6 +17,7 @@ import androidx.swiperefreshlayout.widget.SwipeRefreshLayout;
 import com.masteryip.arkstudio.api.ApiException;
 import com.masteryip.arkstudio.api.ArkClient;
 import com.masteryip.arkstudio.data.AccountSession;
+import com.masteryip.arkstudio.data.ServerEntry;
 import com.masteryip.arkstudio.model.WebRoutes;
 import com.masteryip.arkstudio.platform.Accounts;
 import com.masteryip.arkstudio.ui.Async;
@@ -159,13 +160,16 @@ public abstract class BaseActivity extends AppCompatActivity {
         LinearLayout box = Ui.column(a);
         box.setGravity(Gravity.CENTER_HORIZONTAL);
         box.setPadding(Ui.dp(a, 12), Ui.dp(a, 48), Ui.dp(a, 12), Ui.dp(a, 24));
-        boolean offline = error.isNetwork();
+        boolean offline = error.isUnreachable();
         TextView title = Ui.label(a, a.getString(offline ? R.string.state_offline : R.string.state_error),
                 18, Ui.text(a), true);
         title.setGravity(Gravity.CENTER);
         box.addView(title);
         String detail = offline ? a.getString(R.string.state_offline_detail, a.session == null ? ""
                 : a.session.serverUrl) : error.getMessage();
+        if (ApiException.TUNNEL_DOWN.equals(error.getCode())) {
+            detail = a.getString(R.string.state_tunnel_down_detail, a.session == null ? "" : a.session.serverUrl);
+        }
         if (error.isReadOnly()) detail = a.getString(R.string.read_only_blocked);
         TextView body = Ui.small(a, detail);
         body.setGravity(Gravity.CENTER);
@@ -175,6 +179,20 @@ public abstract class BaseActivity extends AppCompatActivity {
             android.widget.Button button = Ui.button(a, a.getString(R.string.retry), true, false);
             button.setOnClickListener(v -> retry.run());
             box.addView(button, Ui.lp(Ui.WRAP, Ui.WRAP));
+        }
+        ServerEntry entry = a.session == null ? null : Accounts.servers(a).get(a.session.serverUrl);
+        if (offline && entry != null && entry.isTunnel()) {
+            // A quick tunnel restarted under a new address: re-link (scan or short code).
+            android.widget.Button relink = Ui.button(a, a.getString(R.string.relink_prompt), false, false);
+            relink.setOnClickListener(v -> {
+                a.startActivity(MainActivity.relink(a, entry.getUrl()));
+                a.finish();
+            });
+            box.addView(relink, Ui.margins(a, Ui.WRAP, Ui.WRAP, 0, 10, 0, 0));
+            TextView note = Ui.small(a, a.getString(R.string.relink_network_note));
+            note.setGravity(Gravity.CENTER);
+            note.setPadding(0, Ui.dp(a, 10), 0, 0);
+            box.addView(note);
         }
         return box;
     }
@@ -190,7 +208,7 @@ public abstract class BaseActivity extends AppCompatActivity {
             return;
         }
         toast(error.isReadOnly() ? getString(R.string.read_only_blocked)
-                : error.isNetwork() ? getString(R.string.state_offline) : error.getMessage());
+                : error.isUnreachable() ? getString(R.string.state_offline) : error.getMessage());
     }
 
     protected <T> void call(Async.Work<T> work, Async.Done<T> done) {

@@ -3,6 +3,8 @@ package com.masteryip.arkstudio.api;
 /** A failed ARK API call: HTTP status (0 for network failures) plus ARK's error code. */
 public final class ApiException extends Exception {
     public static final String NETWORK = "NETWORK";
+    /** A Cloudflare error page: the tunnel address no longer leads to ARK. */
+    public static final String TUNNEL_DOWN = "TUNNEL_DOWN";
 
     private final int status;
     private final String code;
@@ -34,6 +36,11 @@ public final class ApiException extends Exception {
     /** Server unreachable, DNS/TLS/timeout: show the offline state with Retry. */
     public boolean isNetwork() {
         return status == 0;
+    }
+
+    /** The server could not be reached at all, or only Cloudflare answered. */
+    public boolean isUnreachable() {
+        return status == 0 || TUNNEL_DOWN.equals(code);
     }
 
     /** The device token is gone (revoked, expired, unknown): the user must sign in again. */

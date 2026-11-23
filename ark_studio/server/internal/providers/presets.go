@@ -350,8 +350,8 @@ func DefaultPresets() ([]*pyjson.Object, error) {
 	}
 	cli := []spec{
 		{"dsh", "DeepSeek Harness", "Headless DSH process. Reads the initial prompt from stdin.", "ARK_TASK_DSH_COMMAND", "dsh headless -", "stdin"},
-		{"claude", "Claude Code", "Claude Code print mode with the prompt as an argument.", "ARK_TASK_CLAUDE_COMMAND", `claude -p "{prompt}"`, "arg"},
-		{"codex", "Codex CLI", "Codex non-interactive exec mode.", "ARK_TASK_CODEX_COMMAND", `codex exec --skip-git-repo-check "{prompt}"`, "arg"},
+		{"claude", "Claude Code", "Claude Code in a long-lived session: every message goes to the running process.", "ARK_TASK_CLAUDE_COMMAND", `claude -p "{prompt}"`, "arg"},
+		{"codex", "Codex CLI", "Codex exec with its JSON event stream; each message continues the same thread.", "ARK_TASK_CODEX_COMMAND", `codex exec --json --skip-git-repo-check "{prompt}"`, "arg"},
 		{"opencode", "OpenCode", "OpenCode non-interactive run mode.", "ARK_TASK_OPENCODE_COMMAND", `opencode run "{prompt}"`, "arg"},
 		{"cursor", "Cursor Agent", "Cursor Agent CLI print mode.", "ARK_TASK_CURSOR_COMMAND", `cursor-agent -p "{prompt}"`, "arg"},
 		{"gemini", "Gemini CLI", "Gemini CLI non-interactive prompt mode.", "ARK_TASK_GEMINI_COMMAND", `gemini -p "{prompt}"`, "arg"},

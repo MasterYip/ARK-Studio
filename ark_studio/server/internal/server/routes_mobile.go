@@ -267,9 +267,9 @@ func portOrNil(port int) any {
 
 // pairingCandidates is mobile._pairing_candidates.
 func (a *App) pairingCandidates(requestHost, requestScheme string, detection *pyjson.Object) []candidate {
-	if public := pytext.Strip(a.publicURL); public != "" {
+	if public := pytext.Strip(a.mobilePublicURL()); public != "" {
 		if u, err := mobile.NormalizePublicURL(public); err == nil {
-			return []candidate{{u, "public_url"}}
+			return []candidate{{u, a.mobilePublicSource()}}
 		}
 	}
 	var out []candidate
@@ -355,7 +355,7 @@ func (a *App) connectionInfo(hostHeader, requestScheme string) (*pyjson.Object, 
 		bind = "127.0.0.1"
 	}
 	port := a.Port
-	public := pytext.Strip(a.publicURL)
+	public := pytext.Strip(a.mobilePublicURL()) // or the Cloudflare Tunnel's (mobile_tunnel.go)
 	expose := a.Cfg.Expose
 	loopback := mobile.IsLoopbackHost(bind)
 	var lan []string
@@ -540,9 +540,9 @@ func hostHeaderFor(host string, port int) string {
 // resolvePairingBase is mobile.resolve_pairing_base.
 func (a *App) resolvePairingBase(overrideHost string, overridePort any, overrideBase, requestHost string, requestPort int,
 	requestScheme string) (string, string, error) {
-	if public := pytext.Strip(a.publicURL); public != "" {
+	if public := pytext.Strip(a.mobilePublicURL()); public != "" {
 		u, err := mobile.NormalizePublicURL(public)
-		return u, "public_url", err
+		return u, a.mobilePublicSource(), err
 	}
 	if pytext.Strip(overrideBase) != "" {
 		u, err := mobile.NormalizePublicURL(overrideBase)
@@ -692,7 +692,8 @@ var (
 		"/api/unit-details",
 		"/api/trash"} // Go only: the recycle bin (routes_trash.go)
 	mobileScopedGet = map[string]bool{"/api/org": true, "/api/projects": true, "/api/gpu/dashboard": true,
-		notificationsPath: true} // Go only (notifications.go)
+		notificationsPath:  true, // Go only (notifications.go)
+		"/api/mobile/apps": true} // the app downloads (/download/android-apps.json lists them publicly)
 )
 
 // mobileDevicePathAllowed is server.mobile_device_path_allowed.

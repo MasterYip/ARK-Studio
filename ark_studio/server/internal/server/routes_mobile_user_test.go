@@ -219,3 +219,57 @@ func TestMobileLoginSwitchesAndKeepsCeiling(t *testing.T) {
 		t.Errorf("read-only device writes: %d %s", w.code, w.raw)
 	}
 }
+
+// Web mode of the Android app: the WebView carries the device token only as
+// the HttpOnly ark_mobile cookie (page scripts never see it) and adds the
+// tab's X-ARK-Project. Its project list offers every project of the account
+// (not just the current one), a pick there moves the phone, and the app
+// download list is readable; pairing management stays desktop-only.
+func TestMobileWebViewListsAndSwitchesProjects(t *testing.T) {
+	app, team := authDesktopApp(t) // ana: read on Team
+	app.Bind("0.0.0.0", 8765)
+	two := newProjectFor(t, app, "owner", "Two")
+	grant(t, app, two, "ana", "write")
+	private := newProjectFor(t, app, "owner", "Private")
+	token, _ := pairPhone(t, app, "ana", team, "full")
+	web := func(tab string) map[string]string {
+		return map[string]string{"Cookie": "ark_mobile=" + token, "X-ARK-Project": tab,
+			"User-Agent": "Mozilla/5.0 (Linux; Android 12; ALN-AL00 Build/HUAWEIALN-AL00; wv) Chrome/114.0 Mobile Safari/537.36 ARKAndroid/3.0"}
+	}
+
+	r := gpuCall(t, app, "GET", "/api/projects", nil, web(team))
+	ids := map[string]bool{}
+	for _, item := range r.body["projects"].([]any) {
+		ids[item.(map[string]any)["id"].(string)] = true
+	}
+	if r.code != 200 || !ids[team] || !ids[two] || ids[private] || ids[demoID] {
+		t.Fatalf("WebView project list: %d %v", r.code, ids)
+	}
+	o := gpuCall(t, app, "POST", "/api/projects/open", map[string]any{"id": two}, web(team))
+	if summary, _ := o.body["summary"].(map[string]any); o.code != 200 || summary["id"] != two {
+		t.Fatalf("WebView switch: %d %s", o.code, o.raw)
+	}
+	if got := phoneProject(t, app, token); got != two {
+		t.Fatalf("session after the WebView switch: %s", got)
+	}
+	// The tab still names Team until the reply arrives: the session wins.
+	if b := gpuCall(t, app, "GET", "/api/bootstrap", nil, web(team)); b.body["summary"].(map[string]any)["id"] != two {
+		t.Errorf("bootstrap after the switch: %v", b.body["summary"])
+	}
+	// A native switch shows in the WebView's next request.
+	if s := gpuCall(t, app, "POST", "/api/mobile/session/project", map[string]any{"project_id": team}, mobileHeader(token)); s.code != 200 {
+		t.Fatalf("native switch: %d %s", s.code, s.raw)
+	}
+	if b := gpuCall(t, app, "GET", "/api/bootstrap", nil, web(two)); b.body["summary"].(map[string]any)["id"] != team {
+		t.Errorf("WebView after the native switch: %v", b.body["summary"])
+	}
+
+	if a := gpuCall(t, app, "GET", "/api/mobile/apps", nil, web(team)); a.code != 200 {
+		t.Errorf("app list on a phone: %d %s", a.code, a.raw)
+	}
+	for _, path := range []string{"/api/mobile/connection", "/api/mobile/pairs"} {
+		if x := gpuCall(t, app, "GET", path, nil, web(team)); x.code != 403 {
+			t.Errorf("%s on a phone: %d %s", path, x.code, x.raw)
+		}
+	}
+}

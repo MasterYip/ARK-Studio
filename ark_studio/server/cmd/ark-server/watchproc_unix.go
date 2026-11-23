@@ -29,6 +29,35 @@ func watchProcessName(pid int) string {
 	return strings.TrimSpace(string(out))
 }
 
+// listProcesses reads every process's parent id and name: /proc/<pid>/stat
+// on Linux, `ps -A -o pid=,ppid=,comm=` elsewhere.  Nothing else is read.
+func listProcesses() (procTable, error) {
+	if entries, err := os.ReadDir("/proc"); err == nil {
+		t := procTable{}
+		for _, e := range entries {
+			pid, err := strconv.Atoi(e.Name())
+			if err != nil {
+				continue
+			}
+			b, err := os.ReadFile("/proc/" + e.Name() + "/stat")
+			if err != nil {
+				continue
+			}
+			if info, ok := parseProcStat(string(b)); ok {
+				t[pid] = info
+			}
+		}
+		if len(t) > 0 {
+			return t, nil
+		}
+	}
+	out, err := exec.Command("ps", "-A", "-o", "pid=,ppid=,comm=").Output()
+	if err != nil {
+		return nil, err
+	}
+	return parsePS(string(out)), nil
+}
+
 // detachProcess puts the child in a session of its own, without a terminal.
 func detachProcess(cmd *exec.Cmd) {
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setsid: true}

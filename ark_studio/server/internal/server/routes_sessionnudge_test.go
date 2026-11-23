@@ -13,7 +13,8 @@ import (
 )
 
 // The nudger sees a person's comment on a unit they created, through the
-// same feed the agents read; the project can switch nudges off.
+// same feed the agents read.  People's replies are not idle reminders: the
+// old nudge_idle setting does not stop them (T-0109).
 func TestNudgeDepsFeedAndSetting(t *testing.T) {
 	app, _ := localGPUApp(t)
 	r := gpuCall(t, app, "POST", "/api/units", map[string]any{"type": "task", "title": "Nudge me"}, nil)
@@ -27,8 +28,11 @@ func TestNudgeDepsFeedAndSetting(t *testing.T) {
 	pid := p.ID()
 	d := app.NudgeDeps()
 	ctx := context.Background()
-	if !d.Enabled(pid) {
-		t.Fatal("nudges are on by default")
+	if rs := gpuCall(t, app, "PATCH", "/api/project/settings", map[string]any{"sessions": map[string]any{"nudge_idle": false}}, nil); rs.code != 200 {
+		t.Fatalf("settings: %d %s", rs.code, rs.raw)
+	}
+	if !(&reqCtx{app: app, ctx: context.Background()}).sessionHooks().WakesIdle(pid) {
+		t.Fatal("sessions launched with nudge_idle off must still be woken by ARK")
 	}
 	epoch, top, err := d.Top(ctx, pid)
 	if err != nil {
@@ -41,12 +45,6 @@ func TestNudgeDepsFeedAndSetting(t *testing.T) {
 	b, err := d.Since(ctx, sessionnudge.Session{ProjectID: pid, User: org.LocalUsername}, top)
 	if err != nil || b.Epoch != epoch || len(b.Items) == 0 || !strings.Contains(sessionnudge.Text(sessionnudge.Session{ID: "s", ProjectID: pid}, d.ProjectName(pid), b.Items), "Nudge me") {
 		t.Fatalf("since: %v %+v", err, b)
-	}
-	if r = gpuCall(t, app, "PATCH", "/api/project/settings", map[string]any{"sessions": map[string]any{"nudge_idle": false}}, nil); r.code != 200 {
-		t.Fatalf("settings: %d %s", r.code, r.raw)
-	}
-	if d.Enabled(pid) {
-		t.Fatal("switched off")
 	}
 }
 

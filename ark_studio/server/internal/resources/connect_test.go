@@ -27,6 +27,10 @@ func TestCleanSSH(t *testing.T) {
 		`{"host": "box.example.com", "port": "2222"}`:           `{"host": "box.example.com", "port": 2222}`,
 		`{"host": "fe80::1%eth0", "user": "a.b_c-d"}`:           `{"host": "fe80::1%eth0", "user": "a.b_c-d"}`,
 		`{"alias": "a", "host": "h", "port": 22.0}`:             `{"alias": "a", "host": "h", "port": 22}`,
+		// How the viewer logs in: a key (in their own ~/.ssh) or a password they type.
+		`{"host": "h", "auth": "key"}`:         `{"host": "h", "auth": "key"}`,
+		`{"alias": "a", "auth": " password "}`: `{"alias": "a", "auth": "password"}`,
+		`{"host": "h", "auth": ""}`:            `{"host": "h"}`,
 	}
 	for in, want := range good {
 		got, err := CleanSSH(obj(t, in))
@@ -60,6 +64,9 @@ func TestCleanSSH(t *testing.T) {
 		`{"host": "h", "password": "x"}`,
 		`{"host": "h", "identity_file": "~/.ssh/id"}`,
 		`{"host": 5}`,
+		`{"host": "h", "auth": "token"}`,
+		`{"host": "h", "auth": true}`,
+		`{"auth": "key"}`, // a mode without a host
 	} {
 		if _, err := CleanSSH(obj(t, in)); err == nil {
 			t.Errorf("%s accepted", in)

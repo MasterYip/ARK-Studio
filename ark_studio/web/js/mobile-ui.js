@@ -200,7 +200,13 @@ export function renderPairGate(host, { session, api, onConnected, error = "", bu
       status.textContent = t("mobile.gate.checking");
       status.className = "pair-gate-status";
       try {
-        const data = await api.claimPairing(token);
+        const prompt = confirmCodeOverlay();
+        let data;
+        try {
+          data = await api.claimPairing(token, prompt);
+        } finally {
+          prompt.close();
+        }
         await onConnected?.(data);
       } catch (err) {
         status.textContent = err.message || t("mobile.gate.failed");
@@ -246,3 +252,31 @@ export function pwaStatusRow() {
   if (typeof window !== "undefined") window.addEventListener("ark:pwa-state", refresh);
   return row;
 }
+
+// While a claim through a Cloudflare Tunnel waits for the computer, the phone
+// shows the 6-digit code to compare with the one in Settings › Mobile there.
+export function confirmCodeOverlay() {
+  let cancelled = false;
+  const digits = h("div", { class: "pair-confirm-code", "aria-live": "polite" });
+  const left = h("div", { class: "pair-confirm-left" });
+  const el = h("div", { class: "pair-confirm", role: "dialog", "aria-modal": "true" },
+    h("div", { class: "pair-confirm-card" },
+      h("div", { class: "pair-gate-eyebrow" }, icon("shield", "sm"), t("mobile.confirm.eyebrow")),
+      h("h2", null, t("mobile.confirm.title")),
+      digits,
+      h("p", { class: "pair-confirm-lead" }, t("mobile.confirm.lead")),
+      left,
+      h("button", { class: "btn ghost", type: "button", onclick: () => { cancelled = true; close(); } },
+        t("action.cancel"))));
+  function close() { el.remove(); }
+  return {
+    onPending(code, seconds) {
+      if (!el.isConnected) document.body.appendChild(el);
+      digits.textContent = String(code || "").replace(/^(\d{3})(\d{3})$/, "$1 $2");
+      left.textContent = seconds ? t("mobile.confirm.left", { n: Math.ceil(seconds) }) : "";
+    },
+    isCancelled: () => cancelled,
+    close,
+  };
+}
+

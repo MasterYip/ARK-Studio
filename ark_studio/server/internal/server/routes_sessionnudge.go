@@ -2,8 +2,9 @@ package server
 
 // Session nudges (Go only, T-0053): wiring of internal/sessionnudge.  A
 // session ARK launched that is idle gets one input turn listing people's
-// replies in ARK since its last look.  Project setting
-// settings.sessions.nudge_idle (default on).
+// replies in ARK since its last look.  People's replies always reach the
+// sessions ARK launched (T-0109): settings.sessions.nudge_idle is still
+// accepted from older clients but no longer read.
 
 import (
 	"context"
@@ -25,21 +26,6 @@ const nudgeResumeWindow = 24 * time.Hour
 // {epoch, after}, so a server restart does not drop updates held back
 // while a turn ran.
 const nudgeCursorKey = "nudge_cursor"
-
-// NudgeEnabled reads settings.sessions.nudge_idle (absent: on).
-func NudgeEnabled(p *project.Project) bool {
-	settings := p.Manifest.Get("settings")
-	s, _ := settings.(*pyjson.Object)
-	if s == nil {
-		return true
-	}
-	sess, _ := s.Value("sessions").(*pyjson.Object)
-	if sess == nil {
-		return true
-	}
-	v, ok := sess.Get("nudge_idle")
-	return !ok || v == nil || pyjson.Truthy(v)
-}
 
 func (a *App) nudgeProject(ctx context.Context, id string) *project.Project {
 	c := &reqCtx{app: a, ctx: ctx}
@@ -88,10 +74,6 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 				return pyjson.Str(orDefault(p.Manifest.Get("name"), ""))
 			}
 			return ""
-		},
-		Enabled: func(id string) bool {
-			p := a.nudgeProject(context.Background(), id)
-			return p != nil && NudgeEnabled(p)
 		},
 		Top: func(ctx context.Context, id string) (string, int64, error) {
 			p := a.nudgeProject(ctx, id)

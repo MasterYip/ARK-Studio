@@ -215,7 +215,7 @@ function mediaElement(kind, resolved, label) {
   return h("img", { class: "rich-img", src: resolved.src, alt: label || "", loading: "lazy" });
 }
 
-const NOT_EMBEDDABLE = new Set(["file", "anchor", "mailto", "app"]);
+const NOT_EMBEDDABLE = new Set(["file", "anchor", "query", "mailto", "app"]);
 
 // A tiny, dependency-free highlighter. It only ever creates text nodes and
 // spans (no innerHTML), so code from an agent stays inert. Unknown languages
@@ -407,7 +407,7 @@ function htmlNodes(source, opts, slots = []) {
     else if (resolved.kind === "workspace") {
       link.classList.add("rich-ws-link");
       link.dataset.wsPath = resolved.path;
-    } else if (resolved.kind !== "anchor") link.target = "_blank";
+    } else if (resolved.kind !== "anchor" && resolved.kind !== "query") link.target = "_blank";
     if (resolved.kind === "media") link.dataset.mediaId = resolved.mediaId;
   }
   for (const table of fragment.querySelectorAll("table")) table.classList.add("md-table");
@@ -445,7 +445,7 @@ function inlineTokenNodes(token, opts) {
     const local = resolved.kind === "file", app = resolved.kind === "app";
     return [h("a", {
       href: local ? resolved.href : resolved.src,
-      target: local || app || resolved.kind === "anchor" ? undefined : "_blank",
+      target: local || app || resolved.kind === "anchor" || resolved.kind === "query" ? undefined : "_blank",
       rel: "noreferrer noopener", title: token.title || (local || app ? resolved.href : undefined),
       class: local ? "rich-local-link" : app ? "rich-app-link" : resolved.kind === "workspace" ? "rich-ws-link" : undefined,
       "data-local-href": local ? resolved.href : undefined,

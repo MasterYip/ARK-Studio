@@ -47,7 +47,10 @@ public final class ServerStore {
                     String name = asString(object.get("name"));
                     long lastUsedAt = asLong(object.get("lastUsedAt"));
                     String lastError = asString(object.get("lastError"));
-                    ServerEntry entry = new ServerEntry(name, normalized, lastUsedAt, lastError);
+                    // Optional since the Cloudflare Tunnel pairing; older lists have none.
+                    ServerEntry entry = new ServerEntry(name, normalized, lastUsedAt, lastError,
+                            asString(object.get("serverId")), asString(object.get("publicKey")),
+                            Boolean.TRUE.equals(object.get("tunnel")));
 
                     int existing = store.indexOf(entry.getUrl());
                     if (existing >= 0) {
@@ -90,6 +93,13 @@ public final class ServerStore {
             out.append(",\"lastUsedAt\":").append(entry.getLastUsedAt());
             out.append(",\"lastError\":");
             writeString(out, entry.getLastError());
+            if (entry.hasIdentity()) {
+                out.append(",\"serverId\":");
+                writeString(out, entry.getServerId());
+                out.append(",\"publicKey\":");
+                writeString(out, entry.getPublicKey());
+            }
+            if (entry.isTunnel()) out.append(",\"tunnel\":true");
             out.append('}');
         }
         out.append("]}");
@@ -145,7 +155,10 @@ public final class ServerStore {
                     cleanName.isEmpty() ? existing.getName() : cleanName,
                     normalized,
                     existing.getLastUsedAt(),
-                    existing.getLastError());
+                    existing.getLastError(),
+                    existing.getServerId(),
+                    existing.getPublicKey(),
+                    existing.isTunnel());
             servers.set(index, updated);
             return new AddResult(updated, false);
         }
@@ -228,6 +241,63 @@ public final class ServerStore {
             lastSelectedUrl = fallback == null ? "" : fallback.getUrl();
         }
         return true;
+    }
+
+    /** Stores the server identity checked by {@link ServerIdentity#check}. */
+    public ServerEntry setIdentity(String rawUrl, String serverId, String publicKey, boolean viaTunnel) {
+        int index = indexOf(rawUrl);
+        if (index < 0) {
+            return null;
+        }
+        ServerEntry updated = servers.get(index).withIdentity(serverId, publicKey, viaTunnel);
+        servers.set(index, updated);
+        return updated;
+    }
+
+    /** The saved server with this server id (the most recently used one), or {@code null}. */
+    public ServerEntry findByServerId(String serverId) {
+        if (serverId == null || serverId.isEmpty()) {
+            return null;
+        }
+        ServerEntry best = null;
+        for (ServerEntry entry : servers) {
+            if (serverId.equals(entry.getServerId())
+                    && (best == null || entry.getLastUsedAt() > best.getLastUsedAt())) {
+                best = entry;
+            }
+        }
+        return best;
+    }
+
+    /**
+     * Moves a saved server to a new address (re-link after a quick tunnel
+     * restarted): name, identity and last use stay, the error is cleared, and
+     * the selection follows. Another entry already saved at the new address is
+     * replaced. The caller checks the server's signature first.
+     */
+    public ServerEntry relink(String oldUrl, String newUrl) {
+        int index = indexOf(oldUrl);
+        String normalized = ServerUrl.withoutFragment(newUrl);
+        if (index < 0 || normalized == null) {
+            return null;
+        }
+        ServerEntry old = servers.get(index);
+        boolean wasSelected = isSelected(old);
+        int clash = indexOf(normalized);
+        String name = old.getName().equals(ServerUrl.defaultName(old.getUrl())) ? "" : old.getName();
+        ServerEntry moved = new ServerEntry(name, normalized, old.getLastUsedAt(), null,
+                old.getServerId(), old.getPublicKey(), old.isTunnel());
+        servers.set(index, moved);
+        if (clash >= 0 && clash != index) {
+            if (!lastSelectedUrl.isEmpty() && ServerUrl.sameServer(lastSelectedUrl, servers.get(clash).getUrl())) {
+                wasSelected = true;
+            }
+            servers.remove(clash);
+        }
+        if (wasSelected) {
+            lastSelectedUrl = moved.getUrl();
+        }
+        return moved;
     }
 
     private int indexOf(String rawUrl) {

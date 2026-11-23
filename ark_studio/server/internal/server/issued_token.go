@@ -32,12 +32,12 @@ func (a *App) IssuedToken(r *http.Request, token string) bool {
 		return false
 	}
 	client := splitHostPort(r.RemoteAddr)
-	if a.failures.check(client) != nil {
-		return false
-	}
 	_, _, ok, err := a.authenticatePersonalToken(r.Context(), token)
-	if err == nil && !ok {
+	if err == nil && ok {
+		return true // a valid token is never throttled
+	}
+	if err == nil && a.failures.check(client) == nil {
 		a.failures.record(client)
 	}
-	return err == nil && ok
+	return false
 }

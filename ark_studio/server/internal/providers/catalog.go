@@ -472,7 +472,14 @@ func (c *Catalog) authFor(id string) *pyjson.Object {
 
 // ---------------------------------------------------------------- models
 
-var builtinEfforts = map[string][]string{"claude": {"low", "medium", "high", "xhigh", "max"}}
+// builtinEfforts are the reasoning levels a provider takes when its model
+// list does not name them: Claude Code's --effort levels, and the levels
+// every Codex version accepts for model_reasoning_effort (newer models list
+// more in `codex debug models`).
+var builtinEfforts = map[string][]string{
+	"claude": {"low", "medium", "high", "xhigh", "max"},
+	"codex":  {"low", "medium", "high"},
+}
 
 func looksSecret(value string) bool {
 	lowered := pytext.Lower(pytext.Strip(value))

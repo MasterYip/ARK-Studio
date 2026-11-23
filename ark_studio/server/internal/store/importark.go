@@ -193,8 +193,14 @@ func (p *importPlan) readSource(ctx context.Context, q sqlitedb.Querier, root st
 	return nil
 }
 
-// readTarget finds earlier copies and numbers the new ones (D-0015).
+// readTarget finds earlier copies and numbers the new ones (D-0015).  An
+// import runs it again inside its write transaction, so the uids are the
+// ones free at that moment.
 func (p *importPlan) readTarget(ctx context.Context, q sqlitedb.Querier) error {
+	p.renumbered = 0
+	for _, u := range p.units {
+		u.existing, u.newUID, u.newID = false, "", 0
+	}
 	taken := map[string]bool{}
 	rows, err := sqlitedb.Query(ctx, q, "SELECT id, uid, source_ref FROM units")
 	if err != nil {
@@ -274,6 +280,11 @@ func (p *importPlan) summary() *pyjson.Object {
 
 // ImportFrom copies the requested units of src into s; dryRun only plans.
 func (s *Store) ImportFrom(ctx context.Context, src *Store, req ImportRequest, dryRun bool, actor string) (*pyjson.Object, error) {
+	return s.importFrom(ctx, src, req, dryRun, actor, nil)
+}
+
+// planImport reads both sides of an import without writing.
+func (s *Store) planImport(ctx context.Context, src *Store, req ImportRequest) (*importPlan, error) {
 	if src == s {
 		return nil, storeErr("the source is this project")
 	}
@@ -284,8 +295,24 @@ func (s *Store) ImportFrom(ctx context.Context, src *Store, req ImportRequest, d
 	if err := s.read(ctx, func(q sqlitedb.Querier) error { return p.readTarget(ctx, q) }); err != nil {
 		return nil, err
 	}
+	return p, nil
+}
+
+// importFrom is ImportFrom; check (when set) sees the plan as numbered
+// inside the write transaction and can refuse it.
+func (s *Store) importFrom(ctx context.Context, src *Store, req ImportRequest, dryRun bool, actor string,
+	check func(*importPlan) error) (*pyjson.Object, error) {
+	p, err := s.planImport(ctx, src, req)
+	if err != nil {
+		return nil, err
+	}
 	if dryRun {
 		return p.summary(), nil
+	}
+	if check != nil {
+		if err := check(p); err != nil {
+			return nil, err
+		}
 	}
 	fresh := 0
 	for _, u := range p.units {
@@ -338,10 +365,28 @@ func (s *Store) ImportFrom(ctx context.Context, src *Store, req ImportRequest, d
 			return nil, err
 		}
 	}
-	err := s.write(ctx, func(w *wtx) error {
+	err = s.write(ctx, func(w *wtx) error {
 		w.full = true
+		// Number again here: units made since the preview keep their uids.
+		if err := p.readTarget(ctx, w.q); err != nil {
+			return err
+		}
+		if check != nil {
+			if err := check(p); err != nil {
+				return err
+			}
+		}
+		fresh = 0
+		for _, u := range p.units {
+			if !u.existing {
+				fresh++
+			}
+		}
 		return p.insert(w, actor)
 	})
+	if err == nil && fresh == 0 {
+		cleanup() // copied by someone else meanwhile: nothing new
+	}
 	if err != nil {
 		cleanup()
 		return nil, err

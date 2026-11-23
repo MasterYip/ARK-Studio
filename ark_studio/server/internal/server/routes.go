@@ -113,6 +113,9 @@ func (c *reqCtx) doGet() error {
 	if c.serveWatcherScript() { // public: no secrets, so no token on the download's command line
 		return nil
 	}
+	if c.path == mobileIdentityPath { // public: a phone checks a new tunnel address (mobile_tunnel.go)
+		return c.mobileIdentity()
+	}
 	if err := c.guardPublicAuth(); err != nil {
 		return err
 	}
@@ -349,6 +352,9 @@ func (c *reqCtx) doPost() error {
 	}
 	if c.rawPath == "/api/local/open" {
 		return c.localOpen()
+	}
+	if c.rawPath == mobileClaimStatusPath { // public: the claim secret is the credential (mobile_tunnel.go)
+		return c.mobileClaimStatus()
 	}
 	if handled, err := c.handleAuthPost(); handled || err != nil {
 		return err

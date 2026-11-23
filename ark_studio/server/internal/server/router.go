@@ -183,6 +183,9 @@ func init() {
 		when(isImportArkPath, (*reqCtx).importArkGet),
 		// Go only (routes_reviews.go; ids in GoOnlyRoutes).
 		when(reviewsGetPath, (*reqCtx).reviewsGet),
+		// Go only (mobile_tunnel.go; ids in GoOnlyRoutes).
+		exact(mobileTunnelPath, (*reqCtx).mobileTunnelGet),
+		exact(mobilePendingPath, (*reqCtx).mobilePendingGet),
 		exact("/api/remote/info", (*reqCtx).remoteInfo, PortedRoute{"exact:/api/remote/info", "GET,HEAD"}),
 		when(isMobileGetPath, func(c *reqCtx, path string) error { _, err := c.mobileGet(path); return err },
 			PortedRoute{"exact:/api/mobile/apps", "GET,HEAD"},
@@ -246,6 +249,10 @@ func init() {
 		exact(projectRevealPath, (*reqCtx).projectReveal),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.orgPost(path, c.body) }, orgPorted...),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.personalSettingsPost(path, c.body) }),
+		// Go only (mobile_tunnel.go): claims through the tunnel wait for the computer.
+		sub((*reqCtx).tunnelClaim),
+		exact(mobileTunnelPath, func(c *reqCtx) error { return c.mobileTunnelPost(c.body) }),
+		match(reMobilePendingConfirm, func(c *reqCtx, m []string) error { return c.mobilePendingConfirm(m[1], c.body) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.mobilePost(path, c.body) }, mobilePorted...),
 		// Go only (routes_mobile.go: what one of the person's devices may do).
 		match(reMobilePairPermission, func(c *reqCtx, m []string) error { return c.mobilePairPermission(m[1], c.body) }),

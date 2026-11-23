@@ -9,8 +9,10 @@ import com.masteryip.arkstudio.api.ArkClient;
 import com.masteryip.arkstudio.data.AccountSession;
 import com.masteryip.arkstudio.data.PairingLink;
 import com.masteryip.arkstudio.data.ServerEntry;
+import com.masteryip.arkstudio.data.ServerIdentity;
 import com.masteryip.arkstudio.data.ServerStore;
 import com.masteryip.arkstudio.data.ServerUrl;
+import com.masteryip.arkstudio.data.SessionVault;
 
 import java.net.URI;
 
@@ -106,6 +108,31 @@ public final class Accounts {
         SecureStorage.vault(c).remove(serverUrl);
         if (session != null) clearWebCookie(session.serverUrl);
         if (active(c) == null) Notifications.cancelPolling(c);
+    }
+
+    /** Stores a checked server identity with the saved server. */
+    public static ServerEntry storeIdentity(Context c, String serverUrl, ServerIdentity identity, boolean tunnel) {
+        ServerStore store = servers(c);
+        ServerEntry updated = store.setIdentity(serverUrl, identity.serverId, identity.publicKey, tunnel);
+        if (updated != null) save(c, store);
+        return updated;
+    }
+
+    /**
+     * Moves a saved server, its device session and the WebView's device cookie
+     * to a new address (re-link). The caller has checked the server's
+     * signature at {@code newUrl} against the stored key.
+     */
+    public static ServerEntry relink(Context c, String oldUrl, String newUrl) throws Exception {
+        ServerStore store = servers(c);
+        ServerEntry moved = store.relink(oldUrl, newUrl);
+        if (moved == null) return null;
+        SessionVault vault = SecureStorage.vault(c);
+        AccountSession session = vault.move(oldUrl, moved.getUrl());
+        save(c, store);
+        clearWebCookie(oldUrl);
+        if (session != null) applyWebCookie(session);
+        return moved;
     }
 
     public static boolean notificationsEnabled(Context c) {

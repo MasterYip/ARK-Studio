@@ -83,10 +83,13 @@ func (m *Manager) PresetsPublic(h *Hooks, actor string) []*pyjson.Object {
 			"unsupported_permission_modes", preset.Value("unsupported_permission_modes"),
 			"approval_protocol", ApprovalProtocol, "demo", preset.Value("demo"), "program", cmd[0],
 			"command_source", or(override.Value("command_source"), "global"),
-			"personal_override", override.Len() > 0, "configured_env", strList(envKeys))
+			"personal_override", override.Len() > 0, "configured_env", strList(envKeys),
+			"agent_options", agentOptionsPublic(h, pyjson.Str(preset.Value("id"))))
 		if !available {
 			if disabled {
-				item.Set("unavailable_reason", "disabled in personal settings")
+				// "project" or "personal": where it was switched off.
+				item.Set("disabled", pyjson.Str(or(override.Value("disabled_by"), "personal")))
+				item.Set("unavailable_reason", "disabled in "+pyjson.Str(or(override.Value("disabled_by"), "personal"))+" settings")
 			} else {
 				item.Set("unavailable_reason", cmd[0]+" was not found")
 			}

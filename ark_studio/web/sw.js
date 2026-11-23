@@ -5,7 +5,7 @@
 // The shell list is intentionally explicit.  A Python test compares it with the
 // files under web/js so a new module cannot silently be missing from offline
 // mode.  Bump CACHE_VERSION whenever the shell changes.
-const CACHE_VERSION = "ark-shell-v296";
+const CACHE_VERSION = "ark-shell-v303";
 const SHELL_ASSETS = [
   "./vendor/dompurify/purify.es.js",
   "./vendor/marked/marked.esm.js",
@@ -154,6 +154,7 @@ const SHELL_ASSETS = [
   "./js/mind.js",
   "./js/mobile-core.js",
   "./js/mobile-ui.js",
+  "./js/mobile-tunnel-model.js",
   "./js/needs-model.js",
   "./js/needs-ui.js",
   "./js/agent-messages.js",
@@ -179,6 +180,7 @@ const SHELL_ASSETS = [
   "./js/session-workspace.js",
   "./js/session-sidebar.js",
   "./js/session-sidebar-model.js",
+  "./js/launch-dialog-model.js",
   "./js/session-stream.js",
   "./js/session-stream-model.js",
   "./js/session-thread-parts.js",
@@ -240,6 +242,7 @@ const SHELL_ASSETS = [
   "./js/views/review.js",
   "./js/views/settings-markers.js",
   "./js/views/settings.js",
+  "./js/views/mobile-tunnel-panel.js",
   "./js/views/setup-resources.js",
   "./js/views/tasks.js",
   "./js/views/topics.js",

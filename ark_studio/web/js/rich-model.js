@@ -38,7 +38,7 @@ const MEDIA_RAW_RE = /^\/api\/media\/(\d+)\/raw(?:[?#].*)?$/;
  * Resolve a URL written in Markdown.
  *   https://… / http://…      remote (as is)
  *   /api/media/7/raw, media:7 ARK attachment (mediaId 7)
- *   /anything, #anchor, mailto: as is
+ *   /anything, #anchor, ?query, mailto: as is
  *   file:…                    local file (opened through the host, not loaded)
  *   vscode://…, cursor://…    desktop app link (handed to the OS protocol handler)
  *   relative/path.png         project file: /api/workspace/raw?path=<baseDir/…>
@@ -102,6 +102,8 @@ export function resolveRichUrl(raw, { baseDir = "" } = {}) {
   if (url.startsWith("//")) return null; // protocol-relative: ambiguous host
   if (url.startsWith("/")) return { kind: "absolute", href: url };
   if (url.startsWith("#")) return { kind: "anchor", href: url };
+  // "?move_plan=<id>" and similar: an in-app link on this page, not a file.
+  if (url.startsWith("?")) return { kind: "query", href: url };
   if (/^mailto:/i.test(url)) return { kind: "mailto", href: url };
   if (/^file:/i.test(url)) return { kind: "file", href: url };
   if (APP_SCHEME_RE.test(url)) return { kind: "app", href: url };

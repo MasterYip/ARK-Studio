@@ -433,6 +433,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		actor = strOr(meta.Value("actor"))
 	}
 	effort := strOr(meta.Value("effort"))
+	agent := strOr(meta.Value("agent"))
 	resumeID := strOr(meta.Delete("resume_native_id"))
 	forkID := strOr(meta.Delete("fork_native_id"))
 	pending := s.pendingEntries
@@ -482,6 +483,15 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		access := pyjson.Str(or(meta.Value("access_mode"), "read_only"))
 		m.mu.Unlock()
 		argv = withCodexSandbox(argv, access)
+		argv = codexJSONArgv(argv)
+	}
+	agentFlag := m.agentFlag(h, presetID, agent)
+	if presetID == "codex" && len(agentFlag) > 0 {
+		at := 1
+		if i := indexOf(argv, "exec"); i >= 0 {
+			at = i + 1
+		}
+		argv = insertAt(argv, at, agentFlag...)
 	}
 	if presetID == "claude" && len(argv) > 1 {
 		var extra []string
@@ -491,6 +501,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		if effort != "" && !contains(argv, "--effort") {
 			extra = append(extra, "--effort", effort)
 		}
+		extra = append(extra, agentFlag...)
 		argv = insertAt(argv, 1, extra...)
 	}
 	// A long-lived Claude Code process takes every message on stdin.
@@ -712,8 +723,16 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 		{"ARK_TASK_ARTIFACTS", artifacts}, {"ARK_TASK_API_BASE", apiBase}, {"ARK_READ_TOKEN", readToken},
 		{"ARK_TASK_ACCESS_MODE", access}, {"ARK_TASK_PERMISSION_MODE", access},
 		{"ARK_TASK_APPROVAL_PROTOCOL", ApprovalProtocol}, {"ARK_TASK_MODEL", model}, {"ARK_TASK_EFFORT", effort},
-		{"PYTHONUNBUFFERED", "1"}, {"PYTHONIOENCODING", "utf-8"}} {
+		{"PYTHONUNBUFFERED", "1"}, {"PYTHONIOENCODING", "utf-8"}, {"PYTHONUTF8", "1"}} {
 		env.set(kv[0], kv[1])
+	}
+	if platform == "codex" {
+		// The transcript reads Codex's JSON events on stdout; its tracing
+		// log on stderr is noise there (the raw log keeps what is left).
+		if env.get("RUST_LOG") == "" {
+			env.set("RUST_LOG", "error")
+		}
+		env.set("NO_COLOR", "1")
 	}
 	// ark-server's own folder first, so `ark-server agent watch` and
 	// `ark-server agent host-id` work inside every session (T-0053).

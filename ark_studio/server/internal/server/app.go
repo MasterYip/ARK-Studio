@@ -104,6 +104,8 @@ type App struct {
 	// Presence: which agent is on which node, memory only (routes_presence.go, Go only).
 	Presence *presence.Hub
 	invites  inviteLimiter // public invite routes (routes_invites.go, Go only)
+	// Phones through a Cloudflare Tunnel (mobile_tunnel.go, Go only).
+	cfTunnel mobileTunnel
 }
 
 // NewApp is App.__init__ for the ported subset.
@@ -251,6 +253,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 // Close releases every database.  Relayed agent sessions keep running;
 // the next server re-attaches them.
 func (a *App) Close() {
+	a.closeTunnel() // mobile_tunnel.go: cloudflared ends with the server
 	if a.Sessions != nil {
 		a.Sessions.Detach()
 	}
@@ -343,6 +346,9 @@ func (a *App) allowAdvertisedURL(raw string) {
 		return
 	}
 	host := strings.ToLower(u.Hostname())
+	if a.isTunnelHostname(host) {
+		return // only the tunnel listener answers the tunnel's name (tunnel_gate.go)
+	}
 	port := 80
 	if u.Scheme == "https" {
 		port = 443

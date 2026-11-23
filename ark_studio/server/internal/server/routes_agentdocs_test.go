@@ -211,7 +211,7 @@ func TestAgentInterfaceListsDocs(t *testing.T) {
 			kept = append(kept, c)
 		}
 	}
-	if len(caps)-len(kept) != 16 || ids["watch.updates"] != "/api/agent/v1/updates" {
+	if len(caps)-len(kept) != 17 || ids["watch.updates"] != "/api/agent/v1/updates" {
 		t.Fatalf("Go-only capabilities: %d, %v", len(caps)-len(kept), ids)
 	}
 	mine["capabilities"] = kept

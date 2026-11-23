@@ -5,7 +5,7 @@ import { t, hasKey, localizeServer } from "../i18n.js";
 const gpuText = (text) => localizeServer(text, "server.gpu.");
 const gpuKind = (kind) => (kind && hasKey(`server.gpu.kind.${kind}`) ? t(`server.gpu.kind.${kind}`) : kind);
 import { icon } from "../icons.js";
-import { api, exportUrl } from "../api.js";
+import { api, exportUrl, isPairedDevice } from "../api.js";
 import { openModal, confirmDialog } from "../components.js";
 import { gpuRegistrationNote, openSetupResources } from "../gpu-note.js";
 import { formatRemaining } from "../mobile-core.js";
@@ -38,6 +38,7 @@ import { canManageInvites } from "../invites-model.js";
 import { agentTokensPanel, legacyServerTokenPanel } from "./agent-tokens.js";
 import { trashPanel } from "./trash-panel.js";
 import { agentRulesPanel } from "./agent-rules-panel.js";
+import { mobileTunnelPanel } from "./mobile-tunnel-panel.js";
 import { setupResourcesPanels } from "./setup-resources.js";
 import { renderProfilePanels, saveAppearanceOverride } from "../profile.js";
 import { appearanceOverrides, APPEARANCE_CHANGED } from "../appearance-overrides.js";
@@ -672,21 +673,16 @@ export function renderSettings(host, ctx) {
   const sessionUploadsAdmin = ctx.S.session?.project_permission === "admin" || !ctx.S.session?.project_permission;
   const sessionUploadsBox = h("input", { type: "checkbox", "data-session-uploads": "",
     checked: sessionUploadsSaved(), disabled: !sessionUploadsAdmin });
-  // Remind idle ARK-launched agents of people's replies (absent = on; T-0053).
-  const nudgeSaved = () => ctx.S.project?.settings?.sessions?.nudge_idle !== false;
-  const nudgeBox = h("input", { type: "checkbox", "data-session-nudge": "", checked: nudgeSaved(), disabled: !sessionUploadsAdmin });
   const sessionUploadsPanel = h("section", { class: "panel settings-panel", "data-session-uploads-panel": "" },
     h("div", { class: "panel-head" }, h("h3", null, t("settings.session_uploads.title"))),
     h("p", { class: "settings-lead" }, t("settings.session_uploads.lead")),
     h("label", { class: "row tight settings-session-uploads" }, sessionUploadsBox, h("span", null, t("ctx.consent"))),
-    h("label", { class: "row tight settings-session-nudge", title: t("settings.session_nudge.hint") }, nudgeBox,
-      h("span", null, t("settings.session_nudge.label"))),
     sessionUploadsAdmin ? null : h("p", { class: "muted" }, t("settings.session_uploads.admin_only")));
   registerSave("sessionUploads", {
     section: "sessionUploads", label: t("settings.session_uploads.title"), root: sessionUploadsPanel,
     save: async () => {
       try {
-        const result = await api.updateSettings({ sessions: { accept_uploads: sessionUploadsBox.checked, nudge_idle: nudgeBox.checked } });
+        const result = await api.updateSettings({ sessions: { accept_uploads: sessionUploadsBox.checked } });
         if (ctx.S.project) ctx.S.project.settings = result.settings || ctx.S.project.settings;
         ctx.toast(t(sessionUploadsBox.checked ? "ctx.consent_on" : "ctx.consent_off"), "ok");
         return true;
@@ -695,7 +691,7 @@ export function renderSettings(host, ctx) {
         return false;
       }
     },
-    discard: () => { sessionUploadsBox.checked = sessionUploadsSaved(); nudgeBox.checked = nudgeSaved(); },
+    discard: () => { sessionUploadsBox.checked = sessionUploadsSaved(); },
   });
 
   // ------------------------------------------------------ mobile / pair phone
@@ -1124,12 +1120,30 @@ export function renderSettings(host, ctx) {
           mobileFolds.apps.setSummary([mobilePwaRow, h("span", null, t("settings.fold.apps"))]);
         })] }),
   };
-  const mobilePanel = h("section", { class: "panel settings-panel mobile-panel" },
+  // A local server can let phones in through a Cloudflare Tunnel; a new
+  // tunnel address makes the QR code below use it.
+  const tunnelPanel = mobileTunnelPanel(ctx, {
+    onUrlChange: () => {
+      autoPairings.delete(ctx.S.project?.id || "");
+      mobileState.created = null;
+      mobileState.autoAttempted = false;
+      clear(mobileQrHost);
+      loadMobile();
+    },
+  });
+  // On a paired phone the section offers the app downloads only: pairing
+  // codes and the device list are managed from a computer.
+  const pairedDevice = isPairedDevice();
+  const mobilePanel = pairedDevice ? h("section", { class: "panel settings-panel mobile-panel" },
+    h("div", { class: "panel-head" }, h("h3", null, t("settings.mobile.title"))),
+    h("div", { class: "settings-note" }, icon("smartphone", "sm"), h("div", null, t("settings.mobile.paired_device"))),
+    h("div", { class: "settings-fold-stack" }, mobileFolds.apps.el)) : h("section", { class: "panel settings-panel mobile-panel" },
     h("div", { class: "panel-head" },
       h("h3", null, t("settings.mobile.title")),
       mobileMode),
     h("p", { class: "settings-lead" },
       t("settings.mobile.lead")),
+    tunnelPanel.el,
     mobileAccountBox,
     mobileTunnelFields,
     h("div", { class: "assistant-api-grid", style: { marginTop: "8px" } },
@@ -1157,7 +1171,10 @@ export function renderSettings(host, ctx) {
       h("div", null,
         h("b", null, t("settings.mobile.security_boundary_label")),
         t("settings.mobile.security_boundary"))));
-  loadMobile();
+  if (!pairedDevice) {
+    loadMobile();
+    tunnelPanel.refresh();
+  }
 
   const shortcutPanel = h("section", { class: "panel settings-panel" },
     h("div", { class: "panel-head" },

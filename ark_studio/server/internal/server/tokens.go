@@ -83,15 +83,18 @@ func (c *reqCtx) bindPersonalToken() (bool, error) {
 	if !strings.HasPrefix(secret, "arka_") {
 		return false, nil
 	}
+	// A valid token always gets in: the limiter only slows down guessing.
+	// Throttling before the check let one agent with a revoked token (all
+	// agents on the server share its address) lock every other agent out.
 	client := c.clientIP()
-	if err := c.app.failures.check(client); err != nil {
-		return false, err
-	}
 	row, user, ok, err := c.app.authenticatePersonalToken(c.ctx, secret)
 	if err != nil {
 		return false, err
 	}
 	if !ok {
+		if err := c.app.failures.check(client); err != nil {
+			return false, err
+		}
 		c.app.failures.record(client)
 		return false, apiErr(401, "The agent token is invalid, expired or revoked.", "AGENT_TOKEN_INVALID")
 	}
@@ -124,17 +127,17 @@ func (c *reqCtx) requireAgent() error {
 		return nil
 	}
 	token := c.agentToken()
-	client := c.clientIP()
-	if err := c.app.failures.check(client); err != nil {
-		return err
+	if token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(c.app.AgentToken())) == 1 {
+		return nil // a valid token is never throttled
 	}
-	if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(c.app.AgentToken())) != 1 {
-		if token != "" {
-			c.app.failures.record(client)
+	if token != "" {
+		client := c.clientIP()
+		if err := c.app.failures.check(client); err != nil {
+			return err
 		}
-		return apiErr(401, "A valid agent token is required", "")
+		c.app.failures.record(client)
 	}
-	return nil
+	return apiErr(401, "A valid agent token is required", "")
 }
 
 func (c *reqCtx) taskReadSession() *sessions.Session {

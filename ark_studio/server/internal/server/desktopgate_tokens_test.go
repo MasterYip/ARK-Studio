@@ -187,3 +187,26 @@ func TestDesktopGateForgedTokensLimited(t *testing.T) {
 		t.Fatal("failures not recorded")
 	}
 }
+
+// One agent with a revoked token must not lock out the others: all agents on
+// the server share its address, so a valid token is never throttled.
+func TestValidTokenNotThrottledAfterFailures(t *testing.T) {
+	app, _ := authDesktopApp(t)
+	secret, _, err := app.Org.CreateSessionToken(context.Background(), "owner", "s_ok", "write", time.Hour)
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := httptest.NewRequest("GET", "/api/agent/v1/context", nil)
+	r.RemoteAddr = "127.0.0.1:50000"
+	for i := 0; i < failLimit+5; i++ {
+		if app.IssuedToken(r, "arka_revoked"+strconv.Itoa(i)+strings.Repeat("x", 30)) {
+			t.Fatal("forged token admitted")
+		}
+	}
+	if app.failures.check("127.0.0.1") == nil {
+		t.Fatal("failures not recorded")
+	}
+	if !app.IssuedToken(r, secret) {
+		t.Fatal("valid token throttled after other clients' failures")
+	}
+}

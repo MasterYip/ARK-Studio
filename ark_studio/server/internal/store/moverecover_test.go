@@ -119,19 +119,18 @@ func TestImportPlanApplyAndUndo(t *testing.T) {
 	if err != nil || loaded.Mode != "import" || !loaded.Request.WithChildren || loaded.Request.SourceID != "prj_a" {
 		t.Fatalf("loaded: %+v %v", loaded, err)
 	}
-	// A new unit here takes I-0001: the batch would be renumbered, so the
-	// plan is stale.
+	// A new unit here takes I-0001: the copies are numbered when the plan is
+	// applied, so the plan stays valid and the batch is renumbered.
 	impUnit(t, f.dst, "idea", "here first", "")
-	if _, err := f.dst.ApplyImport(ctx, f.src, loaded, "human:bob"); !errors.As(err, new(*MoveStaleError)) {
-		t.Fatalf("stale import: %v", err)
-	}
-	p2 := &MovePlan{CreatedBy: "agent:bot", Request: loaded.Request}
-	if err := f.dst.ProposeImport(ctx, f.src, p2, false); err != nil {
-		t.Fatal(err)
-	}
+	p2 := loaded
 	out, err := f.dst.ApplyImport(ctx, f.src, p2, "human:bob")
 	if err != nil || out.Value("imported") != int64(2) || len(p2.Created) != 2 {
 		t.Fatalf("apply: %v %v %v", out, err, p2.Created)
+	}
+	for _, uid := range p2.Created {
+		if uid == "I-0001" || uid == p.Decision {
+			t.Fatalf("copy took a uid in use: %v", p2.Created)
+		}
 	}
 	u, err := f.dst.UndoImport(ctx, p2, false, "human:bob")
 	if err != nil || u.Value("units") != int64(2) {

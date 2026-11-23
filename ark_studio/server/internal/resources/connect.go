@@ -8,6 +8,9 @@ package resources
 //               them to admins only (gpu.ScopedSource), so members see none
 //   mine        the viewer's own entry for a device (org settings scope
 //               "ssh_hosts"): an ~/.ssh/config alias and/or host, user, port
+//               and how they log in ("auth": "key" or "password"; only the
+//               mode: key files stay on the viewer's computer, passwords
+//               are typed into ssh / VS Code and never reach ARK)
 //
 // Only devices of the viewer's graph (what the viewer can see) get one, and
 // a saved entry is only ever returned to the person who saved it.
@@ -39,7 +42,7 @@ var (
 // sshKinds are the device kinds one can SSH into.
 var sshKinds = map[string]bool{"ark": true, "gpu-server": true, "host": true}
 
-// CleanSSH validates an entry {alias?, host?, user?, port?}: nil (and no
+// CleanSSH validates an entry {alias?, host?, user?, port?, auth?}: nil (and no
 // error) when it is empty, an *Error when a field is invalid.
 func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 	if raw == nil {
@@ -48,9 +51,9 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 	bad := func(msg string) error { return &Error{400, msg, "RESOURCES_SSH_INVALID"} }
 	for _, k := range raw.Keys() {
 		switch k {
-		case "alias", "host", "user", "port":
+		case "alias", "host", "user", "port", "auth":
 		default:
-			return nil, bad("an SSH connection has only alias, host, user and port")
+			return nil, bad("an SSH connection has only alias, host, user, port and auth")
 		}
 	}
 	field := func(key string, re *regexp.Regexp, what string) (string, error) {
@@ -104,8 +107,19 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 	if port != 0 && (port < 1 || port > 65535) {
 		return nil, bad("port must be between 1 and 65535")
 	}
+	auth := ""
+	switch a := raw.Value("auth").(type) {
+	case nil:
+	case string:
+		auth = strings.TrimSpace(a)
+		if auth != "" && auth != "key" && auth != "password" {
+			return nil, bad(`auth must be "key" or "password"`)
+		}
+	default:
+		return nil, bad(`auth must be "key" or "password"`)
+	}
 	if alias == "" && host == "" {
-		if user != "" || port != 0 {
+		if user != "" || port != 0 || auth != "" {
 			return nil, bad("give an SSH alias or a host")
 		}
 		return nil, nil
@@ -122,6 +136,9 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 	}
 	if port != 0 {
 		out.Set("port", port)
+	}
+	if auth != "" {
+		out.Set("auth", auth)
 	}
 	return out, nil
 }

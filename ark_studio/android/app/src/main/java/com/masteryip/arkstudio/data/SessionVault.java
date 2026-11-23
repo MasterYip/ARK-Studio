@@ -74,6 +74,19 @@ public final class SessionVault {
         }
     }
 
+    /**
+     * Moves the session of {@code oldUrl} to {@code newUrl} (re-link). Returns
+     * the moved session, or {@code null} when there was none.
+     */
+    public AccountSession move(String oldUrl, String newUrl) throws Exception {
+        AccountSession session = get(oldUrl);
+        if (session == null) return null;
+        AccountSession moved = session.withServer(newUrl);
+        save(moved);
+        if (!key(oldUrl).equals(key(newUrl))) remove(oldUrl);
+        return moved;
+    }
+
     public boolean has(String serverUrl) {
         return get(serverUrl) != null;
     }

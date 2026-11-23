@@ -72,7 +72,7 @@ public final class NotifyOpenActivity extends Activity {
                         result.optString("project", current.projectName),
                         result.optString("permission", current.permission)));
             } catch (ApiException failed) {
-                error = failed.isNetwork() ? getString(R.string.state_offline) : failed.getMessage();
+                error = failed.isUnreachable() ? getString(R.string.state_offline) : failed.getMessage();
             } catch (Exception failed) {
                 error = failed.getMessage();
             }
