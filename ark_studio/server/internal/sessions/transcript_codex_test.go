@@ -224,10 +224,10 @@ func TestCleanLine(t *testing.T) {
 func TestCodexCommandUnwrap(t *testing.T) {
 	for in, want := range map[string]string{
 		`"C:\\Users\\me\\pwsh.exe" -Command "Get-Content -LiteralPath .\\hello.txt"`: `Get-Content -LiteralPath .\hello.txt`,
-		`"C:\\pwsh.exe" -Command 'Get-Content -Raw notes.md'`:                         `Get-Content -Raw notes.md`,
-		`/bin/bash -lc 'pytest -q'`:                                                   `pytest -q`,
-		`bash -lc "echo \"hi\""`:                                                      `echo "hi"`,
-		`git status`:                                                                  `git status`,
+		`"C:\\pwsh.exe" -Command 'Get-Content -Raw notes.md'`:                        `Get-Content -Raw notes.md`,
+		`/bin/bash -lc 'pytest -q'`:                                                  `pytest -q`,
+		`bash -lc "echo \"hi\""`:                                                     `echo "hi"`,
+		`git status`:                                                                 `git status`,
 	} {
 		if got := codexCommand(in); got != want {
 			t.Errorf("codexCommand(%q) = %q, want %q", in, got, want)
