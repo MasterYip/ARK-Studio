@@ -77,12 +77,12 @@ export function agentTokensPanel(ctx) {
   const reveal = h("div");
   const list = h("div", { class: "agent-token-list" });
   const count = h("span", { class: "pill" });
-  let state = { tokens: [], limit: 10 };
+  let state = { tokens: [] };
 
   const render = () => {
     clear(list);
     const active = state.tokens.filter((item) => !item.expired).length;
-    count.textContent = t("tokens.count", { count: active, limit: state.limit });
+    count.textContent = t("tokens.count", { count: active });
     if (!state.tokens.length) {
       list.appendChild(h("div", { class: "empty sm" }, t("tokens.empty")));
       return;
@@ -255,10 +255,8 @@ async function copyFromRequest(makeText) {
 // ark_studio/server/internal/org/starter_tokens.go), so a copy reuses it and
 // a new token is minted only when there is none, it expired or was revoked,
 // or the person chooses "New token" (which revokes the previous one).  The
-// dialog opens on every Copy; it says which token goes into the prompt.  At
-// the 10-token limit it offers to revoke this project's older starter tokens
-// (revoke_old) and copy.  One flow at a time: further Copy clicks while it is
-// open are ignored.  Resolves to { reused, copied }.
+// dialog opens on every Copy; it says which token goes into the prompt.  One
+// flow at a time: further Copy clicks while it is open are ignored.  Resolves to { reused, copied }.
 let tokenFlow = null;
 
 export function copyPromptWithToken(buildText, { projectId = "" } = {}) {
@@ -276,18 +274,17 @@ async function openTokenFlow(buildText, projectId, done) {
     catch (err) { toast(err.message, "err"); done({ reused: false, copied: false }); return; }
   }
   const current = peek?.current || null;
-  const limit = peek?.limit || 10;
   const label = homePromptLabel(new Date(), projectId);
   const extra = h("div", { class: "stack", "data-token-extra": "" });
   let busy = false;
   let result = { reused: false, copied: false };
   let dialog = null;
 
-  const run = async (mode, revokeOld = false) => {
+  const run = async (mode) => {
     if (busy) return;
     busy = true;
     const request = projectId
-      ? () => api.starterToken({ project: projectId, mode, ...(revokeOld ? { revoke_old: true } : {}) })
+      ? () => api.starterToken({ project: projectId, mode })
       : () => api.createAgentToken({ label, scope: "write", expires_days: 90 });
     let reply = null;
     let copy;
@@ -295,26 +292,13 @@ async function openTokenFlow(buildText, projectId, done) {
       copy = await copyFromRequest(async () => { reply = await request(); return buildText(reply.token); });
     } catch (err) {
       busy = false;
-      if (err?.code === "AGENT_TOKEN_LIMIT" && projectId) await showLimit(mode);
-      else toast(err?.message || String(err), "err");
+      toast(err?.message || String(err), "err");
       return;
     }
     result = { reused: Boolean(reply?.reused), copied: true };
     dialog.close(true);
     if (copy.ok) toast(t("start.token_copied"), "ok");
     else manualCopy(copy.text);
-  };
-
-  const showLimit = async (mode) => {
-    let old = 0;
-    try { old = (await api.starterToken({ project: projectId, mode: "peek" })).old_tokens || 0; } catch { /* keep 0 */ }
-    clear(extra);
-    extra.appendChild(h("div", { class: "notice", "data-token-limit": "" }, icon("alert", "sm"),
-      h("div", { class: "stack" },
-        h("p", null, old ? t("start.token_limit_old", { limit, count: old }) : t("start.token_limit", { limit })),
-        old ? h("div", { class: "row tight" },
-          h("button", { class: "btn primary", type: "button", onclick: () => run(mode, true) },
-            t("start.token_limit_revoke", { count: old }))) : null)));
   };
 
   const confirmNew = () => {

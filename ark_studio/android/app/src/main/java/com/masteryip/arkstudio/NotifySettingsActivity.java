@@ -77,6 +77,7 @@ public final class NotifySettingsActivity extends BaseActivity {
         LinearLayout kinds = Ui.card(this);
         kinds.addView(switchRow(getString(R.string.notify_ch_review), s.reviews, (v, on) -> change(x -> x.reviews = on)));
         kinds.addView(switchRow(getString(R.string.notify_ch_decision), s.decisions, (v, on) -> change(x -> x.decisions = on)));
+        kinds.addView(switchRow(getString(R.string.notify_ch_assigned), s.assigned, (v, on) -> change(x -> x.assigned = on)));
         kinds.addView(switchRow(getString(R.string.notify_ch_session), s.sessionErrors,
                 (v, on) -> change(x -> x.sessionErrors = on)));
         kinds.addView(switchRow(getString(R.string.notify_kind_session_done), s.sessionsDone,

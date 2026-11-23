@@ -20,6 +20,7 @@ var GoOnlyRoutes = append([]PortedRoute{
 	{"goonly:prefix:/api/agent/v1/docs/", "GET,HEAD"},
 	{"goonly:exact:" + chatapi.PluginChatPath, "POST"}, // routes_chat.go (view plugins' ai:chat)
 	needsSeenGoOnly[0],                               // project_reviews.go
+	needsSeenGoOnly[1],                               // project_reviews.go
 	notificationsGoOnly[0],                           // notifications.go
 	appManifestGoOnly[0],                             // app_manifest.go
 	{"goonly:exact:" + agentMarkersPath, "GET,HEAD"}, // routes_agentmarkers.go

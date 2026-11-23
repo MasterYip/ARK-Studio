@@ -12,7 +12,7 @@ import { attachImageContextMenu } from "./image-copy.js";
 import {
   borrowedSources, decisionOptions, groupExplain, groupNeeds, needsFilterActive, needsKind, needsLightboxItems,
   normalizeNeedsFilter, previewKind, runBatch, setNeedsGroupAll, toggleNeedsValue, NEEDS_FILTER_GROUPS,
-  needsSeenBody,
+  needsSeenBody, assignedClearKeys, assignedEntries, dropAssigned,
 } from "./needs-model.js";
 import {
   anchorLabel, anchorUnit, changeSummary, changesText, clockLabel, diffBlocks, keyNumber, noteParts, reviewCardText,
@@ -83,6 +83,7 @@ export function needsProjectKey(ctx) {
 // view that shows it redraw only itself (no full route change, so the page
 // keeps its scroll position).
 export async function refreshNeeds(ctx) {
+  refreshAssigned(ctx);
   try {
     const data = await api.project();
     ctx.S.needsYou = data.needs_you || [];
@@ -90,6 +91,63 @@ export async function refreshNeeds(ctx) {
     document.dispatchEvent(new CustomEvent(NEEDS_CHANGED, { detail: { ctx } }));
     ctx.syncNeedsBadge?.();
   } catch (err) { toast(err.message, "err"); }
+}
+
+// ------------------------------------------------------- assigned to me
+// Units others assigned to the person (needs-model.js assignedEntries).
+// ctx.S.needsAssigned keeps the server's list; views show assignedEntries of
+// it against the current Needs you list.
+let assignedRequest = 0;
+
+/** Reloads the person's assigned units, then redraws Needs you and the badge. */
+export async function refreshAssigned(ctx) {
+  const project = ctx.S.project?.id || "";
+  const request = ++assignedRequest;
+  let items = [];
+  try { items = (await api.needsAssigned())?.items || []; } catch { return; /* offline or signed out: keep the list */ }
+  if (request !== assignedRequest || project !== (ctx.S.project?.id || "")) return;
+  if (JSON.stringify(items) === JSON.stringify(ctx.S.needsAssigned || [])) return;
+  ctx.S.needsAssigned = items;
+  document.dispatchEvent(new CustomEvent(NEEDS_CHANGED, { detail: { ctx } }));
+  ctx.syncNeedsBadge?.();
+}
+
+/** Clears one entry from Needs you (reads its notice too). */
+export function clearAssigned(ctx, entry) {
+  const keys = assignedClearKeys(entry);
+  if (!keys.length) return;
+  ctx.S.needsAssigned = dropAssigned(ctx.S.needsAssigned || [], entry.batch);
+  document.dispatchEvent(new CustomEvent(NEEDS_CHANGED, { detail: { ctx } }));
+  ctx.syncNeedsBadge?.();
+  const project = ctx.S.project?.id || "";
+  api.markNeedsSeen({ clear: keys }).then((counts) => {
+    window.dispatchEvent(new CustomEvent(REVIEW_SEEN, { detail: { project, counts } }));
+  }).catch((err) => { toast(err.message, "err"); refreshAssigned(ctx); });
+}
+
+/** The "Assigned to me" block of Needs you, or null when nothing is assigned. */
+export function assignedSection(ctx) {
+  const entries = assignedEntries(ctx.S.needsAssigned || [], ctx.S.needsYou || []);
+  if (!entries.length) return null;
+  const row = (entry) => {
+    const by = entry.by_name || displayName(entry.by) || entry.by;
+    const line = entry.units.length > 1 ? t("needs.assigned.many", { by, n: entry.units.length }) : t("needs.assigned.one", { by });
+    return h("article", { class: `needs-assigned-row ${entry.new ? "new" : ""}`.trim(), dataset: { batch: entry.batch } },
+      h("div", { class: "needs-assigned-head" },
+        entry.new ? h("span", { class: "needs-assigned-new" }, t("needs.assigned.new")) : null,
+        h("span", { class: "needs-assigned-by" }, line),
+        entry.at ? h("span", { class: "needs-age", title: fmtDateTime(entry.at) }, relativeTime(entry.at)) : null,
+        h("button", { class: "link needs-assigned-clear", type: "button", title: t("needs.assigned.clear_title"),
+          onclick: () => clearAssigned(ctx, entry) }, t("needs.assigned.clear"))),
+      h("div", { class: "needs-assigned-units" }, entry.units.map((unit) => h("button", {
+        class: `needs-assigned-unit ${unit.new ? "new" : ""}`.trim(), type: "button", title: `${unit.uid} · ${unit.title}`,
+        dataset: { unitRef: unit.uid }, onclick: () => ctx.openUnit(unit.uid),
+      }, h("span", { class: "needs-uid" }, unit.uid), " ", unit.title))));
+  };
+  return h("div", { class: "needs-assigned", "aria-label": t("needs.assigned.title") },
+    h("div", { class: "needs-assigned-title", title: t("needs.assigned.hint") }, t("needs.assigned.title"),
+      h("span", { class: "needs-count" }, String(entries.reduce((n, e) => n + e.units.length, 0)))),
+    entries.map(row));
 }
 
 // ------------------------------------------------------------- filters

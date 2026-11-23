@@ -26,8 +26,7 @@ type Session struct {
 	ID        string
 	ProjectID string
 	User      string // the account it acts for
-	Idle      bool   // running and quiet for a while
-	Busy      bool   // between turns, but its sub-agents or background tasks still run
+	Idle      bool   // running and quiet for a while (between turns, even while its sub-agents or background tasks run)
 	Accepts   bool   // takes follow-up input
 	Stopped   bool   // finished recently and can be resumed with a new turn
 	Watching  bool   // a watcher of its own is waiting on the update feed
@@ -49,6 +48,10 @@ type Deps struct {
 	Send     func(s Session, text string) error
 	// ProjectName names the project in the message (optional).
 	ProjectName func(projectID string) string
+	// Load and Save keep a session's cursor across server restarts
+	// (optional): updates held back before a restart are still delivered.
+	Load func(sessionID string) (epoch string, after int64, ok bool)
+	Save func(sessionID, epoch string, after int64)
 }
 
 type cursor struct {
@@ -78,31 +81,40 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 			continue
 		}
 		c, ok := n.cursor[s.ID]
+		if !ok && n.D.Load != nil { // seen before a restart: go on from there
+			if epoch, after, saved := n.D.Load(s.ID); saved {
+				c, ok = cursor{epoch, after}, true
+				n.cursor[s.ID] = c
+			}
+		}
 		if !ok { // first sight: the feed starts now
 			if epoch, top, err := n.D.Top(ctx, s.ProjectID); err == nil {
-				n.cursor[s.ID] = cursor{epoch, top}
+				n.set(s.ID, cursor{epoch, top})
 			}
 			continue
 		}
 		if s.Watching { // its own watcher wakes it: one wake-up per update
 			if epoch, top, err := n.D.Top(ctx, s.ProjectID); err == nil {
-				n.cursor[s.ID] = cursor{epoch, top}
+				n.set(s.ID, cursor{epoch, top})
 			}
 			continue
 		}
-		if !(s.Idle && s.Accepts && !s.Busy) && !s.Stopped {
-			continue // the agent is working: keep the cursor, nudge when it rests
+		// Between turns a session takes input even while its sub-agents or
+		// background tasks run (they can run for hours): people's answers
+		// reach it then, as a person's message would.
+		if !(s.Idle && s.Accepts) && !s.Stopped {
+			continue // a turn runs: keep the cursor, nudge when it rests
 		}
 		b, err := n.D.Since(ctx, s, c.after)
 		if err != nil {
 			continue
 		}
 		if b.Epoch != c.epoch { // history replaced: start again at now
-			n.cursor[s.ID] = cursor{b.Epoch, b.Top}
+			n.set(s.ID, cursor{b.Epoch, b.Top})
 			continue
 		}
 		if len(b.Items) == 0 {
-			n.cursor[s.ID] = cursor{c.epoch, b.Top}
+			n.set(s.ID, cursor{c.epoch, b.Top})
 			continue
 		}
 		name := ""
@@ -112,7 +124,7 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 		if err := n.D.Send(s, Text(s, name, b.Items)); err != nil {
 			continue // try again next tick
 		}
-		n.cursor[s.ID] = cursor{c.epoch, b.Top}
+		n.set(s.ID, cursor{c.epoch, b.Top})
 		sent = append(sent, s.ID)
 	}
 	for id := range n.cursor {
@@ -121,6 +133,17 @@ func (n *Nudger) Tick(ctx context.Context) []string {
 		}
 	}
 	return sent
+}
+
+// set moves a session's cursor and saves it when it changed (caller holds n.mu).
+func (n *Nudger) set(id string, c cursor) {
+	if old, ok := n.cursor[id]; ok && old == c {
+		return
+	}
+	n.cursor[id] = c
+	if n.D.Save != nil {
+		n.D.Save(id, c.epoch, c.after)
+	}
 }
 
 // Run ticks until ctx ends.

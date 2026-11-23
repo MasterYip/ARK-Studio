@@ -501,7 +501,62 @@ export function needsSeenBody(entries = [], shown = entries.length, { filtered =
   return all ? { all: true, items: keys.slice(0, max) } : { items: keys.slice(0, max) };
 }
 
-/** A unit the inspector opened counts as seen while it waits in Needs you. */
-export function needsUnitKey(unit = {}) {
-  return unit?.uid && inNeedsYou(unit) ? `u:${unit.uid}` : "";
+/**
+ * A unit the inspector opened counts as seen while it waits in Needs you,
+ * or while it is one of the units assigned to the person (`assigned`, the
+ * assignedEntries list; the server reads its assignment notice too).
+ */
+export function needsUnitKey(unit = {}, assigned = []) {
+  return unit?.uid && (inNeedsYou(unit) || isAssigned(assigned, unit.uid)) ? `u:${unit.uid}` : "";
+}
+
+// ------------------------------------------------------- assigned to me
+// Units someone else assigned to the person (GET /api/needs/assigned,
+// server: store/assignments.go), one entry per batch of assignments.  They
+// count as read once the person opened the unit or cleared the entry
+// (POST /api/needs/seen {clear}); showing the list does not read them.
+
+/**
+ * The entries to show: units already in Needs you (in review, an open
+ * decision) are left out, so each unit appears once; entries left empty go.
+ */
+export function assignedEntries(assigned = [], needsYou = []) {
+  const shown = new Set((Array.isArray(needsYou) ? needsYou : []).map((item) => item?.uid).filter(Boolean));
+  const out = [];
+  for (const entry of Array.isArray(assigned) ? assigned : []) {
+    const units = (entry?.units || []).filter((unit) => unit?.uid && !shown.has(unit.uid));
+    if (!units.length) continue;
+    out.push({ ...entry, units, new: units.some((unit) => unit.new) });
+  }
+  return out;
+}
+
+/** Number of assigned units (for the Home badge). */
+export function assignedCount(entries = []) {
+  return (entries || []).reduce((n, entry) => n + (entry?.units?.length || 0), 0);
+}
+
+/** The seen keys an entry's Clear sends ("a:<uid>" per unit). */
+export function assignedClearKeys(entry = {}) {
+  return (entry.units || []).map((unit) => unit.key || (unit.uid ? `a:${unit.uid}` : "")).filter(Boolean);
+}
+
+/** The entries with `uid` read (after the person opened it); unchanged when it is not there. */
+export function markAssignedRead(entries = [], uid = "") {
+  if (!uid) return entries;
+  return (entries || []).map((entry) => {
+    if (!(entry.units || []).some((unit) => unit.uid === uid && unit.new)) return entry;
+    const units = entry.units.map((unit) => (unit.uid === uid ? { ...unit, new: false } : unit));
+    return { ...entry, units, new: units.some((unit) => unit.new) };
+  });
+}
+
+/** The entries without the cleared one (by batch). */
+export function dropAssigned(entries = [], batch = "") {
+  return (entries || []).filter((entry) => entry.batch !== batch);
+}
+
+/** Whether uid is one of the assigned units. */
+export function isAssigned(entries = [], uid = "") {
+  return Boolean(uid) && (entries || []).some((entry) => (entry.units || []).some((unit) => unit.uid === uid));
 }

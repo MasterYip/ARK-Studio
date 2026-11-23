@@ -469,11 +469,13 @@ class StarterTokenTest(unittest.TestCase):
 
     @staticmethod
     def reply(label, tokens, rotated=None):
+        """Python's reply has "limit"; Go's (with rotated) has none."""
         item = {"id": "tok_new", "label": label, "prefix": "arka_abcd", "scope": "write",
                 "created_at": "t", "expires_at": "e", "last_used_at": None, "expired": False}
         out = {"ok": True, "token": "arka_secret", "item": item, "user": "local", "tokens": tokens,
                "limit": 10, "scopes": ["read", "write"], "expiry_days": [0, 30, 90]}
         if rotated is not None:
+            del out["limit"]
             out["rotated"] = rotated
         return body(out)
 
@@ -484,6 +486,19 @@ class StarterTokenTest(unittest.TestCase):
         self.assertEqual(go_only.fix_for("POST", self.PATH, py, go).id, "agent-token-starter-rotation")
         first = resp(200, self.reply("Home starter prompt (prj_1) – 2026-11-16", [{"id": "tok_new"}], []))
         self.assertIsNotNone(go_only.fix_for("POST", self.PATH, py, first))
+
+    def test_token_limit_restored(self):
+        go = {"ok": True, "user": "local", "tokens": [], "scopes": ["read"], "expiry_days": [0]}
+        want = {"ok": True, "user": "local", "tokens": [], "limit": 10, "scopes": ["read"], "expiry_days": [0]}
+        for path in (self.PATH, self.PATH + "?x=1", self.PATH + "/tok_abc"):
+            out = go_only.augmented(path)(body(go))
+            self.assertEqual(list(json.loads(out).items()), list(want.items()))
+        restore = go_only.augmented(self.PATH)
+        self.assertEqual(restore(body(want)), body(want))
+        self.assertEqual(restore(b"not json"), b"not json")
+        self.assertEqual(restore(b'{"ok": false}'), b'{"ok": false}')
+        go_src = (REPO / "ark_studio/server/internal/org/admin.go").read_text(encoding="utf-8")
+        self.assertNotIn('"limit"', go_src.split("func (m *Manager) ListAgentTokens", 1)[1].split("\n}\n", 1)[0])
 
     def test_narrow(self):
         py = resp(200, self.reply("Home starter prompt – d", []))

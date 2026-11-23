@@ -40,8 +40,7 @@ test("the Copy flow asks the server for the project's token and stores nothing",
   assert.match(flow, /mode: "peek"/);
   assert.match(flow, /run\("copy"\)/);
   assert.match(flow, /run\("new"\)/);
-  assert.match(flow, /revoke_old: true/);
-  assert.match(flow, /AGENT_TOKEN_LIMIT/);
+  assert.doesNotMatch(flow, /revoke_old|AGENT_TOKEN_LIMIT/);
   const api = readFileSync(new URL("../../ark_studio/web/js/api.js", import.meta.url), "utf8");
   assert.match(api, /starterToken: \(body\) => request\("\/api\/personal\/agent-tokens", \{ method: "POST", body: \{ purpose: "starter"/);
   assert.match(api.slice(api.indexOf("export async function clearClientData")), /clearStarterTokens\(localStorage\)/);

@@ -651,8 +651,11 @@ to the latest release's APK. A release binary has the web UI built in and no
 and its updates from the server (`/download/android-apps.json` then reports
 `source: "server"` with the APK's version code).
 
-The app is a hybrid: everyday screens are native, the rest is the web app in a
-same-origin WebView signed in with the same device session.
+The release is one APK with two modes. Web mode is the default and opens the full
+same-origin WebView workspace. Native mode opens the native Home, Tasks, Runs, GPU,
+node and notification screens, with links back to the WebView for areas that are not
+native yet. The mode is selected in the native More screen and uses the same device
+session in either mode.
 
 | Native | WebView (deep-linked hash routes) |
 | --- | --- |

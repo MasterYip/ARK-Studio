@@ -4065,6 +4065,18 @@ html[data-theme="dark"] .ed-highlight .tok-lit { color: #569cd6; }
 .needs-title{flex:1 1 auto;min-width:0;text-align:left;background:none;border:0;padding:0;color:var(--ink);font-size:0.78125rem;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .needs-title:hover{color:var(--accent-2)}
 .needs-uid{font:600 0.65625rem var(--mono);color:var(--mute)}
+/* Needs you › Assigned to me (needs-ui.js assignedSection) */
+.needs-assigned{display:flex;flex-direction:column;gap:6px;margin:4px 0 10px;padding-bottom:10px;border-bottom:1px solid var(--line)}
+.needs-assigned-title{display:flex;align-items:center;gap:6px;font-size:0.71875rem;font-weight:700;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.needs-assigned-row{display:flex;flex-direction:column;gap:4px;padding:6px 8px;border-radius:8px;background:var(--chip-bg)}
+.needs-assigned-head{display:flex;align-items:center;gap:8px;font-size:0.78125rem;color:var(--ink)}
+.needs-assigned-by{flex:1 1 auto;min-width:0}
+.needs-assigned-new{font-size:0.59375rem;font-weight:700;text-transform:uppercase;padding:1px 5px;border-radius:5px;color:var(--accent);background:color-mix(in srgb,var(--accent) 14%,transparent)}
+.needs-assigned-clear{flex:0 0 auto;font-size:0.71875rem}
+.needs-assigned-units{display:flex;flex-wrap:wrap;gap:4px 10px}
+.needs-assigned-unit{border:0;background:none;padding:0;cursor:pointer;color:var(--ink);font-size:0.78125rem;text-align:left;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.needs-assigned-unit:hover{text-decoration:underline}
+.needs-assigned-unit.new{font-weight:600}
 .needs-notes{flex:0 0 auto;display:inline-flex;align-items:center;gap:3px;font-size:0.625rem;color:var(--accent-2)}
 .needs-notes .icon{width:11px;height:11px}
 .needs-age{flex:0 0 auto;font-size:0.625rem;color:var(--mute);white-space:nowrap}

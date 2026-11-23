@@ -14,7 +14,9 @@ consult:
 * ``AUGMENTED``: Python routes whose Go reply carries extra, Go-only
   members.  diffreplay strips them from the Go body (and ignores the
   body-derived ETag / Content-Length) before the byte comparison, so the
-  rest of the payload is still checked byte for byte.
+  rest of the payload is still checked byte for byte.  The agent token
+  routes go the other way: Go dropped "limit" and the canonicaliser adds
+  Python's value back.
 
 * ``FIXES``: intentional behaviour changes on Python routes (bug fixes made
   in Go only).  Each entry names the route, the Go file, a note and a
@@ -247,6 +249,30 @@ def _strip_needs_review(body: bytes) -> bytes:
     return json.dumps(payload, ensure_ascii=False).encode()
 
 
+# Python's token list reply carries "limit": 10 (agent_tokens.MAX_ACTIVE_TOKENS);
+# ark-server has no cap and sends no "limit" since 2026-11-23
+# (ark_studio/server/internal/org/admin.go ListAgentTokens; test
+# starter_token_test.go TestAgentTokensNoLimit).  The canonicaliser puts
+# Python's member back in its place so the rest of the reply is still compared.
+PY_TOKEN_LIMIT = 10
+TOKENS_PATH = "/api/personal/agent-tokens"
+
+
+def _restore_token_limit(body: bytes) -> bytes:
+    try:
+        payload = json.loads(body)
+    except ValueError:
+        return body
+    if not isinstance(payload, dict) or "tokens" not in payload or "limit" in payload:
+        return body
+    out = {}
+    for key, value in payload.items():
+        out[key] = value
+        if key == "tokens":
+            out["limit"] = PY_TOKEN_LIMIT
+    return json.dumps(out, ensure_ascii=False).encode()
+
+
 def _chain(*strips):
     def strip(body: bytes) -> bytes:
         for f in strips:
@@ -270,6 +296,7 @@ AUGMENTED = {
     # ark_studio/server/internal/store/reviewrounds.go enrichReviews and reviewgroups.go: the review
     # members of needs_you items and the review group items (tests store/review_test.go).
     "/api/project": _strip_needs_review,
+    TOKENS_PATH: _restore_token_limit,
 }
 
 # The Go system query ends with a read-only df section (ark_studio/server/internal/gpu/
@@ -286,7 +313,10 @@ def ssh_call_canonical(argv: list) -> list:
 
 def augmented(path: str):
     """The Go-body canonicaliser for a request path (query ignored), or None."""
-    return AUGMENTED.get(path.split("?", 1)[0])
+    path = path.split("?", 1)[0]
+    if path.startswith(TOKENS_PATH + "/"):  # DELETE one token: the list follows
+        return _restore_token_limit
+    return AUGMENTED.get(path)
 
 
 @dataclass(frozen=True)
@@ -950,7 +980,7 @@ def _starter_rotation(py, go) -> bool:
         return False
     if not (isinstance(a.get("token"), str) and isinstance(b.get("token"), str)):
         return False
-    rest_a = {k: v for k, v in a.items() if k != "tokens"}
+    rest_a = {k: v for k, v in a.items() if k not in ("tokens", "limit")}
     if "reused" in b and not isinstance(b["reused"], bool):
         return False
     rest_b = {k: v for k, v in b.items() if k not in ("tokens", "rotated", "reused")}
@@ -959,8 +989,8 @@ def _starter_rotation(py, go) -> bool:
 
 FIXES.append(Fix("agent-token-starter-rotation", "POST", "/api/personal/agent-tokens", STARTER_TOKEN_FILE,
                  "UX-18: a Home starter-prompt token (purpose: starter, project) is one per user and project, "
-                 "stored sealed and reused by later copies instead of adding up to "
-                 "the 10-token limit; Python ignores the members and mints a plain token",
+                 "stored sealed and reused by later copies; Python ignores the members and mints a plain token "
+                 "(and Go sends no \"limit\")",
                  _starter_rotation))
 
 

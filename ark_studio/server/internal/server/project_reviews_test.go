@@ -127,8 +127,10 @@ func TestReviewBadgesPerPerson(t *testing.T) {
 	if r := gpuCall(t, app, "POST", "/api/needs/seen", map[string]any{}, owner); r.code != 400 {
 		t.Fatalf("empty body: %d %s", r.code, r.raw)
 	}
-	// Read-only members have no badge, and POSTs need write access.
-	if r := gpuCall(t, app, "POST", "/api/needs/seen", map[string]any{"all": true}, as("vic")); r.code != 403 {
+	// Read-only members have no review badge; they may mark their own
+	// assignments read (assignee_notice_test.go), so the POST answers 0 of 0.
+	if r := gpuCall(t, app, "POST", "/api/needs/seen", map[string]any{"all": true}, as("vic")); r.code != 200 ||
+		r.body["review_new"] != float64(0) || r.body["review_total"] != float64(0) {
 		t.Fatalf("viewer seen: %d %s", r.code, r.raw)
 	}
 }

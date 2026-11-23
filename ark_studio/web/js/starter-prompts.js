@@ -66,13 +66,13 @@ export const START_SHARED = {
       zh: "文档：本提示词有意保持简短。先 GET {{url}}/api/agent/v1/docs（使用相同的 Authorization 和 X-ARK-Project 请求头）：它列出 ARK 的全部文档，并给出“从这里开始”的阅读顺序。需要时再用 GET /api/agent/v1/docs/<path> 读取相关文档（加上 ?section=<heading-slug> 只读一节）；文档比本提示词更详细的地方，以文档为准。如果 /api/agent/v1/docs 返回 404（旧版 ARK），改用 GET /api/agent/v1/interface 和 GET /api/agent/v1/skills。",
     },
   ],
-  // ARK defaults as composed by the server (internal/agentrules, rules r-d3c19ef1).
+  // ARK defaults as composed by the server (internal/agentrules, rules r-391921f7).
   // Used when the server cannot compose them (older ARK); agentrules_test.go
   // checks that these lines are the catalog's default composition.
   rules: [
     {
-      en: "CORE RULES (rules r-d3c19ef1): they hold for this whole conversation, for every task. ARK is the record: work that is not in ARK did not happen. GET /api/agent/v1/rules returns the current rules; when you check updates and its version is not r-d3c19ef1, follow the new rules. Details and examples: GET /api/agent/v1/docs/agents/working-mode.md.",
-      zh: "核心规则（规则 r-d3c19ef1）：在整段对话中、对每个任务都有效。ARK 就是记录：没有写进 ARK 的工作等于没有发生。GET /api/agent/v1/rules 返回当前规则；查看 updates 时如果它的版本不是 r-d3c19ef1，按新规则执行。细节和示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
+      en: "CORE RULES (rules r-391921f7): they hold for this whole conversation, for every task. ARK is the record: work that is not in ARK did not happen. GET /api/agent/v1/rules returns the current rules; when you check updates and its version is not r-391921f7, follow the new rules. Details and examples: GET /api/agent/v1/docs/agents/working-mode.md.",
+      zh: "核心规则（规则 r-391921f7）：在整段对话中、对每个任务都有效。ARK 就是记录：没有写进 ARK 的工作等于没有发生。GET /api/agent/v1/rules 返回当前规则；查看 updates 时如果它的版本不是 r-391921f7，按新规则执行。细节和示例见 GET /api/agent/v1/docs/agents/working-mode.md。",
     },
     {
       en: "C1. Read before your first write: GET /api/agent/v1/context, GET /api/agent/v1/setup and the whole of working-mode.md (about 27 KB: read all of it, in parts if you must; do not cut it off with head or a byte limit).",
@@ -87,8 +87,8 @@ export const START_SHARED = {
       zh: "C3. 进展是任务正文里的一行带日期的记录（\"YYYY-MM-DD HH:MM UTC · 运行了什么、问题、下一步\"）；每次写入前重新读取正文。绝不要把进展、计划或答案发成评论。",
     },
     {
-      en: "C4. Each result is its own unit (type \"experiment\" for a measurement or analysis, \"artifact\" for a document or audit), part_of and derived_from the task; attach its files to it (POST /api/agent/v1/media/upload for images, POST /api/agent/v1/assets/upload for other files, JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}) and embed figures as ![caption](media:<id>). A claim unit only for a statement results support or contradict. No other unit types, sub-tasks or relates_to links unless I ask.",
-      zh: "C4. 每个结果单独成一个节点（测量或分析用 type \"experiment\"，文档或审查用 \"artifact\"），part_of 并 derived_from 该任务；把文件附到它上面（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}），图以 ![caption](media:<id>) 嵌入。只有被结果支持或反驳的陈述才建论断节点。除非我要求，不要使用其他节点类型、子任务或 relates_to 关联。",
+      en: "C4. Each result is its own unit (type \"experiment\" for a measurement or analysis, \"artifact\" for a document or audit), part_of and derived_from the task; attach its files to it (POST /api/agent/v1/media/upload for images, POST /api/agent/v1/assets/upload for other files, JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}) and embed figures as ![caption](media:<id>). How a plan is laid out as units: G1. No relates_to links unless I ask.",
+      zh: "C4. 每个结果单独成一个节点（测量或分析用 type \"experiment\"，文档或审查用 \"artifact\"），part_of 并 derived_from 该任务；把文件附到它上面（图片用 POST /api/agent/v1/media/upload，其他文件用 POST /api/agent/v1/assets/upload，JSON {\"unit\", \"filename\", \"data\": \"<base64>\", \"caption\"}），图以 ![caption](media:<id>) 嵌入。计划如何拆成节点见 G1。除非我要求，不要使用 relates_to 关联。",
     },
     {
       en: "C5. Needs you: whenever you hand me something (a result, a plan to approve, versions to choose from), set that unit's status to review so it appears in Needs you; a question for me is a decision unit left open. Each time you set status review, send review_note with it: one to three lines saying what to look at and what changed, with anchors to the exact places (`[heading](#slug)`, `T-0042#slug`, `media:<id>@0:08-0:12`); never just \"see the body\". Never leave it only in chat, a comment or a body, and never set a review unit to done yourself: I Accept or Send back in ARK.",
@@ -97,6 +97,10 @@ export const START_SHARED = {
     {
       en: "C6. Every decision I make (approving a plan, choosing an option, setting a scope), in chat, a comment or an answer, is one decision unit (type: \"decision\", status: \"done\") part_of and derived_from the task.",
       zh: "C6. 我做出的每个决定（批准计划、选择选项、确定范围），无论在对话、评论还是回答中，都是一个决定节点（type: \"decision\", status: \"done\"），part_of 并 derived_from 该任务。",
+    },
+    {
+      en: "G1. Planning graph: when you plan an idea, build a small tree a person can read from the top: question → plan task → claims → 1–3 tasks per claim → later, their results and decisions. The question is the open question the plan answers (create it, type \"question\", if there is none; part_of the line or topic when there is one). The plan task is the request's task unit (C2) with the whole plan in its body: derived_from the question, and part_of its line, topic or parent task as C2 says, else part_of the question. A claim (type \"claim\") is one testable statement, with what result would support or refute it; use 1–3 claims, one per independent part of the question. A task under a claim (type \"task\", status open until it runs) is one piece of work that tests that claim, with its measurable outcome. Every claim and task below the plan task is part_of and derived_from its parent; none is left without one. A first plan has 6–15 units. Before you hand the plan over, check the graph (GET /api/agent/v1/units): every unit has its parent; no two units say the same thing; every task tests a claim and every claim has at least one task; no unit without a purpose (no unit per plan step, no empty placeholder).",
+      zh: "G1. 规划图：规划一个想法时，建一棵从上往下读得懂的小树：问题 → 计划任务 → 论断 → 每个论断 1–3 个任务 → 之后是它们的结果和决定。问题是这个计划要回答的未决问题（没有就新建，type \"question\"；有主线或主题时 part_of 它）。计划任务就是这个请求的任务节点（C2），完整计划写在它的正文里：derived_from 这个问题，并按 C2 part_of 它所属的主线、主题或上级任务，没有时 part_of 这个问题。论断（type \"claim\"）是一个可检验的陈述，写明什么结果会支持或推翻它；用 1–3 个论断，问题里每个独立的部分一个。论断下的任务（type \"task\"，开始运行前状态为 open）是检验这个论断的一项工作，写明可衡量的结果。计划任务下面的每个论断和任务都 part_of 并 derived_from 它的父节点，不留没有父节点的节点。第一版计划 6–15 个节点。交出计划之前检查这张图（GET /api/agent/v1/units）：每个节点都有父节点；没有两个节点说同一件事；每个任务检验一个论断，每个论断至少有一个任务；没有无用的节点（不为每个计划步骤建节点，不建空占位）。",
     },
     {
       en: "C7. Between steps and before every reply to me, GET /api/agent/v1/updates (or `ark-server agent watch --once`): my comments, Send back and decisions are instructions. Act, reply (POST /api/agent/v1/units/<ID>/comments with {\"body\": \"...\", \"reply_to\": <comment id>}) and resolve them.",
@@ -190,8 +194,8 @@ export const STARTER_PROMPTS = [
           zh: "接下来：用几句话向我说明如何用 ARK 开发和管理这个项目：ARK 保存计划、任务、证据和决定（首页、研究、地图、执行）；你负责干活，并按核心规则记录；在新会话中，首页的“启动 / 继续研究团队”提示词会重新加载这些上下文。然后把下面这些选项连同我可以说的示例请求一起给我，等我选择：",
         },
         {
-          en: "- \"Plan this idea: <idea, paper or link>\": research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 tasks, written into one task unit.",
-          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、2–3 个可检验的假设、需要证据的论断以及什么证据能判定它们、最初的 3–5 个任务，写进一个任务节点。",
+          en: "- \"Plan this idea: <idea, paper or link>\": research question, 1–3 testable claims with what would settle each, and the first tasks for each claim, laid out as the planning graph of G1 (the full plan in the plan task's body).",
+          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、1–3 个可检验的论断以及什么能判定每个论断、每个论断最初的任务，按 G1 的规划图建成节点（完整计划写在计划任务的正文里）。",
         },
         {
           en: "- \"Start a research team on <objective>\": follow the agent-team skill (GET /api/agent/v1/skills/agent-team): bounded tasks with an owner, an independent reviewer and a measurable outcome, work in .worktrees/<TASK-ID>, gates cheapest-first.",
@@ -258,8 +262,8 @@ export const STARTER_PROMPTS = [
           zh: "- “继续 <任务 ID>”：阅读该任务、它的评论和证据，然后从最后记录的下一步继续。",
         },
         {
-          en: "- \"Plan this idea: <idea, paper or link>\": research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 tasks, written into one task unit.",
-          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、2–3 个可检验的假设、需要证据的论断以及什么证据能判定它们、最初的 3–5 个任务，写进一个任务节点。",
+          en: "- \"Plan this idea: <idea, paper or link>\": research question, 1–3 testable claims with what would settle each, and the first tasks for each claim, laid out as the planning graph of G1 (the full plan in the plan task's body).",
+          zh: "- “规划这个想法：<想法、论文或链接>”：研究问题、1–3 个可检验的论断以及什么能判定每个论断、每个论断最初的任务，按 G1 的规划图建成节点（完整计划写在计划任务的正文里）。",
         },
         {
           en: "- \"Give me a status check\": refresh the summary above; change nothing.",
@@ -372,8 +376,8 @@ export const LIBRARY_PROMPTS = [
       main: [
         { en: "TASK: plan this idea: <idea, paper or link>.", zh: "任务：规划这个想法：<想法、论文或链接>。" },
         {
-          en: "Write one task unit: research question, 2–3 testable hypotheses, the claims that need evidence and what would settle them, the first 3–5 steps, evaluation protocol and decision gates; link it derived_from the idea's unit if there is one.",
-          zh: "写一个任务节点：研究问题、2–3 个可检验的假设、需要证据的论断以及什么能判定它们、最初的 3–5 步、评估协议和决策关卡；如果这个想法已有节点，用 derived_from 关联到它。",
+          en: "Lay the plan out as the planning graph of G1: research question, 1–3 testable claims with what would settle each, and the first tasks for each claim; the plan task's body holds the full plan with its evaluation protocol and decision gates. Link the plan task derived_from the idea's unit if there is one.",
+          zh: "按 G1 的规划图建成节点：研究问题、1–3 个可检验的论断以及什么能判定每个论断、每个论断最初的任务；完整计划连同评估协议和决策关卡写在计划任务的正文里。如果这个想法已有节点，计划任务用 derived_from 关联到它。",
         },
         {
           en: "Set the task to review with an anchored review_note and wait for my approval; run nothing before I approve.",

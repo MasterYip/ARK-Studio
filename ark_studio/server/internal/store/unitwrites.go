@@ -501,6 +501,11 @@ func (s *Store) createUnitIn(ctx context.Context, outer *wtx, data *pyjson.Objec
 		if err := w.log(actor, "unit.create", unitID, detail); err != nil {
 			return err
 		}
+		if assignee != "" && data.Has("assignee") {
+			if err := recordAssignment(w, unitID, assignee, who.whoAssigns(), actor); err != nil {
+				return err
+			}
+		}
 		if needs != "" {
 			if err := reviewTransition(w, unitID, "", needs, body, actor, reviewNote); err != nil {
 				return err
@@ -795,6 +800,10 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 		}
 		if containsString(changed, "assignee") {
 			detail.Set("assignee", pyjson.NewObject("from", oldAssignee, "to", assignee))
+			to, _ := assignee.(string)
+			if err := recordAssignment(w, unitID, to, who.whoAssigns(), actor); err != nil {
+				return err
+			}
 		}
 		if err := w.log(actor, "unit.update", unitID, detail); err != nil {
 			return err

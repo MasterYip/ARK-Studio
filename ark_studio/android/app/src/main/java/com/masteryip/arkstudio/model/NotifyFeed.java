@@ -26,11 +26,13 @@ public final class NotifyFeed {
     public static final String KIND_APPROVAL = "approval";
     public static final String KIND_SESSION_ERROR = "session_error";
     public static final String KIND_SESSION_DONE = "session_done";
+    public static final String KIND_ASSIGNED = "assigned";
 
     /** Notification channels; decisions and approvals share one. */
     public static final String CH_REVIEW = "ark_review";
     public static final String CH_DECISION = "ark_decision";
     public static final String CH_SESSION = "ark_session_error";
+    public static final String CH_ASSIGNED = "ark_assigned";
     public static final String CH_OTHER = "ark_other";
 
     /** Posted ids are remembered this long after they left the feed. */
@@ -49,6 +51,8 @@ public final class NotifyFeed {
                 return CH_DECISION;
             case KIND_SESSION_ERROR:
                 return CH_SESSION;
+            case KIND_ASSIGNED:
+                return CH_ASSIGNED;
             default:
                 return CH_OTHER;
         }
@@ -69,6 +73,9 @@ public final class NotifyFeed {
         public final String linkRef;
         public final String unitType;
         public final String route;
+        /** assigned: who assigned (username and display name). */
+        public final String by;
+        public final String byName;
 
         Item(JSONObject o) {
             JSONObject p = o.optJSONObject("project");
@@ -86,6 +93,9 @@ public final class NotifyFeed {
             linkRef = link == null ? "" : link.optString("ref");
             unitType = link == null ? "" : link.optString("unit_type");
             route = link == null ? "" : link.optString("route");
+            by = o.isNull("by") ? "" : o.optString("by");
+            String name = o.isNull("by_name") ? "" : o.optString("by_name");
+            byName = name.isEmpty() ? by : name;
         }
     }
 
@@ -128,6 +138,7 @@ public final class NotifyFeed {
         public boolean decisions = true;
         public boolean sessionErrors = true;
         public boolean sessionsDone = false;
+        public boolean assigned = true;
         public final Set<String> mutedProjects = new HashSet<>();
         public boolean quiet = false;
         /** Minutes after midnight. */
@@ -145,6 +156,8 @@ public final class NotifyFeed {
                     return sessionErrors;
                 case KIND_SESSION_DONE:
                     return sessionsDone;
+                case KIND_ASSIGNED:
+                    return assigned;
                 default:
                     return false;
             }
@@ -159,7 +172,7 @@ public final class NotifyFeed {
             JSONObject o = new JSONObject();
             try {
                 o.put("reviews", reviews).put("decisions", decisions).put("session_errors", sessionErrors)
-                        .put("sessions_done", sessionsDone).put("quiet", quiet).put("quiet_start", quietStart)
+                        .put("sessions_done", sessionsDone).put("assigned", assigned).put("quiet", quiet).put("quiet_start", quietStart)
                         .put("quiet_end", quietEnd).put("muted", new JSONArray(new ArrayList<>(mutedProjects)));
             } catch (JSONException impossible) {
                 throw new IllegalStateException(impossible);
@@ -176,6 +189,7 @@ public final class NotifyFeed {
                 s.decisions = o.optBoolean("decisions", true);
                 s.sessionErrors = o.optBoolean("session_errors", true);
                 s.sessionsDone = o.optBoolean("sessions_done", false);
+                s.assigned = o.optBoolean("assigned", true);
                 s.quiet = o.optBoolean("quiet", false);
                 s.quietStart = clampMinute(o.optInt("quiet_start", s.quietStart));
                 s.quietEnd = clampMinute(o.optInt("quiet_end", s.quietEnd));

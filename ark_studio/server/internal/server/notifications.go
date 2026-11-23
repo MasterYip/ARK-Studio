@@ -27,12 +27,18 @@ package server
 //             Projects the person may only read have none, reviews the
 //             person opened on their own work neither (ownOrElsewhere).
 //   decision  open decisions in the same cards (high priority)
+//   assigned  units someone else assigned to the person (store/
+//             assignments.go): one item per batch, "Ana assigned you 3
+//             nodes", with by / by_name (who assigned them).  Read once the
+//             person opened the unit or the item was shown in Needs you
+//             (seen keys a:<uid>); read-only members get them too.
 //   approval  pending approval requests of the person's agent sessions
 //             (high priority)
 //   session_error  the person's sessions that errored, or that ARK stopped
 //             when it restarted, in the last notifySessionWindow (high)
 //   session_done   the person's sessions that ended normally (low)
-// Agents' progress, comments and the person's own actions are not items.
+// Agents' progress, comments and the person's own actions (assigning
+// yourself included) are not items.
 //
 // Cost: the cached Needs you cards per project (needsCardsFor) and one pass
 // over the session list; no per-project activity reads.
@@ -40,6 +46,7 @@ package server
 import (
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -66,6 +73,7 @@ type notifyProject struct {
 
 type notifyItem struct {
 	id, kind, priority, title, body string
+	by, byName                      string // assigned: who assigned
 	project                         notifyProject
 	link                            *pyjson.Object
 	at                              time.Time
@@ -192,6 +200,44 @@ func cardItems(p notifyProject, cards []store.NeedsCard, seen store.NeedsSeen, u
 	return out
 }
 
+// assignedItems are the assignment items of one project: the person's
+// assignment cards with a unit they have not read.
+func assignedItems(p notifyProject, cards []store.AssignedCard, seen store.NeedsSeen, user string,
+	nameOf func(string) string) []notifyItem {
+	var out []notifyItem
+	unread := store.NeedsSeen{Items: seen.Items} // only reading the item counts, not the list watermark
+	for _, card := range store.AssignedTo(cards, user, seen) {
+		var keys []string
+		for _, m := range card.Marks() {
+			if unread.ItemNew(m) {
+				keys = append(keys, m.Key+"@"+m.Since)
+			}
+		}
+		if len(keys) == 0 {
+			continue
+		}
+		sort.Strings(keys)
+		first := card.Units[0]
+		name := nameOf(card.By)
+		item := notifyItem{project: p, kind: "assigned", priority: "default", title: first.Title,
+			by: card.By, byName: name, at: store.ParseTime(card.Latest()), count: len(card.Units)}
+		if item.title == "" {
+			item.title = first.UID
+		}
+		if len(card.Units) == 1 {
+			item.body = "Assigned to you by " + name
+			item.link = unitLink(p, "unit", first.UID, first.Type)
+		} else {
+			item.body = name + " assigned you " + strconv.Itoa(len(card.Units)) + " nodes"
+			item.link = pyjson.NewObject("type", "needs", "ref", card.Batch, "unit_type", "", "project_id", p.id,
+				"route", "#/home")
+		}
+		item.id = "assigned:" + p.id + ":" + card.Batch + ":" + strings.Join(keys, ",")
+		out = append(out, item)
+	}
+	return out
+}
+
 // sessionItems are the approval and session items of the projects.
 func sessionItems(alerts []sessions.Alert, projects map[string]notifyProject, user string, auth bool, now time.Time) []notifyItem {
 	var out []notifyItem
@@ -280,14 +326,19 @@ func (c *reqCtx) getNotifications() error {
 				defer wg.Done()
 				for i := range jobs {
 					p := projects[i]
-					if cards, ok := c.app.needsCardsFor(c.ctx, p.path); ok {
-						lists[i] = cardItems(p, cards, seen[p.id], user, auth)
+					e, ok := c.app.needsFor(c.ctx, p.path)
+					if !ok {
+						continue
 					}
+					if p.review {
+						lists[i] = cardItems(p, e.cards, seen[p.id], user, auth)
+					}
+					lists[i] = append(lists[i], assignedItems(p, e.assigned, seen[p.id], user, c.displayNameOf)...)
 				}
 			}()
 		}
 		for i, p := range projects {
-			if p.review && p.path != "" {
+			if p.path != "" {
 				jobs <- i
 			}
 		}
@@ -320,6 +371,9 @@ func (c *reqCtx) getNotifications() error {
 		list = append(list, pyjson.NewObject("id", it.id, "project", pyjson.NewObject("id", it.project.id, "name", it.project.name),
 			"kind", it.kind, "priority", it.priority, "title", it.title, "body", it.body, "deep_link", it.link,
 			"created_at", created, "count", int64(it.count)))
+		if it.kind == "assigned" {
+			list[len(list)-1].(*pyjson.Object).Set("by", it.by).Set("by_name", it.byName)
+		}
 	}
 	names := []any{}
 	for _, p := range projects {
@@ -328,4 +382,18 @@ func (c *reqCtx) getNotifications() error {
 	c.ok(pyjson.NewObject("cursor", store.MarkTimeOf(now.Add(-notifyOverlap)), "server_time", store.MarkTimeOf(now),
 		"scope", scope, "projects", names, "items", list, "active", active))
 	return nil
+}
+
+// displayNameOf is the account's display name, or the name itself.
+func (c *reqCtx) displayNameOf(username string) string {
+	if c.app.Org == nil || username == "" {
+		return username
+	}
+	if row, ok, err := c.app.Org.UserByName(c.ctx, username); err == nil && ok {
+		if d := strings.TrimSpace(row.Str("display_name")); d != "" {
+			return d
+		}
+		return row.Str("username")
+	}
+	return username
 }

@@ -213,10 +213,10 @@ func CardMarks(cards []NeedsCard) map[string]string {
 	return out
 }
 
-// ValidNeedsKey: a seen-mark key as NeedsCards writes them.
+// ValidNeedsKey: a seen-mark key as NeedsCards and AssignedCards write them.
 func ValidNeedsKey(key string) bool {
 	if len(key) > 120 {
 		return false
 	}
-	return (strings.HasPrefix(key, "u:") && len(key) > 2) || (strings.HasPrefix(key, "rg:"+ReviewGroupPrefix) && len(key) > 3+len(ReviewGroupPrefix))
+	return ((strings.HasPrefix(key, "u:") || strings.HasPrefix(key, "a:")) && len(key) > 2) || (strings.HasPrefix(key, "rg:"+ReviewGroupPrefix) && len(key) > 3+len(ReviewGroupPrefix))
 }

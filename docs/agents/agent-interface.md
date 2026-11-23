@@ -398,6 +398,13 @@ kind has one. Kinds: `comment`, `reply`, `mention`, `sent_back`, `accepted`,
 `decided`, `comment_reopened`, `status`, `assignee`, `importance`,
 `archived`, `assigned`, `decision`, `setup_confirmed`, `message`.
 
+`assigned` is per user: the token's user gets one item for every unit
+assigned to them (any unit assigned later, and new tasks created assigned to
+them; `change` has from and to), so an agent watching for its user sees new
+assignments without polling the units. The same assignment puts the unit
+under "Assigned to me" in the person's Needs you and in their notifications
+(`GET /api/notifications`, kind `assigned`).
+
 - **Cursor.** Opaque; it encodes the project's activity log position and
   history epoch. A cursor from another project, a malformed one or one from
   before a snapshot restore returns `reset: true` with a fresh cursor and no

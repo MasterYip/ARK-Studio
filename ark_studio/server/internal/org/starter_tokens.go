@@ -22,8 +22,7 @@ package org
 // owner (routes_org.go personalTokensGuard refuses agent, task and phone
 // tokens).  Starter tokens minted before have no stored value: they keep
 // working, cannot be reused, and count as "older" for revoke_old and cleanup.
-// revoke_old revokes them before the cap check, so a full account can still
-// copy once the person agrees.
+// There is no limit on the number of active tokens (since 2026-11-23).
 
 import (
 	"context"
@@ -146,19 +145,6 @@ func (m *Manager) starterOld(ctx context.Context, q sqlitedb.Querier, userID, pr
 	return ids, active, nil
 }
 
-// activeTokens counts the user's tokens that count against the limit
-// (tokenList: not expired, not a session token).
-func (m *Manager) activeTokens(ctx context.Context, q sqlitedb.Querier, userID string, except map[string]bool) (int, error) {
-	rows, err := sqlitedb.Query(ctx, q, "SELECT * FROM agent_tokens WHERE user_id=? AND revoked_at IS NULL", userID)
-	n := 0
-	for _, r := range rows {
-		if !except[r.Str("id")] && !m.tokenExpired(r) && !strings.HasPrefix(r.Str("label"), SessionTokenLabel) {
-			n++
-		}
-	}
-	return n, err
-}
-
 func revokeIDs(ctx context.Context, q sqlitedb.Querier, userID string, ids []string) ([]any, error) {
 	at := isoAt(TokenClock())
 	out := []any{}
@@ -241,17 +227,6 @@ func (m *Manager) starterToken(ctx context.Context, user sqlitedb.Row, username 
 		}
 		if ok && req.mode == "new" {
 			revoke = append(revoke, tok.Str("id"))
-		}
-		except := map[string]bool{}
-		for _, id := range revoke {
-			except[id] = true
-		}
-		active, err := m.activeTokens(ctx, q, uid, except)
-		if err != nil {
-			return err
-		}
-		if active >= maxActiveTokens {
-			return tokenLimitErr()
 		}
 		if revoked, err = revokeIDs(ctx, q, uid, revoke); err != nil {
 			return err

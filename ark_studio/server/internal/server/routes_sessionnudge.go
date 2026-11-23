@@ -21,6 +21,11 @@ import (
 // last activity (older ones are started again by a person).
 const nudgeResumeWindow = 24 * time.Hour
 
+// nudgeCursorKey: session meta key with the nudger's feed cursor
+// {epoch, after}, so a server restart does not drop updates held back
+// while a turn ran.
+const nudgeCursorKey = "nudge_cursor"
+
 // NudgeEnabled reads settings.sessions.nudge_idle (absent: on).
 func NudgeEnabled(p *project.Project) bool {
 	settings := p.Manifest.Get("settings")
@@ -74,7 +79,7 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 					watching = watching || a.tokenLongPolling(id)
 				}
 				out = append(out, sessionnudge.Session{ID: s.ID, ProjectID: a.Sessions.ProjectID(s), User: owner,
-					Idle: status == "idle", Busy: b.Value("busy") != nil, Accepts: true, Stopped: stopped, Watching: watching})
+					Idle: status == "idle", Accepts: true, Stopped: stopped, Watching: watching})
 			}
 			return out
 		},
@@ -106,6 +111,24 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 			}
 			v := agentwatch.Viewer{User: s.User, AnyAgent: true, Mine: true}
 			return sessionnudge.Batch{Items: agentwatch.Items(batch.Rows, v, nil), Epoch: batch.Epoch, Top: batch.Top}, nil
+		},
+		Load: func(id string) (string, int64, bool) {
+			s, err := a.Sessions.Get(id)
+			if err != nil {
+				return "", 0, false
+			}
+			c, _ := a.Sessions.MetaValue(s, nudgeCursorKey).(*pyjson.Object)
+			if c == nil {
+				return "", 0, false
+			}
+			after, ok := c.Value("after").(int64)
+			epoch := pyjson.Str(c.Value("epoch"))
+			return epoch, after, ok && epoch != ""
+		},
+		Save: func(id, epoch string, after int64) {
+			if s, err := a.Sessions.Get(id); err == nil {
+				a.Sessions.SetMeta(s, nudgeCursorKey, pyjson.NewObject("epoch", epoch, "after", after))
+			}
 		},
 		Send: func(s sessionnudge.Session, text string) error {
 			if s.Stopped {

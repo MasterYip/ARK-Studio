@@ -180,6 +180,11 @@
     <string name="web_files">文件</string>
     <string name="web_settings">设置</string>
     <string name="web_title">ARK 网页版</string>
+    <string name="app_mode_heading">应用模式</string>
+    <string name="app_mode_label">打开 ARK 时使用</string>
+    <string name="app_mode_web">网页模式（默认）</string>
+    <string name="app_mode_native">原生模式</string>
+    <string name="open_native_mode">原生界面</string>
     <string name="notifications">通知</string>
     <string name="notify_toggle">动态通知</string>
     <string name="notify_detail">约每 15 分钟以及打开应用时检查已登录的服务器（不使用推送服务）。</string>
@@ -199,7 +204,7 @@
     <string name="notify_projects_empty">第一次检查后，你的项目会显示在这里。</string>
     <string name="notify_system_settings">系统通知设置</string>
     <string name="notify_optin_title">开启通知</string>
-    <string name="notify_optin_body">ARK Studio 约每 15 分钟以及打开应用时检查你的服务器（不使用推送服务），在你能打开的所有项目中提醒：新的待审阅、待决策事项和智能体会话的审批请求，以及出错停止的会话。进度更新和你自己的操作不会提醒。接下来 Android 会请求通知权限。</string>
+    <string name="notify_optin_body">ARK Studio 约每 15 分钟以及打开应用时检查你的服务器（不使用推送服务），在你能打开的所有项目中提醒：新的待审阅、待决策事项和智能体会话的审批请求、分配给你的节点，以及出错停止的会话。进度更新和你自己的操作不会提醒。接下来 Android 会请求通知权限。</string>
     <string name="notify_optin_go">继续</string>
     <string name="notify_denied_title">通知已被禁止</string>
     <string name="notify_denied_body">Android 不会再询问这项权限。请在系统设置中允许 ARK Studio 发送通知。</string>
@@ -223,6 +228,12 @@
     <string name="notify_sum_approval">%1$d 个审批请求</string>
     <string name="notify_sum_error">%1$d 个会话错误</string>
     <string name="notify_sum_done">%1$d 个会话已完成</string>
+    <string name="notify_ch_assigned">分配给你</string>
+    <string name="notify_ch_assigned_desc">别人分配给你的节点</string>
+    <string name="notify_kind_assigned">分配给你</string>
+    <string name="notify_assigned_one">%1$s 给你分配了：%2$s</string>
+    <string name="notify_assigned_many">%1$s 给你分配了 %2$d 个节点</string>
+    <string name="notify_sum_assigned">分配给你 %1$d 项</string>
     <string name="notify_sum_sep">" · "</string>
     <string name="account">账号</string>
     <string name="version_line">ARK Studio Android 版 %1$s（%2$d）</string>

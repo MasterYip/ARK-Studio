@@ -71,9 +71,11 @@ public class WebActivity extends BaseActivity {
         super.onCreate(savedInstanceState);
         if (!ready()) return;
         String route = getIntent().getStringExtra(EXTRA_ROUTE);
-        buildFrame(getString(R.string.web_title), true);
-        setSubtitle(session.projectName.isEmpty() ? session.serverUrl : session.projectName);
-        addAction(getString(R.string.reload), v -> web.reload());
+        // Web mode matches the former standalone Web APK: no native toolbar or
+        // padding, so the ARK page owns the entire app content viewport.
+        buildFrame(getString(R.string.web_title), false);
+        topBar.setVisibility(View.GONE);
+        if (root.getChildCount() > 1) root.getChildAt(1).setVisibility(View.GONE);
         stage.removeAllViews();
         web = new WebView(this);
         stage.addView(web, new FrameLayout.LayoutParams(Ui.MATCH, Ui.MATCH));
@@ -278,7 +280,7 @@ public class WebActivity extends BaseActivity {
     @Override
     public void onBackPressed() {
         if (web == null || backPending) {
-            super.onBackPressed();
+            if (web == null) openNativeMode();
             return;
         }
         backPending = true;
@@ -286,7 +288,14 @@ public class WebActivity extends BaseActivity {
             backPending = false;
             if ("true".equals(value)) return;
             if (web.canGoBack()) web.goBack();
-            else finish();
+            else openNativeMode();
         });
+    }
+
+    /** Return to the native shell once the WebView has no page history left. */
+    private void openNativeMode() {
+        Accounts.setAppMode(this, Accounts.MODE_NATIVE);
+        startActivity(ShellActivity.intent(this, ShellActivity.TAB_HOME));
+        finish();
     }
 }

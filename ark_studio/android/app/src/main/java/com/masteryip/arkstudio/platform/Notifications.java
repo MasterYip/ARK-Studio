@@ -80,6 +80,8 @@ public final class Notifications {
                 c.getString(R.string.notify_ch_decision_desc), NotificationManager.IMPORTANCE_HIGH);
         channel(manager, NotifyFeed.CH_SESSION, c.getString(R.string.notify_ch_session),
                 c.getString(R.string.notify_ch_session_desc), NotificationManager.IMPORTANCE_HIGH);
+        channel(manager, NotifyFeed.CH_ASSIGNED, c.getString(R.string.notify_ch_assigned),
+                c.getString(R.string.notify_ch_assigned_desc), NotificationManager.IMPORTANCE_DEFAULT);
         channel(manager, NotifyFeed.CH_OTHER, c.getString(R.string.notify_ch_other),
                 c.getString(R.string.notify_ch_other_desc), NotificationManager.IMPORTANCE_LOW);
         channel(manager, CHANNEL, c.getString(R.string.notify_channel), c.getString(R.string.notify_channel_desc),
@@ -317,6 +319,8 @@ public final class Notifications {
                 return c.getString(R.string.notify_kind_approval);
             case NotifyFeed.KIND_SESSION_ERROR:
                 return c.getString(R.string.notify_kind_session_error);
+            case NotifyFeed.KIND_ASSIGNED:
+                return c.getString(R.string.notify_kind_assigned);
             default:
                 return c.getString(R.string.notify_kind_session_done);
         }
@@ -330,7 +334,7 @@ public final class Notifications {
                 PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         String title = item.projectName.isEmpty() ? kindLabel(c, item.kind)
                 : c.getString(R.string.notify_item_title, item.projectName, kindLabel(c, item.kind));
-        String text = item.count > 1 ? c.getString(R.string.notify_item_count, item.title, item.count) : item.title;
+        String text = itemText(c, item);
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, NotifyFeed.channelOf(item.kind))
                 .setSmallIcon(R.drawable.ic_stat_ark)
                 .setContentTitle(title)
@@ -350,14 +354,23 @@ public final class Notifications {
         return b;
     }
 
+    /** The notification's line: the title (with a count), or who assigned what. */
+    static String itemText(Context c, NotifyFeed.Item item) {
+        if (NotifyFeed.KIND_ASSIGNED.equals(item.kind) && !item.byName.isEmpty()) {
+            return item.count > 1 ? c.getString(R.string.notify_assigned_many, item.byName, item.count)
+                    : c.getString(R.string.notify_assigned_one, item.byName, item.title);
+        }
+        return item.count > 1 ? c.getString(R.string.notify_item_count, item.title, item.count) : item.title;
+    }
+
     /** "PredActor_Rebuttal: 3 new for review · 1 decision" with one line per item. */
     static String summaryText(Context c, NotifyFeed.Group g) {
         List<String> parts = new ArrayList<>();
         int[][] order = {
                 {0, R.string.notify_sum_review}, {1, R.string.notify_sum_decision}, {2, R.string.notify_sum_approval},
-                {3, R.string.notify_sum_error}, {4, R.string.notify_sum_done}};
+                {3, R.string.notify_sum_error}, {4, R.string.notify_sum_done}, {5, R.string.notify_sum_assigned}};
         String[] kinds = {NotifyFeed.KIND_REVIEW, NotifyFeed.KIND_DECISION, NotifyFeed.KIND_APPROVAL,
-                NotifyFeed.KIND_SESSION_ERROR, NotifyFeed.KIND_SESSION_DONE};
+                NotifyFeed.KIND_SESSION_ERROR, NotifyFeed.KIND_SESSION_DONE, NotifyFeed.KIND_ASSIGNED};
         for (int[] o : order) {
             Integer n = g.counts.get(kinds[o[0]]);
             if (n != null && n > 0) parts.add(c.getString(o[1], n));

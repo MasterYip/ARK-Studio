@@ -145,6 +145,27 @@ public class NotifyFeedTest {
     }
 
     @Test
+    public void assignedItems() throws Exception {
+        JSONObject one = item("assigned:p1:a_1:a:T-1@x", "p1", "assigned", "Write the intro", 1)
+                .put("by", "ana").put("by_name", "Ana");
+        JSONObject many = item("assigned:p1:b_2:a:T-2@x,a:T-3@x", "p1", "assigned", "Two", 2).put("by", "bo")
+                .put("by_name", JSONObject.NULL);
+        NotifyFeed.Reply r = reply("c1", list(one, many), "assigned:p1:a_1:a:T-1@x", "assigned:p1:b_2:a:T-2@x,a:T-3@x");
+        assertEquals("Ana", r.items.get(0).byName);
+        assertEquals("bo", r.items.get(1).byName);
+        assertEquals(NotifyFeed.CH_ASSIGNED, NotifyFeed.channelOf("assigned"));
+        NotifyFeed.Settings s = new NotifyFeed.Settings();
+        assertTrue(s.wants("assigned"));
+        NotifyFeed.State start = new NotifyFeed.State();
+        start.cursor = "c0";
+        NotifyFeed.Plan plan = NotifyFeed.plan(start, r, s, SERVER, NOW, 600);
+        assertEquals(2, plan.post.size());
+        s.assigned = false;
+        assertFalse(NotifyFeed.Settings.fromJson(s.toJson()).assigned);
+        assertTrue(NotifyFeed.Settings.fromJson("{}").assigned);
+    }
+
+    @Test
     public void quietHoursPostSilently() throws Exception {
         NotifyFeed.Settings s = new NotifyFeed.Settings();
         assertFalse(NotifyFeed.inQuietHours(s, 23 * 60));

@@ -28,6 +28,9 @@ public final class Accounts {
     private static final String KEY_SERVERS_JSON = "servers_json_v1";
     private static final String KEY_LEGACY_URL = "server_url";
     private static final String KEY_NOTIFY = "notifications_enabled";
+    private static final String KEY_APP_MODE = "app_mode";
+    public static final String MODE_WEB = "web";
+    public static final String MODE_NATIVE = "native";
 
     private Accounts() {
     }
@@ -111,6 +114,17 @@ public final class Accounts {
 
     public static void setNotificationsEnabled(Context c, boolean enabled) {
         prefs(c).edit().putBoolean(KEY_NOTIFY, enabled).apply();
+    }
+
+    /** The single APK opens the complete WebView workspace by default. */
+    public static String appMode(Context c) {
+        String mode = prefs(c).getString(KEY_APP_MODE, MODE_WEB);
+        return MODE_NATIVE.equals(mode) ? MODE_NATIVE : MODE_WEB;
+    }
+
+    public static void setAppMode(Context c, String mode) {
+        prefs(c).edit().putString(KEY_APP_MODE,
+                MODE_NATIVE.equals(mode) ? MODE_NATIVE : MODE_WEB).apply();
     }
 
     // ---------------------------------------------------------------- cookies

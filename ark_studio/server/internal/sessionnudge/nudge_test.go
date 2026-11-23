@@ -128,20 +128,28 @@ func TestNudgeSkipsSessionsWithTheirOwnWatcher(t *testing.T) {
 	}
 }
 
-// Between turns with sub-agents or background tasks running, a session is
-// busy: no nudge.  Once they finish, the pending updates are delivered.
-func TestNudgeWaitsForBackgroundWork(t *testing.T) {
+// The cursor is saved as it moves; a new nudger (a server restart) goes on
+// from the saved one, so updates held back while a turn ran are delivered.
+func TestNudgeCursorSurvivesRestart(t *testing.T) {
 	f := &fake{enabled: true, epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
-	f.sessions = []Session{{ID: "s1", ProjectID: "p", Idle: true, Accepts: true, Busy: true}}
-	n := &Nudger{D: f.deps()}
+	saved := map[string]cursor{}
+	d := f.deps()
+	d.Load = func(id string) (string, int64, bool) { c, ok := saved[id]; return c.epoch, c.after, ok }
+	d.Save = func(id, epoch string, after int64) { saved[id] = cursor{epoch, after} }
+	f.sessions = []Session{{ID: "s1", ProjectID: "p", Accepts: true}} // a turn runs
 	ctx := context.Background()
-	n.Tick(ctx)
-	f.rows = append(f.rows, 2, 3)
-	if got := n.Tick(ctx); len(got) != 0 {
-		t.Fatal("a session whose background work runs is not nudged")
+	(&Nudger{D: d}).Tick(ctx)
+	if saved["s1"] != (cursor{"e1", 1}) {
+		t.Fatalf("first sight saved: %+v", saved)
 	}
-	f.sessions[0].Busy = false
-	if got := n.Tick(ctx); len(got) != 1 || !strings.Contains(f.sent["s1"], "2 new update") {
-		t.Fatalf("nudge after the background work ended: %v %q", got, f.sent["s1"])
+	f.rows = append(f.rows, 2, 3)
+	restarted := &Nudger{D: d}
+	restarted.Tick(ctx) // still in its turn
+	f.sessions[0].Idle = true
+	if got := restarted.Tick(ctx); len(got) != 1 || !strings.Contains(f.sent["s1"], "2 new update") {
+		t.Fatalf("after the restart: %v %q", got, f.sent["s1"])
+	}
+	if saved["s1"] != (cursor{"e1", 3}) {
+		t.Fatalf("delivered cursor saved: %+v", saved)
 	}
 }

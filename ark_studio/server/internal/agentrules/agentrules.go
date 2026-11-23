@@ -112,6 +112,7 @@ type Rule struct {
 	Order   int             `json:"order"`
 	Default bool            `json:"default,omitempty"`
 	Silent  bool            `json:"silent,omitempty"` // only params, no line of its own
+	Marker  string          `json:"marker,omitempty"` // own marker letter (G for G1, G2...); default C or P
 	Title   Text            `json:"title"`
 	Text    Text            `json:"text,omitempty"`
 	OffText *Text           `json:"off_text,omitempty"`
@@ -177,7 +178,7 @@ type Effective struct {
 	Params   map[string]string `json:"params,omitempty"`
 	Text     Text              `json:"text"`
 	Silent   bool              `json:"silent,omitempty"`
-	Marker   string            `json:"marker,omitempty"` // "C3", "P2"
+	Marker   string            `json:"marker,omitempty"` // "C3", "P2", "G1"
 	Custom   bool              `json:"custom,omitempty"`
 	Title    Text              `json:"title"`
 	Disabled *Text             `json:"text_when_off,omitempty"`
@@ -284,7 +285,8 @@ func contains(list []string, v string) bool {
 
 // Compose applies project then personal settings to the catalog.  Each
 // preference rule takes its value only from the scope it belongs to.
-// Output order is fixed: header, required rules C1..Cn in catalog order,
+// Output order is fixed: header, required rules C1..Cn in catalog order
+// (a rule with its own marker letter, such as G1, keeps its catalog place),
 // enabled preference rules P1..Pm in catalog order, then custom rules
 // (project first, then personal, in stored order), then the self-check.
 func (c *Catalog) Compose(project, personal Settings) Composed {
@@ -292,7 +294,7 @@ func (c *Catalog) Compose(project, personal Settings) Composed {
 	langVars := map[string]map[string]string{"en": {}, "zh": {}}
 	var eff []Effective
 	for _, r := range c.Rules {
-		e := Effective{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Title: r.Title, Silent: r.Silent, Source: "ark"}
+		e := Effective{ID: r.ID, Kind: r.Kind, Scope: r.Scope, Title: r.Title, Silent: r.Silent, Source: "ark", Marker: r.Marker}
 		params := map[string]string{}
 		for _, p := range r.Params {
 			params[p.ID] = p.Default
@@ -385,13 +387,19 @@ func (c *Catalog) Compose(project, personal Settings) Composed {
 		})
 	}
 	nReq, nPref := 0, 0
+	nOwn := map[string]int{} // rules with their own marker letter, counted per letter
 	for i := range eff {
 		e := &eff[i]
 		e.Text = Text{EN: fillLang(e.Text.EN, "en"), ZH: fillLang(e.Text.ZH, "zh")}
+		letter := e.Marker
+		e.Marker = ""
 		if !e.Enabled || e.Silent {
 			continue
 		}
-		if e.Kind == "required" {
+		if letter != "" {
+			nOwn[letter]++
+			e.Marker = letter + strconv.Itoa(nOwn[letter])
+		} else if e.Kind == "required" {
 			nReq++
 			e.Marker = "C" + strconv.Itoa(nReq)
 		} else {

@@ -14,8 +14,8 @@ agent token; see [External agents](external-agent.md) for authentication and
 
 These rules are complete on their own; the sections below add the detail.
 The starter prompt carries the same rules as numbered lines (C rules: ARK's
-protocol; P rules: the project's and the user's preferences, set in
-Settings), with a rules version. `GET /api/agent/v1/rules` returns the
+protocol; G1: how a plan is laid out as nodes; P rules: the project's and
+the user's preferences, set in Settings), with a rules version. `GET /api/agent/v1/rules` returns the
 current ones: when its version differs from the one in your prompt, the
 user changed a preference, so follow the new lines.
 Read this whole page before your first write. It is about 35 KB: fetch it in
@@ -24,7 +24,9 @@ parts if your tools limit output, but do not stop at the first part.
 1. **Plan in a node first.** One request is one task node with the plan in
    its body, `part_of` the line, topic or parent task it belongs to (and
    `derived_from` the question it comes from). Create it when the work starts; if the user asked to see
-   the plan first, put it in the task with status `review` and wait.
+   the plan first, put it in the task with status `review` and wait. A
+   plan for an idea is a small tree of nodes: question → plan task →
+   1–3 claims → 1–3 tasks per claim (see [Planning graph](#planning-graph)).
 2. **Progress goes in the task body.** A dated line per step, written with
    the read, compare, write procedure. Never post progress, plans or answers
    as comments.
@@ -181,13 +183,15 @@ steps:
    no parent"). Add `derived_from` the question or idea it comes from, for
    provenance. This keeps the research lineage a tree that a person can
    follow back: line → task → the task's results and decisions (each
-   `part_of` and `derived_from` the task). Add a `claim` node only for
-   a statement that results support or contradict (the claim `derived_from`
-   the question, the result linked to it with `supports` or `contradicts`).
+   `part_of` and `derived_from` the task). A plan for an idea adds its
+   claims and their tasks below the plan task (next section); a result
+   that bears on a claim is linked to it with `supports` or `contradicts`.
    Add `part_of` the storyline it belongs to when the project has one. When branches change, update the
    project's lineage or story topic
    (`POST /api/agent/v1/units/<uid>/members`).
-3. **Create a task folder** for the files, inside a registered task space.
+3. **Lay the plan out as a planning graph** (G1) when the request is to plan
+   an idea; see [Planning graph](#planning-graph) below.
+4. **Create a task folder** for the files, inside a registered task space.
    A task space is a folder listed under `task_spaces` in the confirmed
    setup (`GET /api/agent/v1/setup`) that holds one task folder per task
    node, side by side:
@@ -219,10 +223,50 @@ steps:
    project has no task space yet, propose one
    (`POST /api/agent/v1/setup/resource` with `kind: "task_space"`) and ask
    the user to confirm it before writing files.
-4. **Pre-register** the compared arms, metrics and the ranking or acceptance
+5. **Pre-register** the compared arms, metrics and the ranking or acceptance
    rule in the protocol before running anything. Later changes are dated
    amendments, and anything decided after seeing results says "post hoc".
-5. **Record decisions** as decision nodes (see section 3).
+6. **Record decisions** as decision nodes (see section 3).
+
+### Planning graph
+
+When you plan an idea, build a small tree a person can read from the top
+(core rule G1):
+
+```text
+question
+  plan task            the request's task node, the whole plan in its body
+    claim              one testable statement and what would settle it
+      task             one piece of work that tests it, status open
+      task
+    claim
+      task
+    decision           the user's approval of the plan
+```
+
+- **Question**: the open question the plan answers (`type: "question"`;
+  create it if there is none). When the project has a line or topic, the
+  question is `part_of` it.
+- **Plan task**: the request's task node (C2), `derived_from` the question
+  and `part_of` its line, topic or parent task; when there is none, `part_of`
+  the question. Its body holds the whole plan.
+- **Claims**: 1–3, one per independent part of the question (one for a
+  narrow yes/no question). Each states what result would support or refute
+  it.
+- **Tasks under a claim**: 1–3 per claim, each one piece of work with a
+  measurable outcome, status `open` until it runs. Steps of a task stay in
+  its body, not in nodes of their own.
+- Every claim and task below the plan task is `part_of` and `derived_from`
+  its parent. A first plan has 6–15 nodes.
+- Later, each result is `part_of` and `derived_from` the task that produced
+  it (C4) and links to the claim it bears on with `supports` or
+  `contradicts`.
+
+Before you hand the plan over, read the graph back
+(`GET /api/agent/v1/units`) and check: every node has its parent; no two
+nodes say the same thing; every task tests a claim and every claim has at
+least one task; no node without a purpose (no node per plan step, no empty
+placeholder).
 
 ## 3. Progress while working
 
@@ -514,7 +558,7 @@ tokens (yours and other agents') are left out.
 | `status`, `assignee`, `importance` | a person changed one of your units (`change` has from and to) | follow the change: stop work on a unit set `blocked` or `abandoned`, pick up a unit set `active`, re-plan by importance |
 | `archived` | a person deleted one of your units | stop work on it; ask if the reason is unclear |
 | `moved` | one of your units moved to another project (`moved_to`: project, uid) | continue there with that project's id; see [Moving project content](project-content.md) |
-| `assigned` | a task was assigned to your user | read it; start it when the current work allows, or say when you will |
+| `assigned` | a unit was assigned to your user (on create: tasks only) | read it; start it when the current work allows, or say when you will |
 | `decision` | a person created a decision node | if it concerns your work, give it the facts it needs, and wait for the answer before the step it decides |
 | `setup_confirmed` | a setup layer was confirmed (`layer`) | read `GET /api/agent/v1/setup` again; work that waited for setup can start |
 | `message` | a person sent you a message (experimental) | answer it with `POST /api/agent/v1/messages/<id>/reply` `{body}`, or mark it read with `.../ack` |

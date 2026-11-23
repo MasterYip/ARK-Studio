@@ -26,6 +26,7 @@ export const S = {
   activity: [],
   nextActions: [],
   needsYou: [],
+  needsAssigned: [], // GET /api/needs/assigned (needs-ui.js refreshAssigned)
   dueTasks: [],
   sort: "updated",
   updatedAt: null,

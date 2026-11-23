@@ -164,7 +164,11 @@ X-ARK-Project: <project id>     # account mode; otherwise the user's default pro
 The token acts as that user: it reaches only the user's granted projects,
 capped by the token scope (`read` / `write`), and writes are attributed
 `agent:<username>` (or `agent:<username>/<X-Agent-Name>`). A coordinator
-working for user X therefore sets `assignee` X. Start with
+working for user X therefore sets `assignee` X. Setting `assignee` to
+another project member tells that person: the unit appears under "Assigned
+to me" in their Needs you and in their notifications, as assigned by your
+user (several units assigned within a short time or in one batch are one
+notice). Assigning your own user notifies nobody. Start with
 `GET /api/agent/v1/whoami` to learn the user, scope and reachable projects.
 Never write the token into files, units or reports.
 

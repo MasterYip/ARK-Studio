@@ -190,6 +190,11 @@
     <string name="web_files">Files</string>
     <string name="web_settings">Settings</string>
     <string name="web_title">ARK web</string>
+    <string name="app_mode_heading">App mode</string>
+    <string name="app_mode_label">Open ARK with</string>
+    <string name="app_mode_web">Web mode (default)</string>
+    <string name="app_mode_native">Native mode</string>
+    <string name="open_native_mode">Native UI</string>
     <string name="notifications">Notifications</string>
     <string name="notify_toggle">Activity notifications</string>
     <string name="notify_detail">Checks your signed-in servers about every 15 minutes and when you open the app (no push service).</string>
@@ -209,7 +214,7 @@
     <string name="notify_projects_empty">Your projects appear here after the first check.</string>
     <string name="notify_system_settings">System notification settings</string>
     <string name="notify_optin_title">Turn on notifications</string>
-    <string name="notify_optin_body">ARK Studio checks your servers about every 15 minutes and when you open the app (no push service). It notifies you about new reviews, decisions and approval requests from agent sessions, and sessions that stopped with an error, in every project you can open. Progress updates and your own changes do not notify. Android asks for permission next.</string>
+    <string name="notify_optin_body">ARK Studio checks your servers about every 15 minutes and when you open the app (no push service). It notifies you about new reviews, decisions and approval requests from agent sessions, nodes assigned to you, and sessions that stopped with an error, in every project you can open. Progress updates and your own changes do not notify. Android asks for permission next.</string>
     <string name="notify_optin_go">Continue</string>
     <string name="notify_denied_title">Notifications are blocked</string>
     <string name="notify_denied_body">Android no longer asks for this permission. Allow notifications for ARK Studio in the system settings.</string>
@@ -233,6 +238,12 @@
     <string name="notify_sum_approval">Approvals: %1$d</string>
     <string name="notify_sum_error">Session errors: %1$d</string>
     <string name="notify_sum_done">Finished: %1$d</string>
+    <string name="notify_ch_assigned">Assigned to you</string>
+    <string name="notify_ch_assigned_desc">Nodes someone assigned to you</string>
+    <string name="notify_kind_assigned">Assigned to you</string>
+    <string name="notify_assigned_one">%1$s assigned you: %2$s</string>
+    <string name="notify_assigned_many">%1$s assigned you %2$d nodes</string>
+    <string name="notify_sum_assigned">Assigned to you: %1$d</string>
     <string name="notify_sum_sep">" · "</string>
     <string name="account">Account</string>
     <string name="version_line">ARK Studio for Android %1$s (%2$d)</string>

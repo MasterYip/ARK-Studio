@@ -51,7 +51,7 @@ function stubServer(web, calls, state) {
         await new Promise((r) => setTimeout(r, mode === 'peek' ? 250 : 200));
         const current = state.existing ? { id: 'tok1', label: 'Home starter prompt (prj_test) – 2026-11-20', prefix: 'arka_kep',
           expires_at: '2027-02-18T00:00:00+00:00', expired: false } : null;
-        if (mode === 'peek') return json({ ok: true, current, old_tokens: 0, limit: 10, tokens: [] });
+        if (mode === 'peek') return json({ ok: true, current, old_tokens: 0, tokens: [] });
         return json({ ok: true, token: state.existing ? 'arka_kept' : `arka_test${calls[`starter ${mode}`]}`,
           reused: state.existing, item: current || { id: 'tok2' }, rotated: [] });
       }

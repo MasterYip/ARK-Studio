@@ -663,6 +663,8 @@ export const api = {
   openProject: (body) => request("/api/projects/open", { method: "POST", body, write: false }),
   // The person looked at the Needs you list (all) or some of its items (project picker badges).
   markNeedsSeen: (body) => request("/api/needs/seen", { method: "POST", body, write: false }),
+  // Units others assigned to the person in this project (Needs you › Assigned to me).
+  needsAssigned: () => request("/api/needs/assigned"),
   updateProject: (body) => request("/api/project", { method: "PATCH", body }),
   deleteProject: (body) => request("/api/project", { method: "DELETE", body }),
   updateSettings: (body) => request("/api/project/settings", { method: "PATCH", body }),

@@ -175,8 +175,8 @@ func TestStarterTokenNewRevokesOld(t *testing.T) {
 }
 
 // Old starter tokens (no stored value) keep working, are never reused, and
-// can be revoked at the limit (revoke_old) or from Settings (cleanup).
-func TestStarterTokenLimitAndOldTokens(t *testing.T) {
+// can be revoked with revoke_old or from Settings (cleanup).
+func TestStarterTokenOldTokens(t *testing.T) {
 	e := newStarterEnv(t)
 	var oldIDs []string
 	for i := 0; i < 4; i++ {
@@ -195,21 +195,12 @@ func TestStarterTokenLimitAndOldTokens(t *testing.T) {
 		}
 		oldIDs = append(oldIDs, id)
 	}
-	for len(e.active("owner")) < maxActiveTokens {
-		*e.clock++
-		if _, err := e.m.CreateAgentToken(e.ctx, "owner", pyjson.NewObject("label", "filler")); err != nil {
-			t.Fatal(err)
-		}
-	}
 	peek, err := e.starter("owner", "project", "prj_a", "mode", "peek")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if peek.Value("current") != nil || peek.Value("old_tokens") != int64(3) {
 		t.Fatalf("peek current %v old %v", peek.Value("current"), peek.Value("old_tokens"))
-	}
-	if _, err := e.starter("owner", "project", "prj_a"); !isCode(err, "AGENT_TOKEN_LIMIT") {
-		t.Fatalf("copy at the limit without revoke_old: %v", err)
 	}
 	_, id, out := e.mustStarter("owner", "project", "prj_a", "revoke_old", true)
 	rotated, _ := out.Value("rotated").([]any)
@@ -220,22 +211,14 @@ func TestStarterTokenLimitAndOldTokens(t *testing.T) {
 	if _, ok := now[oldIDs[3]]; !ok {
 		t.Error("the unscoped old token belongs to no project and stays")
 	}
-	if _, ok := now[id]; !ok || len(now) != maxActiveTokens-2 {
+	if _, ok := now[id]; !ok || len(now) != 2 {
 		t.Fatalf("active after revoke_old: %d", len(now))
-	}
-	// Repeated copies at the limit still work: they reuse.
-	for len(e.active("owner")) < maxActiveTokens {
-		*e.clock++
-		if _, err := e.m.CreateAgentToken(e.ctx, "owner", pyjson.NewObject("label", "filler")); err != nil {
-			t.Fatal(err)
-		}
 	}
 	for i := 0; i < 3; i++ {
 		if _, again, _ := e.mustStarter("owner", "project", "prj_a"); again != id {
-			t.Fatal("copy at the limit did not reuse")
+			t.Fatal("copy did not reuse")
 		}
 	}
-	// "New token" at the limit replaces, so it fits.
 	_, newID, _ := e.mustStarter("owner", "project", "prj_a", "mode", "new")
 	// Settings cleanup: older starter tokens of every project go, current ones stay.
 	if all, err := e.starter("owner", "mode", "peek"); err != nil || all.Value("old_tokens") != int64(1) || all.Value("current") != nil {
@@ -250,6 +233,31 @@ func TestStarterTokenLimitAndOldTokens(t *testing.T) {
 	}
 	if _, ok := e.active("owner")[newID]; !ok {
 		t.Fatal("cleanup revoked the current token")
+	}
+}
+
+// There is no cap on active tokens: plain and starter tokens past ten are created.
+func TestAgentTokensNoLimit(t *testing.T) {
+	e := newStarterEnv(t)
+	for i := 0; i < 25; i++ {
+		*e.clock++
+		if _, err := e.m.CreateAgentToken(e.ctx, "owner", pyjson.NewObject("label", "filler")); err != nil {
+			t.Fatalf("token %d: %v", i+1, err)
+		}
+	}
+	for _, p := range []string{"prj_a", "prj_b", "prj_c"} {
+		e.mustStarter("owner", "project", p)
+	}
+	e.mustStarter("owner", "project", "prj_a", "mode", "new")
+	if n := len(e.active("owner")); n != 28 {
+		t.Fatalf("%d active tokens, want 28", n)
+	}
+	list, err := e.m.ListAgentTokens(e.ctx, "owner")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if list.Has("limit") {
+		t.Fatal("the list still reports a limit")
 	}
 }
 

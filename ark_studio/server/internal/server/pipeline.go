@@ -125,6 +125,12 @@ func (c *reqCtx) guardProjectScope() error {
 	if path == promptsPath {
 		return nil
 	}
+	// Marking Needs you items seen only writes the person's own marks, so
+	// read-only members may do it for their assignments (project_reviews.go).
+	if path == needsSeenPath && c.r.Method == "POST" {
+		_, err := c.require("read")
+		return err
+	}
 	for _, p := range globalAPIPrefixes {
 		if strings.HasPrefix(path, p) {
 			return nil

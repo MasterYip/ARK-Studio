@@ -1228,9 +1228,8 @@ func (m *Manager) SetPasswordHash(ctx context.Context, username, hash string) er
 // -------------------------------------------------------- agent tokens
 
 const (
-	tokenPrefix     = "arka_"
-	maxActiveTokens = 10
-	maxTokenLabel   = 80
+	tokenPrefix   = "arka_"
+	maxTokenLabel = 80
 )
 
 // TokenClock is the agent-token clock (AgentTokenStore._now); the replay pins it.
@@ -1257,20 +1256,13 @@ func (m *Manager) tokenPublic(r sqlitedb.Row) *pyjson.Object {
 		"expired", hasExpiry && r.Str("expires_at") != "" && expires <= TokenClock())
 }
 
-func (m *Manager) tokenList(ctx context.Context, userID string) ([]any, int, error) {
+func (m *Manager) tokenList(ctx context.Context, userID string) ([]any, error) {
 	rows, err := m.rows(ctx, "SELECT * FROM agent_tokens WHERE user_id=? AND revoked_at IS NULL ORDER BY created_at DESC, id", userID)
 	out := []any{}
-	active := 0
 	for _, r := range rows {
-		p := m.tokenPublic(r)
-		// Session tokens (session_tokens.go) are not the person's to manage
-		// and do not count against the limit.
-		if p.Value("expired") != true && !strings.HasPrefix(r.Str("label"), SessionTokenLabel) {
-			active++
-		}
-		out = append(out, p)
+		out = append(out, m.tokenPublic(r))
 	}
-	return out, active, err
+	return out, err
 }
 
 func (m *Manager) userOrError(ctx context.Context, username string) (sqlitedb.Row, error) {
@@ -1290,11 +1282,11 @@ func (m *Manager) ListAgentTokens(ctx context.Context, username string) (*pyjson
 	if err != nil {
 		return nil, err
 	}
-	tokens, _, err := m.tokenList(ctx, user.Str("id"))
+	tokens, err := m.tokenList(ctx, user.Str("id"))
 	if err != nil {
 		return nil, err
 	}
-	return pyjson.NewObject("user", user.Get("username"), "tokens", tokens, "limit", int64(maxActiveTokens),
+	return pyjson.NewObject("user", user.Get("username"), "tokens", tokens,
 		"scopes", []any{"read", "write"}, "expiry_days", []any{int64(0), int64(30), int64(90)}), nil
 }
 
@@ -1346,13 +1338,6 @@ func (m *Manager) CreateAgentToken(ctx context.Context, username string, body *p
 	if starter {
 		return m.starterToken(ctx, user, username, req, scope, days)
 	}
-	_, active, err := m.tokenList(ctx, user.Str("id"))
-	if err != nil {
-		return nil, err
-	}
-	if active >= maxActiveTokens {
-		return nil, tokenLimitErr()
-	}
 	var minted newToken
 	err = m.DB.Write(ctx, func(q sqlitedb.Querier) error {
 		var err error
@@ -1366,10 +1351,6 @@ func (m *Manager) CreateAgentToken(ctx context.Context, username string, body *p
 		return nil, err
 	}
 	return m.withTokenList(ctx, username, pyjson.NewObject("token", minted.secret, "item", minted.item))
-}
-
-func tokenLimitErr() error {
-	return orgErr(409, fmt.Sprintf("You already have %d active agent tokens. Revoke one before creating another.", maxActiveTokens), "AGENT_TOKEN_LIMIT")
 }
 
 // newToken is a token insertToken just stored; secret is shown once.

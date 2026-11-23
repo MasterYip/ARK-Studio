@@ -65,7 +65,7 @@ public class MainActivity extends AppCompatActivity {
         boolean setup = ACTION_SETUP.equals(getIntent().getAction()) || message != null
                 || ACTION_DEBUG_PAIR.equals(getIntent().getAction());
         if (!setup && savedInstanceState == null && Accounts.active(this) != null) {
-            openShell();
+            openPreferred();
             return;
         }
         build();
@@ -171,7 +171,7 @@ public class MainActivity extends AppCompatActivity {
         Ui.clickable(card, v -> {
             if (session != null) {
                 Accounts.select(this, entry.getUrl());
-                openShell();
+                openPreferred();
             } else {
                 showSignIn(entry.getUrl(), null);
             }
@@ -190,7 +190,7 @@ public class MainActivity extends AppCompatActivity {
             labels.add(getString(R.string.open));
             handlers.add(() -> {
                 Accounts.select(this, entry.getUrl());
-                openShell();
+                openPreferred();
             });
             labels.add(getString(R.string.sign_out));
             handlers.add(() -> signOut(session));
@@ -358,11 +358,20 @@ public class MainActivity extends AppCompatActivity {
                 getString(session.isReadOnly() ? R.string.perm_read_only : R.string.perm_full)),
                 Toast.LENGTH_SHORT).show();
         Notifications.sync(this);
-        openShell();
+        openPreferred();
     }
 
     private void openShell() {
         startActivity(ShellActivity.intent(this, ShellActivity.TAB_HOME));
+        finish();
+    }
+
+    private void openPreferred() {
+        if (Accounts.MODE_NATIVE.equals(Accounts.appMode(this))) {
+            openShell();
+            return;
+        }
+        startActivity(WebActivity.intent(this, com.masteryip.arkstudio.model.WebRoutes.HOME));
         finish();
     }
 

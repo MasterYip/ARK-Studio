@@ -107,7 +107,7 @@ test("the drift check notices a dropped token", () => {
 });
 
 test("steps, rules and options line up between the languages", () => {
-  const marker = (text) => (text.match(/^\s*(?:[RCP]?\d+\.|-)(?=\s)/) || [""])[0];
+  const marker = (text) => (text.match(/^\s*(?:[RCPG]?\d+\.|-)(?=\s)/) || [""])[0];
   for (const [where, line] of allLines()) {
     if (typeof line === "string") continue;
     assert.equal(marker(line.zh), marker(line.en), `${where}: step/rule/option marker`);
@@ -119,7 +119,7 @@ test("steps, rules and options line up between the languages", () => {
       assert.deepEqual(markers("zh"), markers("en"), `${prefix}.${part}`);
     }
   }
-  assert.deepEqual(P.rules.map((line) => marker(line.en)).filter(Boolean), ["C1.", "C2.", "C3.", "C4.", "C5.", "C6.", "C7.", "C8.", "C9.", "C10.", "C11.", "P1.", "P2.", "P3.", "P4.", "P5."]);
+  assert.deepEqual(P.rules.map((line) => marker(line.en)).filter(Boolean), ["C1.", "C2.", "C3.", "C4.", "C5.", "C6.", "G1.", "C7.", "C8.", "C9.", "C10.", "C11.", "P1.", "P2.", "P3.", "P4.", "P5."]);
   assert.deepEqual(P.setup.map((line) => marker(line.en)).filter(Boolean), ["1.", "2.", "3.", "4.", "5."]);
   assert.equal(P.next.filter((line) => marker(line.en) === "-").length, 5);
   assert.deepEqual(TEAM.context.map((line) => marker(line.en)).filter(Boolean), ["1.", "2.", "3.", "4.", "5."]);
@@ -227,7 +227,14 @@ test("core rules cover reading, planning, progress, results, Needs you, decision
     "POST /api/agent/v1/assets/upload",
     "\"data\": \"<base64>\"",
     "![caption](media:<id>)",
-    "No other unit types, sub-tasks or relates_to links unless I ask",
+    "How a plan is laid out as units: G1. No relates_to links unless I ask",
+    // Planning graph (T-0101: g3 ablation, adopted 2026-11-23).
+    "G1. Planning graph: when you plan an idea, build a small tree",
+    "question → plan task → claims → 1–3 tasks per claim",
+    "use 1–3 claims, one per independent part of the question",
+    "part_of its line, topic or parent task as C2 says, else part_of the question",
+    "A first plan has 6–15 units",
+    "Before you hand the plan over, check the graph (GET /api/agent/v1/units)",
     // Needs you (user rule 2026-11-18).
     "set that unit's status to review so it appears in Needs you",
     "never set a review unit to done yourself",

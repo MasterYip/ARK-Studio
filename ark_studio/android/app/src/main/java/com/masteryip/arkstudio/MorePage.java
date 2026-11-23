@@ -68,6 +68,13 @@ final class MorePage extends ShellActivity.Page {
         addRow(a.getString(R.string.update_title), a.getString(R.string.version_short, BuildConfig.VERSION_NAME),
                 v -> a.startActivity(new Intent(a, com.masteryip.arkstudio.update.UpdateActivity.class)));
 
+        content.addView(Ui.heading(a, a.getString(R.string.app_mode_heading)));
+        addRow(a.getString(R.string.app_mode_label),
+                Accounts.MODE_NATIVE.equals(Accounts.appMode(a))
+                        ? a.getString(R.string.app_mode_native)
+                        : a.getString(R.string.app_mode_web),
+                v -> chooseAppMode());
+
         content.addView(Ui.heading(a, a.getString(R.string.account)));
         LinearLayout buttons = Ui.column(a);
         android.widget.Button servers = Ui.button(a, a.getString(R.string.switch_server), false, false);
@@ -106,6 +113,26 @@ final class MorePage extends ShellActivity.Page {
         Ui.clickable(row, v -> a.openWeb(route));
         content.addView(row);
         content.addView(Ui.divider(a));
+    }
+
+    private void chooseAppMode() {
+        String[] labels = {a.getString(R.string.app_mode_web), a.getString(R.string.app_mode_native)};
+        int checked = Accounts.MODE_NATIVE.equals(Accounts.appMode(a)) ? 1 : 0;
+        new AlertDialog.Builder(a)
+                .setTitle(R.string.app_mode_label)
+                .setSingleChoiceItems(labels, checked, (dialog, which) -> {
+                    String mode = which == 1 ? Accounts.MODE_NATIVE : Accounts.MODE_WEB;
+                    Accounts.setAppMode(a, mode);
+                    dialog.dismiss();
+                    if (Accounts.MODE_WEB.equals(mode)) {
+                        a.startActivity(WebActivity.intent(a, WebRoutes.HOME));
+                        a.finish();
+                    } else {
+                        render();
+                    }
+                })
+                .setNegativeButton(R.string.cancel, null)
+                .show();
     }
 
     private void confirmSignOut() {

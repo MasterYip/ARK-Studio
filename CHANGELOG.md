@@ -6,6 +6,35 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.3] - 2026-11-23
+
+### Added
+
+- Android app: one app with two modes. Web mode, the default, opens the
+  full ARK workspace full screen; Native mode opens the Android screens and
+  reaches the rest through the Web button. Switch modes in the app's
+  settings. Phones with 2.1.2 update in the app; phones with 2.1.1 or
+  earlier uninstall once and install 2.1.3.
+- Needs you: when someone assigns nodes to you, they appear under
+  "Assigned to me", the project selector shows them, and the Android app
+  sends a notification. Several nodes assigned at once arrive as one notice.
+
+### Changed
+
+- Personal agent tokens have no count limit any more: create as many as you
+  need in Settings > Personal > Agent access, and Copy prompt no longer stops
+  at 10 active tokens. The token list shows how many are active.
+- Agents lay out a planned idea as a small tree of nodes: the question, the
+  plan task, one to three claims and the tasks that test each claim. The
+  starter prompts' "Plan this idea" option and core rule G1 describe it, and
+  the agent checks the tree before it hands the plan over.
+
+### Fixed
+
+- Sessions started by ARK get "ARK UPDATE" messages again after you accept,
+  send back or comment on a review, also while their background tasks or
+  sub-agents run, and no update is lost when the server restarts.
+
 ## [2.1.2] - 2026-11-22
 
 ### Added

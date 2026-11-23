@@ -8,7 +8,7 @@ import {
 } from "../needs-model.js";
 import {
   NEEDS_CHANGED, bulkAcceptDialog, closeNeedsFilters, needsEntryCard, needsFilterBar, needsFilterFor, needsProjectKey, saveNeedsFilter,
-  watchNeedsSeen,
+  watchNeedsSeen, assignedSection,
 } from "../needs-ui.js";
 import { currentUsername, displayName, userAvatar } from "../users.js";
 import { startPanel, setupNeedsRow } from "./onboarding.js";
@@ -764,6 +764,9 @@ function needsYouPanel(ctx, all) {
     },
     onChange: () => ctx.refresh?.(),
   }));
+  // Units others assigned to the person, before what waits for review.
+  const assigned = assignedSection(ctx);
+  if (assigned) panel.appendChild(assigned);
   const setFilter = (next) => {
     saveNeedsFilter(ctx, projectKey, next);
     panel.replaceWith(needsYouPanel(ctx, all));
@@ -771,6 +774,7 @@ function needsYouPanel(ctx, all) {
   if (sorted.length) panel.appendChild(needsFilterBar(facets, filter, setFilter));
   if (!items.length) {
     if (!sorted.length) watchNeedsSeen(ctx, panel, null, [], { filtered: false });
+    if (assigned && !sorted.length) return panel;
     panel.appendChild(h("div", { class: "empty sm" }, sorted.length ? t("needs.filter.empty") : t("needs.empty"),
       sorted.length ? h("button", { class: "link needs-filter-clear", type: "button",
         onclick: () => { closeNeedsFilters(); setFilter(normalizeNeedsFilter({})); } }, t("filters.clear")) : null));

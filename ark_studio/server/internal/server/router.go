@@ -177,6 +177,8 @@ func init() {
 		}),
 		// Go only (notifications.go; ids in GoOnlyRoutes).
 		exact(notificationsPath, (*reqCtx).getNotifications),
+		// Go only (project_reviews.go; ids in GoOnlyRoutes).
+		exact(needsAssignedPath, (*reqCtx).getNeedsAssigned),
 		// Go only (routes_importark.go, T-0070: import from another ARK project).
 		when(isImportArkPath, (*reqCtx).importArkGet),
 		// Go only (routes_reviews.go; ids in GoOnlyRoutes).

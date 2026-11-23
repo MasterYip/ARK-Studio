@@ -1,16 +1,18 @@
 # ARK Studio for Android
 
-Hybrid native app for ARK Studio: everyday screens are native, and the rest of the web
-app opens in a same-origin WebView signed in with the same device session, so there's
-no second login.
+Single APK for ARK Studio with two selectable modes. Web mode is the default and opens
+the full same-origin WebView workspace. Native mode opens the Android screens for the
+parts implemented natively, with the rest available through the Web button. Both modes
+use the same signed-in device session, so there's no second login.
 
-- Package `com.masteryip.arkstudio`, `versionCode 17`, `versionName 2.1.2` (the ARK release)
+- Package `com.masteryip.arkstudio`, `versionCode 18`, `versionName 2.1.3` (the ARK release)
 - minSdk 26, target/compile 33, Java 11, AGP 7.4.2, Gradle 7.6
 - Server side: `POST /api/mobile/login` and the project-switch endpoints
   (see `docs/guide/mobile.md` → *Android app*)
 
 The Gradle project has one app module, `:app`, plus the updater sources in
-`shared/update`.
+`shared/update`. The former standalone WebView module is not built. Web and native
+mode selection is stored on the device and defaults to Web mode.
 
 ## Screens
 

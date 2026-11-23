@@ -36,7 +36,7 @@ import { ruleFromFilters } from "./topic-model.js";
 // download them; idle prefetch fetches them after the first screen).
 import { renderEditor, editorExplorerVisible, setExplorerVisible, EXPLORER_CHANGED, editorKeyDown, openInEditor, editorHasDirty, focusQuickOpen, loadEditor } from "./editor-entry.js";
 import { keyFromRoute } from "./editor-model.js";
-import { needsCount } from "./needs-model.js";
+import { assignedCount, assignedEntries, needsCount } from "./needs-model.js";
 import { installUnitContextMenu, openUnitInEditor } from "./unit-menu.js";
 import { projectMoveCommands } from "./project-move.js";
 import { focusLocated, isLocateShortcut, setLocateContext, syncRevealNotice } from "./locate-map.js";
@@ -48,7 +48,7 @@ import {
 } from "./project-state-model.js";
 import { desktopHub } from "./desktop-hub-model.js";
 import { otherProjectsNew, withReviewBadge } from "./project-picker-model.js";
-import { REVIEW_SEEN } from "./needs-ui.js";
+import { REVIEW_SEEN, refreshAssigned } from "./needs-ui.js";
 import { getMindSettings, setActiveGraphDisplay } from "./mind-settings.js";
 import { setMarkerGroups } from "./markers.js";
 import { createMindNodeStore } from "./mind-node-state.js";
@@ -1334,6 +1334,8 @@ function applyBootstrap(data, reset = false) {
   S.activity = data.activity || [];
   S.nextActions = data.next_actions || [];
   S.needsYou = data.needs_you || [];
+  S.needsAssigned = [];
+  refreshAssigned(ctx);
   S.updatedAt = data.updated_at || S.project?.updated;
   S.dueTasks = data.dueTasks || S.dueTasks || [];
   S.booted = true;
@@ -1593,6 +1595,7 @@ function applyProject(data) {
   S.activity = data.activity || S.activity;
   S.nextActions = data.next_actions || S.nextActions;
   S.needsYou = data.needs_you || S.needsYou;
+  refreshAssigned(ctx);
   syncTopbar();
   renderRoute({ keepScroll: true });
 }
@@ -2971,7 +2974,7 @@ function syncWorkspaceButtons() {
 
 // Count of items waiting on the user, shown on the Home tab.
 function needsBadge() {
-  const n = needsCount(S.needsYou);
+  const n = needsCount(S.needsYou) + assignedCount(assignedEntries(S.needsAssigned || [], S.needsYou));
   return h("span", {
     class: "tab-badge needs-badge", hidden: n ? undefined : true,
     title: `${t("needs.title")}: ${n}`, "aria-label": `${t("needs.title")}: ${n}`,
