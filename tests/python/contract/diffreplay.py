@@ -502,11 +502,12 @@ def wait_terminal(clients, path: str) -> None:
 
 
 def zip_canonical(data: bytes, norm: "Normalizer") -> bytes:
-    """N10: a ZIP as its entry names and contents (databases row by row)."""
+    """N10: a ZIP as its entry names and contents (databases row by row; session
+    meta.json without the nudger's cursor, statediff S11)."""
     import io
     import tempfile
     import zipfile
-    from statediff import StateNormalizer, _dump_sqlite
+    from statediff import StateNormalizer, _drop_nudge_cursor, _dump_sqlite
     try:
         archive = zipfile.ZipFile(io.BytesIO(data))
     except zipfile.BadZipFile:
@@ -521,6 +522,8 @@ def zip_canonical(data: bytes, norm: "Normalizer") -> bytes:
                 state = StateNormalizer(norm.data_dir, norm.start_text)
                 content = json.dumps(_dump_sqlite(raw, state), ensure_ascii=False, sort_keys=True).encode()
                 raw.unlink()
+            elif info.filename.endswith("meta.json") and "sessions/" in info.filename:
+                content = _drop_nudge_cursor(content)  # statediff S11: written by the nudger in the background
             out.append(info.filename.encode() + b"\n" + norm.body(content))
     return b"\n--\n".join(out)
 

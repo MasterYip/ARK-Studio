@@ -39,7 +39,10 @@ S11 Agent sessions (agent-sessions/<id>/meta.json): "pid" -> <PID> (process
     every agent-sessions file "127.0.0.1:<port>" -> <PORT> (the task API
     base comes from each server's Host header, see N11); the data dir is
     also masked when JSON-escaped twice (S1; an [[ark-event]] line inside
-    a log entry).
+    a log entry).  "nudge_cursor" (the nudger's saved feed position) is
+    dropped from every session meta.json, also the project's mirrored copy
+    under sessions/internal/: the nudger saves it in the background, so
+    whether it is written before the session ends depends on timing.
 S12 Sealed personal credentials (org user_secrets.data_json): every value is
     opened with that data dir's own private/org/secret.key and compared as
     plaintext ("<opened:...>"); a value that does not open is compared as
@@ -202,6 +205,19 @@ def open_sealed(key_path: Path, token, aad: str) -> str:
     return bytes(a ^ b for a, b in zip(cipher, stream)).decode("utf-8", "replace")
 
 
+def _drop_nudge_cursor(data: bytes) -> bytes:
+    """S11: a session meta.json without "nudge_cursor", re-serialized (same on both sides)."""
+    try:
+        meta = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return data
+    if not isinstance(meta, dict):
+        return data
+    meta.pop("nudge_cursor", None)
+    # Always re-serialized, so a file that had the key and one that did not compare equal.
+    return json.dumps(meta, indent=2, ensure_ascii=False).encode()
+
+
 def dump(data_dir: Path, start: str, *, skip: tuple[str, ...] = ()) -> dict:
     data_dir = Path(data_dir)
     norm = StateNormalizer(data_dir, start)
@@ -254,6 +270,8 @@ def dump(data_dir: Path, start: str, *, skip: tuple[str, ...] = ()) -> dict:
         if parts[0] == "agent-sessions":
             text = re.sub(r"127\.0\.0\.1:\d+", "127.0.0.1:<PORT>", data.decode("utf-8", "replace"))
             data = text.encode()
+        if path.name == "meta.json" and (parts[0] == "agent-sessions" or "sessions" in parts[:-1]):
+            data = _drop_nudge_cursor(data)
         if parts[0] == "agent-sessions" and path.name == "meta.json":
             text = data.decode("utf-8", "replace")
             text = re.sub(r'("pid": )\d+', r'\1"<PID>"', text)
