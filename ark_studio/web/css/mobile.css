@@ -58,6 +58,9 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+  }
+
+  html:not([data-root-overscroll="auto"]) {
     overscroll-behavior-y: none;
   }
 
@@ -1220,7 +1223,7 @@
    older mobile rules above.
    ========================================================================== */
 @media (max-width: 760px) {
-  body {
+  html:not([data-root-overscroll="auto"]) body {
     overscroll-behavior-y: none;
   }
 

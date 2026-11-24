@@ -1,6 +1,18 @@
 // A classic script can report failures before app.js/i18n evaluate.
 (function () {
   document.documentElement.dataset.boot = "booted";
+  // WebKit (desktop Safari, WebKitGTK in the Linux desktop app and Linux
+  // WebKit browsers) stops scrolling the document with a mouse wheel when the
+  // root element sets overscroll-behavior (WebKit bug 237093); only dragging
+  // the scrollbar works.  There, with a mouse present, the root keeps the
+  // default and app.css/mobile.css skip their root overscroll lock.
+  try {
+    var ua = navigator.userAgent || "";
+    if (/AppleWebKit/.test(ua) && !/Chrome|Chromium|CriOS|Edg|OPR|Android/.test(ua)
+      && window.matchMedia && matchMedia("(any-pointer: fine)").matches) {
+      document.documentElement.dataset.rootOverscroll = "auto";
+    }
+  } catch (_) { /* keep the lock */ }
   var host = document.getElementById("ark-startup"), stage = host.querySelector(".entry-stage");
   var track = host.querySelector('[role="progressbar"]'), bar = track.querySelector("i");
   var lang;

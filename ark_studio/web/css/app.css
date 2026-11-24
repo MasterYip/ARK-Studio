@@ -30,9 +30,11 @@
   --grid-line:rgba(30,41,59,.055);
 }
 *{box-sizing:border-box}
-html{height:100%;font-size:calc(16px * var(--font-scale,1));color-scheme:dark;overscroll-behavior-y:none}
+html{height:100%;font-size:calc(16px * var(--font-scale,1));color-scheme:dark}
+/* Root overscroll lock (top bar stays put); boot.js lifts it on WebKit with a mouse, where it blocks wheel scrolling. */
+html:not([data-root-overscroll="auto"]),html:not([data-root-overscroll="auto"]) body{overscroll-behavior-y:none}
 html[data-theme="light"]{color-scheme:light}
-body{min-height:100%;margin:0;overscroll-behavior-y:none;background:var(--bg);color:var(--ink);font:0.875rem/1.5 var(--font);-webkit-font-smoothing:antialiased}
+body{min-height:100%;margin:0;background:var(--bg);color:var(--ink);font:0.875rem/1.5 var(--font);-webkit-font-smoothing:antialiased}
 button,input,select,textarea{font:inherit;color:inherit}
 button{border:0;background:none;cursor:pointer}
 /* The hidden attribute always wins over component display rules. */

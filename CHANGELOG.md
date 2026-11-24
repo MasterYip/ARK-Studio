@@ -58,6 +58,8 @@ Notable changes to ARK Studio are recorded here. The format follows
   punctuation begins.
 - Filters: clicking a tag or removing an active chip no longer scrolls the
   filter panel back to the top, and tag groups you opened stay open.
+- The mouse wheel scrolls pages again in the Linux desktop app and in
+  Safari.
 
 
 ## [2.1.5] - 2026-11-23

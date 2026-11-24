@@ -167,7 +167,7 @@ func TestAgentWatchQueuesIntoItsOwnCodex(t *testing.T) {
 	t.Setenv(watchDetachedEnv, strconv.Itoa(owner.Process.Pid)) // as the detached copy
 	srv, app := watchServer(t)
 	t.Setenv("ARK_TOKEN", app.AgentToken())
-	unit := watchHTTP(t, srv, app, "POST", "/api/agent/v1/units", `{"type":"task","title":"Sweep","status":"review"}`, true)
+	unit := watchHTTP(t, srv, app, "POST", "/api/agent/v1/units", `{"type":"task","title":"Sweep","status":"review","review_note":"Check the sweep settings and the run list."}`, true)
 	uid := unit["unit"].(map[string]any)["uid"].(string)
 	pid := projectID(t, srv.URL, watchHTTP(t, srv, app, "GET", "/api/agent/v1/context", "", true))
 	state := filepath.Join(dir, "cursor")
