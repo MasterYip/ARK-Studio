@@ -215,7 +215,7 @@ function mediaElement(kind, resolved, label) {
   return h("img", { class: "rich-img", src: resolved.src, alt: label || "", loading: "lazy" });
 }
 
-const NOT_EMBEDDABLE = new Set(["file", "anchor", "query", "mailto", "app"]);
+const NOT_EMBEDDABLE = new Set(["file", "task", "anchor", "query", "mailto", "app"]);
 
 // A tiny, dependency-free highlighter. It only ever creates text nodes and
 // spans (no innerHTML), so code from an agent stays inert. Unknown languages
@@ -403,6 +403,9 @@ function htmlNodes(source, opts, slots = []) {
     if (resolved.kind === "file") {
       link.classList.add("rich-local-link");
       link.dataset.localHref = resolved.href;
+    } else if (resolved.kind === "task") {
+      link.classList.add("rich-local-link", "rich-task-link");
+      link.dataset.taskRef = resolved.href;
     } else if (resolved.kind === "app") link.classList.add("rich-app-link");
     else if (resolved.kind === "workspace") {
       link.classList.add("rich-ws-link");
@@ -414,13 +417,26 @@ function htmlNodes(source, opts, slots = []) {
   return fragment;
 }
 
+// A task: link: resolved per device when clicked (app.js).
+function taskLink(resolved, content, title = "") {
+  return h("a", {
+    href: resolved.href, class: "rich-local-link rich-task-link", rel: "noreferrer noopener",
+    title: title || resolved.href, "data-task-ref": resolved.href,
+  }, content);
+}
+
 function inlineTokenNodes(token, opts) {
   const children = () => inlineNodes(token.tokens || [{ type: "text", text: token.text || "" }], opts);
   if (token.type === "strong") return [h("strong", null, children())];
   if (token.type === "em") return [h("em", null, children())];
   if (token.type === "del") return [h("del", null, children())];
   if (token.type === "br") return [h("br")];
-  if (token.type === "codespan") return [h("code", null, token.text)];
+  if (token.type === "codespan") {
+    // `task:...` in code is still a task-space link (agents often quote paths).
+    const task = /^task:\S+$/i.test(token.text) ? richUrl(token.text, opts) : null;
+    if (task?.kind === "task") return [taskLink(task, [h("code", null, token.text)])];
+    return [h("code", null, token.text)];
+  }
   if (token.type === "arkReference") return [unitReference(token.text)];
   if (token.type === "arkLiteral") return [document.createTextNode(`[[${token.text}]]`)];
   if (token.type === "arkCitation") return [h("sup", { class: "citation" }, token.raw)];
@@ -442,6 +458,7 @@ function inlineTokenNodes(token, opts) {
           class: "rich-media-caption", href: resolved.src, target: "_blank", rel: "noreferrer noopener",
         }, children()) : null)];
     }
+    if (resolved.kind === "task") return [taskLink(resolved, children(), token.title)];
     const local = resolved.kind === "file", app = resolved.kind === "app";
     return [h("a", {
       href: local ? resolved.href : resolved.src,

@@ -151,6 +151,30 @@ func watchTokenFromFile(path, project string) string {
 	return strings.TrimSpace(line)
 }
 
+// agentTokenFor is the agent token of the CLI helpers: the token file, else
+// the environment variable.  In a session ARK launched (ARK_SESSION_ID) the
+// session's own token in the environment comes first, unless a token file
+// is named explicitly: ~/.ark/tokens/<project> holds the person's own token,
+// and writes made with it would not count as the session's.
+func agentTokenFor(file, project, envName string) string {
+	env := strings.TrimSpace(os.Getenv(envName))
+	if env != "" && file == "" && os.Getenv("ARK_SESSION_ID") != "" {
+		return env
+	}
+	if tok := watchTokenFromFile(file, project); tok != "" {
+		return tok
+	}
+	return env
+}
+
+// setSessionHeader names the ARK session the helper runs in (X-ARK-Session
+// from ARK_SESSION_ID): the server then counts the writes as the session's.
+func setSessionHeader(req *http.Request) {
+	if id := strings.TrimSpace(os.Getenv("ARK_SESSION_ID")); id != "" {
+		req.Header.Set("X-ARK-Session", id)
+	}
+}
+
 // agentWatch is `ark-server agent watch [flags]`.
 func agentWatch(argv []string, out, errw io.Writer) int {
 	fs, o, tokenEnv := agentWatchFlags(errw)
@@ -177,10 +201,7 @@ func agentWatch(argv []string, out, errw io.Writer) int {
 			"use ~/.ark/tokens/<project> or ARK_TOKEN instead")
 	}
 	if o.Token == "" {
-		o.Token = watchTokenFromFile(o.TokenFile, o.Project)
-	}
-	if o.Token == "" {
-		o.Token = strings.TrimSpace(os.Getenv(*tokenEnv))
+		o.Token = agentTokenFor(o.TokenFile, o.Project, *tokenEnv)
 	}
 	if o.Token == "" {
 		fmt.Fprintf(errw, "ark-server agent watch: no agent token; write it to ~/.ark/tokens/<project> or set %s\n", *tokenEnv)
@@ -406,6 +427,7 @@ func setWatchHeaders(req *http.Request, o *watchOptions) {
 	if o.Host != "" {
 		req.Header.Set("X-ARK-Host", o.Host)
 	}
+	setSessionHeader(req)
 }
 
 func printWatchItem(out io.Writer, raw json.RawMessage, asJSON bool) {

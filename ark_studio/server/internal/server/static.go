@@ -230,15 +230,21 @@ func (c *reqCtx) static() error {
 		cache = "private, max-age=31536000, immutable"
 	}
 	var transform func(string, string) string
+	cacheVersion := version
 	switch {
 	case rel == "index.html":
 		transform = indexHTML(c.app.Assets, c.app.Cfg.ReleaseVersion)
+		if c.app.Cfg.ReadOnly { // the standby marker; its own cache entry
+			base, status, release := transform, c.app.Cfg.StandbyStatus, version
+			transform = func(text, _ string) string { return withStandbyMeta(base(text, release), status) }
+			cacheVersion = version + "|standby|" + statusStamp(status)
+		}
 	case suffix == ".html":
 		transform = VersionedHTML
 	case suffix == ".js":
 		transform = VersionedJS
 	}
-	data, gz, err := assetCache.get(c, rel, info, version, transform, AcceptsGzip(c.header("Accept-Encoding")))
+	data, gz, err := assetCache.get(c, rel, info, cacheVersion, transform, AcceptsGzip(c.header("Accept-Encoding")))
 	if err != nil {
 		return apiErr(404, "Not found", "")
 	}

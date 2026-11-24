@@ -418,6 +418,12 @@ func buildCompute(item *obj, i int, errs, warns *[]string) *obj {
 	o.Set("use", choice(get(item, "use"), computeUse, "ask", fmt.Sprintf("compute[%d].use", i), errs))
 	o.Set("scratch", text(get(item, "scratch"), 500))
 	o.Set("note", text(get(item, "note"), 500))
+	// Go only (2026-11-24): the setup host (device) this compute is, so the
+	// device opens over SSH with the server's address without more setup.
+	// Only an id: addresses and keys never go into setup.
+	if h := CleanHostID(get(item, "device_id")); h != "" {
+		o.Set("device_id", h)
+	}
 	if kind == "ssh" && o.Value("gpu_server") == "" {
 		*warns = append(*warns, fmt.Sprintf("compute[%d]: ssh compute should name a gpu_server from "+
 			"the private GPU server list (no hosts or keys here)", i))

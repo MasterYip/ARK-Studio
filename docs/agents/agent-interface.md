@@ -393,10 +393,13 @@ confirmations and (experimental) messages. Read scope is enough.
 Reply: `{cursor, items, count, more, reset, reason?, mine, kinds, waited_ms}`.
 Each item is `{id, kind, unit, uid, title, type, status, actor, at, summary,
 link}` plus `comment {id, body, kind, reply_to, resolved}`, `change {field,
-from, to}`, `layer` or `message {id, body, status, ack, reply}` where the
+from, to}`, `layer`, `message {id, body, status, ack, reply}` or `job {job,
+name, server, status, exit_code, duration_s, error, log_path}` where the
 kind has one. Kinds: `comment`, `reply`, `mention`, `sent_back`, `accepted`,
 `decided`, `comment_reopened`, `status`, `assignee`, `importance`,
-`archived`, `assigned`, `decision`, `setup_confirmed`, `message`.
+`archived`, `assigned`, `decision`, `setup_confirmed`, `message`,
+`gpu_job_done` (a GPU queue job this token queued ended; see
+[GPU](../operations/gpu.md#job-finished-wake-ups)).
 
 `assigned` is per user: the token's user gets one item for every unit
 assigned to them (any unit assigned later, and new tasks created assigned to

@@ -259,6 +259,20 @@ html[data-desktop-shell] .topbar .brand{-webkit-user-select:none;user-select:non
 .time-range-hint{font-size:0.5625rem;color:var(--mute)}
 .time-range-reset{border:0;background:none;color:var(--accent-2);font-size:0.59375rem;padding:0;cursor:pointer;text-decoration:underline;text-underline-offset:2px}
 .time-range-empty{font-size:0.6875rem;color:var(--mute);padding:3px 0}
+/* Min. links slider (Filters, after Time) */
+.min-links .rail-label{min-height:20px}
+.min-links-chip{font-size:0.625rem;text-transform:none;letter-spacing:0;cursor:pointer;border:0}
+.min-links-row{display:flex;align-items:center;gap:8px;margin:0 2px}
+.min-links-input{flex:1;min-width:0;height:22px;margin:0;background:none;-webkit-appearance:none;appearance:none;cursor:pointer}
+.min-links-input::-webkit-slider-runnable-track{height:3px;border-radius:3px;background:linear-gradient(to right,var(--accent) var(--fill,0%),var(--line) var(--fill,0%))}
+.min-links-input::-webkit-slider-thumb{width:14px;height:14px;margin-top:-5.5px;border-radius:50%;background:var(--card);border:2px solid var(--accent);box-shadow:0 1px 3px rgba(0,0,0,.25);-webkit-appearance:none;cursor:grab}
+.min-links-input::-moz-range-track{height:3px;border-radius:3px;background:var(--line)}
+.min-links-input::-moz-range-progress{height:3px;border-radius:3px;background:var(--accent)}
+.min-links-input::-moz-range-thumb{width:12px;height:12px;border-radius:50%;background:var(--card);border:2px solid var(--accent);cursor:grab}
+.min-links-input:focus-visible::-webkit-slider-thumb{outline:2px solid var(--accent-2);outline-offset:2px}
+.min-links-input:disabled{opacity:.45;cursor:default}
+.min-links-value{min-width:34px;text-align:right;font-size:0.6875rem;color:var(--ink);font-variant-numeric:tabular-nums}
+.min-links-scale{display:flex;justify-content:space-between;margin:2px 44px 0 2px;font-size:0.5625rem;color:var(--mute);font-variant-numeric:tabular-nums}
 .filter-check-list{display:flex;flex-direction:column;gap:6px}
 .filter-check{display:flex;align-items:center;gap:6px;font-size:0.6875rem;color:var(--sub);cursor:pointer}
 .filter-check input{accent-color:var(--accent)}
@@ -3153,6 +3167,47 @@ a.infohub-message-link:hover{text-decoration:underline}
 
 .task-gpu-chip.active .task-gpu-chip-head b { color: var(--blue); }
 
+/* Workspace support (support-panel.js): Board deck and Home "Agents and hosts". */
+.support-card { display: flex; flex-direction: column; min-width: 0; }
+.support-card .panel-head { gap: 6px; }
+.support-head-meta { margin-left: auto; font-size: 0.625rem; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.support-card .panel-head .support-head-meta + .link { margin-left: 4px; }
+.support-list { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.support-row { display: flex; align-items: flex-start; gap: 7px; width: 100%; min-width: 0; padding: 6px 5px; border: 0; border-radius: 6px; background: none; color: var(--ink); text-align: left; font: inherit; }
+button.support-row { cursor: pointer; }
+button.support-row:hover { background: var(--card); }
+.support-dot { width: 7px; height: 7px; margin-top: 5px; border-radius: 50%; flex: 0 0 auto; background: var(--mute); }
+.support-dot.running, .support-dot.working, .support-dot.online { background: var(--green); box-shadow: 0 0 0 3px color-mix(in srgb, var(--green) 14%, transparent); }
+.support-dot.approval, .support-dot.review, .support-dot.stale, .support-dot.active { background: var(--amber); }
+.support-dot.error, .support-dot.offline { background: var(--red); }
+.support-dot.idle, .support-dot.recent { background: color-mix(in srgb, var(--green) 45%, var(--mute)); }
+.support-dot.node, .support-dot.ended, .support-dot.unknown { background: transparent; border: 1px solid var(--mute); }
+.support-main { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.support-line { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+.support-line .support-title, .support-line .support-sub { flex: 1; min-width: 0; }
+.support-line .support-state, .support-line .support-time { flex: 0 0 auto; }
+.support-title { font-size: 0.75rem; font-weight: 620; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.support-sub { font-size: 0.65625rem; color: var(--mute); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.support-unit { color: var(--sub); }
+.support-unit b { font-weight: 650; }
+.support-state { font-size: 0.65625rem; color: var(--sub); white-space: nowrap; }
+.support-state.running, .support-state.working, .support-state.online { color: var(--green); }
+.support-state.approval, .support-state.review, .support-state.stale { color: var(--amber); }
+.support-state.error, .support-state.offline { color: var(--red); }
+.support-time { font-size: 0.625rem; color: var(--mute); white-space: nowrap; }
+.support-row.compact { padding: 4px 6px; }
+.support-empty { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; text-align: left; }
+.support-empty .link { font-size: inherit; }
+.support-more { align-self: flex-start; margin: 4px 5px 0; font-size: 0.65625rem; }
+.support-tiles { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+button.support-tile { cursor: pointer; text-align: left; color: var(--ink); font: inherit; }
+button.support-tile:hover { background: var(--card); }
+.support-note { margin-top: 7px; font-size: 0.65625rem; color: var(--mute); }
+.support-due { border: 0; background: none; width: 100%; text-align: left; color: var(--ink); font: inherit; }
+.support-uid { color: var(--mute); font-weight: 600; }
+.support-home .ov-group + .ov-group { margin-top: 8px; }
+.support-other-due { margin-top: 8px; }
+
 /* Preview: six user-intent workspaces + contextual sub-navigation. */
 .workspace-bar {
   display: flex;
@@ -5992,3 +6047,22 @@ button.marker-chip:hover .marker-chip-x{color:var(--red)}
 .marker-row .marker-preview{font-weight:700;font-size:1rem;text-align:center}
 .marker-row input[type=color]{width:40px;height:28px;padding:0;border:1px solid var(--input-border);border-radius:5px;background:var(--input-bg)}
 .marker-row .input{min-width:0}
+/* ---------------------------------------------------------- standby banner */
+/* A read-only standby server (js/standby.js): a one-line banner above the top
+   bar.  While it shows, --topbar covers banner + top bar, so every panel,
+   drawer and sticky bar that starts at var(--topbar) moves down with it. */
+:root{--ark-banner-h:0px}
+html.ark-standby-banner{--ark-banner-h:30px;--topbar:calc(58px + var(--ark-banner-h))}
+html.ark-standby-banner body{padding-top:var(--ark-banner-h)}
+html.ark-standby-banner .topbar{top:var(--ark-banner-h);height:calc(var(--topbar) - var(--ark-banner-h))}
+html.ark-standby-banner[data-desktop-shell="custom"]{--ark-desktop-controls-top:calc(var(--ark-banner-h) + (var(--topbar) - var(--ark-banner-h) - 32px) / 2)}
+#ark-standby-banner{position:fixed;top:0;left:0;right:0;z-index:1000;height:var(--ark-banner-h);display:flex;align-items:center;justify-content:center;gap:8px;padding:0 38px;
+  background:color-mix(in srgb,var(--amber) 22%,var(--bg));color:var(--ink);border-bottom:1px solid color-mix(in srgb,var(--amber) 55%,var(--line));
+  font-size:.78rem;font-weight:600;line-height:1}
+#ark-standby-banner .standby-banner-text{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+#ark-standby-banner .standby-banner-text.short{display:none}
+@media (max-width:760px){#ark-standby-banner{padding:0 34px 0 12px;font-size:.75rem}#ark-standby-banner .standby-banner-text{display:none}#ark-standby-banner .standby-banner-text.short{display:block}}
+#ark-standby-banner .standby-banner-close{position:absolute;right:8px;top:50%;transform:translateY(-50%);width:22px;height:22px;border:0;border-radius:6px;background:transparent;color:inherit;font-size:1rem;line-height:1;cursor:pointer}
+#ark-standby-banner .standby-banner-close:hover{background:color-mix(in srgb,var(--amber) 30%,transparent)}
+.topbar .standby-chip{flex:0 0 auto;height:24px;padding:0 9px;border-radius:999px;border:1px solid color-mix(in srgb,var(--amber) 60%,var(--line));
+  background:color-mix(in srgb,var(--amber) 16%,transparent);color:var(--ink);font-size:.72rem;font-weight:700;cursor:pointer;white-space:nowrap}

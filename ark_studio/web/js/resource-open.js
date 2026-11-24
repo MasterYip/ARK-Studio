@@ -14,7 +14,7 @@ import { openModal, toast } from "./components.js";
 import {
   openActions, effectiveConnection, configNames, sshCommand, validAlias, validHost, validUser, SSH_KINDS,
   cleanConnection, managedAlias, sshConfigSnippet, identityForConfig, configMatchFits, remoteEditorUrl, keySuggestion,
-  authMode, keySetupCommands,
+  authMode, keySetupCommands, sshFormPrefill, sshFormBody, gpuDeviceId, machineName, resolveAlias, staleAliases,
 } from "./resource-open-model.js";
 import { graphHostId } from "./location-size-model.js";
 import { desktopDeviceId } from "./location-size.js";
@@ -34,7 +34,8 @@ function shellKind() {
  * graph load; everything else is synchronous for context menus.
  */
 export function connectionStore() {
-  const state = { devices: {}, hosts: {}, canSave: false, matches: new Map(), myDevice: "", localArk: false, loaded: false };
+  const state = { devices: {}, hosts: {}, machines: {}, links: {}, mine: {}, suggest: {}, canSave: false,
+    canSavePersonal: false, canEditShared: false, matches: new Map(), myDevice: "", localArk: false, loaded: false };
   let pending = null;
   let lastDevices = [];
   async function refresh(devices = null) {
@@ -46,7 +47,13 @@ export function connectionStore() {
         const data = await api.resourcesConnect();
         state.devices = data?.devices || {};
         state.hosts = data?.hosts || {};
+        state.machines = data?.machines || {};
+        state.links = data?.links || {};
+        state.mine = data?.mine || {};
+        state.suggest = data?.suggest || {};
         state.canSave = data?.can_save === true;
+        state.canSavePersonal = data?.can_save_personal ?? state.canSave;
+        state.canEditShared = data?.can_edit_shared === true;
       } catch { /* older servers: no connections */ }
       state.myDevice = await desktopDeviceId().catch(() => "");
       try {
@@ -60,11 +67,18 @@ export function connectionStore() {
           if (!SSH_KINDS.has(device.kind)) continue;
           for (const n of configNames(device, state.devices[device.id])) names.add(n);
         }
+        // The managed ark-<name> alias and the address of every machine.
+        for (const m of Object.values(state.machines)) {
+          const managed = managedAlias(m?.name);
+          if (managed) names.add(managed);
+          if (m?.host && validHost(m.host)) names.add(m.host);
+        }
         try {
           const found = names.size ? await match([...names].slice(0, 64)) : [];
           state.matches = new Map((found || []).filter((m) => validAlias(m.alias)).map((m) => [String(m.name).toLowerCase(), m.alias]));
         } catch { state.matches = new Map(); }
       }
+      repairLocalAliases(devices, state);
       state.loaded = true;
     })().finally(() => { pending = null; });
     return pending;
@@ -75,6 +89,13 @@ export function connectionStore() {
     /** The graph device id of a setup host id (Settings > Resources). */
     deviceOfHost: (hostId) => state.hosts[hostId] || (hostId ? `host:${hostId}` : ""),
     connection: (device) => effectiveConnection(state.devices[device?.id], device, state.matches),
+    /** The name of the machine a device is linked to ("" when none): its ark-<name> alias. */
+    machineName: (device) => machineName(device, state),
+    /** The connection of a GPU server by name (GPU tab), or null. */
+    gpuConnection(name) {
+      const id = gpuDeviceId(name);
+      return id ? effectiveConnection(state.devices[id], { id, kind: "gpu-server", label: name }, state.matches) : null;
+    },
     /** The location is on this computer. */
     isLocal(device) {
       if (!device) return false;
@@ -122,6 +143,26 @@ function writeMap(name, key, value) {
 const connKey = (c) => `${c.user || ""}@${c.host}:${c.port || 22}`;
 
 /**
+ * Forget aliases older versions made from a device's hostname (staleAliases):
+ * "pasted" marks are dropped, a remembered key file and login mode move to
+ * the machine's alias when it has none yet.
+ */
+function repairLocalAliases(devices, data) {
+  const stale = staleAliases(devices, data);
+  if (!stale.size) return;
+  const added = readMap(ADDED_KEY);
+  const keys = readMap(KEYFILE_KEY);
+  const auth = readMap(AUTH_KEY);
+  for (const [alias, own] of stale) {
+    if (added[alias]) writeMap(ADDED_KEY, alias, "");
+    if (own && keys[alias] && !keys[own]) writeMap(KEYFILE_KEY, own, keys[alias]);
+    if (own && auth[alias] && !auth[own]) writeMap(AUTH_KEY, own, auth[alias]);
+    if (keys[alias]) writeMap(KEYFILE_KEY, alias, "");
+    if (auth[alias]) writeMap(AUTH_KEY, alias, "");
+  }
+}
+
+/**
  * The connection to open with: `conn` with an ~/.ssh/config alias that
  * carries the port, user and (key login) the key.  Shows the SSH config
  * dialog when there is none yet; null when the person cancels.
@@ -129,22 +170,40 @@ const connKey = (c) => `${c.user || ""}@${c.host}:${c.port || 22}`;
 export async function prepareConnection(conn, { name = "" } = {}) {
   const c = cleanConnection(conn);
   if (!c) throw new Error(t("resources.sshcfg.no_address"));
-  if (c.alias) return c;
-  const alias = managedAlias(name) || managedAlias(c.host);
-  if (!alias) return c;
   const d = desk();
+  // Only an alias known to exist is used (resolveAlias); else the desktop
+  // app writes ark-<machine name> first (it asks), a browser shows the entry
+  // to paste.  Without a machine name: user@host:port, no alias.
+  const managed = name ? managedAlias(name) : null;
+  let found = null;
   if (d?.sshConfigMatch) {
-    let found = [];
-    try { found = (await d.sshConfigMatch([alias, c.host])) || []; } catch { found = []; }
-    const own = found.find((m) => m.alias === alias && String(m.hostname || "").toLowerCase() === c.host.toLowerCase()
-      && configMatchFits(m, c));
-    if (own) return { ...c, alias };
-    const other = found.find((m) => String(m.name).toLowerCase() === c.host.toLowerCase() && configMatchFits(m, c));
-    if (other) return { ...c, alias: other.alias };
-  } else if (String(readMap(ADDED_KEY)[alias] || "").split("#")[0] === connKey(c)) {
-    return { ...c, alias };
+    try { found = (await d.sshConfigMatch([c.alias, managed, c.host].filter(Boolean))) || []; } catch { found = []; }
   }
-  return sshConfigDialog(c, alias, { name });
+  const r = resolveAlias({ name, conn: c, found, added: d?.sshConfigMatch ? null : readMap(ADDED_KEY) });
+  if (r.known) return { ...c, alias: r.alias };
+  // No alias: key login uses the key file remembered on this computer.
+  const keyFile = readMap(KEYFILE_KEY)[r.alias || c.host] || "";
+  const direct = keyFile && authMode({ auth: c.auth, identityFile: keyFile }) === "key" ? { ...c, identityFile: keyFile } : c;
+  if (!r.alias) return direct;
+  // A browser cannot write ~/.ssh/config: open with user@host:port at once
+  // and offer the entry (with the person's key) for next time.
+  if (!d?.sshConfigEnsure) {
+    const snippet = sshConfigSnippet([{ alias: r.alias, host: c.host, user: c.user || "", port: c.port || null,
+      identityFile: keyFile, auth: authMode({ auth: c.auth, identityFile: keyFile }) }]);
+    if (snippet) {
+      toast(t("resources.sshcfg.direct_opened", { alias: r.alias }), "", { duration: 15000, action: {
+        label: t("resources.sshcfg.copy"),
+        onClick: async () => {
+          const ok = await copyText(snippet);
+          if (ok) writeMap(ADDED_KEY, r.alias, `${connKey(c)}#${authMode({ auth: c.auth, identityFile: keyFile })}`);
+          toast(t(ok ? "resources.sshcfg.copied" : "resources.open.copy_failed"), ok ? "ok" : "err");
+        },
+      } });
+    }
+    return direct;
+  }
+  // Desktop app: write Host ark-<machine> once (it asks first), then open.
+  return sshConfigDialog(c, r.alias, { name });
 }
 
 /**
@@ -312,8 +371,9 @@ export async function openServer(action, conn, { name = "", folder = "~", editor
       toast(t("resources.sshcfg.terminal_opened"), "ok");
       return;
     }
-    const c = await prepareConnection(conn, { name });
-    if (!c) return;
+    // A browser copies the command (no alias needed: it runs in the person's own shell).
+    const c = cleanConnection(conn);
+    if (!c) throw new Error(t("resources.sshcfg.no_address"));
     const ok = await copyText(sshCommand(c, path, { shell: shellKind() }));
     toast(t(ok ? "resources.sshcfg.copied_ssh" : "resources.open.copy_failed"), ok ? "ok" : "err");
   } catch (err) {
@@ -330,7 +390,9 @@ export function openMenuItems(store, { device, path = null, onChange = null }) {
   if (!device) return [];
   const conn = store.connection(device);
   const actions = openActions({ device, path, local: store.isLocal(device), conn,
-    terminal: Boolean(desk()?.openSsh), canSave: store.state.canSave });
+    terminal: Boolean(desk()?.openSsh), localTerminal: Boolean(desk()?.openTerminal), canSave: store.state.canSave });
+  // The managed alias is named after the linked machine, never the device's hostname.
+  const name = store.machineName?.(device) || "";
   const run = (fn) => async () => {
     try { await fn(); } catch (err) { toast(err?.message || String(err), "err"); }
   };
@@ -341,11 +403,13 @@ export function openMenuItems(store, { device, path = null, onChange = null }) {
         // Remote folders go through the SSH config entry (the key), local ones open directly.
         return { label: t(`resources.open.${a.id}`), icon: "external",
           onClick: a.conn
-            ? () => openServer("editor", a.conn, { name: device.label || device.id, folder: a.folder, editor: a.id })
+            ? () => openServer("editor", a.conn, { name, folder: a.folder, editor: a.id })
             : run(() => openEditor(a.url)) };
-      case "ssh-terminal":
-        return { label: t("resources.open.ssh_terminal"), icon: "terminal",
-          onClick: () => openServer("ssh", a.command.conn, { name: device.label || device.id, path: a.command.path }) };
+      case "terminal":
+        return { label: t("resources.open.terminal"), icon: "terminal",
+          onClick: a.local
+            ? run(async () => { await desk().openTerminal(a.path); })
+            : () => openServer("ssh", a.command.conn, { name, path: a.command.path }) };
       case "copy-ssh":
         return { label: t("resources.open.copy_ssh"), icon: "copy",
           onClick: run(async () => {
@@ -358,10 +422,23 @@ export function openMenuItems(store, { device, path = null, onChange = null }) {
             const ok = await copyText(a.path);
             toast(t(ok ? "resources.open.copied_path" : "resources.open.copy_failed"), ok ? "ok" : "err");
           }) };
+      case "vscode-setup":
+        // The SSH dialog (prefilled), then VS Code once the connection is saved.
+        return {
+          label: t("resources.open.vscode_setup"), icon: "external",
+          disabled: !a.canSave,
+          title: a.canSave ? undefined : t("resources.open.ssh_sign_in"),
+          onClick: () => openSshForm(store, device, onChange, {
+            afterSave: () => {
+              const conn = store.connection(device);
+              if (conn) return openServer("editor", conn, { name: store.machineName?.(device) || "", folder: a.folder });
+              return null;
+            },
+          }),
+        };
       case "ssh-setup":
         return {
-          label: t(a.known ? "resources.open.ssh_edit" : "resources.open.ssh_setup"), icon: "settings",
-          hint: a.known ? null : t("resources.open.ssh_setup_hint"),
+          label: t("resources.open.ssh_edit"), icon: "settings",
           disabled: !a.canSave,
           title: a.canSave ? undefined : t("resources.open.ssh_sign_in"),
           onClick: () => openSshForm(store, device, onChange),
@@ -372,24 +449,58 @@ export function openMenuItems(store, { device, path = null, onChange = null }) {
   }).filter(Boolean);
 }
 
-/** The viewer's own SSH entry for a device: alias and/or host, user, port. */
-export function openSshForm(store, device, onChange = null) {
-  const saved = store.state.devices[device.id];
-  const mine = saved?.source === "mine" ? saved : null;
-  const input = (value, attrs = {}) => {
-    const el = h("input", { class: "input", value: value ?? "", ...attrs });
-    el.value = value ?? "";
-    return el;
-  };
-  const alias = input(mine?.alias, { maxlength: 100, placeholder: t("resources.ssh.alias_ph"), spellcheck: "false" });
-  const host = input(mine?.host, { maxlength: 253, placeholder: t("resources.ssh.host_ph"), spellcheck: "false" });
-  const user = input(mine?.user, { maxlength: 64, placeholder: t("resources.ssh.user_ph"), spellcheck: "false" });
-  const port = input(mine?.port ? String(mine.port) : "", { maxlength: 5, inputmode: "numeric", placeholder: "22" });
+/**
+ * The SSH dialog of a device: the machine it is linked to, the machine's
+ * shared host, port and user (admins edit them, everyone else overrides
+ * them for themselves), and the viewer's alias, login and key file.
+ * Opens prefilled from GET /api/resources/connect (sshFormPrefill).
+ */
+export function openSshForm(store, device, onChange = null, { afterSave = null } = {}) {
+  const st = store.state;
+  const data = { machines: st.machines, links: st.links, mine: st.mine, suggest: st.suggest };
+  const admin = st.canEditShared;
+  const local = { matches: st.matches, added: readMap(ADDED_KEY), localAuth: readMap(AUTH_KEY), localKeys: readMap(KEYFILE_KEY) };
+  let prefill = sshFormPrefill({ device, data, ...local });
+  const savedMachine = prefill.machine;
+  const input = (attrs = {}) => h("input", { class: "input", spellcheck: "false", ...attrs });
+  const name = input({ maxlength: 60 });
+  const host = input({ maxlength: 253, placeholder: t("resources.ssh.host_ph") });
+  const port = input({ maxlength: 5, inputmode: "numeric", placeholder: "22" });
+  const user = input({ maxlength: 64, placeholder: t("resources.ssh.user_ph") });
+  const alias = input({ maxlength: 100 });
+  const key = input({ class: "input mono", maxlength: 1024, placeholder: t("resources.sshcfg.key_ph") });
   // How you log in: detected (a key path set on this computer means key) or chosen.
   const auth = h("select", { class: "input" },
     ["", "key", "password"].map((v) => h("option", { value: v }, t(`resources.ssh.auth_${v || "auto"}`)))); // i18n-ignore: option values; labels go through t()
-  auth.value = mine?.auth || "";
+  const linkNote = h("p", { class: "muted", style: { margin: "0" } });
+  const picker = h("select", { class: "input", disabled: !admin },
+    h("option", { value: "" }, t("resources.ssh.machine_own", { device: device.label || device.id })),
+    prefill.options.map((o) => h("option", { value: o.id }, o.name)));
+  const keyField = h("label", { class: "field" }, h("span", null, t("resources.ssh.key")), key);
+  const fill = () => {
+    const v = prefill.values;
+    name.value = v.name;
+    host.value = v.host;
+    port.value = v.port;
+    user.value = v.user;
+    alias.value = v.alias;
+    alias.placeholder = prefill.aliasPlaceholder;
+    auth.value = v.auth;
+    key.value = v.keyFile;
+    picker.value = prefill.machine && prefill.machine !== device.id ? prefill.machine : "";
+    const how = { server: "linked_server", hostname: "linked_hostname", address: "linked_address" }[prefill.how];
+    linkNote.textContent = how ? t(`resources.ssh.${how}`) : "";
+    linkNote.style.display = how ? "" : "none";
+    keyField.style.display = auth.value === "password" ? "none" : "";
+  };
+  picker.addEventListener("change", () => {
+    prefill = sshFormPrefill({ device, data, link: picker.value, ...local });
+    fill();
+  });
+  auth.addEventListener("change", () => { keyField.style.display = auth.value === "password" ? "none" : ""; });
+  fill();
   const field = (label, el) => h("label", { class: "field" }, h("span", null, label), el);
+  const group = (title, ...children) => h("div", { class: "stack" }, h("b", null, title), ...children);
   const save = async (body) => {
     try {
       await api.resourceConnectSave(device.id, body);
@@ -397,31 +508,55 @@ export function openSshForm(store, device, onChange = null) {
       toast(t("resources.ssh.saved"), "ok");
       onChange?.();
     } catch (err) { toast(err.message, "err"); return false; }
+    if (afterSave) setTimeout(() => afterSave(), 0);
   };
+  // Login mode and key file stay in this computer's storage, per alias.
+  const remember = (form) => {
+    const k = form.alias || prefill.managedAlias || form.host;
+    if (!validAlias(k)) return true;
+    const path = key.value.trim();
+    if (form.auth !== "password" && path && !identityForConfig(path)) { toast(t("resources.sshcfg.key_invalid"), "err"); return false; }
+    writeMap(KEYFILE_KEY, k, form.auth === "password" ? "" : path);
+    writeMap(AUTH_KEY, k, form.auth);
+    // A browser cannot read ~/.ssh/config: an alias typed here counts as confirmed.
+    if (!desk()?.sshConfigMatch && form.alias && form.host) {
+      writeMap(ADDED_KEY, form.alias, `${connKey({ user: form.user, host: form.host, port: form.port ? Number(form.port) : 22 })}#${form.auth || "key"}`);
+    }
+    return true;
+  };
+  const hasMine = Object.keys(prefill.personal).length > 0;
   openModal({
     title: t("resources.ssh.title", { device: device.label || device.id }),
     body: h("div", { class: "stack" },
-      h("p", { class: "settings-lead" }, t("resources.ssh.lead")),
-      saved && saved.source !== "mine" ? h("p", { class: "muted" }, t("resources.ssh.from_config")) : null,
-      field(t("resources.ssh.alias"), alias),
-      field(t("resources.ssh.host"), host),
-      h("div", { class: "row tight" }, field(t("resources.ssh.user"), user), field(t("resources.ssh.port"), port)),
-      field(t("resources.ssh.auth"), auth)),
+      h("p", { class: "settings-lead" }, t(admin ? "resources.ssh.lead" : "resources.ssh.lead_member")),
+      field(t("resources.ssh.machine"), picker),
+      linkNote,
+      group(t("resources.ssh.shared"),
+        admin ? field(t("resources.ssh.name"), name) : null,
+        field(t("resources.ssh.host"), host),
+        h("div", { class: "row tight" }, field(t("resources.ssh.user"), user), field(t("resources.ssh.port"), port))),
+      group(t("resources.ssh.personal"),
+        field(t("resources.ssh.alias"), alias),
+        field(t("resources.ssh.auth"), auth),
+        keyField)),
     actions: [
-      mine ? { label: t("resources.ssh.clear"), ghost: true, danger: true, onClick: () => save({}) } : null,
+      hasMine && st.canSavePersonal ? { label: t("resources.ssh.clear"), ghost: true, danger: true, onClick: () => save({}) } : null,
       { spacer: true },
       { label: t("action.cancel"), ghost: true },
       {
         label: t("resources.ssh.save"), primary: true,
         onClick: () => {
-          const body = { alias: alias.value.trim(), host: host.value.trim(), user: user.value.trim(), port: port.value.trim(),
-            auth: auth.value };
-          if ((body.alias && !validAlias(body.alias)) || (body.host && !validHost(body.host)) || (body.user && !validUser(body.user))
-            || (body.port && !/^\d{1,5}$/.test(body.port))) {
+          const form = { name: name.value.trim(), host: host.value.trim(), port: port.value.trim(), user: user.value.trim(),
+            alias: alias.value.trim(), auth: auth.value };
+          if ((form.alias && !validAlias(form.alias)) || (form.host && !validHost(form.host)) || (form.user && !validUser(form.user))
+            || (form.port && !/^\d{1,5}$/.test(form.port))) {
             toast(t("resources.ssh.invalid"), "err");
             return false;
           }
-          if (!body.alias && !body.host) { toast(t("resources.ssh.need_host"), "err"); return false; }
+          if (!form.alias && !form.host) { toast(t("resources.ssh.need_host"), "err"); return false; }
+          if (!remember(form)) return false;
+          const body = sshFormBody(prefill, form, { admin, personal: st.canSavePersonal,
+            linkChanged: admin && prefill.machine !== savedMachine });
           return save(body);
         },
       },

@@ -50,6 +50,7 @@ type reqCtx struct {
 	resolved      bool
 	project       *project.Project
 	token         *personalToken  // personal arka_ token bound to this request
+	sessLink      *sessionLink    // the ARK session the request comes from (agent_session.go)
 	forcedProject string          // X-ARK-Project or the task session's project
 	mobileSession *mobile.Session // paired device of this request
 	bodyConsumed  bool            // the request body was read (_body_consumed)
@@ -94,9 +95,13 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	parsed := pyurl.Parse(target)
 	c := &reqCtx{app: a, w: w, r: r, ctx: ctx, target: target, rawPath: parsed.Path,
 		path: pyurl.Unquote(parsed.Path), query: pyurl.ParseQS(parsed.Query), releaseAdmission: release}
+	if c.refuseStandbyWrite() {
+		return
+	}
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
 		// Agent writes move the agent's presence cursor (routes_presence.go, Go only).
 		c.ctx = store.WithActivityObserver(c.ctx, c.observeActivity)
+		c.ctx = store.WithActivitySession(c.ctx, c.agentSessionLink)
 	}
 	if replayClockOn {
 		clock.SetReplay(nil)
@@ -152,6 +157,7 @@ func (c *reqCtx) handleError(err error) {
 	var se *store.Error
 	var moved *store.MovedError
 	var merged *store.MergedError
+	var noNote *store.ReviewNoteError
 	var pe *project.Error
 	var oe *org.Error
 	var ve *pyerr.ValueError
@@ -169,6 +175,8 @@ func (c *reqCtx) handleError(err error) {
 		c.fail(409, moved.Error(), "UNIT_MOVED")
 	case errors.As(err, &merged): // store/move.go: a merged project is read-only
 		c.fail(409, merged.Error(), "PROJECT_MERGED")
+	case errors.As(err, &noNote): // store/reviewnote_required.go: an agent handed off without a note
+		c.fail(422, noNote.Message, store.ReviewNoteErrorCode)
 	case errors.As(err, &se):
 		c.fail(400, se.Message, "")
 	case errors.As(err, &pe):

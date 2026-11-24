@@ -1,6 +1,7 @@
 package agentwatch
 
 import (
+	"strings"
 	"testing"
 
 	"arkstudio/go/internal/compat/pyjson"
@@ -169,5 +170,56 @@ func TestMessagesTargeting(t *testing.T) {
 	m := got[0].Value("message").(*pyjson.Object)
 	if m.Value("reply") != "/api/agent/v1/messages/3/reply" || got[0].Value("actor") != "alice" {
 		t.Fatalf("message item %s", pyjson.Dumps(got[0]))
+	}
+}
+
+// A finished GPU job reaches the ARK session that queued it, or the token
+// that queued it; never another session, token or account.
+func TestGPUJobDoneRouting(t *testing.T) {
+	row := func(detail ...any) store.UpdateRow {
+		d := pyjson.NewObject("job", "gpu_1", "name", "train", "server", "h20", "status", "errored",
+			"exit_code", int64(1), "duration_s", int64(3725), "error", "remote process exited with code 1: OOM", "owner", "ana")
+		for i := 0; i+1 < len(detail); i += 2 {
+			d.Set(detail[i].(string), detail[i+1])
+		}
+		return store.UpdateRow{ID: 7, Actor: store.GPUJobActor, Action: store.GPUJobDoneAction, Detail: d}
+	}
+	session := row("session", "ses_1", "token", "tok_s")
+	external := row("token", "tok_x")
+	shared := row()
+	cases := []struct {
+		name string
+		v    Viewer
+		r    store.UpdateRow
+		want bool
+	}{
+		{"own session", Viewer{User: "ana", AnyAgent: true, Mine: true, Session: "ses_1"}, session, true},
+		{"other session", Viewer{User: "ana", AnyAgent: true, Mine: true, Session: "ses_2"}, session, false},
+		{"session's own watcher", Viewer{User: "ana", TokenID: "tok_s"}, session, true},
+		{"another token of the user", Viewer{User: "ana", TokenID: "tok_x"}, session, false},
+		{"external token", Viewer{User: "ana", TokenID: "tok_x", Mine: true}, external, true},
+		{"other token", Viewer{User: "ana", TokenID: "tok_y"}, external, false},
+		{"session never gets external", Viewer{User: "ana", AnyAgent: true, Session: "ses_1"}, external, false},
+		{"server token, owner", Viewer{User: "ana", AnyAgent: true}, shared, true},
+		{"server token, other user", Viewer{User: "bob", AnyAgent: true}, shared, false},
+		{"session never gets shared", Viewer{User: "ana", AnyAgent: true, Session: "ses_1"}, shared, false},
+	}
+	for _, tc := range cases {
+		items := Items([]store.UpdateRow{tc.r}, tc.v, nil)
+		if (len(items) == 1) != tc.want {
+			t.Errorf("%s: %d items, want %v", tc.name, len(items), tc.want)
+			continue
+		}
+		if tc.want {
+			it := items[0]
+			sum := pyjson.Str(it.Value("summary"))
+			if it.Value("kind") != KindGPUJobDone || it.Value("link") != "/api/agent/v1/gpu/jobs/gpu_1/logs" ||
+				!strings.Contains(sum, `GPU job gpu_1 "train" errored on h20 (exit 1) after 1h02m: remote process exited with code 1: OOM`) {
+				t.Errorf("%s: item %s", tc.name, pyjson.Dumps(it))
+			}
+		}
+	}
+	if _, err := ParseKinds("gpu_job_done"); err != nil {
+		t.Fatal(err)
 	}
 }

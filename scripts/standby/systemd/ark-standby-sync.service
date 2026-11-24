@@ -1,0 +1,11 @@
+[Unit]
+Description=ARK standby replication (primary -> standby)
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/share/ark-standby/ark-standby-sync.sh
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=10
+TimeoutStartSec=50min

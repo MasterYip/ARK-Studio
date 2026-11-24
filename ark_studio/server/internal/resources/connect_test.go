@@ -113,11 +113,12 @@ func TestConnections(t *testing.T) {
 		if got != want {
 			t.Errorf("admin=%v:\n got %s\nwant %s", admin, got, want)
 		}
-		// The viewer's own entries win; devices not in the graph get none.
+		// The viewer's own entries win field by field over the shared values;
+		// devices not in the graph get none.
 		got = string(pyjson.Dumps(Connections(graph, src, saved).Value("devices")))
-		want = `{"gpu:gpu-a": {"alias": "my-gpu", "source": "mine"}, "host:abc123abc123": {"alias": "laptop", "source": "mine"}}`
+		want = `{"gpu:gpu-a": {"alias": "my-gpu", "host": "10.0.0.5", "user": "ana", "port": 2222, "source": "mine"}, "host:abc123abc123": {"alias": "laptop", "source": "mine"}}`
 		if !admin {
-			want = `{"host:abc123abc123": {"alias": "laptop", "source": "mine"}, "gpu:gpu-a": {"alias": "my-gpu", "source": "mine"}}`
+			want = `{"gpu:gpu-a": {"alias": "my-gpu", "source": "mine"}, "host:abc123abc123": {"alias": "laptop", "source": "mine"}}`
 		}
 		if got != want {
 			t.Errorf("admin=%v saved:\n got %s\nwant %s", admin, got, want)

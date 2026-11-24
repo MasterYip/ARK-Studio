@@ -434,3 +434,30 @@ func TestClaudeStreamBusyBetweenTurns(t *testing.T) {
 			strings.Contains(logText(m, s), "Build finished")
 	})
 }
+
+// A waiting process whose background command still runs (a training run)
+// is not closed to make room or after the idle timeout: closing it would
+// end the command and the CLI could not report its end.
+func TestClaudeStreamKeepsBusyProcessOpen(t *testing.T) {
+	m := streamManager(t)
+	old := StreamMaxPerUser
+	StreamMaxPerUser = 1
+	defer func() { StreamMaxPerUser = old }()
+	a, err := m.Start(nil, pyjson.NewObject("platform", "claude", "prompt", "start background"), "http://127.0.0.1:1", "erin")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer killSession(m, a)
+	waitFor(t, "a busy", func() bool { return metaOf(m, a, "turn_state") == "waiting" && m.Busy(a).Any() })
+	for _, l := range m.liveStreams() {
+		if l.s == a && !l.busy {
+			t.Fatal("a busy process is not marked busy")
+		}
+	}
+	if m.makeRoom("erin", nil) {
+		t.Fatal("room made by closing a busy process")
+	}
+	if !m.IsActive(a) {
+		t.Fatal("the busy process was closed")
+	}
+}

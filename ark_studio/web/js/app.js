@@ -9,13 +9,14 @@ import { installSyncStatus, markFirstRender } from "./sync-status.js";
 import { installSyncNow, requestSync, syncTopButton } from "./sync-now.js";
 import { installPullToSync } from "./pull-to-sync.js";
 import { cacheRoute, prefetchPlan, slowConnection } from "./client-cache-model.js";
-import { UNIT_SAVED_EVENT, syncUnitLocally } from "./unit-edit.js";
-import { S, setTab, persistFilters, resetFilters, saveFiltersAsDefault, clearFilterDefault, setLanguage, toggleTheme, activeFilterCount, filtersActive, filtersToParams, baseTypes, routeKey, PLAN_SUBS, emptyFilters, toggleTypeFilter, toggleStatusFilter, toggleImportanceFilter, RECENT_DAYS } from "./state.js";
+import { UNIT_SAVED_EVENT, offerReviewNote, syncUnitLocally } from "./unit-edit.js";
+import { S, setTab, persistFilters, resetFilters, saveFiltersAsDefault, clearFilterDefault, setLanguage, toggleTheme, activeFilterCount, filtersActive, filtersToParams, baseTypes, routeKey, PLAN_SUBS, emptyFilters, toggleTypeFilter, toggleStatusFilter, toggleImportanceFilter, RECENT_DAYS, minLinksValue } from "./state.js";
 import { applyProjectPalette } from "./appearance.js";
 import { appearanceOverrides, resolveAppearance, APPEARANCE_CHANGED } from "./appearance-overrides.js";
 import { t, getLang } from "./i18n.js";
 import { h, clear, copyText, fmtDate, relativeTime, typeColor, typeBadge, slug } from "./dom.js";
-import { fileUrlToPath, isLoopbackHost, isLikelyLocalPath, localOpenRoute } from "./rich-model.js";
+import { fileUrlToPath, isLoopbackHost, isLikelyLocalPath, localOpenRoute, taskPathsFor } from "./rich-model.js";
+import { desktopDeviceId } from "./location-size.js";
 import { icon } from "./icons.js";
 import {
   MOBILE_PRIMARY_TABS, MOBILE_SECONDARY_TABS, parsePairHash,
@@ -52,7 +53,7 @@ import { REVIEW_SEEN, refreshAssigned } from "./needs-ui.js";
 import { getMindSettings, setActiveGraphDisplay } from "./mind-settings.js";
 import { setMarkerGroups } from "./markers.js";
 import { createMindNodeStore } from "./mind-node-state.js";
-import { GraphFilterIndex } from "./graph-filter.js";
+import { GraphFilterIndex, linkCounts } from "./graph-filter.js";
 import { mountGuidance } from "./guidance.js";
 import { maybeShowWelcome } from "./views/welcome.js";
 import { startReloadGuard, safeUrl, reopenTarget } from "./reload-guard.js";
@@ -88,6 +89,7 @@ import { watchUpdates } from "./update-state.js";
 import { settingsTarget } from "./settings-tabs.js";
 import { settingsNeedsRepaint, settingsViewKey } from "./settings-sync-model.js";
 import { rememberMode } from "./read-edit-mode.js";
+import { installStandby, refreshStandby, standbyChip } from "./standby.js";
 
 // Inside the ARK Studio desktop app (borderless window): top bar = title bar.
 installDesktopShell();
@@ -149,8 +151,10 @@ function workspaceLabel(workspace) {
 
 // Execute › Files moved into the Editor (explorer, Changes view with diffs,
 // Terminal view); old #/execute/files links open the Editor.
-const EXECUTE_VIEWS = ["board", "sessions", "gpu", "resources", "agents", "library"];
-const EXECUTE_VIEW_ALIASES = { board: "board", runs: "sessions", sessions: "sessions", gpu: "gpu", resources: "resources", agents: "agents", library: "library" };
+// "agents" and "library" were lists of agent / artifact nodes; their links
+// now open Runs and Resources (the Board's support panel has the live data).
+const EXECUTE_VIEWS = ["board", "sessions", "gpu", "resources"];
+const EXECUTE_VIEW_ALIASES = { board: "board", runs: "sessions", sessions: "sessions", gpu: "gpu", resources: "resources", agents: "sessions", library: "resources" };
 
 function workspaceHashForRoute(tab = S.tab, sub = S.sub) {
   if (tab === "overview") return "#/home";
@@ -388,6 +392,16 @@ const ctx = {
     paintFiltersNow();
     applyFiltersIncremental();
   },
+  // Min. links slider: live drags filter without rebuilding the rail under
+  // the pointer; the release (or the chip's ×) repaints it.
+  setMinLinks: (value, { live = false } = {}) => {
+    const next = minLinksValue(value);
+    if (next === minLinksValue(S.filters.minLinks) && live) return;
+    S.filters.minLinks = next;
+    if (live) persistFilters();
+    else paintFiltersNow();
+    applyFiltersIncremental({ repaintRail: !live });
+  },
   setTimeRange: (from, to, options = {}) => {
     const valid = (value) => {
       const text = String(value || "").trim();
@@ -425,9 +439,7 @@ const ctx = {
     S.filterTab = tab === "infohub" ? "infohub" : "ark";
     const rail = document.querySelector(".rail");
     if (rail) {
-      const top = rail.scrollTop;
       renderFilterRail(rail, ctx);
-      requestAnimationFrame(() => { rail.scrollTop = top; });
     }
   },
   toggleFilterValue: (key, value, sourceEl = null) => {
@@ -508,7 +520,9 @@ const ctx = {
   setGraphContext: (value) => ctx.setFilter("context", Boolean(value)),
   setGanttGroup: (group) => { S.ganttGroup = group; },
   moveTask: async (unit, status) => {
-    await api.updateUnit(unit.uid, { status });
+    const before = unit.status;
+    const data = await api.updateUnit(unit.uid, { status });
+    offerReviewNote(ctx, data?.unit, before, { status });
     unit.status = status;
     toast(t("toast.status", { status }), "ok");
     await renderRoute({ keepScroll: true });
@@ -912,6 +926,62 @@ document.addEventListener("click", async (event) => {
   }
   showLocalPath(path);
 }, true);
+
+// task: links name a place in the project's task space; each of the
+// person's devices has its own path for it (Settings > Setup > Devices).
+document.addEventListener("click", async (event) => {
+  const link = event.target.closest?.("a[data-task-ref]");
+  if (!link || event.defaultPrevented) return;
+  event.preventDefault();
+  event.stopPropagation();
+  await showTaskPath(link.dataset.taskRef);
+}, true);
+
+function fileUrlOf(path) {
+  const clean = String(path).replace(/\\/g, "/");
+  return encodeURI(clean.startsWith("/") ? `file://${clean}` : `file:///${clean}`);
+}
+
+async function showTaskPath(ref) {
+  let state = null;
+  try { state = await api.setupState(); } catch (err) { toast(err.message, "err"); return; }
+  const { space, rows } = taskPathsFor(state, ref);
+  const deskId = await desktopDeviceId();
+  const loopback = isLoopbackHost(location.hostname);
+  const hereRow = rows.find((row) => (deskId ? row.id === deskId : loopback && row.current));
+  const here = hereRow?.path || "";
+  const actions = [{ label: t("action.close"), ghost: true }];
+  if (here) {
+    actions.push({
+      label: t("links.local.copy"),
+      onClick: async () => { toast((await copyText(here)) ? t("links.local.copied") : t("links.local.copy_failed"), "ok"); },
+    });
+    actions.push({
+      label: t("links.local.open_here"), primary: true,
+      onClick: async () => {
+        if (!deskId && loopback) {
+          try { await api.openExternal({ url: fileUrlOf(here) }); toast(t("links.local.opened"), "ok"); return true; } catch (err) {
+            toast(t("links.local.open_failed", { error: err.message }), "err");
+            return false;
+          }
+        }
+        return openLocalPathHere(here);
+      },
+    });
+  }
+  const list = rows.length ? h("div", { class: "task-path-rows" }, rows.map((row) => h("div", { class: "task-path-row" },
+    h("div", { class: "muted" }, row.label, row === hereRow ? ` · ${t("links.task.this_device")}` : ""),
+    row.path ? h("pre", { class: "code-box", style: { whiteSpace: "pre-wrap", wordBreak: "break-all", margin: "2px 0 8px" } }, row.path)
+      : h("p", { class: "muted", style: { margin: "2px 0 8px" } }, t("links.task.no_path"))))) : null;
+  openModal({
+    title: t("links.task.title"),
+    body: h("div", null,
+      h("p", { class: "muted", style: { marginTop: "0" } }, space ? t("links.task.hint", { space: space.name }) : t("links.task.no_space")),
+      h("pre", { class: "code-box", style: { whiteSpace: "pre-wrap", wordBreak: "break-all" } }, ref),
+      list),
+    actions,
+  });
+}
 
 async function openLocalPathHere(path) {
   // The page is served by the remote ARK host; the browser is on the user's computer.  The
@@ -1350,6 +1420,7 @@ function applyBootstrap(data, reset = false) {
   refreshAssigned(ctx);
   S.updatedAt = data.updated_at || S.project?.updated;
   S.dueTasks = data.dueTasks || S.dueTasks || [];
+  if (!S.booted) installStandby({ rerender: () => renderTopbar() });
   S.booted = true;
   applyEffectiveAppearance();
   const switched = Boolean(reset || (previous && S.project?.id && previous !== S.project.id));
@@ -1851,9 +1922,8 @@ function paintFiltersNow() {
   persistFilters();
   const rail = document.querySelector(".rail");
   if (!rail) return;
-  const top = rail.scrollTop;
+  // renderFilterRail keeps the scroll offset, focus and open groups itself.
   renderFilterRail(rail, ctx);
-  requestAnimationFrame(() => { rail.scrollTop = top; });
 }
 
 async function renderRoute({ keepScroll = false, preloaded = null } = {}) {
@@ -2112,7 +2182,7 @@ async function loadRouteData({ fresh = false } = {}) {
     ]);
     const graphIndex = await graphIndexFor(snapshot);
     const data = graphIndex.filter(query, S.session?.user || "", { all: true });
-    return { units: data.nodes, total: data.total, facets: metadata.facets, graphIndex,
+    return { units: data.nodes, total: data.total, facets: linkAwareFacets(graphIndex, query, metadata.facets), graphIndex,
       graph: { nodes: [], edges: [], context_count: 0 } };
   }
   const params = filtersToParams(S.filters, {
@@ -2127,7 +2197,17 @@ async function loadRouteData({ fresh = false } = {}) {
     || (S.tab === "plan" && (S.view === "graph" || S.view === "split"));
   const graphQuery = currentGraphQuery();
   let graphIndex = null;
-  const [unitsData, graphData, sessionData] = await Promise.all([
+  // Lists with the filter rail (Ideas, Map gantt) still need every node's
+  // link count for Min. links: the lite snapshot, without bodies.
+  const linkIndex = !needsGraph && ["ideas", "map"].includes(S.tab)
+    ? api.graphSnapshot(opts).then((snapshot) => {
+      const index = new GraphFilterIndex(snapshot);
+      // Only link counts are read from it; lists filter text elsewhere.
+      index.hasBodies = true;
+      return index;
+    }).catch(() => null)
+    : Promise.resolve(null);
+  const [unitsData, graphData, sessionData, listIndex] = await Promise.all([
     api.units({ ...params, slim: S.tab === "production" ? 0 : 1 }, opts),
     needsGraph ? api.graphSnapshot(opts).then(async (snapshot) => {
       graphIndex = await graphIndexFor(snapshot);
@@ -2136,11 +2216,22 @@ async function loadRouteData({ fresh = false } = {}) {
     S.tab === "tasks"
       ? api.agentSessions().catch(() => ({ sessions: [] }))
       : Promise.resolve(null),
+    linkIndex,
   ]);
+  graphIndex ||= listIndex;
+  // The server does not know Min. links: apply it here, but keep the full
+  // reply as the local base so lowering the slider brings units back.
+  const minLinks = minLinksValue(S.filters.minLinks);
+  const shownUnits = minLinks && graphIndex
+    ? unitsData.items.filter((unit) => graphIndex.degreeOf(unit.id) >= minLinks)
+    : unitsData.items;
+  const total = shownUnits === unitsData.items ? unitsData.total
+    : (graphData && Number.isFinite(graphData.total) ? graphData.total : shownUnits.length);
   return {
-    units: unitsData.items,
-    total: unitsData.total,
-    facets: unitsData.facets,
+    units: shownUnits,
+    total,
+    ...(shownUnits === unitsData.items ? {} : { unitsBase: [...unitsData.items], unitsBaseKey: unitsBaseKey() }),
+    facets: linkAwareFacets(graphIndex, needsGraph ? graphQuery : params, unitsData.facets),
     graphIndex,
     graph: graphData ? { nodes: graphData.nodes, edges: graphData.edges, context_count: graphData.context_count } : { nodes: [], edges: [], context_count: 0 },
     ...(sessionData ? { taskSessions: sessionData.sessions || [], sessionsLoaded: true } : {}),
@@ -2182,8 +2273,21 @@ function currentGraphQuery() {
   };
 }
 
+// Min. links is applied in the browser, so with it on the server's counts
+// would include nodes the slider hides: count over the snapshot instead.
+function linkAwareFacets(index, query, fallback) {
+  if (!index || !minLinksValue(S.filters.minLinks)) return fallback;
+  const local = index.facets(query, S.session?.user || "", { linkTypes: baseTypes(S.tab, S.sub) });
+  // The snapshot has no time extent for undated projects; keep the server's.
+  return { ...local, time: fallback?.time || local.time };
+}
+
+function unitsBaseKey() {
+  return `${S.project?.id || ""}:${S.tab}:${S.sub || ""}`;
+}
+
 function ensureUnitsBase() {
-  const key = `${S.project?.id || ""}:${S.tab}:${S.sub || ""}`;
+  const key = unitsBaseKey();
   if (!S.unitsBase || S.unitsBaseKey !== key) {
     S.unitsBase = [...(S.units || [])];
     S.unitsBaseKey = key;
@@ -2223,6 +2327,12 @@ function locallyFilterGraph(base, filters) {
   }
   const unsetGroups = new Set(filters.tagsUnset || []);
   const query = String(filters.q || "").trim().toLowerCase();
+  // Link counts come from the whole project graph (the snapshot index), so a
+  // node keeps its count whatever else is filtered out.  Without an index
+  // the base's own edges are used.
+  const minLinks = minLinksValue(filters.minLinks);
+  const ownCounts = minLinks && !S.graphIndex ? linkCounts(base.edges || []) : null;
+  const linksOf = (id) => (ownCounts ? ownCounts.get(id) || 0 : S.graphIndex?.degreeOf(id) || 0);
   const since = filters.timeMode === "recent"
     ? new Date(Date.now() - (Number(filters.recentDays) || 7) * 86400000).toISOString()
     : "";
@@ -2236,6 +2346,7 @@ function locallyFilterGraph(base, filters) {
       if (!haystack.includes(query)) return false;
     }
     if (filters.roots && (node.parents || []).length) return false;
+    if (minLinks && linksOf(node.id) < minLinks) return false;
     if (!assigneeMatches(node, filters.assignees, S.session?.user || "")) return false;
     if (filters.timeMode === "timeline") {
       const from = Date.parse(filters.from || "");
@@ -2329,9 +2440,15 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
     if (seq !== filterRequestSeq) return;
   }
   if (S.tab === "map" && S.view === "list" && S.graphIndex) {
-    const data = S.graphIndex.filter(currentGraphQuery(), S.session?.user || "", { all: true });
+    const query = currentGraphQuery();
+    const data = S.graphIndex.filter(query, S.session?.user || "", { all: true });
     S.units = data.nodes;
     S.total = data.total;
+    if (repaintRail && minLinksValue(S.filters.minLinks)) {
+      S.facets = linkAwareFacets(S.graphIndex, query, S.facets);
+      const rail = document.querySelector(".rail");
+      if (rail) renderFilterRail(rail, ctx);
+    }
     renderCurrentOnly();
     return;
   }
@@ -2354,6 +2471,13 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
     if (repaintRail) {
       // Facets are secondary UI: coalesce rapid changes and never delay nodes.
       filterFacetTimer = setTimeout(async () => {
+        if (minLinksValue(S.filters.minLinks)) {
+          // The server cannot count with Min. links; the snapshot can.
+          S.facets = linkAwareFacets(S.graphIndex, query, S.facets);
+          const rail = document.querySelector(".rail");
+          if (rail) renderFilterRail(rail, ctx);
+          return;
+        }
         const controller = new AbortController();
         filterFacetController = controller;
         try {
@@ -2362,9 +2486,7 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
           S.facets = facetData.facets;
           const rail = document.querySelector(".rail");
           if (rail) {
-            const top = rail.scrollTop;
             renderFilterRail(rail, ctx);
-            rail.scrollTop = top;
           }
         } catch { /* Keep the current counts when offline or superseded. */ }
       }, 120);
@@ -2402,9 +2524,7 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
     if (repaintRail) {
       const rail = document.querySelector(".rail");
       if (rail) {
-        const top = rail.scrollTop;
         renderFilterRail(rail, ctx);
-        requestAnimationFrame(() => { rail.scrollTop = top; });
       }
       // Fit starts with the data transition above, not after it.  Live
       // timeline drags skip this (repaintRail=false); the release event fits.
@@ -2847,6 +2967,8 @@ function renderTopbar() {
     h("span", { class: `project-dot ${S.project?.demo ? "demo" : ""}`.trim() }),
     h("span", { class: "p-name" }, S.project?.name || t("common.project")),
     icon("chevron", "sm")));
+  const roChip = standbyChip(); // standby server with its banner hidden
+  if (roChip) topbar.appendChild(roChip);
   const mobileTitle = h("div", { class: "mobile-nav-title" });
   renderMobileNavTitle(mobileTitle);
   topbar.appendChild(mobileTitle);
@@ -3290,6 +3412,7 @@ window.addEventListener("ark:lang-loaded", (event) => {
 
 async function changeLanguage(lang) {
   setLanguage(lang);
+  refreshStandby();
   renderMobileNav();
   renderTopbar();
   relocalizeSessionDock(ctx);

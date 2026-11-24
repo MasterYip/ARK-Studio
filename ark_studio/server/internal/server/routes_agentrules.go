@@ -14,6 +14,7 @@ package server
 
 import (
 	"encoding/json"
+	"strings"
 
 	"arkstudio/go/internal/agentrules"
 	"arkstudio/go/internal/assistcfg"
@@ -180,4 +181,26 @@ func (c *reqCtx) agentRulesGet(p *project.Project) error {
 		c.ok(out)
 	}
 	return err
+}
+
+// sessionCoreRules are the core rules a session ARK launches is told
+// (sessions/preamble.go): the project's and the launching person's
+// composed rules, English lines.
+func (c *reqCtx) sessionCoreRules(p *project.Project, actor string) string {
+	cat, err := agentrules.Default()
+	if err != nil {
+		return ""
+	}
+	if actor == "" {
+		actor = c.actor()
+	}
+	proj, err := agentrules.Load(agentrules.ProjectFile(p.Path))
+	if err != nil {
+		return ""
+	}
+	pers, err := agentrules.Load(agentrules.PersonalFile(assistcfg.PrivateDir(), actor))
+	if err != nil {
+		return ""
+	}
+	return strings.Join(cat.Compose(proj, pers).Lines.EN, "\n")
 }

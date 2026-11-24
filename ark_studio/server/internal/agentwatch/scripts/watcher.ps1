@@ -33,13 +33,16 @@ if (-not $curl) { Write-Output 'ARK: curl.exe not found (Windows 10 1803+ has it
 # ---------------------------------------------------------------- the token
 $tf = if ($env:ARK_TOKEN_FILE) { $env:ARK_TOKEN_FILE } else { Join-Path $env:USERPROFILE ".ark\tokens\$($env:ARK_PROJECT)" }
 $tok = ''
-if (Test-Path -LiteralPath $tf) { $tok = "$(Get-Content -LiteralPath $tf -TotalCount 1)".Trim() }
 $tokFromEnv = $false
+# In a session ARK launched, its own token (ARK_TOKEN) comes before the file.
+if ($env:ARK_SESSION_ID -and "$env:ARK_TOKEN".Trim() -and -not $env:ARK_TOKEN_FILE) { $tok = "$env:ARK_TOKEN".Trim(); $tokFromEnv = $true }
+elseif (Test-Path -LiteralPath $tf) { $tok = "$(Get-Content -LiteralPath $tf -TotalCount 1)".Trim() }
 if (-not $tok) { $tok = "$env:ARK_TOKEN".Trim(); $tokFromEnv = $true }
 Remove-Item Env:ARK_TOKEN -ErrorAction SilentlyContinue
 if (-not $tok) { Write-Output "ARK: no token: write it to $tf (only you may read it) or set ARK_TOKEN in this shell's environment."; exit 2 }
 $cfg = @("header = `"Authorization: Bearer $tok`"", "header = `"X-ARK-Project: $($env:ARK_PROJECT)`"")
 if ($env:ARK_HOST) { $cfg += "header = `"X-ARK-Host: $($env:ARK_HOST)`"" }
+if ($env:ARK_SESSION_ID) { $cfg += "header = `"X-ARK-Session: $($env:ARK_SESSION_ID)`"" }
 $cfg = $cfg -join "`n"
 # One request: curl.exe reads the headers from stdin (-K -).  Returns the
 # HTTP status and sets $script:body.

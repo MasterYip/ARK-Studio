@@ -44,6 +44,11 @@ that leads here (they do not list the server names; setup discovery offers
 them). Details and the migration steps for existing projects:
 [gpu.md](gpu.md#project-scope-and-who-sees-what).
 
+A compute resource can also say which device it is: `device_id` is the setup
+host id of that machine (for the ARK server, its own host id). The device's
+locations then open in VS Code, Cursor or a terminal straight away, with the
+GPU server's address; setup stores only the id.
+
 ## Device names
 
 Use the device id for `X-ARK-Host`: sha256 of `ark|` + the OS machine id,
@@ -161,7 +166,23 @@ POST /api/agent/v1/setup/host      {label}
 POST /api/agent/v1/setup/propose   {}
 POST /api/agent/v1/setup/verify
 POST /api/agent/v1/setup/location-stats  {items: [{resource, path_or_ref, bytes, files}]}
+GET  /api/agent/v1/setup/paths     this device's task space, repositories, storage, artifacts, missing
+POST /api/agent/v1/setup/task-space-decision  {options: [{path, free, note}], recommended, part_of}
+POST /api/agent/v1/setup/relocate  {from, to, apply?} | {logical: true, apply?} | {undo}
 ```
+
+A device without a task space gets one only from its owner: the agent asks
+with `task-space-decision`, which opens a decision in Needs you; the answer
+(an option or an absolute path) is written to the answering person's own
+layer for that device, and only that person can answer it. When the
+project has no task space resource yet, the answer adds one to their layer
+and confirms that addition (a layer with other unconfirmed changes stays
+proposed). `relocate` rewrites recorded paths (unit bodies, attachment
+links, setup locations of the caller's layer and, for an admin, the project
+layer) from an old prefix to a new one, or (optional, not recommended by
+default, since task spaces are not necessarily synced between devices)
+absolute task-space paths to `task:` paths; it is a dry run unless `apply` is set, keeps a record under
+`setup/relocations/` and can be undone. It never moves or deletes files.
 
 `propose: true` on a write, or `propose {}` without a layer, sends every layer
 with changes since its last confirmation (the project layer and the caller's

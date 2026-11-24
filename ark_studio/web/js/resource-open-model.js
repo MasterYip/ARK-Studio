@@ -321,13 +321,16 @@ export function effectiveConnection(conn, device, matches = null) {
 /**
  * The open actions of a device or one of its locations.
  * @param {{device: object, path?: string|null, local?: boolean, conn?: object|null,
- *   terminal?: boolean, canSave?: boolean}} input
+ *   terminal?: boolean, localTerminal?: boolean, canSave?: boolean}} input
  *   local: the location is on this computer; terminal: the desktop app can
- *   open a terminal; conn: effectiveConnection(...)
- * @returns {Array<{id: string, url?: string, path?: string, command?: object}>}
- *   ids: vscode, cursor, ssh-terminal, copy-ssh, copy-path, ssh-setup
+ *   open an SSH terminal (else "terminal" copies the command);
+ *   localTerminal: it can open a terminal in a local folder;
+ *   conn: effectiveConnection(...)
+ * @returns {Array<{id: string, url?: string, path?: string, command?: object, copy?: boolean}>}
+ *   ids: vscode, cursor, terminal, copy-ssh, vscode-setup, copy-path, ssh-setup
  */
-export function openActions({ device, path = null, local = false, conn = null, terminal = false, canSave = false } = {}) {
+export function openActions({ device, path = null, local = false, conn = null, terminal = false, localTerminal = false,
+  canSave = false } = {}) {
   const out = [];
   const fsPath = validPath(path) && (path.startsWith("/") || path.startsWith("~") || isWindowsPath(path)) ? path : null;
   const sshable = SSH_KINDS.has(device?.kind);
@@ -336,6 +339,7 @@ export function openActions({ device, path = null, local = false, conn = null, t
       const url = fsPath ? localEditorUrl(fsPath, editor) : null;
       if (url) out.push({ id: editor, url });
     }
+    if (fsPath && localTerminal && (fsPath.startsWith("/") || isWindowsPath(fsPath))) out.push({ id: "terminal", local: true, path: fsPath });
   } else if (sshable && conn && cleanConnection(conn)) {
     const remotePath = fsPath && isRemotePosixPath(fsPath) ? fsPath : null;
     // A device (no location) opens its home folder.
@@ -346,15 +350,201 @@ export function openActions({ device, path = null, local = false, conn = null, t
     }
     const args = sshArgs(conn, remotePath);
     if (args) {
-      if (terminal) out.push({ id: "ssh-terminal", command: { conn: cleanConnection(conn), path: remotePath } });
-      out.push({ id: "copy-ssh", command: { conn: cleanConnection(conn), path: remotePath } });
+      // In a browser "Open in terminal" copies the command (no separate copy item).
+      out.push({ id: "terminal", copy: !terminal, command: { conn: cleanConnection(conn), path: remotePath } });
+      if (terminal) out.push({ id: "copy-ssh", command: { conn: cleanConnection(conn), path: remotePath } });
     }
   }
+  const known = Boolean(conn && cleanConnection(conn));
+  // No connection yet: "Open in VS Code…" asks for it (prefilled) and then opens.
+  if (!local && sshable && !known) {
+    const folder = path === null || path === undefined ? "~" : (fsPath && isRemotePosixPath(fsPath) ? fsPath : null);
+    if (folder) out.push({ id: "vscode-setup", folder, canSave });
+  }
   if (fsPath) out.push({ id: "copy-path", path: fsPath });
-  // Set up (no connection yet: a hint) or change the viewer's own entry.
-  if (!local && sshable) {
-    const known = Boolean(conn && cleanConnection(conn));
-    if (!known || canSave) out.push({ id: "ssh-setup", canSave, known });
+  // Change the connection (the viewer's entry; admins also the shared one).
+  if (!local && sshable && known && canSave) out.push({ id: "ssh-setup", canSave, known });
+  return out;
+}
+
+// ------------------------------------------------ one machine, one SSH record
+// GET /api/resources/connect also returns the project's shared machine
+// records (host, port, default user, name; admins edit them), each device's
+// link to a machine and the viewer's own entries (alias, user, auth, and
+// host / port overrides).  The device SSH dialog prefills from these; key
+// files stay in this computer's storage, passwords never reach ARK.
+
+/** The graph device id of a GPU server name (graph.go slug; "" when the name has no letters or digits). */
+export function gpuDeviceId(name) {
+  const slug = text(name).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 48);
+  return slug ? `gpu:${slug}` : "";
+}
+
+const portText = (v) => (v === null || v === undefined || v === "" ? "" : String(v));
+
+/**
+ * What the device SSH dialog shows.
+ * @param {{device: object, data?: object, link?: string|null, matches?: Map|null,
+ *   added?: object, localAuth?: object, localKeys?: object}} input
+ *   data: GET /api/resources/connect; link: the machine picked in the
+ *   dialog (null: the saved / matched one); matches: the desktop app's
+ *   ~/.ssh/config matches (lower-case name -> alias); added: aliases a
+ *   browser user pasted (alias -> "user@host:port#mode"); localAuth /
+ *   localKeys: this computer's login mode and key file per alias.
+ * @returns {{device: string, machine: string, how: string, own: string, shared: object, personal: object,
+ *   values: object, aliasPlaceholder: string, options: Array<{id: string, name: string}>}}
+ *   machine: the linked machine ("" when none); own: where the shared and
+ *   personal values are saved (the machine, else the device itself).
+ *   Personal values win over shared ones; the alias is the saved one, else
+ *   ark-<name> or another ~/.ssh/config entry for the host when it exists.
+ */
+export function sshFormPrefill({ device, data = {}, link = null, matches = null, added = {}, localAuth = {}, localKeys = {} } = {}) {
+  const id = device?.id || "";
+  const machines = data.machines || {};
+  const saved = data.links?.[id] || null;
+  let machine = saved?.machine || "";
+  let how = saved?.how || "";
+  if (link !== null && link !== undefined) {
+    machine = link && machines[link] ? link : (machines[id] ? id : "");
+    how = link ? "picked" : (machine ? "self" : "unlinked");
+  }
+  const own = machine || id;
+  const record = machines[own] || {};
+  const shared = { name: text(record.name) || text(device?.label) || id, host: text(record.host), port: portText(record.port), user: text(record.user) };
+  const mine = data.mine || {};
+  // An older entry for the device itself still wins over the machine's.
+  const personal = { ...(mine[own] || {}), ...(own !== id ? mine[id] || {} : {}) };
+  // ark-<machine name> only: never a device's hostname or id (machineName).
+  const managed = managedAlias(machineName(device, data, machine)) || "";
+  const host = text(personal.host) || shared.host || text(data.suggest?.[id]?.host);
+  const found = (name) => (name && matches ? matches.get(String(name).toLowerCase()) || "" : "");
+  let alias = text(personal.alias);
+  if (!alias && managed && (found(managed) === managed || added?.[managed])) alias = managed;
+  if (!alias) alias = found(host);
+  const localKey = alias || managed || host;
+  const options = Object.entries(machines)
+    .filter(([mid]) => mid !== id)
+    .map(([mid, m]) => ({ id: mid, name: text(m?.name) || mid }));
+  return {
+    device: id, machine, how, own, shared, personal,
+    values: {
+      name: shared.name,
+      host,
+      port: portText(personal.port) || shared.port,
+      user: text(personal.user) || shared.user,
+      alias,
+      auth: personal.auth === "key" || personal.auth === "password" ? personal.auth
+        : (localAuth?.[localKey] === "key" || localAuth?.[localKey] === "password" ? localAuth[localKey] : ""),
+      keyFile: text(localKeys?.[localKey]),
+    },
+    aliasPlaceholder: managed || "gpu-a",
+    managedAlias: managed,
+    options,
+  };
+}
+
+/**
+ * The POST /api/resources/connect/<device> body for the dialog's values.
+ * Admins save name, host, port and user as the machine's shared record
+ * (and the link when it changed); everyone else saves the host, port and
+ * user only where they differ from the shared values.  Alias and login
+ * mode are always personal; the key file never leaves this computer.
+ * @param {object} prefill sshFormPrefill(...) of the machine shown
+ * @param {object} form {name, host, port, user, alias, auth}
+ * @param {{admin?: boolean, personal?: boolean, linkChanged?: boolean}} opts
+ */
+export function sshFormBody(prefill, form, { admin = false, personal = true, linkChanged = false } = {}) {
+  const f = Object.fromEntries(["name", "host", "port", "user", "alias", "auth"].map((k) => [k, text(form?.[k])]));
+  const body = {};
+  if (personal) {
+    if (f.alias) body.alias = f.alias;
+    if (f.auth) body.auth = f.auth;
+  }
+  if (admin) {
+    const shared = {};
+    for (const k of ["name", "host", "port", "user"]) if (f[k]) shared[k] = f[k];
+    body.shared = Object.keys(shared).length ? shared : null;
+    if (linkChanged) body.link = prefill.machine && prefill.machine !== prefill.device ? prefill.machine : "";
+  } else if (personal) {
+    for (const k of ["host", "port", "user"]) if (f[k] && f[k] !== text(prefill.shared?.[k])) body[k] = f[k];
+  }
+  return body;
+}
+
+/**
+ * The display name of the machine a device is linked to, for its managed
+ * ~/.ssh/config alias (ark-<name>): the linked machine's name, the device's
+ * own shared record's name, a GPU server's name; "" otherwise.  A setup
+ * host's label (a hostname such as deskhost7k2pq) is never used.
+ * @param {object} device graph device
+ * @param {object} data GET /api/resources/connect ({machines, links, devices})
+ * @param {string|null} machine the machine picked in a dialog (null: the saved / matched one)
+ */
+export function machineName(device, data = {}, machine = null) {
+  const machines = data?.machines || {};
+  const id = device?.id || "";
+  const mid = machine !== null && machine !== undefined ? machine
+    : (data?.links?.[id]?.machine || data?.devices?.[id]?.machine || "");
+  const record = machines[mid] || machines[id];
+  if (record && text(record.name)) return text(record.name);
+  return device?.kind === "gpu-server" ? text(device.label) : "";
+}
+
+/**
+ * Which ~/.ssh/config alias to open a connection with, and whether it is
+ * known to exist.  Known: an alias the desktop app found in ~/.ssh/config
+ * (`found`: [{name, alias, hostname?, user?, port?}], looked up for the
+ * connection's own alias, ark-<name> and the host), or, in a browser, an
+ * entry the person pasted or confirmed for the same address (`added`:
+ * alias -> "user@host:port#mode").  A saved alias is checked the same way
+ * (a stale ark-<hostname> alias once sent VS Code to a Host nobody had);
+ * only an alias-only connection (no host to fall back to) is trusted as is.
+ * Otherwise the managed alias to write (or null when the machine has no
+ * name: open with user@host:port instead).
+ * @returns {{alias: string|null, known: boolean}}
+ */
+export function resolveAlias({ name = "", conn = null, found = null, added = null } = {}) {
+  const c = cleanConnection(conn);
+  if (!c) return { alias: null, known: false };
+  if (c.alias && !c.host) return { alias: c.alias, known: true };
+  const managed = text(name) ? managedAlias(name) : null;
+  const host = (c.host || "").toLowerCase();
+  const key = `${c.user || ""}@${c.host}:${c.port || 22}`;
+  const pasted = (a) => Boolean(a && added && typeof added === "object" && validAlias(a)
+    && String(added[a] || "").split("#")[0] === key);
+  if (Array.isArray(found)) {
+    const inConfig = (a) => a && found.find((m) => m.alias === a && configMatchFits(m, c)
+      && (!m.hostname || String(m.hostname).toLowerCase() === host));
+    if (inConfig(c.alias)) return { alias: c.alias, known: true };
+    if (inConfig(managed)) return { alias: managed, known: true };
+    const other = found.find((m) => String(m.name || "").toLowerCase() === host && configMatchFits(m, c));
+    if (other) return { alias: other.alias, known: true };
+  } else {
+    if (pasted(c.alias)) return { alias: c.alias, known: true };
+    if (pasted(managed)) return { alias: managed, known: true };
+  }
+  return { alias: managed, known: false };
+}
+
+/**
+ * Aliases made from a device's hostname or id (ark-<label>, ark-<host id>)
+ * that older versions suggested and remembered in this browser: alias ->
+ * the machine's managed alias to move the key file and login mode to ("" when
+ * the device has no machine).  The machine's own alias is never stale.
+ * @param {Array<object>} devices graph devices
+ * @param {object} data GET /api/resources/connect
+ */
+export function staleAliases(devices, data = {}) {
+  const out = new Map();
+  for (const device of devices || []) {
+    if (device?.kind !== "ark" && device?.kind !== "host") continue;
+    const own = managedAlias(machineName(device, data)) || "";
+    const id = String(device.id || "");
+    const ids = [device.label, id.startsWith("host:") ? id.slice(5) : ""];
+    for (const n of ids) {
+      const a = text(n) ? managedAlias(n) : null;
+      if (a && a !== own && !out.has(a)) out.set(a, own);
+    }
   }
   return out;
 }

@@ -29,6 +29,15 @@ const (
 		"Edits are local to this visit and reset when you switch projects."
 )
 
+// The PredActor example project (seed "demo"): created on a server's first
+// run and by `ark-server demo`.  Projects created earlier keep their stored
+// description.
+const (
+	PredActorName        = "PredActor"
+	PredActorRepo        = "https://github.com/MasterYip/PredActor"
+	PredActorDescription = "A demo research project: from claims to agent tasks. Code: " + PredActorRepo
+)
+
 var demoMu sync.Mutex
 
 // DemoTemplatePath is demo.template_path.

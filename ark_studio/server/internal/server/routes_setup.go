@@ -200,7 +200,8 @@ func (c *reqCtx) setupGPUServers() *pyjson.Object {
 
 var setupActions = map[string]bool{"discover": true, "draft": true, "resource": true, "remove": true,
 	"location": true, "host": true, "propose": true, "confirm": true, "verify": true,
-	"location-stats": true, "measure": true}
+	"location-stats": true, "measure": true,
+	"task-space-decision": true, "relocate": true} // Go only (routes_taskspace.go)
 
 // setupAction is Handler._setup_action.
 func (c *reqCtx) setupAction(action string, body *pyjson.Object, actor string) error {
@@ -352,6 +353,10 @@ func (c *reqCtx) setupAction(action string, body *pyjson.Object, actor string) e
 			}
 			c.ok(result)
 			return nil
+		case "task-space-decision": // Go only (routes_taskspace.go): ask the person where this device's task space goes
+			return c.taskSpaceDecision(p, env, v, body, actor)
+		case "relocate": // Go only (routes_taskspace.go): move paths to a new prefix, or to task: paths
+			return c.relocate(p, env, v, body, actor)
 		case "measure": // Go only (2026-11-20): measure a location on this host again (the refresh button)
 			return c.setupMeasure(p, env, body)
 		case "alias": // Go only (T-0053): host id `from` is this device (X-ARK-Host)

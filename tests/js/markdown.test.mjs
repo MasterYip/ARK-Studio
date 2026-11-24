@@ -14,7 +14,7 @@ async function load(url) {
 }
 const module = await load(new URL("../../ark_studio/web/js/markdown.js", import.meta.url));
 await module.evaluate();
-const { markdownTokens, markdownInlineTokens } = module.namespace;
+const { markdownTokens, markdownInlineTokens, bareUrlEnd } = module.namespace;
 
 test("Marked handles combined and nested emphasis, escapes and punctuation", () => {
   for (const source of ["***both***", "**_both_**", "__*both*__"]) {
@@ -47,4 +47,27 @@ test("GFM nested lists, tasks, tables, reference links and block math are parsed
   assert.ok(tokens.some((t) => t.type === "table"));
   assert.ok(tokens.some((t) => t.type === "arkMathBlock"));
   assert.ok(tokens.some((t) => t.type === "paragraph" && t.tokens[0].type === "link"));
+});
+
+const autoLinks = (src) => markdownInlineTokens(src).filter((t) => t.type === "link").map((t) => t.href).join(" | ");
+
+test("bare URL stops at CJK and full-width punctuation", () => {
+  assert.equal(autoLinks("备用地址：https://ark-bkp.example.com:8443（Let's Encrypt 证书"), "https://ark-bkp.example.com:8443");
+  assert.equal(autoLinks("见 https://example.com/a，然后"), "https://example.com/a");
+  assert.equal(autoLinks("打开https://example.com/x。"), "https://example.com/x");
+  assert.equal(autoLinks("www.example.com中文"), "http://www.example.com");
+});
+
+test("ASCII bare URLs keep Marked's behaviour", () => {
+  assert.equal(autoLinks("see https://example.com/a_(b) now"), "https://example.com/a_(b)");
+  assert.equal(autoLinks("see https://example.com/path."), "https://example.com/path");
+  assert.equal(bareUrlEnd("https://x.example/a)。"), "https://x.example/a");
+});
+test("a bare task: path is a link; a word ending in task: is not", () => {
+  const tokens = markdownInlineTokens("see task:20261124_T-0117/artifacts/out.mp4。然后 multitask:x");
+  const links = tokens.filter((t) => t.type === "link");
+  assert.equal(links.length, 1);
+  assert.equal(links[0].href, "task:20261124_T-0117/artifacts/out.mp4");
+  const linked = markdownInlineTokens("[Task folder](task:20261124_T-0117/)").find((t) => t.type === "link");
+  assert.equal(linked.href, "task:20261124_T-0117/");
 });

@@ -131,6 +131,11 @@ func serveCommand(parser *pyargparse.Parser, ns pyargparse.Namespace, argv []str
 
 func serve(o *options) (int, error) {
 	desktopSecret := desktopgate.SecretFromEnv() // before anything can spawn a child
+	readOnly := envBool("ARK_READ_ONLY")
+	if readOnly && desktopSecret != "" {
+		eprintln("error: ARK_READ_ONLY is for a standby server, not the desktop app")
+		return 2, nil
+	}
 	expose := o.expose || envBool("ARK_PUBLIC")
 	host := pytext.Strip(o.host)
 	if host == "" {
@@ -171,6 +176,8 @@ func serve(o *options) (int, error) {
 		ReleaseVersion: releaseVersion(),
 		// The desktop app's sessions end with the app, as before.
 		SessionRelay: desktopSecret == "",
+		// Standby replica (docs/deploy/standby.md).
+		ReadOnly: readOnly, StandbyStatus: os.Getenv("ARK_STANDBY_STATUS"),
 	}, authMgr)
 	if err != nil {
 		return 0, err
@@ -183,9 +190,14 @@ func serve(o *options) (int, error) {
 	}
 	port := listener.Addr().(*net.TCPAddr).Port
 	app.Bind(host, port)
-	app.StartGPUQueue()                                         // serve(): app.gpu.start_configured_queue()
-	app.StartMobileTunnel()                                     // Go only: Settings › Mobile › Cloudflare Tunnel
-	app.StartSessionNudge(context.Background(), 30*time.Second) // Go only: wake idle ARK-launched agents (T-0053)
+	if readOnly {
+		// A standby leaves the GPU queue, the tunnel and agent sessions to the primary.
+		eprintln("Standby mode: read-only (ARK_READ_ONLY); API writes are refused.")
+	} else {
+		app.StartGPUQueue()                                         // serve(): app.gpu.start_configured_queue()
+		app.StartMobileTunnel()                                     // Go only: Settings › Mobile › Cloudflare Tunnel
+		app.StartSessionNudge(context.Background(), 30*time.Second) // Go only: wake idle ARK-launched agents (T-0053)
+	}
 	var handler http.Handler = app
 	if desktopSecret != "" {
 		if !server.IsLoopbackHost(host) {

@@ -427,6 +427,15 @@ func (s *Store) createUnitIn(ctx context.Context, outer *wtx, data *pyjson.Objec
 		}
 		reviewNote = &note
 	}
+	if IsAgentActor(actor) && needs == "review" { // Go only (reviewnote_required.go)
+		note := ""
+		if reviewNote != nil {
+			note = *reviewNote
+		}
+		if err := checkAgentUnitReviewNote("The new unit", note, body, false); err != nil {
+			return 0, err
+		}
+	}
 	startAt, err := cleanDate(data.Value("start_at"), "start_at")
 	if err != nil {
 		return 0, err
@@ -729,6 +738,16 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 				if !open || current != note {
 					changed = append(changed, "review_note")
 				}
+			}
+		}
+		// Go only: an agent hands off with a note (reviewnote_required.go).
+		if IsAgentActor(actor) && needs == "review" && (oldNeeds != "review" || reviewNote != nil) {
+			note := ""
+			if reviewNote != nil {
+				note = *reviewNote
+			}
+			if err := checkAgentUnitReviewNote(row.Str("uid"), note, body, oldNeeds == "sent-back"); err != nil {
+				return err
 			}
 		}
 		meta := row.Get("meta_json")

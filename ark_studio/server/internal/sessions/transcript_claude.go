@@ -165,6 +165,9 @@ func (b *transcriptBuilder) taskEvent(sub string, o *pyjson.Object, at any) {
 		if s := firstString(o, "summary"); s != "" {
 			task.Set("summary", truncate(s, maxTaskText))
 		}
+		if f := firstString(o, "output_file", "output-file"); f != "" {
+			task.Set("output_file", truncate(f, maxTaskText)) // its output (background notices, busy.go)
+		}
 		task.Set("ended_at", at)
 	}
 }

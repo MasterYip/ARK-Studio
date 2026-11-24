@@ -31,12 +31,15 @@ ARK_URL=${ARK_URL%/}
 # ---------------------------------------------------------------- the token
 tf=${ARK_TOKEN_FILE:-$HOME/.ark/tokens/$ARK_PROJECT}
 tok=""
-if [ -f "$tf" ]; then
+tok_env=""
+# In a session ARK launched, its own token (ARK_TOKEN) comes before the file.
+if [ -n "${ARK_SESSION_ID:-}" ] && [ -n "${ARK_TOKEN:-}" ] && [ -z "${ARK_TOKEN_FILE:-}" ]; then
+  tok=$ARK_TOKEN && tok_env=1
+elif [ -f "$tf" ]; then
   chmod 600 "$tf" 2>/dev/null
   IFS= read -r tok < "$tf" || [ -n "$tok" ]
   tok=$(printf '%s' "$tok" | tr -d '\r\n ')
 fi
-tok_env=""
 [ -z "$tok" ] && tok=$ARK_TOKEN && tok_env=1
 unset ARK_TOKEN
 if [ -z "$tok" ]; then
@@ -47,7 +50,8 @@ fi
 # the token never appears in a process's arguments.
 ark_get() { # path, max seconds; prints body, newline, HTTP status
   printf 'header = "Authorization: Bearer %s"\nheader = "X-ARK-Project: %s"\n' "$tok" "$ARK_PROJECT" |
-    curl -sS -K - -m "$2" -w '\n%{http_code}' ${ARK_HOST:+-H "X-ARK-Host: $ARK_HOST"} "$ARK_URL$1" ||
+    curl -sS -K - -m "$2" -w '\n%{http_code}' ${ARK_HOST:+-H "X-ARK-Host: $ARK_HOST"} \
+      ${ARK_SESSION_ID:+-H "X-ARK-Session: $ARK_SESSION_ID"} "$ARK_URL$1" ||
     printf '\n000'
 }
 

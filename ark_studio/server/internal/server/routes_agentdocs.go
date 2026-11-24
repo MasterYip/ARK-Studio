@@ -30,8 +30,8 @@ var GoOnlyRoutes = append([]PortedRoute{
 	mobileTunnelGoOnly[4],
 	appManifestGoOnly[0],                             // app_manifest.go
 	{"goonly:exact:" + agentMarkersPath, "GET,HEAD"}, // routes_agentmarkers.go
-}, append(append(append(desktopRoutesGoOnly, presenceRoutesGoOnly...), // routes_desktop.go, routes_presence.go
-	agentWatchGoOnly...), append(append(append(append(trashRoutesGoOnly, agentRulesGoOnly...), inviteRoutesGoOnly...), mediaThumbGoOnly...), append(append(append(append(append(reviewRoutesGoOnly, importArkGoOnly...), projectMoveGoOnly...), agentLinksGoOnly...), batchRoutesGoOnly...), append(append(storageRoutesGoOnly, resourcesRoutesGoOnly...), promptsGoOnly...)...)...)...)...) // routes_agentwatch.go, routes_trash.go, routes_agentrules.go, routes_invites.go, media_thumb.go, routes_reviews.go, routes_importark.go, routes_agentlinks.go, routes_batch.go, routes_storage.go, routes_resources.go, routes_projectmove.go
+}, append(append(append(append(desktopRoutesGoOnly, presenceRoutesGoOnly...), append(supportRoutesGoOnly, sessionStartGoOnly...)...), // routes_desktop.go, routes_presence.go, routes_support.go
+	agentWatchGoOnly...), append(append(append(append(trashRoutesGoOnly, agentRulesGoOnly...), inviteRoutesGoOnly...), mediaThumbGoOnly...), append(append(append(append(append(reviewRoutesGoOnly, importArkGoOnly...), projectMoveGoOnly...), agentLinksGoOnly...), batchRoutesGoOnly...), append(append(append(storageRoutesGoOnly, resourcesRoutesGoOnly...), promptsGoOnly...), taskSpaceGoOnly...)...)...)...)...) // routes_agentwatch.go, routes_trash.go, routes_agentrules.go, routes_invites.go, media_thumb.go, routes_reviews.go, routes_importark.go, routes_agentlinks.go, routes_batch.go, routes_storage.go, routes_resources.go, routes_projectmove.go, routes_taskspace.go
 
 const markdownType = apidocs.MarkdownType
 

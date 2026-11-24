@@ -52,6 +52,10 @@ type Config struct {
 	// Go only: agent sessions run under a relay and survive a server
 	// restart (Linux; internal/sessions/relay.go).  Off for the desktop app.
 	SessionRelay bool
+	// Go only: standby mode (readonly.go): API writes are refused and the
+	// web app shows a banner.  StandbyStatus is the replication status file.
+	ReadOnly      bool
+	StandbyStatus string
 
 	// Concurrency knobs (Go only, docs/development/go-port/concurrency.md).
 	ReadPool       int           // read connections per project database
@@ -187,7 +191,7 @@ func NewApp(cfg Config, authMgr *auth.Manager) (*App, error) {
 	}
 	if !cfg.NoDemo && len(manager.ListProjects()) == 0 {
 		// ProjectManager(seed_demo=True): the first-run demo project.
-		if a.project, err = manager.Create(ctx, "PredActor", "A demo research project: from claims to agent tasks.", "demo", true, ""); err != nil {
+		if a.project, err = manager.Create(ctx, project.PredActorName, project.PredActorDescription, "demo", true, ""); err != nil {
 			return nil, err
 		}
 	}

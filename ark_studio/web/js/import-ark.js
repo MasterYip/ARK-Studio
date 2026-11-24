@@ -215,9 +215,7 @@ export async function openImportPreview(ctx, uids) {
 function repaintRail(ctx) {
   const rail = document.querySelector(".rail");
   if (!rail || ctx.S.tab !== "ideas" || ctx.S.filterTab !== "infohub" || !isArkSource(ctx.S.importSource)) return;
-  const top = rail.scrollTop;
-  renderFilterRail(rail, ctx);
-  requestAnimationFrame(() => { rail.scrollTop = top; });
+  renderFilterRail(rail, ctx); // keeps scroll, focus and open groups
 }
 
 // ARK's own filter rail, bound to the source's filters (S.importFilters).

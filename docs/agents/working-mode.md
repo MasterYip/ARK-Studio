@@ -32,8 +32,12 @@ parts if your tools limit output, but do not stop at the first part.
    as comments.
 3. **Hand-offs go to Needs you.** Whenever you deliver something or need
    the user (a result, a plan to approve, versions to choose from), set that
-   node's status to `review` so it appears in **Needs you**. A question is
-   a `decision` node left open. Do not leave it only in chat, a comment or a
+   node's status to `review` so it appears in **Needs you**, with a
+   `review_note` in the same request: one to three sentences on what to
+   check and what changed, at least one anchor into the body or its media,
+   and after a send-back what was fixed for each comment. The server
+   refuses `review` from an agent without it (422 `REVIEW_NOTE_REQUIRED`).
+   A question is a `decision` node left open. Do not leave it only in chat, a comment or a
    body, and never set a `review` node to `done` yourself: the user accepts
    or sends it back.
 4. **One result, one node.** `type: "experiment"` or `"artifact"`, status
@@ -46,19 +50,30 @@ parts if your tools limit output, but do not stop at the first part.
    `ark-server agent watch --once`) between steps, before every reply to
    the user and at least every 10 minutes during long jobs; act on comments,
    reply with `reply_to` and resolve them.
-7. **Show where the files are.** The task folder sits in a registered task
-   space; put it on the task node as an openable link,
-   `[Task folder](file:///<absolute path>)`, in a "Resource paths" section.
-   Do not write the setup register during task work (it sends setup back
-   for confirmation) and never confirm setup yourself.
+7. **Files only under this device's task space.** `GET
+   /api/agent/v1/setup/paths` (with `X-ARK-Host`) returns this device's
+   task space, repositories, storage and artifacts paths and what is
+   `missing`. Everything outside the code repository (task folders,
+   intermediate and resource folders, artifacts, downloads, renders) goes
+   in the task's folder under the task space; no new top-level folders
+   anywhere else. Without a task space, do not choose one: ask with
+   `POST /api/agent/v1/setup/task-space-decision` and wait (see
+   [Task space](#task-space)). Put the task folder on the task node as an
+   absolute path with the device it is on, `Resource paths (device <device
+   id> / <device name>): [Task folder](file:///<absolute path>)`, in a
+   "Resource paths" section. Do not write the setup register during task work (it
+   sends setup back for confirmation) and never confirm setup yourself.
 8. **Announce presence** (`POST /api/agent/v1/presence`) while you work on
    a node, and post **one summary comment** on the main task when the
    session ends.
 9. **Ask before** irreversible or outward actions, and record the approval.
 
 Before every reply to the user, check: is everything they must look at in
-`review` or an open decision? Is progress in the body, not in comments? Is
-every new node linked to its task? Is no finished work left `active`?
+`review` or an open decision, and does every hand-off to review carry an
+anchored `review_note`? Is progress in the body, not in comments? Is
+every new node linked to its task? Is no finished work left `active`? Is
+every file you made under the task space (or the OS temp dir), with its
+absolute path and device written in ARK?
 
 ## 1. Access and basic operations
 
@@ -103,6 +118,8 @@ and `GET /api/agent/v1/context`.
 | Current agent rules | `GET /api/agent/v1/rules` (`?lang=zh`): `{version, lines, rules}`, the rules composed from ARK's protocol and this project's and your preferences; the starter prompt carries the same lines and their version |
 | Topic members | `GET` / `POST /api/agent/v1/units/<uid>/members` ([Topics](../guide/topics.md#agent-workflow)) |
 | Setup register | `POST /api/agent/v1/setup/resource`, `POST /api/agent/v1/setup/location` ([Shared project setup](../operations/multi-user-setup.md#setup-api)) |
+| This device's paths | `GET /api/agent/v1/setup/paths` with `X-ARK-Host`: task space, repositories, storage, artifacts, `missing`; `POST /api/agent/v1/setup/task-space-decision` when the task space is missing ([Task space](#task-space)) |
+| Move recorded paths | `POST /api/agent/v1/setup/relocate` `{from, to}` or `{logical: true}`, dry run unless `apply: true`; `{undo: "<id>"}` ([Task space](#task-space)) |
 | Location sizes | `POST /api/agent/v1/setup/location-stats` `{items: [{resource, path_or_ref, bytes, files}]}` with this device's `X-ARK-Host`: optional, e.g. after registering or verifying a path ([Location sizes](../operations/multi-user-setup.md#location-sizes)) |
 | GPU queue | `GET` / `POST /api/agent/v1/gpu/jobs`, `GET .../<id>/logs`, `POST .../<id>/cancel` ([GPU](../operations/gpu.md#queue-monitoring-api)) |
 
@@ -159,6 +176,70 @@ titles and status, and the filters (`types`, `statuses`, `q`) to fetch less.
 The agent route currently ignores `offset` (the reply's `offset` is always
 0), so a project with more than 500 units cannot be paged there; split the
 fetch by filter instead.
+
+### Task space
+
+Each device has its own path for the project's task space (setup is per
+person and per device). Read it before you create any file outside the
+code repository:
+
+```bash
+curl -s -H "Authorization: Bearer $ARK_TOKEN" -H "X-ARK-Project: $PRJ"   -H "X-ARK-Host: $(ark-server agent host-id)" "$ARK/api/agent/v1/setup/paths"
+```
+
+The reply has `task_space` (`{id, key, path}` or null), `task_spaces`,
+`repositories`, `storage`, `artifacts`, `missing` (for example
+`["task_space"]`), `task_folder` (the folder pattern) and `next`.
+
+- Task files go in `<task space>/<YYYYMMDD>_<UID>-<name>/`, with
+  `artifacts/`, `downloads/`, `renders/`, `logs/` as needed. No other
+  top-level folders: not `C:/Temp/...`, `C:/scratch/...` or a new `*-tasks`
+  folder.
+- Scratch files go only in the OS temp directory and are deleted after the
+  step.
+- When `missing` has `task_space`, do not pick a folder. Look at the
+  device (drives, free space, where the repository is, how the project's
+  other devices lay it out) and ask:
+
+```json
+POST /api/agent/v1/setup/task-space-decision
+{"options": [
+   {"path": "C:/ark-tasks/my-project", "free_bytes": 812000000000, "note": "largest drive"},
+   {"path": "C:/work/my-project-tasks", "free": "120 GB", "note": "next to the repository"}],
+ "recommended": 0, "part_of": "T-0117", "lang": "en"}
+```
+
+  ARK opens the decision "Choose the task space on <device>" in Needs you.
+  The user picks an option (or types another absolute path); ARK saves it
+  in their own setup layer for that device and appends the outcome to the
+  decision. The decision update wakes you; read `setup/paths` again and
+  continue. This needs a personal agent token and `X-ARK-Host`.
+- For another missing path (a repository on this device), ask in an open
+  decision and register the answer with `POST /api/agent/v1/setup/location`.
+
+**Paths in ARK are absolute, with their device.** Task spaces are not
+necessarily synced between devices, so a folder on one computer may not
+exist on another. Write the absolute path and the device it is on:
+
+```text
+Resource paths (device c59c4a65af13 / PC): C:\ark-tasks\20261124_T-0117-render\
+```
+
+You may add a `task:<relative path>` link next to it
+(`[Task folder](task:20261124_T-0117/)`; a second task space is named with
+`?space=<id>`). ARK resolves it with each device's own task space path. It
+is an addition, never a replacement for the absolute path.
+
+**Moving paths later.** `POST /api/agent/v1/setup/relocate` with
+`{"from": "C:/old/tasks", "to": "C:/new/tasks"}` lists every unit body,
+attachment link and setup location that would change (a dry run); add
+`"apply": true` to write them (unit bodies in one transaction) and keep the
+returned `relocation` id: `{"undo": "<id>"}` puts everything back.
+`{"logical": true}` converts absolute paths inside the task space to
+`task:` paths; it is optional and not recommended by default. Fenced code blocks, comments and session records are left
+alone; files are not moved (move them first, then relocate). Ask the user
+before applying either to a project. Settings › Setup › Devices has the
+same tool, and `ark-server agent relocate` runs it from a shell.
 
 ## 2. Plan in a node first
 
@@ -318,6 +399,27 @@ so check for these yourself.
 - **At least every 10 minutes** while a long job runs (training, a sweep, a
   large GPU queue): keep a watcher running in the background, or check from
   the loop that waits for the job.
+
+### Work that ends wakes you too
+
+You do not need to poll for your own long work:
+
+- **A GPU queue job** you queue (`POST /api/agent/v1/gpu/jobs`) wakes you
+  when it ends (completed, errored, cancelled, timed out or lost). A session
+  ARK launched gets an `ARK UPDATE` message with the job id, name, server,
+  state, exit code, duration, the last log lines of a failed job and the log
+  link; send `"session": "$ARK_SESSION_ID"` with the job when that variable
+  is set. Any other agent gets a `gpu_job_done` item in its update feed, so
+  its watcher wakes; only the token that queued the job sees it.
+- **Background commands and sub-agents** of a Claude Code session ARK
+  launched: Claude Code takes up a finished background command itself; when
+  it does not within about 15 seconds, ARK sends one `ARK UPDATE` message
+  listing what finished, with exit codes and the output tail. Codex ends its
+  background terminals with the turn: queue long runs on the GPU queue.
+
+These messages come between turns, never during one. So do not poll
+`gpu/jobs` or wait in `sleep` loops; stop any polling loop at the first
+`401` (a revoked or expired token).
 - **Before you report done**, and before you set a task to `review` or
   `done`: an answer may already be waiting.
 - **After a pause** (a new session, a restart): run the watcher once before
@@ -451,6 +553,24 @@ How each agent waits:
   launched, and it passes the work on.  Without `ARK_WAKE=ark` (other
   platforms) use the watcher as above.  ARK does not remind a session whose
   own watcher is waiting on the feed, so each update wakes a session once.
+- **The token of a session ARK launched** is its own: `ARKT` (also
+  `ARK_AGENT_TOKEN` and `ARK_TOKEN`), write scope with full access, read
+  scope otherwise, revoked when the run ends.  Use it for every agent API
+  call and send `X-ARK-Session: $ARK_SESSION_ID`; ignore a token pasted into
+  the chat and the files in `~/.ark/tokens`, and save no token file.  Writes
+  made this way appear on the session in the support panel instead of as a
+  separate agent.  `ark-server agent ...` and the watcher scripts prefer the
+  session's token and send the header by themselves.
+- **The first step of a session ARK launched** is the Start section at the
+  end of its session block; no Home prompt needs to be pasted.  The person
+  picks it in the Run dialog (Start with: any prompt of the Home library, or
+  a free conversation); the default is setup when the project's or the
+  person's setup is not confirmed, registering this device's paths when it
+  lacks them, continuing the chosen task (with its open send-back comments
+  listed) when one is chosen, and otherwise following the first message or
+  waiting for it.  A later run of the same session starts with Resume.
+  `GET /api/agent/v1/context` repeats the start as `session_start` for a
+  request with the session's token or `X-ARK-Session`.
 
 ### The watcher
 
@@ -569,6 +689,7 @@ tokens (yours and other agents') are left out.
 | `decision` | a person created a decision node | if it concerns your work, give it the facts it needs, and wait for the answer before the step it decides |
 | `setup_confirmed` | a setup layer was confirmed (`layer`) | read `GET /api/agent/v1/setup` again; work that waited for setup can start |
 | `message` | a person sent you a message (experimental) | answer it with `POST /api/agent/v1/messages/<id>/reply` `{body}`, or mark it read with `.../ack` |
+| `gpu_job_done` | a GPU job you queued ended (`job`: id, name, server, status, exit_code, duration_s, error, log_path) | read the log (`link`), record the result in the task's progress line, go on with the step that waited for it |
 
 Record a decision that arrives in a comment as a decision node (section 3).
 When you need the user again (a question back), reply on the comment rather
@@ -622,9 +743,23 @@ the round number, what the reviewer said in the previous round (and whether
 it is resolved), and what changed in the body and attachments since the
 reviewer last accepted or sent the unit back.
 
-- **Say what to look at.** Set `review_note` together with `status:
-  "review"`: at most 500 characters, plain text with
-  [anchors](#review-anchors) to the exact places. The card shows it as
+- **Say what to look at.** Every hand-off to review carries a
+  `review_note`, sent together with `status: "review"`: one to three
+  sentences on what the person should check and what changed, with at
+  least one [anchor](#review-anchors) into the unit body or its media
+  (20 to 500 characters). After a send-back, say what you fixed for each
+  comment. Example: `{"status": "review", "review_note": "Check
+  [Results](#results): acc is 0.61 with three seeds; the baseline row in
+  [Baseline](#baseline) is new."}`.
+- **The server refuses a hand-off without it.** An agent write (agent API,
+  personal or session token, including `POST /api/units/batch` and units
+  created in review) that puts a unit into review with no note, a note under
+  20 characters, or a note without an anchor when the body has headings fails
+  with 422 `REVIEW_NOTE_REQUIRED` and changes nothing; the message says what
+  to send and lists the body's headings. The same holds for submitting or
+  resubmitting a [review group](#review-groups). People in the web UI are
+  only reminded.
+- The card shows the note as
   "Review this" instead of the start of the body; without it the card says
   that nothing was said and shows the newest part of the body. Set it again
   while the unit is in review to replace it (no new round). A note without
@@ -687,7 +822,10 @@ POST /api/agent/v1/reviews
   member sent back gets a `sent_back` comment that names the group.
 - After a send back, fix the members and resubmit:
   `POST /api/agent/v1/reviews/<id>` `{status: "review", review_note}` (a new
-  round; accepted members stay accepted). `{status: "closed"}` drops a group
+  round; accepted members stay accepted). The resubmission needs a new
+  `review_note` that says what was fixed for each comment; without one, or
+  with the previous note unchanged, it fails with 422
+  `REVIEW_NOTE_REQUIRED`. `{status: "closed"}` drops a group
   you will not resubmit. Title, summary, note and `members` can be changed
   the same way.
 - Comments on the group: `POST /api/agent/v1/reviews/<id>/comments`
@@ -727,7 +865,8 @@ For documents the user owns (replies, paper text, reports):
   user.
 - **Compute through the ARK GPU queue** (`POST /api/agent/v1/gpu/jobs`), not
   on the user's own machine. Pin the `server` when the data lives there, and
-  record each returned job id in the task's progress line. The queue has no
+  record each returned job id in the task's progress line. The job's end
+  wakes you ("Work that ends wakes you too"); do not poll. The queue has no
   job-to-job dependencies; make a dependent step a job whose command checks
   its input before it starts, so nothing waits on a laptop.
 

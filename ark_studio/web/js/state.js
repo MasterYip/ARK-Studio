@@ -102,6 +102,7 @@ export function emptyFilters() {
     recentDays: 7,
     from: "",
     to: "",
+    minLinks: 0,
     roots: false,
     context: false,
     assignees: [],
@@ -147,10 +148,17 @@ export function normalizeFilters(raw = {}) {
     : (out.from || out.to ? "timeline" : "all");
   const recentDays = Number(raw.recentDays ?? raw.recent_days ?? 7);
   out.recentDays = RECENT_DAYS.includes(recentDays) ? recentDays : 7;
+  out.minLinks = minLinksValue(raw.minLinks ?? raw.min_links);
   out.roots = Boolean(raw.roots ?? raw.top_level ?? raw.topLevel);
   out.context = Boolean(raw.context ?? raw.linked_context ?? raw.linkedContext);
   out.assignees = normalizeAssigneeValues(raw.assignees ?? raw.assignee);
   return out;
+}
+
+/** Min. links (in + out edges per node): a whole number >= 0, 0 = off. */
+export function minLinksValue(value) {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 1_000_000) : 0;
 }
 
 export const VIEW_BY_TAB = {
@@ -366,6 +374,7 @@ export function activeFilterCount(filters = S.filters) {
     + (filters.timeMode === "recent" ? 1 : 0)
     + (filters.timeMode === "overdue" ? 1 : 0)
     + (filters.time && filters.timeMode === "all" ? 1 : 0)
+    + (minLinksValue(filters.minLinks) ? 1 : 0)
     + (filters.roots ? 1 : 0) + (filters.context ? 1 : 0)
     + (filters.assignees?.length || 0);
 }
@@ -382,6 +391,8 @@ export function filtersToParams(filters = S.filters, extra = {}) {
   if (filters.importanceNone) params.importance = "__none__";
   else if (filters.importanceLevels?.length) params.importance = filters.importanceLevels;
   if (filters.roots) params.roots = "1";
+  // Applied in the browser (GraphFilterIndex); the server ignores it.
+  if (minLinksValue(filters.minLinks)) params.min_links = minLinksValue(filters.minLinks);
   if (filters.assignees?.length) params.assignee = filters.assignees;
   if (filters.timeMode === "timeline") {
     if (filters.from) params.from = filters.from;

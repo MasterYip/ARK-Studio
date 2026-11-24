@@ -661,6 +661,7 @@ func (m *Manager) steerQueueLocked(s *Session) []any {
 
 // Steer is SessionManager.steer.
 func (m *Manager) Steer(h *Hooks, id, text string, context any) (*pyjson.Object, error) {
+	text = WithoutPastedTokens(text) // preamble.go: the session has its own token
 	s, err := m.Get(id)
 	if err != nil {
 		return nil, err
@@ -888,6 +889,7 @@ func (m *Manager) drainSteerLocked(s *Session) []string {
 
 // SendInput is SessionManager.send_input.
 func (m *Manager) SendInput(h *Hooks, id, text string, context any) (*pyjson.Object, error) {
+	text = WithoutPastedTokens(text) // preamble.go: the session has its own token
 	s, err := m.Get(id)
 	if err != nil {
 		return nil, err
@@ -1320,6 +1322,7 @@ func isNoneOrEmpty(v any) bool { return v == nil || v == "" }
 
 // ContinueSession is SessionManager.continue_session.
 func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) (*pyjson.Object, error) {
+	text = WithoutPastedTokens(text) // preamble.go: the session has its own token
 	s, err := m.Get(id)
 	if err != nil {
 		return nil, err

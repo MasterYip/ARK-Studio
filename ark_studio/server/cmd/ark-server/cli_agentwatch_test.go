@@ -72,7 +72,7 @@ func TestAgentWatchCLI(t *testing.T) {
 	if err != nil || !strings.Contains(string(raw), `"cursor": "u1.`) {
 		t.Fatalf("state file: %v %s", err, raw)
 	}
-	unit := watchHTTP(t, srv, app, "POST", "/api/agent/v1/units", `{"type":"task","title":"Sweep","status":"review"}`, true)
+	unit := watchHTTP(t, srv, app, "POST", "/api/agent/v1/units", `{"type":"task","title":"Sweep","status":"review","review_note":"Check the sweep settings and the run list."}`, true)
 	uid := unit["unit"].(map[string]any)["uid"].(string)
 	watchHTTP(t, srv, app, "POST", "/api/units/"+uid+"/comments", `{"body":"Why lr 3e-4?"}`, false)
 	code, out, _ := run()

@@ -101,41 +101,52 @@ test("menu entries per device kind and location", () => {
   const conn = { ...prod, source: "gpu-config" };
   // Remote repository with a connection, desktop app.
   assert.deepEqual(ids(openActions({ device: gpu, path: "/data/RoboKit", conn, terminal: true, canSave: true })),
-    ["vscode", "cursor", "ssh-terminal", "copy-ssh", "copy-path", "ssh-setup"]);
-  // Browser: no terminal, the command is copied instead; signed out: no "SSH connection…".
-  assert.deepEqual(ids(openActions({ device: gpu, path: "/data/RoboKit", conn })), ["vscode", "cursor", "copy-ssh", "copy-path"]);
+    ["vscode", "cursor", "terminal", "copy-ssh", "copy-path", "ssh-setup"]);
+  // Browser: "Open in terminal" copies the command; signed out: no "SSH connection…".
+  const browser = openActions({ device: gpu, path: "/data/RoboKit", conn });
+  assert.deepEqual(ids(browser), ["vscode", "cursor", "terminal", "copy-path"]);
+  assert.equal(browser[2].copy, true);
   // The device itself opens its home folder (needs the user for VS Code).
-  assert.deepEqual(ids(openActions({ device: ark, conn, terminal: true })), ["vscode", "cursor", "ssh-terminal", "copy-ssh"]);
-  assert.deepEqual(ids(openActions({ device: ark, conn: { alias: "prod" } })), ["copy-ssh"]);
+  assert.deepEqual(ids(openActions({ device: ark, conn, terminal: true })), ["vscode", "cursor", "terminal", "copy-ssh"]);
+  assert.deepEqual(ids(openActions({ device: ark, conn: { alias: "prod" } })), ["terminal"]);
   // On this computer: local editor links and the path, no SSH.
   const local = openActions({ device: laptop, path: "E:\\work\\repo", local: true, terminal: true });
   assert.deepEqual(ids(local), ["vscode", "cursor", "copy-path"]);
   assert.equal(local[0].url, "vscode://file/E:/work/repo");
-  // Unknown connection: the path and a hint to set it up.
+  // The desktop app opens a terminal in a local folder.
+  const localTerm = openActions({ device: laptop, path: "E:\\work\\repo", local: true, localTerminal: true });
+  assert.deepEqual(ids(localTerm), ["vscode", "cursor", "terminal", "copy-path"]);
+  assert.deepEqual([localTerm[2].local, localTerm[2].path], [true, "E:\\work\\repo"]);
+  assert.deepEqual(ids(openActions({ device: laptop, path: "~/x", local: true, localTerminal: true })), ["copy-path"]);
+  // Unknown connection: "Open in VS Code…" asks for it, then opens the folder.
   const unknown = openActions({ device: laptop, path: "/home/ana/x", canSave: true });
-  assert.deepEqual(ids(unknown), ["copy-path", "ssh-setup"]);
-  assert.equal(unknown[1].known, false);
+  assert.deepEqual(ids(unknown), ["vscode-setup", "copy-path"]);
+  assert.equal(unknown[0].folder, "/home/ana/x");
+  assert.deepEqual(openActions({ device: ark, canSave: true }).map((a) => [a.id, a.folder]), [["vscode-setup", "~"]]);
+  // Signed out: shown, but disabled by the menu (canSave false); a Windows path cannot open remotely.
+  assert.equal(openActions({ device: laptop, path: "/home/ana/x" })[0].canSave, false);
+  assert.deepEqual(ids(openActions({ device: laptop, path: "D:\\data", canSave: true })), ["copy-path"]);
   // A Windows path on another computer: SSH without cd, no Remote-SSH folder.
   assert.deepEqual(ids(openActions({ device: laptop, path: "D:\\data", conn: { alias: "laptop" } })),
-    ["copy-ssh", "copy-path"]);
+    ["terminal", "copy-path"]);
   // Git hosts, phones and the like: nothing to SSH into; URLs are not paths.
   assert.deepEqual(ids(openActions({ device: gitHost, path: "git@github.com:a/b.git" })), []);
   assert.deepEqual(ids(openActions({ device: { id: "phone:1", kind: "phone" } })), []);
   // A path with a newline is never offered (nor replaced by the home folder).
-  assert.deepEqual(ids(openActions({ device: gpu, path: "/a\nb", conn })), ["copy-ssh"]);
+  assert.deepEqual(ids(openActions({ device: gpu, path: "/a\nb", conn })), ["terminal"]);
 });
 
 test("every menu string exists in both languages", () => {
-  const keys = ["vscode", "cursor", "ssh_terminal", "copy_ssh", "copy_path", "copied_ssh", "copied_path", "copy_failed",
-    "ssh_setup", "ssh_setup_hint", "ssh_edit", "ssh_sign_in", "more", "none"].map((k) => `resources.open.${k}`)
-    .concat(["title", "lead", "from_config", "alias", "alias_ph", "host", "host_ph", "user", "user_ph", "port", "save",
+  const keys = ["vscode", "cursor", "terminal", "copy_ssh", "copy_path", "copied_ssh", "copied_path", "copy_failed",
+    "vscode_setup", "ssh_edit", "ssh_sign_in", "more", "none"].map((k) => `resources.open.${k}`)
+    .concat(["title", "lead", "alias", "alias_ph", "host", "host_ph", "user", "user_ph", "port", "save",
       "clear", "saved", "invalid", "need_host"].map((k) => `resources.ssh.${k}`));
   for (const key of keys) {
     assert.ok(EN[key], `en ${key}`);
     assert.ok(ZH[key], `zh ${key}`);
   }
   assert.equal(ZH["resources.open.vscode"], "在 VS Code 中打开");
-  assert.equal(ZH["resources.open.ssh_terminal"], "通过 SSH 打开终端");
+  assert.equal(ZH["resources.open.terminal"], "在终端中打开");
 });
 
 // The GPU tab's SSH / VS Code buttons (2026-11-23): VS Code asked for a

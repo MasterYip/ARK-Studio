@@ -1,0 +1,4 @@
+# On the primary: ~/.config/systemd/user/ark-server@main.service.d/standby-fence.conf
+# Refuses to start the primary while its standby reports that it was promoted.
+[Service]
+ExecStartPre=%h/.local/share/ark-standby/ark-standby-fence.sh

@@ -70,6 +70,8 @@
           path: text(path)
         });
       },
+      // A terminal window in a folder on this computer (remote_open.rs local_terminal_launch).
+      openTerminal: function (path) { return invoke("open_local_terminal", { path: String(path || "") }); },
       sshConfigMatch: function (names) {
         return invoke("ssh_config_match", { names: (names || []).map(function (n) { return String(n || ""); }) });
       },

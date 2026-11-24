@@ -39,6 +39,7 @@ func cleanText(value any, field string, maxLen int) (string, error) {
 // mirror after the commit (see appendLog).
 func logActivity(ctx context.Context, q sqlitedb.Querier, actor, action string, unitID any, detail *pyjson.Object) (logLine, error) {
 	at := clock.UTCNow()
+	detail = withActivitySession(ctx, actor, detail) // activityobs.go (Go only)
 	_, err := q.ExecContext(ctx, "INSERT INTO activity(at,actor,action,unit_id,detail_json) VALUES(?,?,?,?,?)",
 		at, actor, action, unitID, string(pyjson.Dumps(detail)))
 	line := pyjson.Dumps(pyjson.NewObject("at", at, "actor", actor, "action", action, "unit_id", unitID, "detail", detail))

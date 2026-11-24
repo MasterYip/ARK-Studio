@@ -199,6 +199,11 @@ func (s *Store) CreateReviewGroup(ctx context.Context, data *pyjson.Object, acto
 		if err != nil {
 			return err
 		}
+		if IsAgentActor(actor) { // Go only (reviewnote_required.go)
+			if err := checkAgentGroupReviewNote(note, notes, false, ""); err != nil {
+				return err
+			}
+		}
 		if err := ensureReviewTables(ctx, w.q); err != nil {
 			return err
 		}
@@ -351,6 +356,25 @@ func (s *Store) UpdateReviewGroup(ctx context.Context, ref string, patch *pyjson
 					kind, at, body, media, id, m.Int("unit_id")); err != nil {
 					return err
 				}
+			}
+		}
+		// Go only: an agent (re)submits with a note (reviewnote_required.go).
+		noteSent := patch.Has("review_note") || patch.Has("note")
+		if IsAgentActor(actor) && status == "review" && (resubmit || noteSent) {
+			sent := note
+			if !noteSent {
+				sent = ""
+			}
+			members, err := sqlitedb.Query(ctx, w.q, "SELECT note FROM review_group_members WHERE group_id=?", id)
+			if err != nil {
+				return err
+			}
+			memberNotes := make([]string, len(members))
+			for i, m := range members {
+				memberNotes[i] = m.Str("note")
+			}
+			if err := checkAgentGroupReviewNote(sent, memberNotes, resubmit, g.Str("note")); err != nil {
+				return err
 			}
 		}
 		if _, err := w.q.ExecContext(ctx, `UPDATE review_groups SET title=?, summary=?, note=?, status=?, round=?, opened_at=?,

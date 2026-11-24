@@ -1,0 +1,104 @@
+{
+  "format": "ark-session-start",
+  "source": "web/js/starter-prompts.js",
+  "setup": [
+    {
+      "en": "FIRST: set up this ARK project with ARK's setup skill (GET /api/agent/v1/skills/setup). Several members may run setup; add my resources and machine paths to the shared register and keep everyone else's.",
+      "zh": "第一步：用 ARK 的 setup 技能（GET /api/agent/v1/skills/setup）完成本 ARK 项目的配置。可能有多位成员运行配置；把我的资源和机器路径加入共享资源清单，并保留其他人登记的内容。"
+    },
+    {
+      "en": "1. GET /api/agent/v1/setup (send \"X-ARK-Host: <this device's id>\", see the device id in the core rules). Read resources, policies.effective and readiness.needs_location. Setup is per person and per device: if the project layer and my layer are already confirmed and nothing changed, only register this device: for each key in readiness.needs_location ask me for its path on this device and add it with POST /api/agent/v1/setup/location (this keeps every confirmation), then report and go to NEXT. A recorded path is not proof of access: verify it before use. For resources in known_but_inaccessible, ask their contributor instead of recreating them.",
+      "zh": "1. GET /api/agent/v1/setup（发送 \"X-ARK-Host: <本设备 ID>\"，设备 ID 的算法见核心规则）。读取 resources、policies.effective 和 readiness.needs_location。配置按人、按设备进行：如果项目层和我的个人层都已确认且没有变化，只需登记本设备：readiness.needs_location 中的每一项，问我它在本设备上的路径，用 POST /api/agent/v1/setup/location 添加（不会影响任何确认），然后告诉我并进入“接下来”。已登记的路径不代表你能访问：使用前先验证。known_but_inaccessible 中的资源，去问登记它的成员，不要重新创建。"
+    },
+    {
+      "en": "2. Before asking me anything, POST /api/agent/v1/setup/discover with the paths I gave (or paths: [] if none). Then ask only about missing, conflicting or changed details, one question at a time, in the areas scope, code, team, compute, commands and authority. I may answer, point you at a file or folder, say \"don't know\" (record an unknown and what it blocks) or say \"skip\" (add the area to profile.skipped). Do not crawl my disk; use only the paths I give you.",
+      "zh": "2. 向我提问之前，先用我给出的路径调用 POST /api/agent/v1/setup/discover（如果没有，用 paths: []）。然后只就 scope、code、team、compute、commands、authority 这几个方面中缺失、冲突或有变化的细节提问，每次只问一个。我可以直接回答、给你指一个文件或文件夹、说“不知道”（记为未知项，并注明它阻塞了什么），或说“跳过”（把该方面加入 profile.skipped）。不要遍历我的磁盘；只使用我给你的路径。"
+    },
+    {
+      "en": "3. POST /api/agent/v1/setup/draft with {resources: [...], propose: true} for my layer; drafts merge by ID. Project-wide objective and policies use {layer: \"project\", profile: {...}, propose: true}. Add this machine's location to an existing resource with POST /api/agent/v1/setup/location. propose: true sends every changed layer in one call; do not propose layer by layer. Never delete another member's records.",
+      "zh": "3. 对我的个人层，POST /api/agent/v1/setup/draft，请求体为 {resources: [...], propose: true}；草稿按 ID 合并。项目级的目标和策略使用 {layer: \"project\", profile: {...}, propose: true}。给已有资源添加本机位置用 POST /api/agent/v1/setup/location。propose: true 会在一次调用中提交所有有改动的层；不要逐层提交。绝不要删除其他成员的记录。"
+    },
+    {
+      "en": "4. Show me the summaries and the digests listed in pending, then wait while I confirm them in ARK (Home → Review changes; one Confirm covers the project layer and my layer). Only a human confirms: never confirm yourself and do not continue until I have confirmed. A project admin confirms the project layer.",
+      "zh": "4. 向我展示摘要和 pending 中列出的 digest，然后等待我在 ARK 中确认（首页 → 查看更改；一次确认同时覆盖项目层和我的个人层）。只有人能确认：绝不要自己确认，在我确认之前不要继续。项目层由项目管理员确认。"
+    },
+    {
+      "en": "5. After I confirm, POST /api/agent/v1/setup/verify, then tell me what failed and how to fix it, what is now allowed or blocked, and which resources still need a location on this machine.",
+      "zh": "5. 我确认之后，POST /api/agent/v1/setup/verify，然后告诉我哪些检查失败、如何修复，现在哪些操作被允许或被阻止，以及哪些资源仍需要登记本机位置。"
+    },
+    {
+      "en": "During setup, do not probe GPU servers, run project commands or change repositories. Setup is recorded in the setup register only: create no units (no task, decision or result) during setup; the core rules apply from the first task after setup.",
+      "zh": "配置期间不要探测 GPU 服务器、不要运行项目命令，也不要修改仓库。配置只记录在配置资源清单中：配置期间不要创建任何节点（任务、决定或结果都不要）；核心规则从配置之后的第一个任务开始适用。"
+    },
+    {
+      "en": "NEXT: in a few lines, explain to me how to use ARK for developing and managing this project: ARK keeps the plan, tasks, evidence and decisions (Home, Research, Map, Execute); you do the work and record it under the core rules; in a new session, the Home prompt \"Start / continue research team\" loads this context again. Then offer me these options, each with the example request I can say, and wait for my choice:",
+      "zh": "接下来：用几句话向我说明如何用 ARK 开发和管理这个项目：ARK 保存计划、任务、证据和决定（首页、研究、地图、执行）；你负责干活，并按核心规则记录；在新会话中，首页的“启动 / 继续研究团队”提示词会重新加载这些上下文。然后把下面这些选项连同我可以说的示例请求一起给我，等我选择："
+    },
+    {
+      "en": "- \"Plan this idea: <idea, paper or link>\": research question, 1–3 testable claims with what would settle each, and the first tasks for each claim, laid out as the planning graph of G1 (the full plan in the plan task's body).",
+      "zh": "- “规划这个想法：<想法、论文或链接>”：研究问题、1–3 个可检验的论断以及什么能判定每个论断、每个论断最初的任务，按 G1 的规划图建成节点（完整计划写在计划任务的正文里）。"
+    },
+    {
+      "en": "- \"Start a research team on <objective>\": follow the agent-team skill (GET /api/agent/v1/skills/agent-team): bounded tasks with an owner, an independent reviewer and a measurable outcome, work in .worktrees/<TASK-ID>, gates cheapest-first.",
+      "zh": "- “就 <研究目标> 启动研究团队”：按 agent-team 技能（GET /api/agent/v1/skills/agent-team）执行：边界明确的任务，各有负责人、独立评审者和可衡量的结果，在 .worktrees/<TASK-ID> 中工作，关卡按成本从低到高运行。"
+    },
+    {
+      "en": "- \"Give me a status check\": under 15 lines on what is running, blocked or waiting for me, which external jobs are live (verified read-only), what changed since the last report and the next 3 actions; change nothing.",
+      "zh": "- “检查一下项目状态”：用不超过 15 行说明什么正在运行、什么受阻或在等我处理、哪些外部作业仍在运行（以只读方式核实）、自上次汇报以来的变化以及接下来 3 个行动；不做任何修改。"
+    },
+    {
+      "en": "- \"Record what we just did\": turn the work in this conversation into task updates, comments, evidence and links in ARK.",
+      "zh": "- “把我们刚才做的记录下来”：把这次对话中完成的工作整理成 ARK 中的任务更新、评论、证据和关联。"
+    },
+    {
+      "en": "- \"Import my existing task folder <path>\": register it as a task_space resource, then create units for its tasks with their status and history, linked to the plan; show me the mapping before writing.",
+      "zh": "- “导入我现有的任务目录 <路径>”：把它登记为 task_space 资源，然后为其中的任务创建节点（带上状态和历史）并关联到计划；写入之前先把对应关系给我看。"
+    }
+  ],
+  "device_setup": [
+    {
+      "en": "TASK: set up this device for this project; the project setup is already confirmed.",
+      "zh": "任务：为本项目配置这台设备；项目的配置已经确认。"
+    },
+    {
+      "en": "1. Work out this device's id (see the core rules) and GET /api/agent/v1/setup with X-ARK-Host: <this device's id>.",
+      "zh": "1. 算出本设备 ID（见核心规则），带上 X-ARK-Host: <本设备 ID> 调用 GET /api/agent/v1/setup。"
+    },
+    {
+      "en": "2. For each key in readiness.needs_location ask me for its path here, check that it exists, and add it with POST /api/agent/v1/setup/location.",
+      "zh": "2. readiness.needs_location 中的每一项，问我它在这台设备上的路径，确认路径存在，再用 POST /api/agent/v1/setup/location 添加。"
+    }
+  ],
+  "continue": [
+    {
+      "en": "TASK: continue {{unit}}. GET /api/agent/v1/units/{{unit}} and GET /api/agent/v1/units/{{unit}}/comments; read its last progress line, its linked results and open decisions.",
+      "zh": "任务：继续 {{unit}}。GET /api/agent/v1/units/{{unit}} 和 GET /api/agent/v1/units/{{unit}}/comments；阅读它最后一行进展、关联的结果和未完成的决定。"
+    },
+    {
+      "en": "1. Tell me in under 8 lines where it stands and the next step it recorded; check read only that its running jobs are still alive.",
+      "zh": "1. 用不超过 8 行告诉我它的现状和记录的下一步；以只读方式确认它的运行中作业仍然存活。"
+    },
+    {
+      "en": "2. Answer and resolve open comments, then resume from that next step under the core rules. If the plan has to change, update the task body and ask me first.",
+      "zh": "2. 回复并解决未处理的评论，然后按核心规则从那一步继续。如果计划需要改变，先更新任务正文并问我。"
+    }
+  ],
+  "resume": [
+    {
+      "en": "TASK: pick up work that an earlier session left unfinished (it stopped, crashed or ran out of context).",
+      "zh": "任务：接手之前的会话没有完成的工作（它停止了、崩溃了或上下文用完了）。"
+    },
+    {
+      "en": "1. GET /api/agent/v1/updates and GET /api/agent/v1/context; find the active tasks and their last progress lines. If I give you an ARK session id, GET /api/agent/v1/sessions/<id> for that session's context.",
+      "zh": "1. GET /api/agent/v1/updates 和 GET /api/agent/v1/context；找到进行中的任务和它们最后一行进展。如果我给你一个 ARK 会话 ID，用 GET /api/agent/v1/sessions/<id> 读取那个会话的上下文。"
+    },
+    {
+      "en": "2. Compare what really happened (files, commits, running jobs; read only) with the last recorded step, and write a dated progress line that says where you resume.",
+      "zh": "2. 对照最后记录的一步，核实实际发生了什么（文件、提交、运行中的作业；只读），并写一行带日期的进展，说明你从哪里继续。"
+    },
+    {
+      "en": "3. Tell me what you found and what you will do next; if anything is unclear, wait for my answer before you continue.",
+      "zh": "3. 告诉我你发现了什么、接下来要做什么；有任何不清楚的地方，等我回答之后再继续。"
+    }
+  ]
+}

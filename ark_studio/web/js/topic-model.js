@@ -20,36 +20,7 @@ export function filterTopic(data, query = {}, me = "") {
     return display;
   });
   // Each facet ignores its own filter, using only this topic's members.
-  const candidates = (...keys) => index.filter({ ...query, context: 0,
-    ...Object.fromEntries(keys.map(key => [key, undefined])) }, me, { all: true }).nodes;
-  const counts = (nodes, field) => {
-    const out = Object.create(null);
-    for (const node of nodes) if (node[field]) out[node[field]] = (out[node[field]] || 0) + 1;
-    return { ...out };
-  };
-  const tags = new Map(), namespaces = Object.create(null), unset = Object.create(null);
-  const tagged = candidates("tags", "tags_unset");
-  for (const node of tagged) for (const tag of node.tags || []) {
-    if (/^(type|status|importance):/.test(tag)) continue;
-    tags.set(tag, (tags.get(tag) || 0) + 1);
-  }
-  for (const [tag, count] of tags) {
-    const at = tag.indexOf(":");
-    const namespace = at < 0 ? "tag" : tag.slice(0, at), value = at < 0 ? tag : tag.slice(at + 1);
-    (namespaces[namespace] ||= []).push({ tag, namespace, value, count });
-  }
-  for (const [ns, values] of Object.entries(namespaces)) {
-    values.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
-    unset[ns] = tagged.filter(node => !(node.tags || []).some(tag => ns === "tag" ? !tag.includes(":") : tag.startsWith(ns + ":"))).length;
-  }
-  const assigned = candidates("assignee", "assignees");
-  const dates = (data.members || []).flatMap(node => [node.start_at, node.end_at]).filter(Boolean).sort();
-  const facets = { types: counts(candidates("types", "types_none", "origins"), "type"),
-    statuses: counts(candidates("statuses"), "status"), importance: counts(candidates("importance"), "importance"),
-    namespaces: { ...namespaces }, unset: { ...unset }, assignees: counts(assigned, "assignee_effective"),
-    unassigned: assigned.filter(node => !node.assignee_effective && !node.assignee).length,
-    time: { min: dates[0] || null, max: dates.at(-1) || null,
-      undated: (data.members || []).filter(node => !node.start_at && !node.end_at).length } };
+  const facets = index.facets(query, me);
   return { ...data, members, edges: result.edges, facets, filtered: members.length < (data.members || []).length };
 }
 

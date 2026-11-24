@@ -192,6 +192,8 @@ pub struct Launch {
     /// Windows: start in a new console window.
     pub new_console: bool,
     pub script: Option<String>,
+    /// The folder the program starts in (local terminals).
+    pub cwd: Option<PathBuf>,
 }
 
 /// Linux terminal emulators, in order, with the flag before the command.
@@ -223,9 +225,9 @@ pub fn terminal_launch(
             if let Some(wt) = find("wt.exe").filter(|_| !args.iter().any(|a| a.contains(';')) && !ssh_s.contains(';')) {
                 let mut wt_args = vec!["new-tab".to_string(), "--title".to_string(), "ARK SSH".to_string(), "--".to_string(), ssh_s];
                 wt_args.extend(args.iter().cloned());
-                return Ok(Launch { program: wt, args: wt_args, new_console: false, script: None });
+                return Ok(Launch { program: wt, args: wt_args, new_console: false, script: None, cwd: None });
             }
-            Ok(Launch { program: ssh, args: args.to_vec(), new_console: true, script: None })
+            Ok(Launch { program: ssh, args: args.to_vec(), new_console: true, script: None, cwd: None })
         }
         Os::Macos => {
             let mut words = vec![sh_quote("ssh")];
@@ -236,6 +238,7 @@ pub fn terminal_launch(
                 args: vec!["-a".into(), "Terminal".into(), script_path.to_string_lossy().to_string()],
                 new_console: false,
                 script: Some(script),
+                cwd: None,
             })
         }
         Os::Linux => {
@@ -244,7 +247,44 @@ pub fn terminal_launch(
                     let mut a: Vec<String> = flag.iter().map(|s| s.to_string()).collect();
                     a.push("ssh".into());
                     a.extend(args.iter().cloned());
-                    return Ok(Launch { program, args: a, new_console: false, script: None });
+                    return Ok(Launch { program, args: a, new_console: false, script: None, cwd: None });
+                }
+            }
+            Err("No terminal emulator found (x-terminal-emulator, gnome-terminal, konsole, xterm, ...).".into())
+        }
+    }
+}
+
+/// How to open a terminal on this computer in folder `dir` (absolute, an
+/// existing folder; checked by the caller). Windows Terminal with `-d`, else
+/// a new console running cmd.exe there; macOS Terminal; the first Linux
+/// terminal emulator found, started in the folder.
+pub fn local_terminal_launch(os: Os, dir: &Path, find: &dyn Fn(&str) -> Option<PathBuf>) -> Result<Launch, String> {
+    let d = dir.to_string_lossy().to_string();
+    if d.chars().any(|c| c.is_control()) {
+        return Err("Invalid folder.".into());
+    }
+    match os {
+        Os::Windows => {
+            // Windows Terminal reads ";" as "next command": such folders use a plain console.
+            if let Some(wt) = find("wt.exe").filter(|_| !d.contains(';')) {
+                let args = vec!["new-tab".to_string(), "--title".to_string(), "ARK".to_string(), "-d".to_string(), d];
+                return Ok(Launch { program: wt, args, new_console: false, script: None, cwd: Some(dir.to_path_buf()) });
+            }
+            let cmd = find("cmd.exe").ok_or("cmd.exe was not found.")?;
+            Ok(Launch { program: cmd, args: vec![], new_console: true, script: None, cwd: Some(dir.to_path_buf()) })
+        }
+        Os::Macos => Ok(Launch {
+            program: PathBuf::from("/usr/bin/open"),
+            args: vec!["-a".into(), "Terminal".into(), d],
+            new_console: false,
+            script: None,
+            cwd: None,
+        }),
+        Os::Linux => {
+            for (name, _) in LINUX_TERMINALS {
+                if let Some(program) = find(name) {
+                    return Ok(Launch { program, args: vec![], new_console: false, script: None, cwd: Some(dir.to_path_buf()) });
                 }
             }
             Err("No terminal emulator found (x-terminal-emulator, gnome-terminal, konsole, xterm, ...).".into())
@@ -273,6 +313,9 @@ pub fn spawn(launch: &Launch, script_path: &Path) -> Result<(), String> {
     }
     let mut cmd = std::process::Command::new(&launch.program);
     cmd.args(&launch.args).stdin(std::process::Stdio::null());
+    if let Some(dir) = &launch.cwd {
+        cmd.current_dir(dir);
+    }
     #[cfg(windows)]
     {
         use std::os::windows::process::CommandExt;
@@ -602,6 +645,26 @@ pub fn key_candidates(dir: &Path) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_terminal_in_folder() {
+        let finder = |have: &'static [&'static str]| {
+            move |name: &str| have.iter().find(|p| p.ends_with(name)).map(PathBuf::from)
+        };
+        let dir = Path::new("C:/work/my repo");
+        let wt = local_terminal_launch(Os::Windows, dir, &finder(&["C:/Apps/wt.exe", "C:/Windows/System32/cmd.exe"])).unwrap();
+        assert_eq!(wt.args, vec!["new-tab", "--title", "ARK", "-d", "C:/work/my repo"]);
+        let semi = local_terminal_launch(Os::Windows, Path::new("C:/a;b"), &finder(&["C:/Apps/wt.exe", "C:/Windows/System32/cmd.exe"])).unwrap();
+        assert!(semi.program.ends_with("cmd.exe") && semi.new_console && semi.args.is_empty());
+        assert_eq!(semi.cwd.as_deref(), Some(Path::new("C:/a;b")));
+        let mac = local_terminal_launch(Os::Macos, Path::new("/Users/me/x y"), &finder(&[])).unwrap();
+        assert_eq!(mac.args, vec!["-a", "Terminal", "/Users/me/x y"]);
+        let linux = local_terminal_launch(Os::Linux, Path::new("/home/me"), &finder(&["/usr/bin/xterm"])).unwrap();
+        assert_eq!(linux.cwd.as_deref(), Some(Path::new("/home/me")));
+        assert!(local_terminal_launch(Os::Linux, Path::new("/home/me"), &finder(&[])).is_err());
+        // A folder name with a newline never reaches a terminal.
+        assert!(local_terminal_launch(Os::Linux, Path::new("/home/me\nb"),&finder(&["/usr/bin/xterm"])).is_err());
+    }
 
     fn target(alias: &str, host: &str, user: &str, port: Option<u32>) -> SshTarget {
         let s = |v: &str| if v.is_empty() { None } else { Some(v.to_string()) };

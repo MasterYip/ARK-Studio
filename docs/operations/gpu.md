@@ -129,6 +129,18 @@ confirmations. Per project, one member with write access does one of:
 2. From an agent: `POST /api/agent/v1/setup/resource` with
    `{"resource": {"id": "gpu-a", "kind": "compute", "details": {"kind": "ssh", "gpu_server": "gpu-a"}}}`.
 
+When the server is also a device that has setup locations (the ARK server
+itself, or a machine where an agent runs), add its setup host id as
+`device_id` (an agent on that machine uses its own `X-ARK-Host` id):
+`{"kind": "ssh", "gpu_server": "gpu-a", "device_id": "709270ec09fc"}`. The
+device is then linked to the server, and **Open in VS Code**, **Open in
+terminal** and Cursor work on its folders with the address, port and user
+from the server list, with nothing else to configure. Setup holds only the
+id, never an address or a key. In the project layer any host can be named;
+in a member's own layer only that member's hosts. The desktop app writes the
+`Host ark-<server name>` entry to `~/.ssh/config` the first time (it asks
+first); a browser opens `user@host:port` and offers the entry to copy.
+
 Queued jobs of a project that registers none of its servers wait in the queue
 until the registration exists; running jobs are not affected.
 
@@ -245,6 +257,29 @@ curl --get "$ARK_URL/api/agent/v1/gpu/jobs" \
   --data-urlencode 'since=2026-11-07T00:00:00Z' \
   --data-urlencode 'limit=500' --data-urlencode 'offset=0'
 ```
+
+### Job-finished wake-ups
+
+An agent does not need to poll this list to learn that its job ended. When a
+job reaches `completed`, `errored` (including timeouts and lost processes) or
+`canceled`, the queue records it once in the job's project as a
+`gpu.job.done` activity row, which reaches the update feed
+(`GET /api/agent/v1/updates`, kind `gpu_job_done`):
+
+- A job queued by an ARK-launched session (its session token, the
+  task-agent route, or `"session": "$ARK_SESSION_ID"` in the body when the
+  session is the caller's own in the same project) wakes that session: the
+  session nudger sends one `ARK UPDATE` input turn when the session rests,
+  coalesced with people's updates, and keeps it across server restarts.
+- A job queued with another personal agent token is shown only to that
+  token's feed, so its watcher (`ark-server agent watch --until-update`)
+  wakes. With the shared server token it goes to the owner's agents.
+- Jobs queued from the web UI wake nobody.
+
+The request body cannot choose whom to wake; the server records it at submit
+time (`gpu_jobs.wake`, not part of the job record). Jobs that ended before
+this was deployed, or more than 24 hours before the server looked, are not
+announced.
 
 ## Security model
 

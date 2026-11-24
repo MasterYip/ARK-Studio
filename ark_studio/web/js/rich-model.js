@@ -106,6 +106,8 @@ export function resolveRichUrl(raw, { baseDir = "" } = {}) {
   if (url.startsWith("?")) return { kind: "query", href: url };
   if (/^mailto:/i.test(url)) return { kind: "mailto", href: url };
   if (/^file:/i.test(url)) return { kind: "file", href: url };
+  const task = parseTaskRef(url);
+  if (task) return { kind: "task", href: url, rel: task.rel, space: task.space };
   if (APP_SCHEME_RE.test(url)) return { kind: "app", href: url };
   if (/^[a-z][a-z0-9+.-]*:/i.test(url)) return null;
   const [pathPart, suffix = ""] = url.split(/(?=[?#])/, 2);
@@ -117,6 +119,73 @@ export function resolveRichUrl(raw, { baseDir = "" } = {}) {
     kind: "workspace", path,
     href: `/api/workspace/raw?path=${encodeURIComponent(path)}${suffix.startsWith("#") ? suffix : ""}`,
   };
+}
+
+// ------------------------------------------------------- task-space paths
+// "task:<relative path>[?space=<id>]" names a place inside the project's
+// task space (server: setup/pathtext.go).  Each device resolves it with its
+// own task-space location, so the link works on every computer.
+
+/** { rel, space } of a task: reference, or null (absolute or escaping paths are not task paths). */
+export function parseTaskRef(raw) {
+  const text = String(raw ?? "").trim();
+  if (!/^task:/i.test(text)) return null;
+  let rest = text.slice(5);
+  let space = "";
+  const q = rest.indexOf("?");
+  if (q >= 0) {
+    const params = new URLSearchParams(rest.slice(q + 1));
+    space = String(params.get("space") || "").trim();
+    rest = rest.slice(0, q);
+  }
+  try { rest = decodeURIComponent(rest); } catch { /* keep raw */ }
+  rest = rest.replace(/\\/g, "/");
+  if (rest.startsWith("/") || /^[A-Za-z]:/.test(rest)) return null;
+  if (rest.split("/").includes("..")) return null;
+  return { rel: rest.replace(/^\.\//, ""), space };
+}
+
+/** Absolute path of rel inside root, in root's separator style. */
+export function joinTaskPath(root, rel) {
+  const base = String(root || "");
+  const sep = base.includes("\\") && !base.includes("/") ? "\\" : "/";
+  let out = base.replace(/[\\/]+$/, "");
+  if (!out || /^[A-Za-z]:$/.test(out)) out += sep;
+  else if (rel) out += sep;
+  return rel ? out + String(rel).replace(/\//g, sep) : out;
+}
+
+/**
+ * Where a task: reference points on each of the viewer's devices, from the
+ * setup payload (GET /api/skills/setup/state: resources + devices).  Returns
+ * { space: {id, name} | null, rows: [{ id, label, current, path | null }] }.
+ * The default task space is the server's choice (setup/taskspace.go): a
+ * read-write one first, then the one on most devices, then setup order.
+ */
+export function taskPathsFor(state, ref) {
+  const parsed = typeof ref === "string" ? parseTaskRef(ref) : ref;
+  if (!parsed) return { space: null, rows: [] };
+  const local = (p) => /^([A-Za-z]:[\\/]|\/|~)/.test(String(p || ""));
+  const spaces = (state?.resources || []).filter((r) => r.kind === "task_space"
+    && r.details?.kind !== "issue-tracker"
+    && (!(r.locations || []).length || (r.locations || []).some((l) => local(l.path_or_ref))));
+  let space = null;
+  if (parsed.space) space = spaces.find((r) => r.id === parsed.space) || null;
+  else {
+    let best = -1;
+    for (const r of spaces) {
+      const hosts = new Set((r.locations || []).filter((l) => local(l.path_or_ref)).map((l) => l.host_id));
+      const score = (r.details?.access === "read-write" ? 1000 : 0) + hosts.size;
+      if (score > best) { best = score; space = r; }
+    }
+  }
+  if (!space) return { space: null, rows: [] };
+  const rows = (state?.devices || []).map((device) => {
+    const entry = (device.paths || []).find((p) => p.resource === space.key);
+    const root = entry?.path_or_ref && local(entry.path_or_ref) ? entry.path_or_ref : "";
+    return { id: device.id, label: device.label || device.id, current: !!device.current, path: root ? joinTaskPath(root, parsed.rel) : null };
+  });
+  return { space: { id: space.id, name: space.name || space.id, key: space.key }, rows };
 }
 
 /** "video" | "audio" | "image" | "" for an embeddable URL. `kinds` maps media ids to their kind. */

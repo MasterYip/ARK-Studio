@@ -46,7 +46,8 @@ func TestAgentUpdatesFeed(t *testing.T) {
 	homeCreate(t, app, "Watch", "")
 	// The agent creates a review node; nothing for it yet.
 	created := mustOK(t, gpuCall(t, app, "POST", "/api/agent/v1/units",
-		map[string]any{"type": "task", "title": "Ablation", "status": "review"}, agentHeaders(app)), "agent create")
+		map[string]any{"type": "task", "title": "Ablation", "status": "review",
+			"review_note": "Check the ablation numbers and the seed list."}, agentHeaders(app)), "agent create")
 	uid := created.body["unit"].(map[string]any)["uid"].(string)
 	first := updatesCall(t, app, "")
 	cursor := first.body["cursor"].(string)

@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"arkstudio/go/internal/sessionstart"
 	"errors"
 	"os"
 	"path/filepath"
@@ -136,7 +137,7 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 		return nil, serr(label+" is not installed or configured", 400, "")
 	}
 	title := limit(pytext.Strip(bodyStr(body, "title")), maxTitle)
-	prompt := limit(pytext.Strip(bodyStr(body, "prompt")), maxPrompt)
+	prompt := limit(WithoutPastedTokens(pytext.Strip(bodyStr(body, "prompt"))), maxPrompt)
 	if title == "" && prompt != "" {
 		title = label + " session"
 	}
@@ -153,6 +154,7 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 	// A session may start without a first message: a long-lived process
 	// waits for it; a one-shot agent starts with it (awaiting_first).
 	awaitFirst := prompt == "" && len(startImages) == 0 && promptRequired[presetID]
+	chosen := startChoice(body.Value("start"))
 	model := limit(pytext.Strip(bodyStr(body, "model")), 80)
 	agent := limit(pytext.Strip(bodyStr(body, "agent")), 120)
 	effort := limit(pytext.Strip(bodyStr(body, "effort")), 40)
@@ -164,6 +166,16 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 		return nil, err
 	}
 	taskRef := limit(pytext.Strip(strOr(or(body.Value("task"), body.Value("task_ref")))), 40)
+	// What the agent does first (preamble.go).  A start that has work to
+	// do runs without a typed first message.
+	var start *sessionstart.Start
+	if h != nil && h.StartPoint != nil && !pyjson.Truthy(preset.Value("demo")) {
+		start = h.StartPoint(StartInput{Actor: actor, TaskRef: taskRef, Prompt: prompt, Chosen: chosen})
+		if start != nil && prompt == "" && len(startImages) == 0 && start.Mode != sessionstart.ModeWait {
+			prompt = KickoffMessage
+			awaitFirst = false
+		}
+	}
 	cwd, err := safeRelative(or(body.Value("cwd"), ""), "cwd")
 	if err != nil {
 		return nil, err
@@ -325,7 +337,10 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 			"ARK_TASK_CONTEXT", "workspace/ark-context.json", "ARK_READ_TOKEN", "read-only session token",
 			"ARK_TASK_API_BASE", apiBase),
 		"counts", pyjson.NewObject("stdout", int64(0), "stderr", int64(0), "bytes", int64(0)), "actor", actor)
-	s := &Session{ID: sessionID, Folder: folder, Meta: meta, m: m}
+	s := &Session{ID: sessionID, Folder: folder, Meta: meta, m: m, start: start}
+	if start != nil {
+		meta.Set("start", startObject(start))
+	}
 	if native := pytext.Strip(bodyStr(body, "fork_native_id")); native != "" {
 		meta.Set("fork_native_id", native)
 	}
@@ -440,6 +455,23 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	s.pendingEntries = nil
 	m.mu.Unlock()
 	env := m.buildEnv(h, s, projectRef, apiBase, readToken, workspace, artifacts, actor)
+	presetID := pyjson.Str(preset.Value("id"))
+	// What the agent is told about ARK (preamble.go): Claude Code takes it
+	// as an appended system prompt on every run, other agents ahead of
+	// their first message.
+	userPrompt := prompt
+	m.mu.Lock()
+	firstTurn := intOr(meta.Value("turn"), 1) <= 1
+	start := s.start
+	s.start = nil
+	m.mu.Unlock()
+	if start == nil && (!firstTurn || resumeID != "") {
+		start = m.resumeStart(h, s, actor)
+	}
+	preamble := m.sessionPreamble(h, s, preset, projectRef, env, actor, start)
+	if preamble != "" && presetID != "claude" && firstTurn && resumeID == "" && forkID == "" && prompt != "" {
+		prompt = preamble + "\n\n---\n\n" + prompt
+	}
 	values := [][2]string{{"prompt", prompt}, {"model", model}, {"effort", effort}, {"workspace", cwdDir},
 		{"project", strOr(projectRef.Value("path"))}, {"context", filepath.Join(workspace, "ark-context.json")},
 		{"artifacts", artifacts}, {"api_base", apiBase}, {"session", s.ID}}
@@ -447,7 +479,6 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	for _, part := range providers.Command(preset) {
 		argv = append(argv, expand(part, values))
 	}
-	presetID := pyjson.Str(preset.Value("id"))
 	if resumeID != "" {
 		argv = resumeArgv(argv, presetID, resumeID, prompt)
 	} else if forkID != "" {
@@ -503,6 +534,9 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		}
 		extra = append(extra, agentFlag...)
 		argv = insertAt(argv, 1, extra...)
+		if preamble != "" && !contains(argv, "--append-system-prompt") {
+			argv = append(argv, "--append-system-prompt", preamble)
+		}
 	}
 	// A long-lived Claude Code process takes every message on stdin.
 	stream := false
@@ -520,7 +554,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		// One-shot turns cannot take image blocks: the agent gets the paths.
 		prompt = limit(composeMessage(prompt, pending), maxPrompt)
 		for i, part := range argv {
-			if part == strOr(meta.Value("prompt")) && part != "" {
+			if part != "" && (part == strOr(meta.Value("prompt")) || part == userPrompt) {
 				argv[i] = prompt
 			}
 		}
@@ -567,6 +601,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	s.proc = proc
 	now := NowISO()
 	meta.Set("status", "running").Set("pid", int64(proc.pid())).Set("started_at", now).Set("last_activity_at", now)
+	meta.Delete("bg_pending") // a new process: the old one's background work is gone
 	if stream {
 		meta.Set("stream_input", true).Set("followup", true).Set("turn_state", "running")
 	} else if meta.Has("stream_input") {
@@ -624,7 +659,7 @@ func splitImageContext(raw any) (any, []any) {
 func isWriteCredential(name string) bool {
 	upper := strings.ToUpper(name)
 	switch upper {
-	case "ARK_AGENT_TOKEN", "ARK_TOKEN", "ARK_WRITE_TOKEN", "ARK_API_TOKEN", "ARK_TASK_WRITE_TOKEN":
+	case "ARK_AGENT_TOKEN", "ARK_TOKEN", "ARK_WRITE_TOKEN", "ARK_API_TOKEN", "ARK_TASK_WRITE_TOKEN", "ARKT":
 		return true
 	}
 	if !strings.HasPrefix(upper, "ARK_") {
@@ -806,6 +841,7 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 	if token != "" {
 		env.set("ARK_AGENT_TOKEN", token)
 		env.set("ARK_TOKEN", token) // the name the ARK watcher scripts read
+		env.set("ARKT", token)      // the short name the session block uses (preamble.go)
 	}
 	// The server root and project for the agent API (/api/agent/v1/...);
 	// ARK_TASK_API_BASE is the task API, not the root.

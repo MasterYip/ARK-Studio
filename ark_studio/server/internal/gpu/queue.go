@@ -232,6 +232,11 @@ type Queue struct {
 	// places a job only on servers its project registers (T-0018, scope.go).
 	// nil: every configured server.
 	allowed func(projectID, owner string) Scope
+	// OnFinished is told once about every job that reached a terminal state
+	// (completed, errored, canceled) and names someone to wake (wake.go).
+	// An error leaves the job to the next look.
+	OnFinished func(job *pyjson.Object, wake Wake) error
+	notifyMu   sync.Mutex
 }
 
 const queueDDL = `CREATE TABLE IF NOT EXISTS gpu_jobs (
@@ -246,7 +251,8 @@ const queueDDL = `CREATE TABLE IF NOT EXISTS gpu_jobs (
                 tags_json TEXT NOT NULL DEFAULT '[]',
                 pid INTEGER, exit_code INTEGER, error TEXT NOT NULL DEFAULT '',
                 log TEXT NOT NULL DEFAULT '', log_path TEXT NOT NULL DEFAULT '',
-                started_at TEXT, ended_at TEXT)`
+                started_at TEXT, ended_at TEXT, wake TEXT NOT NULL DEFAULT '',
+                notified INTEGER NOT NULL DEFAULT 1)`
 
 // NewQueue is GpuQueue(config_path, environ=os.environ).
 func NewQueue(configPath string) (*Queue, error) {
@@ -288,7 +294,9 @@ func (q *Queue) ensureDB() error {
 		for _, col := range [][2]string{{"gpu_count", "INTEGER NOT NULL DEFAULT 1"},
 			{"min_free_memory_mb", "INTEGER NOT NULL DEFAULT 1024"},
 			{"max_utilization_pct", "INTEGER NOT NULL DEFAULT 10"},
-			{"tags_json", "TEXT NOT NULL DEFAULT '[]'"}, {"task", "TEXT NOT NULL DEFAULT ''"}} {
+			{"tags_json", "TEXT NOT NULL DEFAULT '[]'"}, {"task", "TEXT NOT NULL DEFAULT ''"},
+			// wake.go: jobs from before the column are not announced (DEFAULT 1).
+			{"wake", "TEXT NOT NULL DEFAULT ''"}, {"notified", "INTEGER NOT NULL DEFAULT 1"}} {
 			if !existing[col[0]] {
 				if _, err := tx.ExecContext(ctx, "ALTER TABLE gpu_jobs ADD COLUMN "+col[0]+" "+col[1]); err != nil {
 					return err
@@ -349,6 +357,8 @@ func public(row sqlitedb.Row) *pyjson.Object {
 	data.Set("tags", loadsOr("tags_json", "[]"))
 	data.Delete("env_json")
 	data.Delete("tags_json")
+	data.Delete("wake") // wake.go: server-side routing, not part of the job
+	data.Delete("notified")
 	data.Set("name", orDefault(data, "job", ""))
 	data.Set("log_tail", logTail(pyjson.Str(orDefault(data, "log", "")), 20))
 	if code := data.Value("exit_code"); code != nil && code != int64(0) && !pyjson.Truthy(data.Value("error")) {
@@ -567,6 +577,12 @@ func (q *Queue) Submit(body *pyjson.Object, start bool) (*pyjson.Object, error) 
 // SubmitChecked is Submit with check(config) run after validation (the
 // project scope: Service.QueueSubmitFor).
 func (q *Queue) SubmitChecked(body *pyjson.Object, start bool, check func(cfg *pyjson.Object) error) (*pyjson.Object, error) {
+	return q.SubmitWake(body, start, check, Wake{})
+}
+
+// SubmitWake is SubmitChecked that records whom to wake when the job ends
+// (wake.go).  The body cannot set it.
+func (q *Queue) SubmitWake(body *pyjson.Object, start bool, check func(cfg *pyjson.Object) error, wake Wake) (*pyjson.Object, error) {
 	cfg, err := q.loadConfig()
 	if err != nil {
 		return nil, err
@@ -584,11 +600,11 @@ func (q *Queue) SubmitChecked(body *pyjson.Object, start bool, check func(cfg *p
 	err = q.exec(`INSERT INTO gpu_jobs
                 (id,status,created_at,updated_at,server,gpu_indices,job,project,owner,
                  session,task,command,work_dir,env_json,timeout_minutes,gpu_count,
-                 min_free_memory_mb,max_utilization_pct,tags_json,error,log,log_path)
-                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+                 min_free_memory_mb,max_utilization_pct,tags_json,error,log,log_path,wake,notified)
+                VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
 		job.id, "queued", now, now, job.server, "[]", job.job, job.project, job.owner, job.session, job.task,
 		job.command, job.workDir, string(pyjson.Dumps(job.env)), job.timeout, job.gpuCount, job.minFree,
-		job.maxUtil, string(pyjson.DumpsASCII(job.tags)), "", "", "")
+		job.maxUtil, string(pyjson.DumpsASCII(job.tags)), "", "", "", wake.encode(), boolInt(wake.IsZero()))
 	if err != nil {
 		return nil, err
 	}
@@ -782,6 +798,7 @@ func (q *Queue) Cancel(id string) (*pyjson.Object, error) {
 		now, now, "canceled by user", id); err != nil {
 		return nil, err
 	}
+	q.NotifyFinished()
 	return q.Get(id)
 }
 
@@ -1185,6 +1202,7 @@ func (q *Queue) Tick() error {
 		return nil
 	}
 	defer q.tickMu.Unlock()
+	defer q.NotifyFinished() // wake.go: whoever waits for a job that ended
 	cfg, err := q.loadConfig()
 	if err != nil {
 		return err

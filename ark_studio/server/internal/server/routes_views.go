@@ -543,6 +543,9 @@ func (c *reqCtx) agentGet() (bool, error) {
 	if handled, err := c.agentWatchGet(path, p); handled { // Go only (routes_agentwatch.go)
 		return true, err
 	}
+	if path == agentSetupPathsPath { // Go only (routes_taskspace.go)
+		return true, c.setupPathsGet()
+	}
 	if path == agentRulesAgentPath { // Go only (routes_agentrules.go)
 		return true, c.agentRulesGet(p)
 	}
@@ -561,7 +564,13 @@ func (c *reqCtx) agentGet() (bool, error) {
 		c.okEncoded(agentInterfaceEncoded())
 		return true, nil
 	case "/api/agent/v1/context":
-		return okObj(st.AgentContext(c.ctx))
+		out, err := st.AgentContext(c.ctx)
+		if err == nil && out != nil {
+			if start := c.sessionStartOf(); start != nil { // routes_sessionstart.go (Go only)
+				out.Set("session_start", start)
+			}
+		}
+		return okObj(out, err)
 	case "/api/agent/v1/project/palette":
 		s, err := settings.ProjectSettings(p.Manifest.Snapshot())
 		if err != nil {

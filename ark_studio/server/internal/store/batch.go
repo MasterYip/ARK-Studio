@@ -29,6 +29,7 @@ const MaxBatchUnits = 500
 var batchFields = map[string]bool{
 	"type": true, "status": true, "importance": true, "assignee": true,
 	"start_at": true, "end_at": true, "tags": true,
+	"review_note": true, // Go only: an agent setting status review sends one (reviewnote_required.go)
 }
 
 // NewBatchID returns a fresh "b_" id for one batch operation.

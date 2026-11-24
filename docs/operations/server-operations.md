@@ -168,6 +168,9 @@ data directory as a rollback copy. Verify SQLite integrity, login, grants,
 tokens, project records, asset reads and credential decryption after restore.
 External symlink targets and externally hosted files need separate backup.
 
+For a copy on a second machine that is refreshed every few minutes and can take
+over, see [Standby server](standby.md).
+
 Remembered browser sessions and personal tokens survive a restart. Ordinary
 browser sessions require another sign-in. Provider subprocesses are stopped by
 the service manager; their history remains, but active conversations require

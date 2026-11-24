@@ -145,3 +145,76 @@ func TestNudgeCursorSurvivesRestart(t *testing.T) {
 		t.Fatalf("delivered cursor saved: %+v", saved)
 	}
 }
+
+// Background work that finished while the session rests is told once, in
+// one message with people's updates; never while a turn runs; the ack runs
+// only after the message was sent; and not more often than bgEvery.
+func TestBackgroundNoticesCoalesce(t *testing.T) {
+	f := &fake{epoch: "e1", rows: []int64{1}, sent: map[string]string{}}
+	f.sessions = []Session{{ID: "s1", ProjectID: "p", Accepts: true}}
+	var pending []Notice
+	acked := 0
+	d := f.deps()
+	d.Background = func(s Session) ([]Notice, func()) {
+		if len(pending) == 0 {
+			return nil, nil
+		}
+		return pending, func() { acked += len(pending); pending = nil }
+	}
+	n := &Nudger{D: d}
+	ctx := context.Background()
+	n.Tick(ctx) // first sight
+	pending = []Notice{{Line: `Background task sh_1 "Train" completed (exit 0)`, Tail: "epoch 9 loss 0.1\nsaved model.pt"},
+		{Line: `Sub-agent ag_2 "Review" completed`}}
+	f.rows = append(f.rows, 2)
+	if got := n.Tick(ctx); len(got) != 0 || acked != 0 {
+		t.Fatal("told while a turn runs")
+	}
+	f.sessions[0].Idle = true
+	if got := n.Tick(ctx); len(got) != 1 || acked != 2 {
+		t.Fatalf("not told at rest: %v %d", got, acked)
+	}
+	msg := f.sent["s1"]
+	for _, want := range []string{"1 new update(s) from people while you were idle; 2 background task(s) of this session finished:",
+		`- Background task sh_1 "Train" completed (exit 0)`, "    saved model.pt", `- Sub-agent ag_2 "Review" completed`,
+		"do not poll"} {
+		if !strings.Contains(msg, want) {
+			t.Fatalf("lacks %q:\n%s", want, msg)
+		}
+	}
+	if strings.Count(msg, "ARK UPDATE") != 1 {
+		t.Fatal("not one message")
+	}
+	pending = []Notice{{Line: "Background task sh_3 completed"}}
+	if got := n.Tick(ctx); len(got) != 0 {
+		t.Fatal("background notices are spaced")
+	}
+	n.lastBg["s1"] = n.lastBg["s1"].Add(-bgEvery)
+	failSend := d
+	failSend.Send = func(Session, string) error { return context.Canceled }
+	n.D = failSend
+	if n.Tick(ctx); acked != 2 {
+		t.Fatal("acked although the message was not sent")
+	}
+	n.D = d
+	if got := n.Tick(ctx); len(got) != 1 || acked != 3 || strings.Contains(f.sent["s1"], "from people") {
+		t.Fatalf("background-only: %v %q", got, f.sent["s1"])
+	}
+}
+
+// A GPU job the session queued is listed with its log tail and the log link.
+func TestComposeGPUJob(t *testing.T) {
+	job := pyjson.NewObject("kind", "gpu_job_done", "summary", `GPU job gpu_1 "train" errored on h20 (exit 1)`,
+		"log_tail", "Traceback\nCUDA out of memory", "link", "/api/agent/v1/gpu/jobs/gpu_1/logs")
+	s := Compose(Session{ID: "ses_1", ProjectID: "prj_x"}, "Lab", []*pyjson.Object{job}, nil)
+	for _, want := range []string{"ARK UPDATE for ARK session ses_1, ARK project Lab (prj_x): 1 GPU job(s) you queued ended:",
+		`- GPU job gpu_1 "train" errored on h20 (exit 1)`, "  last 2 line(s) of output:\n    Traceback\n    CUDA out of memory",
+		"full log: GET /api/agent/v1/gpu/jobs/gpu_1/logs"} {
+		if !strings.Contains(s, want) {
+			t.Fatalf("lacks %q:\n%s", want, s)
+		}
+	}
+	if strings.Contains(s, "ignore this message") {
+		t.Fatal("the session's own job is not someone else's project")
+	}
+}

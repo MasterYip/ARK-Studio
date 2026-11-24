@@ -1671,6 +1671,25 @@ fn open_ssh_terminal(app: AppHandle, webview: tauri::Webview, target: remote_ope
     remote_open::spawn(&launch, &script)
 }
 
+/// "Open in terminal" for a location on this computer: a terminal window in
+/// that folder (a file opens in its folder). Absolute, existing paths only.
+#[tauri::command]
+fn open_local_terminal(app: AppHandle, webview: tauri::Webview, path: String) -> Result<(), String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let raw = PathBuf::from(path.trim());
+    if !raw.is_absolute() {
+        return Err("Only absolute paths can be opened.".into());
+    }
+    let target = raw.canonicalize().map_err(|_| "Path does not exist on this computer".to_string())?;
+    let dir = if target.is_dir() { target } else { target.parent().map(Path::to_path_buf).ok_or("No folder.")? };
+    // canonicalize gives \\?\C:\... on Windows; terminals want the plain form.
+    let plain = PathBuf::from(dir.to_string_lossy().trim_start_matches(r"\\?\").to_string());
+    let launch = remote_open::local_terminal_launch(remote_open::Os::current(), &plain, &remote_open::find_program)?;
+    remote_open::spawn(&launch, &remote_open::script_path())
+}
+
 /// Which of `names` are Host aliases (or HostNames) in ~/.ssh/config.
 #[tauri::command]
 fn ssh_config_match(app: AppHandle, webview: tauri::Webview, names: Vec<String>) -> Result<Vec<remote_open::ConfigMatch>, String> {
@@ -2110,6 +2129,7 @@ pub fn run() {
             device_id,
             measure_paths,
             open_ssh_terminal,
+            open_local_terminal,
             ssh_config_match,
             open_editor_url,
             ssh_config_ensure,

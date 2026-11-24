@@ -80,6 +80,8 @@ ROUTES = {
     # internal/server/routes_presence_test.go)
     "goonly:exact:/api/presence": "T-0043: live agent presence of the project (members, read access; memory only)",
     "goonly:exact:/api/agent/v1/presence": "T-0043: an agent announces the unit it works on (state working|done)",
+    # ark_studio/server/internal/server/routes_support.go (test routes_support_test.go)
+    "goonly:exact:/api/project/support": "Board and Home support panel: live sessions, recent agents, hosts, library counts and deadlines",
     # ark_studio/server/internal/server/routes_trash.go, ark_studio/server/internal/store/trash.go (tests
     # store/trash_test.go, internal/server/routes_trash_test.go).  The archive activity row also keeps the
     # removed links ("links") and a restore from the bin recreates them (state only; replies unchanged).

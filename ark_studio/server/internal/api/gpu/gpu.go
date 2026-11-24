@@ -28,6 +28,10 @@ type Handlers struct {
 	// ScopeByID is Scope for a project id (task-agent jobs name their
 	// project); nil: unscoped.
 	ScopeByID func(projectID string) (gpudom.Scope, error)
+	// Wake is whom a job queued by this request wakes when it ends (the
+	// requesting ARK session or agent; gpu/wake.go).  session is the body's
+	// "session".  nil: nobody.
+	Wake func(c api.Ctx, projectID, session string) gpudom.Wake
 }
 
 // scope is the read-permitted current project and its GPU scope.
@@ -268,7 +272,11 @@ func (h Handlers) submitProjectJob(c api.Ctx, body *pyjson.Object) error {
 	if task == "" {
 		task = api.StrOr(body.Value("task_ref"))
 	}
-	job, err := h.Svc().QueueSubmitFor(sc, body, c.Actor(), p.ID(), api.StrOr(body.Value("session")), task)
+	var wake gpudom.Wake
+	if h.Wake != nil {
+		wake = h.Wake(c, p.ID(), api.StrOr(body.Value("session")))
+	}
+	job, err := h.Svc().QueueSubmitWake(sc, body, c.Actor(), p.ID(), api.StrOr(body.Value("session")), task, wake)
 	if err != nil {
 		return Err(err)
 	}
@@ -451,7 +459,9 @@ func (h Handlers) TaskPost(c api.Ctx, path string) (bool, error) {
 			return true, err
 		}
 	}
-	job, err := h.Svc().QueueSubmitFor(sc, body, api.StrOr(s.Meta.Value("actor")), project, s.ID, task)
+	// The task session is authenticated: its own end-of-job wake-up.
+	job, err := h.Svc().QueueSubmitWake(sc, body, api.StrOr(s.Meta.Value("actor")), project, s.ID, task,
+		gpudom.Wake{Session: s.ID})
 	if err != nil {
 		return true, Err(err)
 	}

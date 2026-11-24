@@ -14,6 +14,7 @@ overview. The guides below cover configuration, integrations and development.
 | [Mobile and remote access](guide/mobile.md) | Android builds, APKs, PWA, pairing, HTTPS and tunnels |
 | [Accounts and access](operations/accounts-and-access.md) | Organization roles, project permissions and personal configuration |
 | [Server operations](operations/server-operations.md) | Native persistent configuration, systemd, restart, backup and restore |
+| [Standby server](operations/standby.md) | Read-only replica on a second machine, daily snapshots, promotion and return |
 | [Shared project setup](operations/multi-user-setup.md) | Register repositories, environments, servers and storage locations |
 | [Home workspace](guide/home-overview.md) | Research pipeline, activity and decision workflow |
 | [View plugins](guide/plugins.md) | Built-in views as plugins; import, permissions and the sandbox of user plugins |

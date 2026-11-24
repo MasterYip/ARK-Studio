@@ -133,6 +133,12 @@ func run(argv []string) int {
 			if len(argv) > 1 && argv[1] == "host-id" { // this device's id for X-ARK-Host (internal/hostid)
 				return agentHostID(argv[2:], stdout)
 			}
+			if len(argv) > 1 && argv[1] == "paths" { // this device's task space and paths (cli_relocate.go)
+				return agentPaths(argv[2:], stdout, stderr)
+			}
+			if len(argv) > 1 && argv[1] == "relocate" { // move recorded paths (cli_relocate.go)
+				return agentRelocate(argv[2:], stdout, stderr)
+			}
 		case "version", "--version":
 			pyprint("ark-server", version)
 			return 0
@@ -223,7 +229,7 @@ func dispatch(parser *pyargparse.Parser, ns pyargparse.Namespace, argv []string)
 	case "new":
 		return newProject(ns.Str("root"), ns.Str("name"), ns.Str("description"), ns.Str("template"), false)
 	case "demo":
-		return newProject(ns.Str("root"), "PredActor", "A demo research project: from claims to agent tasks.", "demo", true)
+		return newProject(ns.Str("root"), project.PredActorName, project.PredActorDescription, "demo", true)
 	case "export":
 		return exportCommand(ns)
 	case "agent":

@@ -1,8 +1,8 @@
-import { h, clear, emptyState, statusColor, impDot, tagChip, fmtDate, relativeTime, dueState, avatarFor } from "../dom.js";
-import { t, typeLabel, statusLabel } from "../i18n.js";
+import { h, clear, statusColor, impDot, tagChip, fmtDate, relativeTime, dueState, avatarFor } from "../dom.js";
+import { t, statusLabel, getLang } from "../i18n.js";
 import { icon } from "../icons.js";
 import { GanttView, ganttControls } from "../gantt.js";
-import { unitCard, viewToggle, openLinkModal, openDispatchModal, typeLegend, openModal, confirmDialog, canRunWithAgent } from "../components.js";
+import { viewToggle, openLinkModal, openDispatchModal, typeLegend, openModal, confirmDialog, canRunWithAgent } from "../components.js";
 import { gpuRegistrationNote, openSetupResources } from "../gpu-note.js";
 import { sortUnits } from "./ideas.js";
 import { renderSessionWorkspace } from "../session-workspace.js";
@@ -13,15 +13,19 @@ import { sessionLibraryPanel } from "../session-library.js";
 import { api, cachedThenFresh } from "../api.js";
 import { gpuOwnership } from "../gpu-model.js";
 import { resourcesGraphPanel } from "../resources-view.js";
-import { openServer } from "../resource-open.js";
+import { openServer, connectionStore } from "../resource-open.js";
 import { advancedEnabled } from "../advanced.js";
 import { modelOptions, modelEfforts } from "../session-model.js";
 import {
   launchProviders, disabledProviders, providerCapabilities, modelChoices, defaultEffort, effortChoices, accessChoices, agentChoices,
   loadLaunchDefaults, saveLaunchDefaults, initialChoice, taskOptions, parseTaskValue, contextTask, autoTitle,
   splitPrefillPrompt, firstMessage, CUSTOM_MODEL,
+  START_FREE, startOptions, defaultStartMode, startPreview, startPlaceholder, startRequest,
 } from "../launch-dialog-model.js";
+import { libraryEntries, effectivePins, entryTitle } from "../prompt-library-model.js";
+import { sessionStartText, promptLang } from "../starter-prompts.js";
 import { assigneeChip } from "../assignee.js";
+import { supportDeck } from "../support-panel.js";
 
 const COLUMNS = ["inbox", "open", "active", "review", "blocked", "done"];
 const SESSION_ACTIVE = ["starting", "running", "idle", "stopping"];
@@ -51,11 +55,10 @@ export function renderTasks(host, ctx) {
   // Execute › Files moved into the Editor.
   if (S.taskView === "files") S.taskView = "board";
   clear(host);
+  // Older links: the agent and library lists moved into Runs and Resources.
+  if (S.taskView === "agents") S.taskView = "sessions";
+  if (S.taskView === "library") S.taskView = "resources";
   const tasks = (S.units || []).filter((u) => u.type === "task");
-  if (!tasks.length && S.taskView === "gpu") S.taskView = "sessions";
-  const agents = (S.units || []).filter((u) => u.type === "agent");
-  const hosts = (S.units || []).filter((u) => u.type === "host");
-  const artifacts = (S.units || []).filter((u) => ["artifact", "resource"].includes(u.type));
   const sessions = S.taskSessions || [];
   const activeSessions = sessions.filter((s) => SESSION_ACTIVE.includes(s.status)).length;
   const phone = typeof window.matchMedia === "function"
@@ -93,10 +96,8 @@ export function renderTasks(host, ctx) {
     S.taskView === "sessions" ? sessionsView(ctx, S, tasks) :
       S.taskView === "gpu" ? gpuResourcesPanel(ctx, S, tasks) :
       S.taskView === "resources" ? resourcesGraphPanel(ctx) :
-      S.taskView === "board" ? boardView(ctx, S, tasks, agents, hosts, artifacts) :
       S.taskView === "timeline" ? timelineView(ctx, S, tasks) :
-      S.taskView === "agents" ? agentsView(ctx, S, agents, hosts, tasks) :
-      libraryView(ctx, S, artifacts));
+      boardView(ctx, S, tasks));
   host.appendChild(page);
 }
 
@@ -106,8 +107,6 @@ function executeViewTitle(view) {
   if (view === "sessions") return t("app.subtab.runs");
   if (view === "gpu") return "GPU"; // i18n-ignore: product term, same in both languages
   if (view === "resources") return t("resources.tab");
-  if (view === "agents") return t("tasks.agents");
-  if (view === "library") return t("tasks.library");
   return t("view.board");
 }
 
@@ -128,11 +127,21 @@ function gpuResourcesPanel(ctx, S, tasks) {
       t("tasks.gpu.legend")),
     body);
   let busy = false;
+  // SSH connections: the project's shared machine records and the viewer's
+  // own entries (resource-open.js), the same ones the Resources graph uses.
+  const connections = connectionStore();
+  let lastData = null;
+  let connectionsLoaded = false;
   async function refresh(manual = false, first = false) {
     if (busy) return;
     if (!panel.isConnected) { stopGpuTimer(); return; }
     busy = true;
+    if (!connectionsLoaded) {
+      connectionsLoaded = true;
+      connections.refresh([]).then(() => { if (lastData && panel.isConnected) render(lastData); }).catch(() => {});
+    }
     const show = (data) => {
+      lastData = data;
       render(data);
       stamp.textContent = data.checked_at
         ? t("tasks.gpu.checked", { time: relativeTime(data.checked_at) }) : t("tasks.gpu.probe");
@@ -183,25 +192,29 @@ function gpuResourcesPanel(ctx, S, tasks) {
       const memUsed = system.memory_used_mb;
       const memPct = memTotal ? Math.min(100, memUsed / memTotal * 100) : null;
       const serverJobs = active.filter((job) => job.server === server.server);
+      // The shared machine record and the viewer's own entry first; the
+      // server list's address only reaches admins (T-0018).
+      const conn = connections.gpuConnection(server.server)
+        || (server.host ? { host: server.host, user: server.user, port: server.port } : null);
+      const shown = conn?.host ? conn : (server.host ? server : null);
       const card = h("div", { class: "task-gpu-server" },
         h("div", { class: "task-gpu-server-head" },
           h("div", null,
             h("b", null, server.server),
-            // Only the server admin (or local mode) gets the address (T-0018).
-            server.host ? h("div", { class: "physics-hint" },
-              `${server.user ? server.user + "@" : ""}${server.host}:${server.port}`) : null),
-          !server.host ? null : h("div", { class: "row tight" },
+            shown ? h("div", { class: "physics-hint" },
+              `${shown.user ? shown.user + "@" : ""}${shown.host}:${shown.port || 22}`) : null),
+          !conn ? null : h("div", { class: "row tight" },
             // Through an ~/.ssh/config entry so the person's key is used
             // (resource-open.js openServer); a browser copies the command.
             h("button", {
               type: "button", class: "task-gpu-link",
               title: t("tasks.gpu.open_ssh"),
-              onclick: () => openServer("ssh", { host: server.host, user: server.user, port: server.port }, { name: server.server }),
-            }, icon("command", "sm"), "SSH"),
+              onclick: () => openServer("ssh", conn, { name: server.server }),
+            }, icon("command", "sm"), t("tasks.gpu.terminal")),
             h("button", {
               type: "button", class: "task-gpu-link",
               title: t("tasks.gpu.open_vscode"),
-              onclick: () => openServer("editor", { host: server.host, user: server.user, port: server.port }, { name: server.server }),
+              onclick: () => openServer("editor", conn, { name: server.server }),
             }, icon("external", "sm"), "VS Code"))),
         h("div", { class: "task-gpu-meter", style: { display: "flex", alignItems: "center", gap: "7px", margin: "5px 0" } },
           h("span", { style: { color: "var(--sub)", fontSize: "9px", fontWeight: "600", width: "26px" } }, "CPU"),
@@ -456,13 +469,16 @@ export async function openLaunchSession(ctx, prefill = {}) {
   let worktreeData = null;
   let effective = null;
   let user = "";
+  let promptsData = null;
   try {
-    const [presetData, worktreeResult, effectiveData, who] = await Promise.all([
+    const [presetData, worktreeResult, effectiveData, who, library] = await Promise.all([
       api.sessionPresets(),
       api.worktrees().catch(() => ({ available: false, worktrees: [] })),
       api.effectiveSettings().catch(() => null),
       launchUser(),
+      api.prompts().catch(() => null),
     ]);
+    promptsData = library;
     presets = presetData.presets || [];
     worktreeData = worktreeResult;
     effective = effectiveData;
@@ -574,6 +590,39 @@ export async function openLaunchSession(ctx, prefill = {}) {
   const promptArea = h("textarea", { class: "textarea", style: { minHeight: "88px" }, placeholder: t("tasks.launcher.prompt_placeholder") });
   promptArea.value = draftPrompt;
 
+  // ---- start (T-0121): what the session does first, from the Home prompt
+  // library; the server's facts choose the default (GET /api/agent-sessions/start).
+  const promptLanguage = promptLang(getLang());
+  const startEntries = libraryEntries(promptsData || {}).map((e) => ({ ...e, title: entryTitle(e, promptLanguage) }));
+  const startChoices = startOptions(startEntries, effectivePins(promptsData ? promptsData.pins : null));
+  const startSelect = h("select", { class: "select", "aria-label": t("tasks.launcher.start") },
+    ...startChoices.map((o) => h("option", { value: o.id }, o.id === START_FREE ? t("tasks.launcher.start_free") : o.title)));
+  const startPreviewLine = h("div", { class: "session-hint", "data-launch-start-preview": "" });
+  let startServer = null;
+  let startTouched = false;
+  let startSeq = 0;
+  const chosenStart = () => startChoices.find((o) => o.id === startSelect.value) || startChoices[startChoices.length - 1];
+  function syncStart({ reset = false } = {}) {
+    if (reset && !startTouched) {
+      startSelect.value = defaultStartMode({ server: startServer, task: chosenTask(), remembered: remembered.start, options: startChoices });
+    }
+    startPreviewLine.textContent = startPreview({ mode: startSelect.value, option: chosenStart(), server: startServer,
+      task: chosenTask(), prompt: promptArea.value, t });
+    promptArea.placeholder = startPlaceholder({ mode: startSelect.value, option: chosenStart(), task: chosenTask(), t });
+  }
+  async function loadStart() {
+    const seq = ++startSeq;
+    syncStart({ reset: true });
+    try {
+      const data = await api.sessionStart(chosenTask());
+      if (seq === startSeq) {
+        startServer = data;
+        syncStart({ reset: true });
+      }
+    } catch { /* an older server: no facts, the default stays */ }
+  }
+  startSelect.addEventListener("change", () => { startTouched = true; syncStart(); });
+
   // ---- advanced
   const titleInput = h("input", { class: "input", maxlength: "160" });
   const worktreeSelect = h("select", { class: "select" },
@@ -654,8 +703,9 @@ export async function openLaunchSession(ctx, prefill = {}) {
   customModel.addEventListener("change", () => fillEfforts());
   worktreeSelect.addEventListener("change", syncWorktree);
   taskInput.addEventListener("input", syncTitle);
-  taskClear.addEventListener("click", () => { taskInput.value = ""; syncTitle(); taskInput.focus(); });
-  promptArea.addEventListener("input", syncTitle);
+  taskClear.addEventListener("click", () => { taskInput.value = ""; syncTitle(); loadStart(); taskInput.focus(); });
+  taskInput.addEventListener("change", loadStart);
+  promptArea.addEventListener("input", () => { syncTitle(); syncStart(); });
   providerRefresh.addEventListener("click", async () => {
     providerRefresh.disabled = true;
     try {
@@ -691,6 +741,7 @@ export async function openLaunchSession(ctx, prefill = {}) {
   titleInput.value = prefill.title || (parent ? t("tasks.launcher.subagent_title", { parent: parent.title || t("common.untitled") }) : "");
   cwdInput.value = prefill.cwd || (parent && parent.cwd !== "." ? parent.cwd : "");
   syncTitle();
+  loadStart();
 
   const personalNeeded = effective?.agents?.personal_config_required;
   const switchedOff = disabledProviders(presets);
@@ -725,6 +776,7 @@ export async function openLaunchSession(ctx, prefill = {}) {
     effortField,
     h("div", { class: "field", "data-launch-field": "task" }, h("label", null, t("tasks.launcher.task")),
       h("div", { class: "launch-task-row" }, taskInput, taskClear), taskList, taskHint),
+    h("div", { class: "field", "data-launch-field": "start" }, h("label", null, t("tasks.launcher.start")), startSelect, startPreviewLine),
     h("div", { class: "field full", "data-launch-field": "access" }, h("label", null, t("tasks.launcher.access")), accessBox),
     h("div", { class: "field full", "data-launch-field": "prompt" }, h("label", null, t("tasks.launcher.prompt")), promptArea),
     advanced,
@@ -752,6 +804,15 @@ export async function openLaunchSession(ctx, prefill = {}) {
         return false;
       }
       const prompt = promptArea.value.trim();
+      const startOption = chosenStart();
+      if (startOption.unit && !task) {
+        ctx.toast(t("tasks.launcher.start_preview.continue_pick"), "err");
+        taskInput.focus();
+        return false;
+      }
+      const startEntry = startEntries.find((e) => e.id === startOption.id) || null;
+      const start = startRequest(startOption, startEntry
+        ? sessionStartText(startEntry, ctx.S.project, { lang: promptLanguage, unit: task, user }) : "");
       const worktree = worktreeSelect.value;
       const effort = effortField.classList.contains("hidden") ? "" : effortSelect.value;
       const access = chosenAccess();
@@ -769,8 +830,9 @@ export async function openLaunchSession(ctx, prefill = {}) {
           worktree,
           prompt: firstMessage(prompt, extraField.classList.contains("hidden") ? "" : extraArea.value),
           parent_id: parent?.id || "",
+          start,
         });
-        saveLaunchDefaults(store, user, projectId, { platform, model, effort, access, worktree, agent });
+        saveLaunchDefaults(store, user, projectId, { platform, model, effort, access, worktree, agent, start: startOption.id });
         rememberSessionChoice({ platform, model });
         ctx.S.selectedSessionId = data.session.id;
         ctx.S.taskView = "sessions";
@@ -795,7 +857,7 @@ export async function openLaunchSession(ctx, prefill = {}) {
   });
 }
 
-function boardView(ctx, S, tasks, agents, hosts, artifacts) {
+function boardView(ctx, S, tasks) {
   const board = h("div", { class: "board" });
   for (const status of COLUMNS) {
     const items = sortUnits(tasks.filter((u) => u.status === status), "importance");
@@ -822,15 +884,14 @@ function boardView(ctx, S, tasks, agents, hosts, artifacts) {
     });
     board.appendChild(col);
   }
-  // Agent fleet / Hosts / Library: shown when the project has them, or with
-  // advanced features on.
-  const showSupport = advancedEnabled() || agents.length || hosts.length || artifacts.length;
-  const support = !showSupport ? null : h("details", { class: "task-support", open: true },
+  // Workspace support: live sessions and agents, hosts, library and
+  // deadlines (support-panel.js, GET /api/project/support).
+  const meta = h("span", { class: "task-support-meta" }, t("support.loading"));
+  const support = h("details", { class: "task-support", open: true },
     h("summary", null,
       h("span", null, icon("layers", "sm"), ` ${t("tasks.support.title")}`),
-      h("span", { class: "task-support-meta" },
-        t("tasks.support.meta", { agents: agents.length, hosts: hosts.length, library: artifacts.length }))),
-    taskAside(ctx, S, tasks, agents, hosts, artifacts));
+      meta),
+    supportDeck(ctx, { onMeta: (text) => { meta.textContent = text; } }));
   return h("div", null, board, support);
 }
 
@@ -859,57 +920,6 @@ function taskCard(ctx, unit) {
   return card;
 }
 
-function taskAside(ctx, S, tasks, agents, hosts, artifacts) {
-  const active = tasks.filter((u) => ["active", "open", "review"].includes(u.status));
-  const agentCards = h("div", { class: "stack", style: { gap: "7px" } });
-  for (const agent of agents.slice(0, 4)) {
-    const load = tasks.filter((u) => (u.assignees || []).some((a) => a.id === agent.id) && u.status !== "done").length;
-    agentCards.appendChild(h("div", { class: "agent-card", dataset: { unitRef: agent.uid }, onclick: () => ctx.openUnit(agent.uid) },
-      avatarFor(agent),
-      h("div", { class: "main" },
-        h("div", { class: "t" }, agent.title.split("·")[0].trim()),
-        h("div", { class: "role" }, roleOf(agent) || typeLabel("agent")),
-        h("div", { class: "load" }, t("tasks.agent_load"),
-          h("span", { class: "load-dots" }, [0, 1, 2, 3].map((i) => h("i", { class: i < Math.min(4, load) ? "on" : "" })))))));
-  }
-  if (!agents.length) agentCards.appendChild(h("div", { class: "empty sm" }, t("tasks.no_agents")));
-  const hostRows = hosts.map((host) => h("div", { class: "host-row", dataset: { unitRef: host.uid }, onclick: () => ctx.openUnit(host.uid) },
-    h("span", { class: "status-dot" }),
-    h("span", { class: "t" }, host.title),
-    ...(host.tags || []).filter((tag) => /^(os|gpu):/.test(tag)).slice(0, 2).map((tag) => h("span", { class: "tag" }, tag.split(":")[1]))));
-  const due = active.filter((u) => u.end_at).sort((a, b) => a.end_at.localeCompare(b.end_at)).slice(0, 3);
-  const dueList = h("div", { class: "action-list" });
-  for (const u of due) {
-    dueList.appendChild(h("div", { class: "action-item", dataset: { unitRef: u.uid }, onclick: () => ctx.openUnit(u.uid) },
-      h("span", { class: "ic" }, icon("clock", "sm")),
-      h("div", { class: "txt" },
-        h("div", { class: "t" }, u.title),
-        h("div", { class: "d" }, h("span", { class: dueState(u) === "overdue" ? "overdue" : "" }, fmtDate(u.end_at))))));
-  }
-  return h("aside", { class: "task-aside" },
-    h("div", { class: "panel" },
-      h("div", { class: "panel-head" }, h("h3", null, t("tasks.fleet")),
-        h("button", { class: "link", onclick: () => ctx.setTaskView("agents") }, t("action.see_all"))),
-      agentCards),
-    h("div", { class: "panel" },
-      h("div", { class: "panel-head" }, h("h3", null, t("tasks.hosts")),
-        h("span", { class: "muted", style: { fontSize: "10px" } }, hosts.length)),
-      hostRows.length ? hostRows : h("div", { class: "empty sm" }, t("tasks.no_hosts"))),
-    h("div", { class: "panel" },
-      h("div", { class: "panel-head" }, h("h3", null, t("tasks.long_term")),
-        h("button", { class: "link", onclick: () => ctx.setTaskView("library") }, t("action.see_all"))),
-      h("div", { class: "row", style: { gap: "7px" } },
-        h("div", { class: "role-tile", style: { flex: 1 } },
-          h("div", { class: "k" }, t("tasks.artifacts")),
-          h("div", { class: "v" }, artifacts.filter((x) => x.type === "artifact").length)),
-        h("div", { class: "role-tile", style: { flex: 1 } },
-          h("div", { class: "k" }, t("tasks.resources")),
-          h("div", { class: "v" }, artifacts.filter((x) => x.type === "resource").length)))),
-    h("div", { class: "panel" },
-      h("div", { class: "panel-head" }, h("h3", null, t("tasks.due_soon"))),
-      dueList));
-}
-
 function timelineView(ctx, S, tasks) {
   const items = [...tasks, ...(S.units || []).filter((u) => u.type === "milestone")];
   const bar = h("div", { class: "toolbar", style: { marginBottom: "10px" } });
@@ -922,57 +932,4 @@ function timelineView(ctx, S, tasks) {
     onZoom: (z) => { S.ganttZoom = z; },
   }));
   return h("div", null, bar, host);
-}
-
-function agentsView(ctx, S, agents, hosts, tasks) {
-  const wrap = h("div", { class: "stack", style: { gap: "16px" } });
-  wrap.appendChild(h("div", { class: "notice" }, icon("info", "sm"),
-    h("div", null, t("tasks.dispatch_hint"))));
-  const grid = h("div", { class: "cards three" });
-  for (const agent of agents) {
-    const assigned = tasks.filter((u) => (u.assignees || []).some((a) => a.id === agent.id));
-    const active = assigned.filter((u) => u.status !== "done");
-    const host = (agent.tags || []).find((x) => x.startsWith("host:"));
-    grid.appendChild(h("div", { class: "panel", style: { padding: "12px", cursor: "pointer" }, onclick: () => ctx.openUnit(agent.uid) },
-      h("div", { class: "row", style: { marginBottom: "8px" } }, avatarFor(agent), h("div", { class: "flex1" },
-        h("div", { style: { fontSize: "13px", fontWeight: "700" } }, agent.title.split("·")[0].trim()),
-        h("div", { style: { fontSize: "10px", color: "var(--mute)" } }, roleOf(agent) || typeLabel("agent"))),
-        h("span", { class: `status-dot ${agent.status === "active" ? "" : agent.status === "inbox" ? "idle" : "idle"}`.trim() })),
-      h("div", { style: { fontSize: "11.5px", color: "var(--sub)", lineHeight: "1.55", minHeight: "34px" } }, (agent.excerpt || agent.body || "").slice(0, 130)),
-      h("div", { class: "row", style: { marginTop: "8px", gap: "5px", fontSize: "10px" } },
-        ...[...new Set((agent.tags || []).filter((x) => /^(model|host|role):/.test(x)))].map((x) => h("span", { class: "pill" }, x)),
-        h("span", { class: "right", color: "var(--mute)" }, t("tasks.active_count", { n: active.length }))),
-      h("div", { class: "load-dots", style: { marginTop: "8px" } }, [0, 1, 2, 3, 4, 5].map((i) => h("i", { class: i < Math.min(6, active.length) ? "on" : "" })))));
-  }
-  wrap.appendChild(grid);
-  wrap.appendChild(h("div", { class: "section-head" }, h("h2", null, t("tasks.hosts"))));
-  const hostGrid = h("div", { class: "cards" });
-  for (const host of hosts) {
-    const tags = (host.tags || []).filter((x) => /^(os|gpu|device|status):/.test(x));
-    hostGrid.appendChild(h("div", { class: "panel", style: { cursor: "pointer" }, onclick: () => ctx.openUnit(host.uid) },
-      h("div", { class: "row", style: { marginBottom: "6px" } }, icon("cpu", "sm"), h("b", null, host.title), h("span", { class: "right status-dot" })),
-      h("div", { style: { fontSize: "11px", color: "var(--sub)", lineHeight: "1.55" } }, (host.excerpt || host.body || "").slice(0, 150)),
-      h("div", { class: "row", style: { marginTop: "8px" } }, tags.map((x) => h("span", { class: "tag" }, x)))));
-  }
-  wrap.appendChild(hostGrid);
-  return wrap;
-}
-
-function libraryView(ctx, S, items) {
-  if (!items.length) return emptyState(t("tasks.library_empty"));
-  const wrap = h("div", { class: "stack", style: { gap: "16px" } });
-  const groups = { artifact: [], resource: [] };
-  for (const item of items) (groups[item.type] || groups.artifact).push(item);
-  for (const [type, list] of Object.entries(groups)) {
-    if (!list.length) continue;
-    wrap.appendChild(h("section", null,
-      h("div", { class: "section-head" }, h("h2", null, typeLabel(type)), h("span", { class: "sub" }, `${list.length}`)),
-      h("div", { class: "cards" }, list.map((unit) => unitCard(unit, ctx, { onTag: (tag) => ctx.toggleFilterValue("tags", tag) })))));
-  }
-  return wrap;
-}
-
-function roleOf(agent) {
-  const tag = (agent.tags || []).find((x) => x.startsWith("role:"));
-  return tag ? tag.split(":")[1] : "";
 }

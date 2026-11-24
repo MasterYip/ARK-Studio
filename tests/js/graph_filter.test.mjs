@@ -62,3 +62,30 @@ test("date, type/origin, inherited assignee and empty selections match API seman
   assert.equal(index.filter({assignee:['me']}, 'alice').nodes[0].id, 1);
   assert.equal(index.filter({types_none:'1'}).nodes.length, 0);
 });
+
+test("min links counts in + out edges over the whole snapshot and combines with other filters", () => {
+  const { linkCounts, minLinksOf } = module.namespace;
+  // 1->2, 3->1, 1->4, 2->3, 4->4 (self-link counts once), 5 isolated.
+  const edges = [{source:1,target:2},{source:3,target:1},{source:1,target:4},{source:2,target:3},{source:4,target:4}];
+  const counts = linkCounts(edges);
+  assert.deepEqual([1,2,3,4,5].map((id) => counts.get(id) || 0), [3,2,2,2,0]);
+  const index = new GraphFilterIndex({ nodes: [node(1,{tags:["topic:a"]}), node(2,{type:"idea"}), node(3,{tags:["topic:a"]}), node(4), node(5)], edges });
+  assert.equal(index.degreeOf(1), 3);
+  assert.equal(index.degreeOf(5), 0);
+  assert.equal(index.maxDegree(), 3);
+  assert.equal(index.maxDegree(["idea"]), 2, "the slider end follows the tab's types");
+  assert.equal(index.maxDegree(["note"]), 0);
+  const ids = (query) => Array.from(index.filter(query).nodes, (n) => n.id).sort();
+  assert.deepEqual(ids({}), [1,2,3,4,5]);
+  assert.deepEqual(ids({ min_links: 0 }), [1,2,3,4,5], "0 means no filter");
+  assert.deepEqual(ids({ min_links: 2 }), [1,2,3,4]);
+  assert.deepEqual(ids({ min_links: 3 }), [1]);
+  assert.deepEqual(ids({ min_links: 4 }), []);
+  // AND with tags; the count does not shrink when neighbours are filtered out.
+  assert.deepEqual(ids({ min_links: 2, tags: ["topic:a"] }), [1,3]);
+  assert.deepEqual(ids({ min_links: 3, types: ["claim"] }), [1]);
+  assert.equal(index.filter({ min_links: 2 }).total, 4);
+  assert.equal(minLinksOf("2.7"), 2);
+  assert.equal(minLinksOf(-1), 0);
+  assert.equal(minLinksOf("x"), 0);
+});

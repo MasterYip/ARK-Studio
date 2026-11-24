@@ -203,6 +203,12 @@ func (c *reqCtx) getHealth() error {
 	} else {
 		payload.Set("root", c.app.Root)
 	}
+	if c.app.Cfg.ReadOnly {
+		payload.Set("read_only", true)
+		if st := standbyStatus(c.app.Cfg.StandbyStatus); st != nil {
+			payload.Set("standby", st)
+		}
+	}
 	c.ok(payload)
 	return nil
 }
@@ -411,6 +417,9 @@ func (c *reqCtx) postComment(m []string) error {
 	comment, err := p.Store.AddComment(c.ctx, m[1], c.body.Value("body"), pyjson.Str(kind), c.body.Value("reply_to"), author, c.writer)
 	if err != nil {
 		return err
+	}
+	if pyjson.Str(kind) == "decided" { // Go only (routes_taskspace.go): a task-space choice goes into setup
+		c.taskSpaceAnswered(p, m[1], c.body.Value("body"))
 	}
 	return c.commentsReply(p.Store, m[1], comment)
 }

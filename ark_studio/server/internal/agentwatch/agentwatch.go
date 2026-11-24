@@ -36,11 +36,12 @@ const (
 	KindDecision       = "decision"         // a person created a decision node
 	KindSetupConfirmed = "setup_confirmed"  // a setup layer was confirmed
 	KindMessage        = "message"          // a message to this agent (experimental)
+	KindGPUJobDone     = "gpu_job_done"     // a GPU queue job this agent queued ended
 )
 
 // Kinds lists every item kind.
 var Kinds = []string{KindComment, KindReply, KindMention, KindSentBack, KindAccepted, KindDecided, KindReopened,
-	KindStatus, KindAssignee, KindImportance, KindArchived, KindMoved, KindAssigned, KindDecision, KindSetupConfirmed, KindMessage}
+	KindStatus, KindAssignee, KindImportance, KindArchived, KindMoved, KindAssigned, KindDecision, KindSetupConfirmed, KindMessage, KindGPUJobDone}
 
 // Viewer is who asks: the agent and the account it acts for.
 type Viewer struct {
@@ -50,6 +51,7 @@ type Viewer struct {
 	TokenID    string          // personal token id ("" for the server token)
 	TokenLabel string          // personal token label
 	AnyAgent   bool            // the server token: every agent:* actor counts as this agent
+	Session    string          // the ARK session asking (the session nudger), "" for an agent token
 	Mine       bool            // only units the agent or its user created or is assigned to
 	Kinds      map[string]bool // nil = every kind
 }
@@ -226,6 +228,9 @@ func (v Viewer) classify(r store.UpdateRow, messages map[int64]*pyjson.Object, a
 		}
 		return []*pyjson.Object{it}
 	}
+	if r.Action == store.GPUJobDoneAction {
+		return v.gpuJobItems(r)
+	}
 	if !IsHuman(r.Actor) {
 		return nil
 	}
@@ -312,6 +317,87 @@ func (v Viewer) classify(r store.UpdateRow, messages map[int64]*pyjson.Object, a
 		return []*pyjson.Object{it}
 	}
 	return nil
+}
+
+// GPUJobFor reports whether a finished GPU job (the detail of a
+// gpu.job.done row) is for this viewer.  A job queued by an ARK session goes
+// to that session only (or to its own token's watcher); a job queued by
+// another agent goes to the token that queued it, or with the shared server
+// token to the owner's agents; never to an ARK session that did not queue it.
+func (v Viewer) GPUJobFor(d *pyjson.Object) bool {
+	session, token := detailStr(d, "session"), detailStr(d, "token")
+	switch {
+	case session != "":
+		return (v.Session != "" && v.Session == session) || (v.Session == "" && token != "" && v.TokenID == token)
+	case v.Session != "":
+		return false
+	case token != "":
+		return v.TokenID == token
+	}
+	owner := detailStr(d, "owner")
+	return owner == "" || v.User == "" || v.isUser(owner)
+}
+
+func (v Viewer) gpuJobItems(r store.UpdateRow) []*pyjson.Object {
+	if !v.GPUJobFor(r.Detail) {
+		return nil
+	}
+	id := detailStr(r.Detail, "job")
+	it := v.item(r, KindGPUJobDone, GPUJobSummary(r.Detail))
+	job := pyjson.NewObject()
+	for _, k := range []string{"job", "name", "server", "status", "exit_code", "duration_s", "error", "log_path"} {
+		if val, ok := r.Detail.Get(k); ok {
+			job.Set(k, val)
+		}
+	}
+	it.Set("job", job)
+	it.Set("link", "/api/agent/v1/gpu/jobs/"+id+"/logs")
+	return []*pyjson.Object{it}
+}
+
+// GPUJobSummary is one line about a finished job: id, name, state, server,
+// exit code, duration and the error line.
+func GPUJobSummary(d *pyjson.Object) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "GPU job %s", detailStr(d, "job"))
+	if name := detailStr(d, "name"); name != "" {
+		fmt.Fprintf(&b, " %q", name)
+	}
+	status := detailStr(d, "status")
+	fmt.Fprintf(&b, " %s", status)
+	if server := detailStr(d, "server"); server != "" {
+		fmt.Fprintf(&b, " on %s", server)
+	}
+	if code, ok := d.Value("exit_code").(int64); ok {
+		fmt.Fprintf(&b, " (exit %d)", code)
+	}
+	if secs, ok := d.Value("duration_s").(int64); ok && secs > 0 {
+		fmt.Fprintf(&b, " after %s", Duration(secs))
+	}
+	if e := detailStr(d, "error"); e != "" && status != "completed" {
+		fmt.Fprintf(&b, ": %s", pytext.Excerpt(e, 200))
+	}
+	return b.String()
+}
+
+// detailStr is a string field of a detail ("" when missing or not a string).
+func detailStr(d *pyjson.Object, key string) string {
+	if d == nil {
+		return ""
+	}
+	s, _ := d.Value(key).(string)
+	return s
+}
+
+// Duration is a short duration: 45s, 12m05s, 3h07m.
+func Duration(secs int64) string {
+	switch {
+	case secs < 60:
+		return fmt.Sprintf("%ds", secs)
+	case secs < 3600:
+		return fmt.Sprintf("%dm%02ds", secs/60, secs%60)
+	}
+	return fmt.Sprintf("%dh%02dm", secs/3600, secs%3600/60)
 }
 
 // groupItems turns a person's decision on, or comment in, a review group

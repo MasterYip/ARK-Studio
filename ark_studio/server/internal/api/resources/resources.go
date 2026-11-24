@@ -8,6 +8,7 @@ package resources
 import (
 	"errors"
 	"os"
+	"strings"
 
 	"arkstudio/go/internal/api"
 	"arkstudio/go/internal/compat/pyjson"
@@ -28,6 +29,42 @@ type Handlers struct {
 	// OnGraph, when set, is told that the project's graph was read (the
 	// server schedules due location sizes in the background).
 	OnGraph func(p *project.Project)
+	// ServerNames, when set, are the ARK server's public host names for this
+	// request (its Host header, the configured public URL).
+	ServerNames func(c api.Ctx) []string
+	// AllGPUServers, when set, is the whole server list for admins (nil for
+	// everyone else): the ARK server's own SSH entry is found in it.
+	AllGPUServers func(c api.Ctx) []any
+}
+
+// connectOpts are the shared machine records of p and the server's names.
+func (h Handlers) connectOpts(c api.Ctx, p *project.Project) resdom.ConnectOpts {
+	opts := resdom.ConnectOpts{Machines: resdom.ReadMachines(p.Path)}
+	if h.ServerNames != nil {
+		opts.ServerNames = h.ServerNames(c)
+		opts.ServerAddrs = resdom.LookupAddrs(c.Context(), opts.ServerNames)
+	}
+	if h.AllGPUServers != nil && len(opts.ServerAddrs) > 0 {
+		addrs := map[string]bool{}
+		for _, a := range opts.ServerAddrs {
+			addrs[a] = true
+		}
+		for _, item := range h.AllGPUServers(c) {
+			if s, ok := item.(*pyjson.Object); ok {
+				if host, _ := s.Value("host").(string); host != "" && addrs[strings.ToLower(host)] {
+					opts.ServerSSH = pyjson.NewObject("name", s.Value("name"), "host", host, "port", s.Value("port"), "user", s.Value("user"))
+					break
+				}
+			}
+		}
+	}
+	return opts
+}
+
+// isAdmin: the viewer may change the project's shared machine records.
+func isAdmin(c api.Ctx) bool {
+	_, err := c.Require("admin")
+	return err == nil
 }
 
 var reDevice = api.PyRe(`/api/resources/devices/([^/]+)`, true)
@@ -68,6 +105,19 @@ func (h Handlers) Graph(c api.Ctx) error {
 	}
 	c.OK(graph)
 	return nil
+}
+
+// GraphFor is the graph GET /api/resources/graph answers, for another reply
+// (GET /api/project/support).  It does not schedule location sizes.
+func (h Handlers) GraphFor(c api.Ctx, p *project.Project) (*pyjson.Object, error) {
+	src, err := h.sources(c, p)
+	if err != nil {
+		return nil, err
+	}
+	if src == nil {
+		return pyjson.NewObject("devices", []any{}, "resources", []any{}), nil
+	}
+	return resdom.BuildGraph(src, c.Actor())
 }
 
 // DevicePost is POST /api/resources/devices/<id> (raw path); false for
@@ -119,7 +169,8 @@ func (h Handlers) DevicePost(c api.Ctx, path string, body *pyjson.Object) (bool,
 }
 
 // ConnectPath is GET /api/resources/connect (Go only, 2026-11-22): the SSH
-// connections of the viewer's graph devices (resources.Connections).
+// connections of the viewer's graph devices and the project's shared
+// machine records (resources.ConnectionsWith, 2026-11-24).
 const ConnectPath = "/api/resources/connect"
 
 var reConnect = api.PyRe(`/api/resources/connect/([^/]+)`, true)
@@ -142,15 +193,20 @@ func (h Handlers) Connect(c api.Ctx) error {
 	if err != nil {
 		return err
 	}
-	out := resdom.Connections(graph, src, saved)
-	out.Set("can_save", h.Deps.Org != nil && c.Actor() != "")
+	out := resdom.ConnectionsWith(graph, src, saved, h.connectOpts(c, p))
+	admin := isAdmin(c)
+	personal := h.Deps.Org != nil && c.Actor() != ""
+	out.Set("can_save", personal || admin)
+	out.Set("can_save_personal", personal)
+	out.Set("can_edit_shared", admin)
 	c.OK(out)
 	return nil
 }
 
-// ConnectPost is POST /api/resources/connect/<device id> {alias, host, user,
-// port} (raw path): the viewer's own entry for a device of their graph; an
-// empty body removes it.  False for other paths.
+// ConnectPost is POST /api/resources/connect/<device id> (raw path): the
+// viewer's own entry {alias, host, user, port, auth} and, for project
+// admins, {"shared": {name, host, port, user}} and {"link": machine id}
+// (resources.SaveConnection).  False for other paths.
 func (h Handlers) ConnectPost(c api.Ctx, path string, body *pyjson.Object) (bool, error) {
 	m := reConnect.FindStringSubmatch(path)
 	if m == nil {
@@ -170,15 +226,9 @@ func (h Handlers) ConnectPost(c api.Ctx, path string, body *pyjson.Object) (bool
 	if err != nil {
 		return true, err
 	}
-	saved, err := resdom.SSHSettings(c.Context(), h.Deps.Org, actor)
-	if err != nil {
-		return true, err
-	}
-	// A device that left the graph can still be cleared.
-	if !resdom.VisibleDevice(graph, deviceID) && !saved.Has(deviceID) {
-		return true, api.Err(404, "device not found", "RESOURCES_DEVICE_NOT_FOUND")
-	}
-	result, err := resdom.SetSSH(c.Context(), h.Deps.Org, actor, deviceID, body)
+	result, err := resdom.SaveConnection(c.Context(), h.Deps.Org, resdom.SaveRequest{
+		ProjectPath: p.Path, Username: actor, DeviceID: deviceID, Body: body, Admin: isAdmin(c),
+		Graph: graph, Sources: src, Opts: h.connectOpts(c, p)})
 	var re *resdom.Error
 	if errors.As(err, &re) {
 		return true, api.Err(re.Status, re.Message, re.Code)

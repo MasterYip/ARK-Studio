@@ -230,3 +230,34 @@ test("state loads v2 saved filters as v3 with an empty assignee group", async ()
   assert.equal(state.S.filters.q, "fav");
   assert.deepEqual(plain(state.S.filters.assignees), []);
 });
+
+test("min links is part of the filter model: normalized, counted, sent and remembered per tab", async () => {
+  const storage = memoryStorage();
+  const { state } = await stateFixture(storage);
+  assert.equal(state.emptyFilters().minLinks, 0);
+  assert.equal(state.normalizeFilters({ minLinks: "3" }).minLinks, 3);
+  assert.equal(state.normalizeFilters({ min_links: 2.9 }).minLinks, 2);
+  assert.equal(state.normalizeFilters({ minLinks: -4 }).minLinks, 0);
+  assert.equal(state.normalizeFilters({ minLinks: "abc" }).minLinks, 0);
+  assert.equal(state.normalizeFilters({ q: "old v3 save" }).minLinks, 0, "older saves load with the filter off");
+  state.setTab("map");
+  assert.equal(state.activeFilterCount(state.S.filters), 0);
+  assert.equal(plain(state.filtersToParams(state.S.filters)).min_links, undefined, "0 sends nothing");
+  state.S.filters.minLinks = 3;
+  state.persistFilters();
+  assert.equal(state.activeFilterCount(state.S.filters), 1);
+  assert.equal(plain(state.filtersToParams(state.S.filters)).min_links, 3);
+  assert.deepEqual(plain(state.filterDiffFromDefault()), ["minLinks"]);
+  state.setTab("ideas");
+  assert.equal(state.S.filters.minLinks, 0, "each tab has its own value");
+  state.setTab("map");
+  assert.equal(state.S.filters.minLinks, 3, "the Map's value round-trips through storage");
+  assert.equal(JSON.parse(storage.getItem("ark.filters.v1.p1.map")).filters.minLinks, 3);
+  state.saveFiltersAsDefault();
+  state.S.filters.minLinks = 0;
+  state.resetFilters();
+  assert.equal(state.S.filters.minLinks, 3, "a saved default keeps it");
+  state.clearFilterDefault();
+  state.resetFilters();
+  assert.equal(state.S.filters.minLinks, 0);
+});

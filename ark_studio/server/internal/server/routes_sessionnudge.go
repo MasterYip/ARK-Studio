@@ -13,6 +13,7 @@ import (
 
 	"arkstudio/go/internal/agentwatch"
 	"arkstudio/go/internal/compat/pyjson"
+	"arkstudio/go/internal/gpu"
 	"arkstudio/go/internal/project"
 	"arkstudio/go/internal/sessionnudge"
 	"arkstudio/go/internal/sessions"
@@ -91,8 +92,26 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 			if err != nil {
 				return sessionnudge.Batch{}, err
 			}
-			v := agentwatch.Viewer{User: s.User, AnyAgent: true, Mine: true}
-			return sessionnudge.Batch{Items: agentwatch.Items(batch.Rows, v, nil), Epoch: batch.Epoch, Top: batch.Top}, nil
+			v := agentwatch.Viewer{User: s.User, AnyAgent: true, Mine: true, Session: s.ID}
+			items := agentwatch.Items(batch.Rows, v, nil)
+			a.addGPULogTails(items)
+			return sessionnudge.Batch{Items: items, Epoch: batch.Epoch, Top: batch.Top}, nil
+		},
+		Background: func(s sessionnudge.Session) ([]sessionnudge.Notice, func()) {
+			ss, err := a.Sessions.Get(s.ID)
+			if err != nil {
+				return nil, nil
+			}
+			done := a.Sessions.RestingBackgroundDone(ss, bgNoticeGrace)
+			if len(done) == 0 {
+				return nil, nil
+			}
+			notices := make([]sessionnudge.Notice, len(done))
+			ids := make([]string, len(done))
+			for i, d := range done {
+				notices[i], ids[i] = sessionnudge.Notice{Line: d.Line(), Tail: d.Tail}, d.ID
+			}
+			return notices, func() { a.Sessions.MarkBackgroundTold(ss, ids) }
 		},
 		Load: func(id string) (string, int64, bool) {
 			s, err := a.Sessions.Get(id)
@@ -126,6 +145,35 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 			}
 			return err
 		},
+	}
+}
+
+// bgNoticeGrace: a background task that finished while its session rests
+// is reported only when the CLI did not take it up itself by then.
+var bgNoticeGrace = 15 * time.Second
+
+// addGPULogTails adds the stored log tail (the last lines of a failed job)
+// to gpu_job_done items, for the message to the session.
+func (a *App) addGPULogTails(items []*pyjson.Object) {
+	var q *gpu.Queue
+	for _, it := range items {
+		if pyjson.Str(it.Value("kind")) != agentwatch.KindGPUJobDone {
+			continue
+		}
+		if q == nil {
+			if q = a.gpu().QueueIfStarted(); q == nil {
+				return
+			}
+		}
+		job, _ := it.Value("job").(*pyjson.Object)
+		if job == nil {
+			continue
+		}
+		if full, err := q.Get(pyjson.Str(job.Value("job"))); err == nil {
+			if tail := strOrEmptyAny(full.Value("log_tail")); tail != "" {
+				it.Set("log_tail", tail)
+			}
+		}
 	}
 }
 

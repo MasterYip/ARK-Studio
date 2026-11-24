@@ -13,6 +13,7 @@ import { displayName } from "./users.js";
 import { withDesktopGroups, newProjectLocation } from "./desktop-hub.js";
 import { liveProjectPicker } from "./project-picker.js";
 import { fallbackNotice } from "./project-storage-model.js";
+import { keepView, scrollParent } from "./scroll-keep.js";
 
 const KIND_COLORS = {topic: "#3b82f6", todo: "#ef4444", event: "#a855f7", decision: "#f59e0b",
   question: "#eab308", announcement: "#14b8a6", resource: "#10b981", digest: "#64748b", note: "#94a3b8"};
@@ -691,7 +692,19 @@ export async function openAssistant(ctx) {
 // -------------------------------------------------------------------- rail
 // embedded: the rail of another project's units (Ideas › Import from an ARK
 // project, import-ark.js): appended to host, without the tab's defaults.
-export function renderFilterRail(host, ctx, { embedded = false } = {}) {
+//
+// Every rebuild keeps the scroll offset, the focused control and the
+// open/closed tag groups (scroll-keep.js), so a chip click never jumps.
+export function renderFilterRail(host, ctx, options = {}) {
+  if (options.embedded) return buildFilterRail(host, ctx, options);
+  return keepView(host, () => buildFilterRail(host, ctx, options));
+}
+
+// Tag groups the user opened or closed by hand, by namespace.  Without this a
+// rebuild re-applied the default (groups over 10 values collapsed).
+const railGroupOpen = new Map();
+
+function buildFilterRail(host, ctx, { embedded = false } = {}) {
   const { S: state } = ctx;
   const facets = state.facets || { types: {}, statuses: {}, importance: {}, namespaces: {} };
   const base = baseTypes(state.tab, state.sub);
@@ -848,6 +861,7 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
   // Time and graph options live above the tag cloud; tags are the longest
   // section and should not push these controls off-screen.
   host.appendChild(section(t("filters.time"), timeFilterControl(state, ctx, facets)));
+  if (ctx.setMinLinks) host.appendChild(minLinksSection(state, ctx, facets, base));
   host.appendChild(section(t("filters.graph_options"), h("div", { class: "filter-check-list" },
     h("label", { class: "filter-check" },
       h("input", { type: "checkbox", checked: state.filters.roots ? true : undefined,
@@ -890,10 +904,15 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
     // Small groups stay expanded. Namespaces with more than 10 values start
     // collapsed so the filter rail remains usable; a selected value or the
     // unset option keeps that group open.
-    const expanded = values.length <= 10 || selectedInNs || unsetOn;
+    // A group the user opened or closed keeps that state across rebuilds.
+    const expanded = railGroupOpen.has(ns) ? railGroupOpen.get(ns) : (values.length <= 10 || selectedInNs || unsetOn);
     const details = h("details", { class: "tag-filter-wrap", open: expanded ? true : undefined });
     if (isNeeds) details.dataset.ns = "needs";
-    details.appendChild(h("summary", null, `${isNeeds ? t("needs.group") : nsLabel(ns)} (${values.length})`));
+    details.appendChild(h("summary", {
+      dataset: { focusKey: `ns:${ns}` },
+      // The click toggles `open` after this handler runs (Enter/Space too).
+      onclick: () => railGroupOpen.set(ns, !details.open),
+    }, `${isNeeds ? t("needs.group") : nsLabel(ns)} (${values.length})`));
     const list = h("div", { class: "tag-filter-cloud" });
     const tagBase = values.map((item) => item.tag);
     for (const value of values.slice(0, 20)) {
@@ -907,7 +926,7 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
     const unsetCount = facets.unset?.[ns] ?? 0;
     list.appendChild(h("button", {
       class: `tag-filter unset-filter ${unsetOn ? "on" : ""}`.trim(),
-      title: t("filters.unset_hint"),
+      title: t("filters.unset_hint"), dataset: { focusKey: `unset:${ns}` },
       onclick: () => ctx.toggleFilterValue("tagsUnset", ns),
     }, h("span", { class: "tag-value" }, isNeeds ? `∅ ${t("needs.unset")}` : `∅ ${t("filters.unset")}`),
     h("span", { class: "n" }, unsetCount)));
@@ -917,6 +936,54 @@ export function renderFilterRail(host, ctx, { embedded = false } = {}) {
 
 
 
+}
+
+// Min. links: nodes with at least N links (in + out edges in the project
+// graph, or the topic's own links on a topic page).  0 = no filter.
+function minLinksSection(state, ctx, facets, base) {
+  const value = Math.max(0, Math.floor(Number(state.filters.minLinks) || 0));
+  const scopeMax = Number.isFinite(facets.links_max) ? facets.links_max
+    : (state.graphIndex?.maxDegree?.(base) ?? 0);
+  // A saved value above the current maximum stays visible (and removable).
+  const max = Math.max(scopeMax, value);
+  const valueLabel = h("span", { class: "min-links-value" });
+  const input = h("input", {
+    type: "range", class: "min-links-input", min: "0", max: String(max), step: "1", value: String(value),
+    disabled: max === 0 ? true : undefined, "aria-label": t("filters.min_links"),
+    dataset: { focusKey: "min-links" },
+  });
+  const paint = (n) => {
+    valueLabel.textContent = n > 0 ? `≥ ${n}` : t("filters.any");
+    input.style.setProperty("--fill", `${max ? (n / max) * 100 : 0}%`);
+    input.setAttribute("aria-valuetext", n > 0 ? t("filters.links_chip", { n }) : t("filters.any"));
+  };
+  let timer = 0;
+  let last = 0;
+  input.addEventListener("input", () => {
+    const n = Number(input.value) || 0;
+    paint(n);
+    clearTimeout(timer);
+    // Throttled like the time slider: paint now, then at most every 50 ms.
+    const run = () => { last = performance.now(); ctx.setMinLinks(n, { live: true }); };
+    if (performance.now() - last >= 50) run();
+    else timer = setTimeout(run, 50);
+  });
+  input.addEventListener("change", () => {
+    clearTimeout(timer);
+    ctx.setMinLinks(Number(input.value) || 0);
+  });
+  paint(value);
+  const chip = value > 0 ? h("button", {
+    type: "button", class: "chip on min-links-chip", title: t("action.remove"),
+    dataset: { focusKey: "min-links-chip" },
+    onclick: () => ctx.setMinLinks(0),
+  }, t("filters.links_chip", { n: value }), h("span", { style: { opacity: ".8" } }, "×")) : null;
+  return h("div", { class: "rail-section min-links" },
+    h("div", { class: "rail-label" }, h("span", null, t("filters.min_links")), chip),
+    h("div", { class: "min-links-row" }, input, valueLabel),
+    h("div", { class: "min-links-scale" },
+      h("span", null, "0"),
+      h("span", null, max === 0 ? t("filters.no_links") : t("filters.links_max", { n: max }))));
 }
 
 function timeFilterControl(state, ctx, facets) {
@@ -1106,10 +1173,12 @@ function renderInfoHubRail(host, ctx) {
   let data = state.infoHubData;
   const refresh = () => ctx.refresh();
   const updateGraph = () => {
-    const top = host.scrollTop;
+    // The rail or, in the workbench, the view around it scrolls.
+    const scroller = scrollParent(host);
+    const top = scroller.scrollTop;
     if (typeof ctx.updateInfoHubGraph === "function") {
       ctx.updateInfoHubGraph();
-      requestAnimationFrame(() => { host.scrollTop = top; });
+      requestAnimationFrame(() => { scroller.scrollTop = top; });
     } else {
       ctx.refresh();
     }

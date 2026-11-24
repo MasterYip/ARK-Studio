@@ -12,7 +12,7 @@ import {
 } from "../needs-ui.js";
 import { currentUsername, displayName, userAvatar } from "../users.js";
 import { startPanel, setupNeedsRow } from "./onboarding.js";
-import { runningAgentRows } from "./agent-connect.js";
+import { homeSupportCard, homeDeadlines } from "../support-panel.js";
 import {
   agentConnection, checklistCard, checklistItems, checklistRestorable, dismissChecklist, restoreChecklist, tutorialChapters, tutorialTopic,
 } from "../home-model.js";
@@ -29,7 +29,6 @@ import { desktopUpdateBanner } from "../desktop-update.js";
 
 const OPEN = ["inbox", "open", "active", "review", "blocked"];
 const STAGE_ICONS = { capture: "bulb", plan: "route", evidence: "target", execute: "tasks", make: "palette", share: "send" };
-const RUN_ACTIVE = new Set(["starting", "running", "stopping"]);
 
 export function renderOverview(host, ctx) {
   const S = ctx.S;
@@ -52,7 +51,7 @@ export function renderOverview(host, ctx) {
         teamPanel(ctx, ov)),
       duePanel(ctx, ov),
       researchPanel(ctx, ov),
-      runsPanel(ctx, ov),
+      homeSupportCard(ctx),
       activityPanel(ctx, ov)),
   ].filter(Boolean));
   host.appendChild(page);
@@ -485,8 +484,11 @@ function duePanel(ctx, ov) {
   if (!ov) { panel.appendChild(unavailable()); return panel; }
   const due = ov.due || {};
   const blocked = ov.blocked || {};
+  // Expiring agent tokens, GPU time limits and long reviews come from the
+  // same read as the Board's "Due soon" (support-panel.js).
+  const other = homeDeadlines(ctx);
   if (!due.overdue_total && !due.soon_total && !blocked.total) {
-    panel.appendChild(h("div", { class: "empty sm" }, t("home.no_due")));
+    panel.append(h("div", { class: "empty sm" }, t("home.no_due")), other);
     return panel;
   }
   const today = ov.today;
@@ -500,6 +502,7 @@ function duePanel(ctx, ov) {
     group("soon", t("home.next_7"), due.soon_total, (due.soon || []).slice(0, 3),
       (u) => (u.end_at === today ? t("home.due_today") : t("home.due_in", { n: daysBetween(today, u.end_at) }))),
     group("blocked", t("home.kpi.blocked"), blocked.total, (blocked.items || []).slice(0, 3), blockerText),
+    other,
   ].filter(Boolean));
   return panel;
 }
@@ -581,49 +584,6 @@ function researchPanel(ctx, ov) {
 
 // ----------------------------------------------------------------- running
 // What is running?  Agent sessions of this project and the GPU queue.
-function runsPanel(ctx, ov) {
-  const panel = h("section", { class: "panel ov-runs" },
-    panelHead(t("home.running"), headLink(t("home.runs_link"), () => ctx.navigateWorkspace("execute", "sessions"))));
-  if (!ov) { panel.appendChild(unavailable()); return panel; }
-  const runs = ov.runs || { total: 0, recent: [] };
-  const gpu = ov.gpu || {};
-  const runsBlock = runs.total
-    ? h("div", { class: "ov-group runs", dataset: { group: "runs" } },
-      h("div", { class: "ov-group-head" }, h("span", null, t("home.runs")),
-        h("b", { dataset: { active: String(runs.active || 0) } }, t("home.runs_count", { a: runs.active || 0, n: runs.total }))),
-      (runs.recent || []).slice(0, 4).map((run) => h("button", {
-        class: "ov-row", type: "button", dataset: { session: run.id },
-        onclick: () => { ctx.S.selectedSessionId = run.id; ctx.navigateWorkspace("execute", "sessions"); },
-      },
-        h("span", { class: `ov-dot ${RUN_ACTIVE.has(run.status) ? "live" : run.status === "errored" ? "bad" : ""}`.trim() }),
-        h("span", { class: "ov-row-title" }, run.title || run.id),
-        h("span", { class: "ov-row-d" }, t(`tasks.status.${run.status}`) === `tasks.status.${run.status}`
-          ? run.status : t(`tasks.status.${run.status}`), " · ", relativeTime(run.last_activity_at)))))
-    : null;
-  // Agents working through the agent API (Claude Code, Codex, ...) are not
-  // ARK sessions; show the ones that wrote in the last 30 minutes too (M5).
-  const agentRows = runningAgentRows(ctx, ov.agents);
-  const agentsBlock = agentRows.length
-    ? h("div", { class: "ov-group agents", dataset: { group: "agents" } },
-      h("div", { class: "ov-group-head" }, h("span", null, t("home.agents_writing")), h("b", null, count(agentRows.length))),
-      agentRows)
-    : null;
-  const idle = !runsBlock && !agentsBlock ? h("div", { class: "ov-hint" }, icon("terminal", "sm"), t("home.runs_none")) : null;
-  const jobs = gpu.jobs || {};
-  const running = (jobs.running || 0) + (jobs.starting || 0);
-  const queued = (jobs.queued || 0) + (jobs.pending || 0);
-  const gpuLine = gpu.configured
-    ? h("button", { class: "ov-gpu", type: "button", dataset: { gpu: "1" }, onclick: () => ctx.navigateWorkspace("execute", "gpu") },
-      icon("cpu", "sm"),
-      h("span", null, t("home.gpu")),
-      h("b", null, t("home.gpu_jobs", { r: running, q: queued })),
-      h("small", null, gpu.free_gpus == null ? t("home.gpu_not_probed")
-        : t("home.gpu_free", { n: gpu.free_gpus, total: gpu.gpus ?? 0 })))
-    : h("div", { class: "ov-hint", dataset: { gpu: "0" } }, icon("cpu", "sm"), t("home.gpu_off"));
-  panel.append(...[agentsBlock, runsBlock, idle, gpuLine].filter(Boolean));
-  return panel;
-}
-
 // ---------------------------------------------------------------- activity
 function activityPanel(ctx, ov) {
   const items = (ov?.activity || ctx.S.activity || []).slice(0, 14);

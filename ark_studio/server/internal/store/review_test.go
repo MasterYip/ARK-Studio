@@ -5,6 +5,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"reflect"
 	"strings"
 	"testing"
@@ -100,7 +101,13 @@ func TestReviewRoundsNoteAndChanges(t *testing.T) {
 	if _, err := st.AddMedia(ctx, uid, "assets/files/plot.png", "image", "Plot", agent); err != nil {
 		t.Fatal(err)
 	}
-	patch(t, st, uid, pyjson.NewObject("status", "review"), agent)
+	// An agent cannot resubmit without a note; a person can.
+	var noNote *ReviewNoteError
+	if _, err := st.UpdateUnit(ctx, uid, pyjson.NewObject("status", "review"), agent, Who{}); !errors.As(err, &noNote) ||
+		!strings.Contains(err.Error(), "for each comment") || !strings.Contains(err.Error(), "#baseline") {
+		t.Fatalf("agent resubmit without a note: %v", err)
+	}
+	patch(t, st, uid, pyjson.NewObject("status", "review"), "human:ui")
 	it = needsItem(t, st, uid)
 	if it.Value("review_round") != int64(2) || it.Value("review_note") != "" {
 		t.Fatalf("round 2: %v", it)
@@ -168,7 +175,7 @@ func TestReviewLegacyUnitWithoutRounds(t *testing.T) {
 	st := reviewStore(t)
 	// Created in review before review rounds: drop the table to simulate.
 	uid := mkUnit(t, st, pyjson.NewObject("type", "artifact", "title", "Old", "status", "review",
-		"body", "intro\n\n## Latest\nnew numbers"), "agent:x")
+		"body", "intro\n\n## Latest\nnew numbers"), "human:ui")
 	if err := st.DB.Write(context.Background(), func(q sqlitedb.Querier) error {
 		_, err := q.ExecContext(context.Background(), "DROP TABLE review_rounds")
 		return err
@@ -215,7 +222,8 @@ func TestReviewGroupLifecycle(t *testing.T) {
 	agent := "agent:local/coder"
 	task := mkUnit(t, st, pyjson.NewObject("type", "task", "title", "HOI-215 B2", "status", "active"), agent)
 	e1 := mkUnit(t, st, pyjson.NewObject("type", "evidence", "title", "Contact rate 0.67", "body", "# Claim\nrate 0.67\n独立评审：PASS。细节"), agent)
-	e2 := mkUnit(t, st, pyjson.NewObject("type", "evidence", "title", "Penetration 2.1 mm", "status", "review", "body", "# Claim\n2.1 mm"), agent)
+	e2 := mkUnit(t, st, pyjson.NewObject("type", "evidence", "title", "Penetration 2.1 mm", "status", "review", "body", "# Claim\n2.1 mm",
+		"review_note", "Check the penetration figure in [Claim](#claim)."), agent)
 	stats0, _ := st.ProjectPayload(ctx)
 	units0 := stats0.Value("stats").(*pyjson.Object).Value("units")
 	// One member is not a group.
@@ -288,7 +296,16 @@ func TestReviewGroupLifecycle(t *testing.T) {
 	}
 	// Resubmit: round 2, e2 pending again, e1 stays accepted.
 	patch(t, st, e2, pyjson.NewObject("body", "# Claim\n2.1 mm\nbaseline 3.0 mm"), agent)
-	out, err = st.UpdateReviewGroup(ctx, ref, pyjson.NewObject("status", "review"), agent)
+	var noNote *ReviewNoteError
+	if _, err := st.UpdateReviewGroup(ctx, ref, pyjson.NewObject("status", "review"), agent); !errors.As(err, &noNote) {
+		t.Fatalf("resubmit without a note: %v", err)
+	}
+	if _, err := st.UpdateReviewGroup(ctx, ref, pyjson.NewObject("status", "review",
+		"review_note", "Start with [the rate](E-0001#claim) and [bad](E-0001#missing)"), agent); !errors.As(err, &noNote) {
+		t.Fatalf("resubmit with the old note: %v", err)
+	}
+	out, err = st.UpdateReviewGroup(ctx, ref, pyjson.NewObject("status", "review",
+		"review_note", "Added the baseline (3.0 mm) to [the penetration claim](E-0002#claim) as asked."), agent)
 	if err != nil {
 		t.Fatal(err)
 	}

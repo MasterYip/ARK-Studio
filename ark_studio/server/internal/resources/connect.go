@@ -19,6 +19,7 @@ import (
 	"context"
 	"regexp"
 	"strings"
+	"unicode/utf8"
 
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
@@ -45,15 +46,51 @@ var sshKinds = map[string]bool{"ark": true, "gpu-server": true, "host": true}
 // CleanSSH validates an entry {alias?, host?, user?, port?, auth?}: nil (and no
 // error) when it is empty, an *Error when a field is invalid.
 func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
+	out, err := cleanConn(raw, sshEntryKeys, "an SSH connection has only alias, host, user, port and auth")
+	if err != nil || out == nil {
+		return nil, err
+	}
+	if !out.Has("alias") && !out.Has("host") {
+		if out.Len() > 0 {
+			return nil, sshBad("give an SSH alias or a host")
+		}
+		return nil, nil
+	}
+	return out, nil
+}
+
+// CleanPersonal is CleanSSH for a personal entry of a machine whose shared
+// record has the address: alias and host are optional (a user, a port or
+// the login mode alone override the shared values).
+func CleanPersonal(raw *pyjson.Object) (*pyjson.Object, error) {
+	out, err := cleanConn(raw, sshEntryKeys, "an SSH connection has only alias, host, user, port and auth")
+	if err != nil || out == nil || out.Len() == 0 {
+		return nil, err
+	}
+	return out, nil
+}
+
+var (
+	sshEntryKeys  = []string{"alias", "host", "user", "port", "auth"}
+	sharedKeys    = []string{"name", "host", "port", "user"}
+	nameControlRe = regexp.MustCompile(`[[:cntrl:]]`)
+)
+
+func sshBad(msg string) error { return &Error{400, msg, "RESOURCES_SSH_INVALID"} }
+
+// cleanConn checks the fields of a connection object; the result has the
+// non-empty ones in the order alias, name, host, user, port, auth.
+func cleanConn(raw *pyjson.Object, allowed []string, unknown string) (*pyjson.Object, error) {
 	if raw == nil {
 		return nil, nil
 	}
-	bad := func(msg string) error { return &Error{400, msg, "RESOURCES_SSH_INVALID"} }
+	has := map[string]bool{}
+	for _, k := range allowed {
+		has[k] = true
+	}
 	for _, k := range raw.Keys() {
-		switch k {
-		case "alias", "host", "user", "port", "auth":
-		default:
-			return nil, bad("an SSH connection has only alias, host, user, port and auth")
+		if !has[k] {
+			return nil, sshBad(unknown)
 		}
 	}
 	field := func(key string, re *regexp.Regexp, what string) (string, error) {
@@ -63,11 +100,11 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 		}
 		s, ok := v.(string)
 		if !ok {
-			return "", bad(what + " must be text")
+			return "", sshBad(what + " must be text")
 		}
 		s = strings.TrimSpace(s)
 		if s != "" && !re.MatchString(s) {
-			return "", bad("invalid " + what)
+			return "", sshBad("invalid " + what)
 		}
 		return s, nil
 	}
@@ -83,6 +120,17 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 	if err != nil {
 		return nil, err
 	}
+	name := ""
+	switch v := raw.Value("name").(type) {
+	case nil:
+	case string:
+		name = strings.TrimSpace(v)
+		if utf8.RuneCountInString(name) > 60 || nameControlRe.MatchString(name) {
+			return nil, sshBad("invalid name")
+		}
+	default:
+		return nil, sshBad("name must be text")
+	}
 	var port int64
 	switch p := raw.Value("port").(type) {
 	case nil:
@@ -90,22 +138,22 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 		port = p
 	case float64:
 		if p != float64(int64(p)) {
-			return nil, bad("port must be a whole number")
+			return nil, sshBad("port must be a whole number")
 		}
 		port = int64(p)
 	case string:
 		if strings.TrimSpace(p) != "" {
 			n, ok := atoi(strings.TrimSpace(p))
 			if !ok {
-				return nil, bad("port must be a number")
+				return nil, sshBad("port must be a number")
 			}
 			port = n
 		}
 	default:
-		return nil, bad("port must be a number")
+		return nil, sshBad("port must be a number")
 	}
 	if port != 0 && (port < 1 || port > 65535) {
-		return nil, bad("port must be between 1 and 65535")
+		return nil, sshBad("port must be between 1 and 65535")
 	}
 	auth := ""
 	switch a := raw.Value("auth").(type) {
@@ -113,20 +161,17 @@ func CleanSSH(raw *pyjson.Object) (*pyjson.Object, error) {
 	case string:
 		auth = strings.TrimSpace(a)
 		if auth != "" && auth != "key" && auth != "password" {
-			return nil, bad(`auth must be "key" or "password"`)
+			return nil, sshBad(`auth must be "key" or "password"`)
 		}
 	default:
-		return nil, bad(`auth must be "key" or "password"`)
-	}
-	if alias == "" && host == "" {
-		if user != "" || port != 0 || auth != "" {
-			return nil, bad("give an SSH alias or a host")
-		}
-		return nil, nil
+		return nil, sshBad(`auth must be "key" or "password"`)
 	}
 	out := pyjson.NewObject()
 	if alias != "" {
 		out.Set("alias", alias)
+	}
+	if name != "" {
+		out.Set("name", name)
 	}
 	if host != "" {
 		out.Set("host", host)
@@ -180,7 +225,7 @@ func SSHSettings(ctx context.Context, o *org.Manager, username string) (*pyjson.
 			for _, id := range devices.Keys() {
 				// Re-validate: only clean entries ever leave the store.
 				entry, _ := devices.Value(id).(*pyjson.Object)
-				if clean, err := CleanSSH(entry); err == nil && clean != nil && deviceIDRe.MatchString(id) {
+				if clean, err := CleanPersonal(entry); err == nil && clean != nil && deviceIDRe.MatchString(id) {
 					out.Set(id, clean)
 				}
 			}
@@ -272,78 +317,13 @@ func HostDevice(sources *pyjson.Object, hostID, label string) string {
 	return "host:" + hostID
 }
 
-// Connections is GET /api/resources/connect: {"devices": {id: {alias?, host?,
-// user?, port?, source}}, "hosts": {setup host id: device id}} for the
-// devices of `graph` (BuildGraph of the same sources for the same viewer).
+// Connections is {"devices": {id: {alias?, host?, user?, port?, auth?,
+// source, machine?}}, "hosts": {setup host id: device id}} for the devices
+// of `graph` (BuildGraph of the same sources for the same viewer), without
+// the project's shared records (ConnectionsWith has them).
 func Connections(graph, sources, saved *pyjson.Object) *pyjson.Object {
-	visible := map[string]bool{}
-	for _, d := range iterate(graph.Value("devices")) {
-		dev, ok := d.(*pyjson.Object)
-		if !ok {
-			continue
-		}
-		id := pyjson.Str(dev.Value("id"))
-		if sshKinds[pyjson.Str(dev.Value("kind"))] {
-			visible[id] = true
-		}
-	}
-	devices := pyjson.NewObject()
-	gpu := asObj(sources.Value("gpu"))
-	for _, item := range iterate(gpu.Value("servers")) {
-		cfg, ok := item.(*pyjson.Object)
-		if !ok {
-			continue
-		}
-		id := "gpu:" + slug(or(cfg.Value("name"), cfg.Value("host")))
-		host, _ := cfg.Value("host").(string)
-		if !visible[id] || host == "" || devices.Has(id) {
-			continue
-		}
-		raw := pyjson.NewObject("host", host)
-		if u, ok := cfg.Value("user").(string); ok && u != "" {
-			raw.Set("user", u)
-		}
-		if p, ok := cfg.Value("port").(int64); ok && p != 0 {
-			raw.Set("port", p)
-		}
-		// A server list entry that is not a plain host (e.g. an option) is skipped.
-		if clean, err := CleanSSH(raw); err == nil && clean != nil {
-			devices.Set(id, clean.Set("source", "gpu-config"))
-		}
-	}
-	if saved != nil {
-		for _, id := range saved.Keys() {
-			entry, _ := saved.Value(id).(*pyjson.Object)
-			if !visible[id] || entry == nil {
-				continue
-			}
-			devices.Set(id, entry.Copy().Set("source", "mine"))
-		}
-	}
-	hosts := pyjson.NewObject()
-	layers := asObj(sources.Value("layers"))
-	records := []any{layers.Value("project")}
-	records = append(records, iterate(layers.Value("users"))...)
-	for _, r := range records {
-		record, ok := r.(*pyjson.Object)
-		if !ok {
-			continue
-		}
-		for _, l := range iterate(record.Value("locations")) {
-			loc, ok := l.(*pyjson.Object)
-			if !ok {
-				continue
-			}
-			hostID := pyjson.Str(or(loc.Value("host_id"), ""))
-			if hostID == "" || hosts.Has(hostID) {
-				continue
-			}
-			if id := HostDevice(sources, hostID, pyjson.Str(or(loc.Value("host_label"), ""))); visible[id] {
-				hosts.Set(hostID, id)
-			}
-		}
-	}
-	return pyjson.NewObject("devices", devices, "hosts", hosts)
+	out := ConnectionsWith(graph, sources, saved, ConnectOpts{})
+	return pyjson.NewObject("devices", out.Value("devices"), "hosts", out.Value("hosts"))
 }
 
 // VisibleDevice reports whether the graph has a device one can SSH into.

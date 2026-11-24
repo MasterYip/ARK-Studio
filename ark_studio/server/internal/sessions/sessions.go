@@ -12,6 +12,7 @@
 package sessions
 
 import (
+	"arkstudio/go/internal/sessionstart"
 	"crypto/subtle"
 	"os"
 	"path/filepath"
@@ -98,6 +99,8 @@ type Session struct {
 	// The run's agent token (Hooks.AgentToken), kept in memory only so
 	// output lines that echo it are redacted before they are written.
 	agentSecret string
+	// The start of the first run (preamble.go), until it has run.
+	start *sessionstart.Start
 	// Background work between turns, as last counted by Manager.Busy (busy.go).
 	busy Busy
 }
@@ -124,6 +127,21 @@ type Hooks struct {
 	// people's updates (internal/sessionnudge; the server: always); the
 	// session then gets ARK_WAKE=ark and starts no watcher of its own.
 	WakesIdle func(projectID string) bool
+	// CoreRules are the person's composed core rules for a project (GET
+	// /api/agent/v1/rules "lines"), added to what a launched agent is told
+	// (preamble.go); nil or "" = none.
+	CoreRules func(projectID, actor string) string
+	// StartPoint is what the agent does first (internal/sessionstart): the
+	// server adds the setup readiness of the session's device and the
+	// task's state to the input.  nil = no start section.
+	StartPoint func(in StartInput) *sessionstart.Start
+}
+
+// StartInput is what the session knows about its start.
+type StartInput struct {
+	Actor, TaskRef, Prompt string
+	Chosen                 *sessionstart.Chosen
+	Resume                 *sessionstart.Resume
 }
 
 // Manager is SessionManager.

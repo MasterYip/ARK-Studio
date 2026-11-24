@@ -1046,6 +1046,9 @@ export function reviewPanel(ctx, unit) {
   return host;
 }
 
+/** The review note dialog (also offered after a person sets a unit to review). */
+export function openReviewNoteDialog(ctx, unit, note = "") { editNoteDialog(ctx, unit, { note }); }
+
 function editNoteDialog(ctx, unit, info) {
   const input = h("textarea", { class: "textarea", style: { minHeight: "72px" }, maxlength: 500,
     placeholder: t("review_req.note_placeholder"), "aria-label": t("review_req.look_here") });

@@ -684,6 +684,8 @@ export const api = {
   // `query`: graph_limit/graph_types/graph_statuses/graph_days when the
   // Home filter is not on the account (home-filter-model.js).
   overview: (options = {}, query = {}) => request(`/api/project/overview${qs(query)}`, options),
+  // Board and Home support panel (support-panel.js); kept 10 s by the server.
+  projectSupport: () => request("/api/project/support", { noCache: true }),
   projects: () => request("/api/projects"),
   createProject: (body) => request("/api/projects", { method: "POST", body }),
   openProject: (body) => request("/api/projects/open", { method: "POST", body, write: false }),
@@ -965,6 +967,8 @@ export const api = {
   removeWorktree: (body) => request("/api/worktrees/remove", { method: "POST", body }),
   agentSession: (id, options = {}) => request(`/api/agent-sessions/${encodeURIComponent(id)}`, options),
   createSession: (body) => request("/api/agent-sessions", { method: "POST", body }),
+  // What a session launched now would do first (Run dialog "Start"; Go only).
+  sessionStart: (task = "") => request(`/api/agent-sessions/start${task ? `?task=${encodeURIComponent(task)}` : ""}`),
   sessionInput: (id, text, context = null) => request(`/api/agent-sessions/${encodeURIComponent(id)}/input`,
     { method: "POST", body: context ? { text, context } : { text } }),
   sessionSteer: (id, text, context = null, now = false) => request(`/api/agent-sessions/${encodeURIComponent(id)}/steer`,

@@ -10,6 +10,22 @@ function likePattern(query) {
     : c === "_" ? "[\\s\\S]" : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(""), "u");
 }
 
+/** A Min. links value: a whole number >= 0 (0 = no filter). */
+export function minLinksOf(value) {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, 1_000_000) : 0;
+}
+
+/** Map node id -> number of edges touching it (in + out; a self-link once). */
+export function linkCounts(edges = []) {
+  const out = new Map();
+  for (const edge of edges || []) {
+    out.set(edge.source, (out.get(edge.source) || 0) + 1);
+    if (edge.target !== edge.source) out.set(edge.target, (out.get(edge.target) || 0) + 1);
+  }
+  return out;
+}
+
 export class GraphFilterIndex {
   constructor(snapshot) {
     this.edges = snapshot.edges || [];
@@ -20,6 +36,9 @@ export class GraphFilterIndex {
     }));
     this.byId = new Map(this.rows.map((row) => [row.node.id, row]));
     this.neighbors = new Map();
+    // Links per node: every edge of the snapshot that touches it, incoming
+    // and outgoing, whatever the current filters show (a self-link counts once).
+    this.degree = linkCounts(this.edges);
     for (const edge of this.edges) {
       for (const [a, b] of [[edge.source, edge.target], [edge.target, edge.source]]) {
         if (!this.neighbors.has(a)) this.neighbors.set(a, new Set());
@@ -46,6 +65,63 @@ export class GraphFilterIndex {
     if (typeof unit.body === "string" && row.search[2] != null) row.search[2] = asciiFold(unit.body);
     this.orders.clear();
     return true;
+  }
+
+  /** Links of a node (in + out) in the whole snapshot. */
+  degreeOf(id) {
+    return this.degree.get(id) || 0;
+  }
+
+  /** Largest link count among the nodes (of `types`, if given): the Min. links slider's end. */
+  maxDegree(types = null) {
+    const wanted = types?.length ? new Set(types) : null;
+    let max = 0;
+    for (const { node } of this.rows) {
+      if (wanted && !wanted.has(node.type)) continue;
+      max = Math.max(max, this.degreeOf(node.id));
+    }
+    return max;
+  }
+
+  /**
+   * Filter-rail counts in the shape of GET /api/units?facets=1: each group
+   * ignores its own filter.  Used where the server cannot apply the query
+   * (topic pages, and Min. links, which only the browser knows).
+   * `linkTypes`: the types whose link counts set `links_max`.
+   */
+  facets(query = {}, me = "", { linkTypes = null } = {}) {
+    const candidates = (...keys) => this.filter({ ...query, context: 0, reveal: undefined,
+      ...Object.fromEntries(keys.map((key) => [key, undefined])) }, me, { all: true }).nodes;
+    const counts = (nodes, field) => {
+      const out = Object.create(null);
+      for (const node of nodes) if (node[field]) out[node[field]] = (out[node[field]] || 0) + 1;
+      return { ...out };
+    };
+    const tags = new Map(), namespaces = Object.create(null), unset = Object.create(null);
+    const tagged = candidates("tags", "tags_unset");
+    for (const node of tagged) for (const tag of node.tags || []) {
+      if (/^(type|status|importance):/.test(tag)) continue;
+      tags.set(tag, (tags.get(tag) || 0) + 1);
+    }
+    for (const [tag, count] of tags) {
+      const at = tag.indexOf(":");
+      const namespace = at < 0 ? "tag" : tag.slice(0, at), value = at < 0 ? tag : tag.slice(at + 1);
+      (namespaces[namespace] ||= []).push({ tag, namespace, value, count });
+    }
+    for (const [ns, list] of Object.entries(namespaces)) {
+      list.sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+      unset[ns] = tagged.filter((node) => !(node.tags || []).some((tag) => ns === "tag" ? !tag.includes(":") : tag.startsWith(ns + ":"))).length;
+    }
+    const assigned = candidates("assignee", "assignees");
+    const nodes = this.rows.map((row) => row.node);
+    const dates = nodes.flatMap((node) => [node.start_at, node.end_at]).filter(Boolean).sort();
+    return { types: counts(candidates("types", "types_none", "origins"), "type"),
+      statuses: counts(candidates("statuses"), "status"), importance: counts(candidates("importance"), "importance"),
+      namespaces: { ...namespaces }, unset: { ...unset }, assignees: counts(assigned, "assignee_effective"),
+      unassigned: assigned.filter((node) => !node.assignee_effective && !node.assignee).length,
+      links_max: this.maxDegree(linkTypes),
+      time: { min: dates[0] || null, max: dates.at(-1) || null,
+        undated: nodes.filter((node) => !node.start_at && !node.end_at).length } };
   }
 
   /** Add full bodies for text search ({bodies: [[id, body], ...]}). */
@@ -92,6 +168,7 @@ export class GraphFilterIndex {
     const from = query.from, to = query.to, today = new Date().toISOString().slice(0, 10);
     const inRange = (at) => at != null && (!from || at >= from) && (!to || at <= to);
     const assignees = values(query.assignee || query.assignees);
+    const minLinks = minLinksOf(query.min_links ?? query.minLinks);
     const matches = ({ node: n, tags, namespaces: ownNamespaces, search }) => {
       if (enabled(query.types_none)) return false;
       if ((types.size || origins.size) && !types.has(n.type) && !origins.has(n.origin)) return false;
@@ -104,6 +181,7 @@ export class GraphFilterIndex {
       if (enabled(query.has_dates) && !n.start_at && !n.end_at) return false;
       if (query.created_since && n.created_at < query.created_since) return false;
       if (query.updated_since && n.updated_at < query.updated_since) return false;
+      if (minLinks && this.degreeOf(n.id) < minLinks) return false;
       if (enabled(query.overdue) && !(n.end_at && n.end_at < today && !["done", "abandoned", "archived"].includes(n.status))) return false;
       for (const ns of namespaces) {
         const wanted = groups.get(ns);

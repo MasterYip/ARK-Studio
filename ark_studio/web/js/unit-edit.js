@@ -36,9 +36,28 @@ export function syncUnitLocally(ctx, unit) {
   }
 }
 
+/**
+ * After a person puts a unit into review without a note: offer to add one
+ * (a toast with an action; skipping is fine, only agents must send a note).
+ */
+export function offerReviewNote(ctx, unit, before, patch) {
+  if (!unit || unit.status !== "review" || before === "review" || patch?.review_note) return;
+  toast(t("review_req.add_note_prompt"), "", {
+    duration: 8000,
+    action: {
+      label: t("review_req.add_note"),
+      onClick: () => import("./needs-ui.js").then((m) => m.openReviewNoteDialog(ctx, unit)),
+    },
+  });
+}
+
 /** Save a draft: PATCH, then sync caches and notify other views. */
 export async function saveUnitDraft(ctx, unitId, draft, origin) {
-  const data = await api.updateUnit(unitId, patchFromDraft(draft));
+  const before = (ctx?.S?.units || []).find((item) => item.id === unitId || item.uid === unitId)?.status
+    ?? (ctx?.S?.detail?.id === unitId ? ctx.S.detail.status : undefined);
+  const patch = patchFromDraft(draft);
+  const data = await api.updateUnit(unitId, patch);
+  if (before !== undefined && "status" in patch) offerReviewNote(ctx, data.unit, before, patch);
   syncUnitLocally(ctx, data.unit);
   announceUnitSaved(data.unit, origin);
   return data.unit;

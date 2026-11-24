@@ -6,6 +6,60 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.6] - 2026-11-24
+
+### Added
+
+- Sessions started by ARK are woken when their GPU jobs finish, fail, time
+  out or are cancelled, and when their background tasks end, so an agent
+  goes on with its work without anyone nudging it.
+- Board and Home show the agents and hosts actually at work: your running
+  sessions with their state, model and task, agents that wrote to the
+  project in the last day, and the devices and GPU servers that are set up.
+- Run an agent: "Start with" picks the session's first step from the prompt
+  library (set up this device, continue a task, plan an idea, and your own
+  prompts) or leaves it free. ARK suggests one: setup when the device is not
+  set up yet, continue when a task is open. The message box hint follows
+  the choice.
+- Standby servers: a second server can run read-only beside the main one,
+  kept in sync every few minutes. Its pages show a banner with the last sync
+  time; hide it for the session and a Read-only chip stays in the top bar.
+- Resources: each machine's SSH address is stored once and reused by the
+  device dialog, the GPU tab and the Resources graph. The device dialog is
+  filled in from what ARK already knows, and Open in VS Code, Cursor or a
+  terminal works right after setup. The desktop app's Open in terminal
+  opens a local terminal in the folder.
+- Filters: a Min. links slider after Time shows only nodes with at least N
+  links (incoming and outgoing, counted over the whole project graph; on a
+  topic page, over the topic's links). It works on the Map, Ideas and topic
+  pages, shows a "Links ≥ N" chip and is remembered per tab.
+- The PredActor example project links its code repository
+  (https://github.com/MasterYip/PredActor) in its description and in the
+  story "PredActor — the paper as a graph". Example projects created
+  before 2.1.6 keep their description.
+
+### Changed
+
+- Agents put work up for review only with a review note that says what to
+  look at; a hand-off without one is refused with an example of what to
+  send.
+- Agents keep files outside the repository in this device's task space and
+  ask you to choose one when there is none, instead of inventing folders.
+  Paths written in ARK are absolute and name the device they are on.
+- Sessions started by ARK use their own token, and the agents panel lists
+  each agent once.
+- Android app: phones with 2.1.2 to 2.1.5 update in the app.
+
+### Fixed
+
+- Open in VS Code no longer uses an SSH alias that was never written to
+  `~/.ssh/config`; it uses the machine's own alias or writes it first.
+- Links typed in Chinese text end where the Chinese text or full-width
+  punctuation begins.
+- Filters: clicking a tag or removing an active chip no longer scrolls the
+  filter panel back to the top, and tag groups you opened stay open.
+
+
 ## [2.1.5] - 2026-11-23
 
 ### Added

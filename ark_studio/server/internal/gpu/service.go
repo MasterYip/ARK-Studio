@@ -68,6 +68,8 @@ type Service struct {
 	// AllowedFor is the queue worker's per-job scope (project id, owner);
 	// nil: every server (unit tests).  The server sets it (routes_gpu.go).
 	AllowedFor func(projectID, owner string) Scope
+	// OnFinished is Queue.OnFinished (wake.go); the server sets it.
+	OnFinished func(job *pyjson.Object, wake Wake) error
 }
 
 // ConfigPath is GpuService.config_path().
@@ -596,6 +598,7 @@ func (s *Service) queueService() (*Queue, error) {
 			return nil, err
 		}
 		q.allowed = s.AllowedFor
+		q.OnFinished = s.OnFinished
 		if !s.Replay {
 			q.Start()
 		}
@@ -667,6 +670,12 @@ func (s *Service) QueueSubmit(body *pyjson.Object, owner, project, session, task
 // project that registers no server is refused (403).  The worker places a
 // job only on its project's registered servers (Queue.allowed).
 func (s *Service) QueueSubmitFor(sc Scope, body *pyjson.Object, owner, project, session, task string) (*pyjson.Object, error) {
+	return s.QueueSubmitWake(sc, body, owner, project, session, task, Wake{})
+}
+
+// QueueSubmitWake is QueueSubmitFor that records whom the job's end wakes
+// (wake.go).
+func (s *Service) QueueSubmitWake(sc Scope, body *pyjson.Object, owner, project, session, task string, wake Wake) (*pyjson.Object, error) {
 	if body != nil && !sc.All {
 		if name := pytext.Strip(strField(body, "server")); name != "" && !sc.Allows(name) {
 			return nil, errNotRegistered(name)
@@ -700,7 +709,7 @@ func (s *Service) QueueSubmitFor(sc Scope, body *pyjson.Object, owner, project, 
 			}
 		}
 	}
-	job, err := q.SubmitChecked(payload, !s.Replay, check)
+	job, err := q.SubmitWake(payload, !s.Replay, check, wake)
 	return job, asGpuError(err, "queue_invalid")
 }
 

@@ -1,0 +1,17 @@
+[Unit]
+Description=ARK Studio (%i)
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%h/.local/bin/ark-server serve --config %h/.config/arkstudio/%i.json
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=20
+UMask=0077
+
+[Install]
+WantedBy=default.target

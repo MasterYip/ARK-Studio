@@ -114,7 +114,7 @@ function readAll(store) {
 
 function cleanChoice(raw = {}) {
   const out = {};
-  for (const key of ["platform", "model", "effort", "access", "worktree", "agent"]) {
+  for (const key of ["platform", "model", "effort", "access", "worktree", "agent", "start"]) {
     const value = str(raw[key]).slice(0, 400);
     if (value) out[key] = value;
   }
@@ -234,4 +234,94 @@ export function splitPrefillPrompt(text = "") {
 /** The first message: the prompt, then any extra text the advanced section kept. */
 export function firstMessage(prompt = "", extra = "") {
   return [str(prompt), str(extra)].filter(Boolean).join("\n\n");
+}
+
+// ---- what the session does first (T-0121)
+// The Run dialog's "Start" option: the Home prompt library (built-in
+// prompts, then the person's and the project's custom prompts, pinned ones
+// first) plus "free" (follow the first message, or wait for it).  The
+// chosen prompt's text goes into the session block; the server adds live
+// facts for setup, device setup and continue (GET /api/agent-sessions/start).
+
+export const START_FREE = "free";
+// Built-in ids the server knows the default for.
+const START_NEEDS = new Set(["setup", "device-setup"]);
+
+/**
+ * Options in order: pinned prompts (pin order), the other built-ins, custom
+ * prompts, then "free".  `entries` are library entries ({id, title,
+ * custom, unit}); `pins` the effective pin list.
+ */
+export function startOptions(entries = [], pins = []) {
+  const list = (entries || []).filter((e) => e && e.id);
+  const byId = new Map(list.map((e) => [e.id, e]));
+  const pinned = (pins || []).map((id) => byId.get(id)).filter(Boolean);
+  const seen = new Set(pinned.map((e) => e.id));
+  const rest = list.filter((e) => !seen.has(e.id));
+  const opt = (e, isPinned) => ({ id: e.id, title: str(e.title) || e.id, custom: Boolean(e.custom), unit: Boolean(e.unit), pinned: isPinned });
+  return [
+    ...pinned.map((e) => opt(e, true)),
+    ...rest.filter((e) => !e.custom).map((e) => opt(e, false)),
+    ...rest.filter((e) => e.custom).map((e) => opt(e, false)),
+    { id: START_FREE, title: "", custom: false, unit: false, pinned: false },
+  ];
+}
+
+/**
+ * The option selected when the dialog opens or the task changes: setup when
+ * the server says setup is missing on this device, continue when a task is
+ * chosen, else what this person last chose in this project (not setup or
+ * continue, which follow the facts), else free.
+ */
+export function defaultStartMode({ server = null, task = "", remembered = "", options = [] } = {}) {
+  const ids = new Set((options || []).map((o) => o.id));
+  const mode = str(server && server.mode);
+  if (START_NEEDS.has(mode) && ids.has(mode)) return mode;
+  if (str(task) && ids.has("continue")) return "continue";
+  const last = str(remembered);
+  if (last && ids.has(last) && !START_NEEDS.has(last) && last !== "continue") return last;
+  return START_FREE;
+}
+
+/**
+ * One line under the option: what the session does first.  `t` is the
+ * translator; `option` the chosen option; `server` the reply of GET
+ * /api/agent-sessions/start for the chosen task.
+ */
+export function startPreview({ mode = START_FREE, option = null, server = null, task = "", prompt = "", t = (k) => k } = {}) {
+  const info = (server && server.task) || null;
+  if (mode === "setup") return t("tasks.launcher.start_preview.setup");
+  if (mode === "device-setup") {
+    const missing = (server && server.setup && server.setup.needs_location) || [];
+    return t("tasks.launcher.start_preview.device", { n: missing.length });
+  }
+  if (mode === "continue") {
+    if (!str(task)) return t("tasks.launcher.start_preview.continue_pick");
+    const sendBacks = Number(info && info.uid === task ? info.send_backs || 0 : 0);
+    const open = Number(info && info.uid === task ? info.open_comments || 0 : 0);
+    if (sendBacks) return t("tasks.launcher.start_preview.continue_sendback", { uid: task, n: sendBacks });
+    if (open) return t("tasks.launcher.start_preview.continue_open", { uid: task, n: open });
+    return t("tasks.launcher.start_preview.continue", { uid: task });
+  }
+  if (mode === START_FREE) {
+    return str(prompt) ? t("tasks.launcher.start_preview.follow") : t("tasks.launcher.start_preview.wait");
+  }
+  return t("tasks.launcher.start_preview.prompt", { title: (option && option.title) || mode });
+}
+
+/** The first-message placeholder for the chosen start. */
+export function startPlaceholder({ mode = START_FREE, option = null, task = "", t = (k) => k } = {}) {
+  if (mode === "setup") return t("tasks.launcher.start_placeholder.setup");
+  if (mode === "device-setup") return t("tasks.launcher.start_placeholder.device");
+  if (mode === "continue") {
+    return str(task) ? t("tasks.launcher.start_placeholder.continue", { uid: task }) : t("tasks.launcher.start_preview.continue_pick");
+  }
+  if (mode === START_FREE) return t("tasks.launcher.start_placeholder.free");
+  return t("tasks.launcher.start_placeholder.prompt", { title: (option && option.title) || mode });
+}
+
+/** The "start" of the launch request: {id, title, text} ("free": id only). */
+export function startRequest(option, text = "") {
+  if (!option || option.id === START_FREE) return { id: START_FREE };
+  return { id: option.id, title: str(option.title), text: str(text) };
 }

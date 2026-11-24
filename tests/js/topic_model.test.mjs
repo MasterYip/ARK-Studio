@@ -177,3 +177,12 @@ test("drag and drop in the outline", () => {
   assert.equal(outlineDrop(tree, 2, 3, "before"), null);   // no change
   assert.deepEqual([dropPosition(0.1), dropPosition(0.5), dropPosition(0.9)], ["before", "inside", "after"]);
 });
+
+test("topic min links use the topic's own links and report the slider end", () => {
+  const all = filterTopic(topic, {});
+  assert.equal(all.facets.links_max, 2, "member 2 has an in and an out link");
+  const filtered = filterTopic(topic, { min_links: 2 });
+  assert.deepEqual(filtered.members.map((m) => m.id), [2]);
+  assert.equal(filtered.facets.links_max, 2, "the end does not shrink with the filter");
+  assert.deepEqual(filterTopic(topic, { min_links: 1 }).members.map((m) => m.id), [1, 2, 3]);
+});

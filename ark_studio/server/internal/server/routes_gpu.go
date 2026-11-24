@@ -9,6 +9,7 @@ import (
 	"os"
 	"sync"
 
+	"arkstudio/go/internal/api"
 	gpuapi "arkstudio/go/internal/api/gpu"
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
@@ -48,7 +49,7 @@ func (a *App) gpu() *gpu.Service {
 		return s.(*gpu.Service)
 	}
 	s, _ := gpuServices.LoadOrStore(a, &gpu.Service{Replay: os.Getenv("ARK_REPLAY_CLOCK") == "1",
-		AllowedFor: a.gpuQueueScope})
+		AllowedFor: a.gpuQueueScope, OnFinished: a.gpuJobFinished})
 	return s.(*gpu.Service)
 }
 
@@ -157,5 +158,6 @@ func (a *App) replayGPUTick() {
 
 // gpuHandlers is the GPU handler package bound to this server.
 func (c *reqCtx) gpuHandlers() gpuapi.Handlers {
-	return gpuapi.Handlers{Svc: c.app.gpu, Scope: c.gpuScope, ScopeByID: c.gpuScopeByID}
+	return gpuapi.Handlers{Svc: c.app.gpu, Scope: c.gpuScope, ScopeByID: c.gpuScopeByID,
+		Wake: func(_ api.Ctx, projectID, session string) gpu.Wake { return c.gpuWake(projectID, session) }}
 }

@@ -13,6 +13,7 @@ import { sizeBadge, refreshLocationSize, desktopDeviceId, measureOnDesktop } fro
 import { duePaths, isLocalPath } from "../location-size-model.js";
 import { openContextMenu } from "../context-menu.js";
 import { connectionStore, openMenuItems } from "../resource-open.js";
+import { openRelocateDialog, openLogicalDialog } from "./setup-relocate.js";
 import { reviewPages, visiblePages, stepLabel, reviewOutcome, plainSummary, confirmPlan, confirmLabelKey,
   changeGroups } from "../setup-review-model.js";
 
@@ -31,7 +32,7 @@ const DETAIL_FIELDS = {
     ["access", ["read-write", "read-only"]], ["default_branch", null], ["remote", null]],
   task_space: [["kind", ["agent-team-folder", "issue-tracker", "ark", "other"]],
     ["access", ["read-only", "read-write"]], ["relation", null]],
-  compute: [["kind", ["ssh", "local", "slurm", "cloud"]], ["gpu_server", null], ["gpus", null],
+  compute: [["kind", ["ssh", "local", "slurm", "cloud"]], ["gpu_server", null], ["device_id", null], ["gpus", null],
     ["use", ["ask", "any", "reserved"]], ["scratch", null]],
   environment: [["kind", ["conda", "venv", "uv", "poetry", "docker", "system", "other"]],
     ["activate", null], ["python", null]],
@@ -728,6 +729,8 @@ export function setupResourcesPanels(ctx) {
         { n: since(device.lastSeen).n })) : null,
       h("span", { class: `pill ${device.missing ? "warn" : "ok"}` },
         device.missing ? t("setupres.device_missing", { n: device.missing }) : t("setupres.device_complete")),
+      canEdit ? btn(t("relocate.button"), "folder", () => openRelocateDialog({ device, reload: () => reload(),
+        from: device.paths.find((p) => p.kind === "task_space" && isLocalPath(p.path_or_ref))?.path_or_ref || "" })) : null,
       moreButton(() => openMenuItems(connections, { device: deviceOf(device.id, device.label), onChange: () => reload() }))),
     h("div", { class: "stack tight" }, ...device.paths.map((p) => h("div", { class: "row tight setupres-device-path",
       "data-device-path": p.resource },
@@ -744,6 +747,8 @@ export function setupResourcesPanels(ctx) {
       h("div", { class: "panel-head" }, h("h3", null, t("setupres.devices_title")),
         h("span", { class: "pill" }, String(rows.length))),
       h("p", { class: "settings-lead" }, t("setupres.devices_lead")),
+      canEdit ? h("div", { class: "row tight" }, btn(t("relocate.logical_button"), "link", () => openLogicalDialog({ reload: () => reload() })),
+        h("span", { class: "muted" }, t("relocate.logical_hint"))) : null,
       list);
     autoMeasure(rows);
   }

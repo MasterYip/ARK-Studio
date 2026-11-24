@@ -1,0 +1,9 @@
+# ~/.config/systemd/user/ark-server@bkp.service.d/standby.conf
+# The same working directory and paths as the primary's unit.
+[Service]
+WorkingDirectory=/srv/ark/ARK-Studio
+Environment=ARK_ALLOWED_HOSTS=ark-bkp.example.org,ark-bkp.example.org:8443,ark.example.org,ark.example.org:8443
+Environment=ARK_TRUST_PROXY=1
+Environment=ARK_STANDBY_STATUS=/srv/ark/standby/state/status.json
+Environment=ARK_BLACKBOX=0
+Nice=5

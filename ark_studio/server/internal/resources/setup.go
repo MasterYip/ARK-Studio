@@ -183,6 +183,9 @@ func normalizeResource(item *pyjson.Object, index int) *pyjson.Object {
 		details.Set("gpu_server", text(in.Value("gpu_server"), 64))
 		details.Set("gpus", text(in.Value("gpus"), 200))
 		details.Set("use", choice(in.Value("use"), computeUse, "ask"))
+		if h := cleanHostID(in.Value("device_id")); h != "" {
+			details.Set("device_id", h)
+		}
 	}
 	name := text(item.Value("name"), 120)
 	if name == "" {

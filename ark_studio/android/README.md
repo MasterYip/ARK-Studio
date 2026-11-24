@@ -5,7 +5,7 @@ the full same-origin WebView workspace. Native mode opens the Android screens fo
 parts implemented natively, with the rest available through the Web button. Both modes
 use the same signed-in device session, so there's no second login.
 
-- Package `com.masteryip.arkstudio`, `versionCode 20` (the ARK release sets `versionName`)
+- Package `com.masteryip.arkstudio`, `versionCode 21` (the ARK release sets `versionName`)
 - minSdk 26, target/compile 33, Java 11, AGP 7.4.2, Gradle 7.6
 - Server side: `POST /api/mobile/login` and the project-switch endpoints
   (see `docs/guide/mobile.md` → *Android app*)

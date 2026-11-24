@@ -99,7 +99,12 @@ func TestReviewGroupRoutes(t *testing.T) {
 		t.Fatalf("feed kinds: %v", kinds)
 	}
 	// Resubmit, accept the rest: the group is gone.
-	mustOK(t, gpuCall(t, app, "POST", "/api/agent/v1/reviews/"+ref, map[string]any{"status": "review"}, agent), "resubmit")
+	if r := gpuCall(t, app, "POST", "/api/agent/v1/reviews/"+ref, map[string]any{"status": "review"}, agent); r.code != 422 ||
+		!strings.Contains(r.raw, "REVIEW_NOTE_REQUIRED") {
+		t.Fatalf("resubmit without a note: %d %s", r.code, r.raw)
+	}
+	mustOK(t, gpuCall(t, app, "POST", "/api/agent/v1/reviews/"+ref, map[string]any{"status": "review",
+		"review_note": "Added the baseline to [B](" + uids[1] + "#claim) as asked."}, agent), "resubmit")
 	done := mustOK(t, gpuCall(t, app, "POST", "/api/reviews/"+ref+"/decide", map[string]any{"action": "accept"}, nil), "accept")
 	if done.body["closed"] != true {
 		t.Fatalf("accept all: %s", done.raw)

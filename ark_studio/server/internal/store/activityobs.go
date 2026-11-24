@@ -31,6 +31,34 @@ func WithActivityObserver(ctx context.Context, fn func(ActivityEvent)) context.C
 	return context.WithValue(ctx, activityObserverKey{}, fn)
 }
 
+type activitySessionKey struct{}
+
+// WithActivitySession returns ctx with fn naming the ARK session an agent
+// write under ctx comes from (Go only, 2026-11-24): the session id and how
+// it is known ("token" for a session's own token, "header" for a checked
+// X-ARK-Session header), "" when none.  An agent's activity rows then carry
+// "session" and "session_via" in their detail, which ties the token's
+// writes to the session in the support panel (SupportAgents).
+func WithActivitySession(ctx context.Context, fn func() (id, via string)) context.Context {
+	return context.WithValue(ctx, activitySessionKey{}, fn)
+}
+
+func withActivitySession(ctx context.Context, actor string, detail *pyjson.Object) *pyjson.Object {
+	fn, _ := ctx.Value(activitySessionKey{}).(func() (string, string))
+	if fn == nil || !isAgent(actor) {
+		return detail
+	}
+	id, via := fn()
+	if id == "" {
+		return detail
+	}
+	out := pyjson.NewObject()
+	if detail != nil {
+		out = detail.Copy()
+	}
+	return out.Set("session", id).Set("session_via", via)
+}
+
 func observeActivity(ctx context.Context, actor, action string, unitID any, detail *pyjson.Object) {
 	fn, _ := ctx.Value(activityObserverKey{}).(func(ActivityEvent))
 	if fn == nil {

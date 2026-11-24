@@ -177,6 +177,7 @@ func (m *Manager) sendUserMessage(s *Session, text string, entries []*pyjson.Obj
 	}
 	m.mu.Lock()
 	s.Meta.Set("turn_state", "running")
+	clearBackgroundPendingLocked(s)
 	m.saveLocked(s)
 	m.mu.Unlock()
 	if record {
@@ -201,6 +202,15 @@ func (m *Manager) streamTurnState(s *Session) string {
 // any) starts the next one.
 func (m *Manager) observeStreamLine(s *Session, line string) {
 	text := pytext.Strip(line)
+	if id := taskNotificationID(text); id != "" { // background work ended (busy.go)
+		m.mu.Lock()
+		if isStream(s) {
+			noteTaskNotificationLocked(s, id)
+			m.saveLocked(s)
+		}
+		m.mu.Unlock()
+		return
+	}
 	if strings.HasPrefix(text, "{") && (strings.Contains(text, `"type":"assistant"`) || strings.Contains(text, `"type": "assistant"`)) &&
 		!strings.Contains(text, `"parent_tool_use_id":"`) && !strings.Contains(text, `"parent_tool_use_id": "`) {
 		// The agent speaks while it waits (a background task's notification
@@ -208,6 +218,7 @@ func (m *Manager) observeStreamLine(s *Session, line string) {
 		m.mu.Lock()
 		if isStream(s) && s.Meta.Value("turn_state") == "waiting" {
 			s.Meta.Set("turn_state", "running")
+			clearBackgroundPendingLocked(s)
 			m.saveLocked(s)
 		}
 		m.mu.Unlock()
@@ -324,8 +335,14 @@ type liveStream struct {
 	s       *Session
 	actor   string
 	waiting bool
+	busy    bool // waiting while its background work runs (busy.go)
 	since   time.Time
 }
+
+// StreamBusyTimeout: a waiting process whose background commands or
+// sub-agents still run is left open this long (closing it would end them
+// and the CLI could no longer report that they finished).
+var StreamBusyTimeout = envDuration("ARK_CLAUDE_STREAM_BUSY_IDLE", 24*time.Hour)
 
 func (m *Manager) liveStreams() []liveStream {
 	var out []liveStream
@@ -340,6 +357,11 @@ func (m *Manager) liveStreams() []liveStream {
 				waiting: s.Meta.Value("turn_state") == "waiting", since: since})
 		}
 		m.mu.Unlock()
+	}
+	for i := range out {
+		if out[i].waiting {
+			out[i].busy = m.Busy(out[i].s).Any()
+		}
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].since.Before(out[j].since) })
 	return out
@@ -363,7 +385,7 @@ func (m *Manager) makeRoom(actor string, self *Session) bool {
 		if total < StreamMax && mine < StreamMaxPerUser {
 			return true
 		}
-		if l.s == self || !l.waiting || (mine >= StreamMaxPerUser && total < StreamMax && l.actor != actor) {
+		if l.s == self || !l.waiting || l.busy || (mine >= StreamMaxPerUser && total < StreamMax && l.actor != actor) {
 			continue
 		}
 		m.closeIdle(l.s, "Closed to make room for another session; the next message resumes it.")
@@ -381,8 +403,12 @@ func (m *Manager) startStreamReaper() {
 		go func() {
 			for range time.Tick(30 * time.Second) {
 				for _, l := range m.liveStreams() {
-					if l.waiting && !l.since.IsZero() && time.Since(l.since) > StreamIdleTimeout {
-						m.closeIdle(l.s, "Closed after "+StreamIdleTimeout.String()+" without messages; the next message resumes it.")
+					limit := StreamIdleTimeout
+					if l.busy {
+						limit = StreamBusyTimeout
+					}
+					if l.waiting && !l.since.IsZero() && time.Since(l.since) > limit {
+						m.closeIdle(l.s, "Closed after "+limit.String()+" without messages; the next message resumes it.")
 					}
 				}
 			}

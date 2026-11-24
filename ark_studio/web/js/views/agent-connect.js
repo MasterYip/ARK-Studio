@@ -1,5 +1,5 @@
 // Home: is the user's agent connected to this project?  One status line for
-// the agent card (onboarding.js) and the agent rows of the Running card.
+// the agent card (onboarding.js).
 //
 // Sources, no new polling of the project: the overview's "agents" member
 // (agent writes, refreshed with Home whenever the live sync reports a change)
@@ -12,7 +12,7 @@ import { h, clear, relativeTime } from "../dom.js";
 import { t } from "../i18n.js";
 import { api } from "../api.js";
 import { actorLabel } from "../components.js";
-import { agentConnection, createConnectionPoller, runningAgents } from "../home-model.js";
+import { agentConnection, createConnectionPoller } from "../home-model.js";
 
 const CACHE_MS = 15000;
 
@@ -96,15 +96,4 @@ export function connectionStatus(ctx) {
     poller.start(now.getTime());
   };
   return { el, state: first.state, refresh, stop: poller.stop };
-}
-
-/** Rows for the Running card: agents that wrote in the last 30 minutes. */
-export function runningAgentRows(ctx, agents) {
-  return runningAgents(agents).map((item) => h("div", {
-    class: "ov-row ov-agent", dataset: { agent: item.actor },
-    title: `${item.actor} · ${new Date(item.last_at).toLocaleString()}`,
-  },
-    h("span", { class: "ov-dot live" }),
-    h("span", { class: "ov-row-title" }, actorLabel(item.actor)),
-    h("span", { class: "ov-row-d" }, t("home.agent_last", { when: relativeTime(item.last_at) }))));
 }

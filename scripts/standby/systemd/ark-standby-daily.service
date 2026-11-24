@@ -1,0 +1,10 @@
+[Unit]
+Description=ARK standby daily verified snapshot
+
+[Service]
+Type=oneshot
+ExecStart=%h/.local/share/ark-standby/ark-standby-daily.sh
+Nice=19
+IOSchedulingClass=idle
+CPUWeight=10
+TimeoutStartSec=3h

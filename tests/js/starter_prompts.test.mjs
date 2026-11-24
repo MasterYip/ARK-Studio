@@ -264,10 +264,21 @@ test("core rules cover reading, planning, progress, results, Needs you, decision
   assert.ok(rules.includes("/api/agent/v1/watcher.sh"));
   assert.ok(rules.includes("run_in_background"));
   assert.ok(rules.includes("codex queue"));
-  // Paths are registered per device, from the user's answer, never guessed (C10).
-  assert.ok(rules.includes("check that this device has a path"));
+  // Paths are registered per device, from the user's answer, never guessed (C10);
+  // without a task space the agent asks instead of inventing a folder (2026-11-24).
+  assert.ok(rules.includes("GET /api/agent/v1/setup/paths"));
+  assert.ok(rules.includes("POST /api/agent/v1/setup/task-space-decision"));
+  assert.ok(rules.includes("do not pick a place yourself"));
+  assert.ok(rules.includes("never a new top-level dir elsewhere"));
+  assert.ok(rules.includes("Scratch files only in the OS temp dir"));
   assert.ok(rules.includes("never guess a path"));
   assert.ok(rules.includes("`ark-server agent host-id`"));
+  // Task spaces are not synced between devices: paths in ARK stay absolute,
+  // with their device; a task: link is only an addition (D-0037, 2026-11-24).
+  assert.ok(rules.includes("In ARK write paths as absolute paths with the device they are on"));
+  assert.ok(rules.includes("A task: link may be added next to it, never instead of it."));
+  assert.ok(rules.includes("with its absolute path and device written in ARK?"));
+  assert.doesNotMatch(rules, /not absolute paths/);
   assert.doesNotMatch(rules, /POST \/api\/agent\/v1\/setup\/resource/);
 });
 

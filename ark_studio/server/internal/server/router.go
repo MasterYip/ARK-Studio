@@ -138,6 +138,10 @@ func init() {
 		exact(mobile.DesktopProjectsPath, (*reqCtx).desktopProjectsGet),
 		// Go only (routes_presence.go, T-0043 agent presence).
 		exact(presencePath, (*reqCtx).presenceGet),
+		// Go only (routes_support.go: the Board and Home support panel).
+		exact(supportPath, (*reqCtx).projectSupportGet),
+		// Go only (routes_sessionstart.go: the Run dialog's start preview).
+		exact(sessionStartPath, (*reqCtx).sessionStartGet),
 		// Go only (media_thumb.go: list thumbnails of images and videos).
 		match(reMediaThumb, func(c *reqCtx, m []string) error { return c.mediaThumb(m[1]) }),
 		// Go only (routes_invites.go: project invite links).
@@ -199,6 +203,8 @@ func init() {
 		exact(humanMessagesPath, (*reqCtx).humanMessages),
 		// Go only (routes_agentrules.go, T-0053).
 		exact(agentRulesPath, (*reqCtx).agentRules),
+		// Go only (routes_taskspace.go: this device's task space and paths).
+		exact(setupPathsPath, (*reqCtx).setupPathsGet),
 		// Go only (routes_prompts.go: the Home prompt library).
 		exact(promptsPath, (*reqCtx).prompts),
 		sub((*reqCtx).providersGet,

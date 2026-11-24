@@ -49,6 +49,12 @@
     --mobile-tabbar: 56px;
   }
 
+  /* Standby banner (app.css): the phone top bar plus the banner. */
+  html.ark-standby-banner {
+    --ark-banner-h: 28px;
+    --topbar: calc(54px + env(safe-area-inset-top, 0px) + var(--ark-banner-h));
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;

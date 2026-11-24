@@ -14,7 +14,7 @@ func TestAgentWatchUntilUpdate(t *testing.T) {
 	srv, app := watchServer(t)
 	state := filepath.Join(t.TempDir(), ".ark-watch-cursor")
 	t.Setenv("ARK_TOKEN", app.AgentToken())
-	unit := watchHTTP(t, srv, app, "POST", "/api/agent/v1/units", `{"type":"task","title":"Sweep","status":"review"}`, true)
+	unit := watchHTTP(t, srv, app, "POST", "/api/agent/v1/units", `{"type":"task","title":"Sweep","status":"review","review_note":"Check the sweep settings and the run list."}`, true)
 	uid := unit["unit"].(map[string]any)["uid"].(string)
 	// The first check only stores the cursor.
 	var out0, err0 bytes.Buffer

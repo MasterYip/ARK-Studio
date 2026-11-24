@@ -5,7 +5,7 @@
 // The shell list is intentionally explicit.  A Python test compares it with the
 // files under web/js so a new module cannot silently be missing from offline
 // mode.  Bump CACHE_VERSION whenever the shell changes.
-const CACHE_VERSION = "ark-shell-v303";
+const CACHE_VERSION = "ark-shell-v317";
 const SHELL_ASSETS = [
   "./vendor/dompurify/purify.es.js",
   "./vendor/marked/marked.esm.js",
@@ -56,6 +56,7 @@ const SHELL_ASSETS = [
   "./js/live-sync.js",
   "./js/connectivity.js",
   "./js/sync-status.js",
+  "./js/standby.js",
   "./js/sync-now.js",
   "./js/sync-now-model.js",
   "./js/pull-to-sync.js",
@@ -64,6 +65,8 @@ const SHELL_ASSETS = [
   "./js/appearance-panel.js",
   "./js/assistant-composer.js",
   "./js/gpu-note.js",
+  "./js/support-model.js",
+  "./js/support-panel.js",
   "./js/assistant-response.js",
   "./js/assistant-scope-model.js",
   "./js/boot.js",
@@ -102,6 +105,7 @@ const SHELL_ASSETS = [
   "./js/breadcrumb-model.js",
   "./js/files-model.js",
   "./js/filter-store.js",
+  "./js/scroll-keep.js",
   "./js/gantt.js",
   "./js/graph.js",
   "./js/guidance.js",
@@ -243,6 +247,7 @@ const SHELL_ASSETS = [
   "./js/views/settings-markers.js",
   "./js/views/settings.js",
   "./js/views/mobile-tunnel-panel.js",
+  "./js/views/setup-relocate.js",
   "./js/views/setup-resources.js",
   "./js/views/tasks.js",
   "./js/views/topics.js",

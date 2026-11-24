@@ -100,3 +100,31 @@ test("desktop app links and local file paths", () => {
   for (const host of ["localhost", "127.0.0.1", "127.1.2.3", "[::1]", "::1"]) assert.equal(m.isLoopbackHost(host), true, host);
   for (const host of ["192.168.1.20", "192.0.2.20", "ark.example.com", ""]) assert.equal(m.isLoopbackHost(host), false, host);
 });
+
+test("task: references resolve per device from the setup payload", async () => {
+  const M = await load();
+  assert.deepEqual({ ...M.parseTaskRef("task:20261124_T-1/a%20b.png?space=old") }, { rel: "20261124_T-1/a b.png", space: "old" });
+  assert.equal(M.parseTaskRef("task:../x"), null);
+  assert.equal(M.parseTaskRef("task:/etc"), null);
+  assert.equal(M.parseTaskRef("file:///E:/x"), null);
+  assert.equal(M.resolveRichUrl("task:20261124_T-1/").kind, "task");
+  assert.equal(M.joinTaskPath("E:\\work\\tasks", "T-1/a.png"), "E:\\work\\tasks\\T-1\\a.png");
+  assert.equal(M.joinTaskPath("/data/tasks/", "T-1/"), "/data/tasks/T-1/");
+  const state = {
+    resources: [
+      { key: "project/old", id: "old", kind: "task_space", details: { access: "read-only" },
+        locations: [{ host_id: "pc", path_or_ref: "E:/old" }] },
+      { key: "project/tasks", id: "tasks", kind: "task_space", details: { access: "read-write" },
+        locations: [{ host_id: "pc", path_or_ref: "E:/work/tasks" }, { host_id: "srv", path_or_ref: "/data/tasks" }] },
+    ],
+    devices: [
+      { id: "pc", label: "PC", current: false, paths: [{ resource: "project/tasks", path_or_ref: "E:/work/tasks" }, { resource: "project/old", path_or_ref: "E:/old" }] },
+      { id: "srv", label: "gpu-lab", current: true, paths: [{ resource: "project/tasks", path_or_ref: "/data/tasks" }] },
+      { id: "lap", label: "Laptop", current: false, paths: [{ resource: "project/tasks", path_or_ref: null }] },
+    ],
+  };
+  const out = M.taskPathsFor(state, "task:20261124_T-1/artifacts/");
+  assert.equal(out.space.id, "tasks");
+  assert.deepEqual(out.rows.map((r) => r.path), ["E:/work/tasks/20261124_T-1/artifacts/", "/data/tasks/20261124_T-1/artifacts/", null]);
+  assert.equal(M.taskPathsFor(state, "task:T-9/?space=old").rows[0].path, "E:/old/T-9/");
+});

@@ -396,6 +396,14 @@ func (c *reqCtx) sessionHooks() *sessions.Hooks {
 			}
 			return target, err
 		},
+		StartPoint: c.sessionStartPoint,
+		CoreRules: func(projectID, actor string) string {
+			p, err := c.require("read")
+			if err != nil || p.ID() != projectID {
+				return ""
+			}
+			return c.sessionCoreRules(p, actor)
+		},
 		AgentConfig:  func(actor string) (*pyjson.Object, error) { return c.agentConfigFor(actor) },
 		AssistantKey: func(actor string) (string, error) { return c.assistantKeyFor(actor) },
 		LinuxAccount: func(actor string) string {

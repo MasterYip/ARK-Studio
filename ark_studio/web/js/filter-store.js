@@ -13,6 +13,8 @@
 //
 // Model versions: v1 legacy shapes, v2 tag/status/importance groups,
 // v3 adds `assignees` (["me" | "none" | <username>], OR within the group).
+// `minLinks` (0 = off) is an additive v3 field: normalizeFilters defaults it to
+// 0, so saves without it need no migration step.
 
 export const STORE_PREFIX = "ark.filters.v1";
 
