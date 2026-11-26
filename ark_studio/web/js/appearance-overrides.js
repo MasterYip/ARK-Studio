@@ -8,7 +8,7 @@
 // immediate cache and the fallback when there is no account profile.
 //
 //   palette  {enabled, light, dark}  - project palette (saved themes stay project-wide)
-//   graph    {repulsion, distance, gravity, damping} - force-graph physics
+//   graph    {repulsion, distance, gravity, damping, cluster*} - force-graph physics
 //   arrows   {style, relations, mind_tree}            - edge line ends (arrows.js)
 //   graph_display {tab: {key: value}}                 - graph display by graph type
 //
@@ -25,6 +25,7 @@ export const APPEARANCE_CHANGED = "ark:appearance-overrides";
 const STORAGE_KEY = "ark.appearanceOverrides";
 const HEX = /^#[0-9a-f]{6}$/i;
 const GRAPH_KEYS = ["repulsion", "distance", "gravity", "damping"];
+const CLUSTER_GROUPINGS = ["type", "status", "tag"]; // graph-core.js CLUSTER_GROUPINGS
 
 function plainColors(value) {
   if (!value || typeof value !== "object") return null;
@@ -51,6 +52,12 @@ function normalizeGraph(value) {
     if (value[key] === null || value[key] === "" || !Number.isFinite(number)) return null;
     out[key] = number;
   }
+  // Optional clustering fields (physics.js normalizeClusterSettings).
+  if (typeof value.cluster === "boolean") out.cluster = value.cluster;
+  for (const key of ["cluster_attract", "cluster_repel"]) {
+    if (typeof value[key] === "number" && value[key] >= 0 && value[key] <= 1) out[key] = value[key];
+  }
+  if (CLUSTER_GROUPINGS.includes(value.cluster_by)) out.cluster_by = value.cluster_by;
   return out;
 }
 

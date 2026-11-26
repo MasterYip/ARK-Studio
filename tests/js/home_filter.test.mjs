@@ -194,7 +194,7 @@ test("Home and Review stay fast on large projects (source checks)", async () => 
   const local = await read("js/local-graph-view.js");
   assert.match(local, /if \(wantsCenter\(\)\) \{\s*try \{ await ensureSnapshot\(\); \}/);
   // Settings › Display has the same control.
-  assert.match(await read("js/views/settings.js"), /display: \[appearancePanel\(\), \.\.\.\(ctx\.S\.project\?\.id \? \[homeFilterPanel\(ctx\)\] : \[\]\)\]/);
+  assert.match(await read("js/views/settings.js"), /display: \[appearancePanel\(\), \.\.\.\(ctx\.S\.project\?\.id \? \[homeFilterPanel\(ctx\)\] : \[\]\)[,\]]/);
 });
 
 test("Home filter strings exist in both languages", async () => {

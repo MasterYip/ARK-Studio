@@ -479,7 +479,7 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 		body = pyjson.NewObject()
 	}
 	known := map[string]bool{"graph": true, "arrows": true, "assistant": true, "agents": true, "palette": true, "sessions": true,
-		"graph_display": true, "markers": true}
+		"graph_display": true, "markers": true, "branches": true}
 	hasSection := false
 	for k := range known {
 		if body.Has(k) {
@@ -562,6 +562,19 @@ func SettingsPatch(manifest *pyjson.Object, body *pyjson.Object, allowedProvider
 			current.Set("markers", markers.ToJSON(groups))
 		} else {
 			current.Delete("markers")
+		}
+	}
+	if body.Has("branches") {
+		// Go-only: lines of work; the value replaces the stored one, null or
+		// {} go back to the default prefix "branch".
+		b, err := Branches(body.Value("branches"))
+		if err != nil {
+			return nil, err
+		}
+		if b != nil {
+			current.Set("branches", b)
+		} else {
+			current.Delete("branches")
 		}
 	}
 	if body.Has("sessions") {

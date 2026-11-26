@@ -418,7 +418,18 @@ func (s *Store) Topic(ctx context.Context, ref string, full bool) (*pyjson.Objec
 		if err != nil {
 			return err
 		}
-		topic := hydrated[0]
+		out, err = s.topicPayload(ctx, q, row, hydrated[0], full)
+		return err
+	})
+	return out, err
+}
+
+// topicPayload is the body of Topic for the topic row (its id and
+// meta_json are read) and the topic object to send (Go only: BranchTopic
+// passes a row that is not stored).
+func (s *Store) topicPayload(ctx context.Context, q sqlitedb.Querier, row sqlitedb.Row, topic *pyjson.Object, full bool) (*pyjson.Object, error) {
+	var out *pyjson.Object
+	err := func() error {
 		sg, err := topicSubgraph(row)
 		if err != nil {
 			return err
@@ -507,7 +518,7 @@ func (s *Store) Topic(ctx context.Context, ref string, full bool) (*pyjson.Objec
 		out = pyjson.NewObject("topic", topic, "members", members, "edges", edges, "excluded", excludedUnits,
 			"archived", archived.Get("n"), "subgraph", sg.object())
 		return nil
-	})
+	}()
 	return out, err
 }
 

@@ -25,6 +25,7 @@ import (
 	"context"
 	"strings"
 
+	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/sqlitedb"
 	"arkstudio/go/internal/store"
 )
@@ -75,7 +76,8 @@ func (m *Manager) MarkReviewListSeen(ctx context.Context, username, projectID, a
 			return err
 		}
 		_, err := q.ExecContext(ctx, "DELETE FROM review_seen WHERE username=? AND project_id=? AND item<>? AND since<>'' AND since<? "+
-			"AND item NOT LIKE ? AND item NOT LIKE ?", user, projectID, reviewSeenWatermark, at, store.ClearedPrefix+"%", "a:%")
+			"AND item NOT LIKE ? AND item NOT LIKE ? AND item NOT LIKE ?", user, projectID, reviewSeenWatermark, at, store.ClearedPrefix+"%", "a:%",
+			store.OpenedPrefix+"%")
 		return err
 	}, nil)
 }
@@ -126,4 +128,41 @@ func (m *Manager) ForgetAssignments(ctx context.Context, username, projectID str
 		}
 		return nil
 	}, nil)
+}
+
+// ForgetReviewItems drops username's marks of these items of the project
+// ("Mark as unread": the "o:" opened marks, store.OpenedPrefix).
+func (m *Manager) ForgetReviewItems(ctx context.Context, username, projectID string, items []string) error {
+	if len(items) == 0 {
+		return nil
+	}
+	user := strings.ToLower(username)
+	return m.DB.Write(ctx, func(q sqlitedb.Querier) error {
+		for _, item := range items {
+			if _, err := q.ExecContext(ctx, "DELETE FROM review_seen WHERE username=? AND project_id=? AND item=?", user, projectID, item); err != nil {
+				return err
+			}
+		}
+		return nil
+	}, nil)
+}
+
+// HighlightOthers reports prefs.highlight_others_reviews of username:
+// whether review items assigned to someone else count as new for them.
+func (m *Manager) HighlightOthers(ctx context.Context, username string) bool {
+	user, ok, err := m.UserByName(ctx, username)
+	if err != nil || !ok {
+		return false
+	}
+	prefs, _ := pyjson.Loads(user.Str("prefs_json"))
+	o, _ := prefs.(*pyjson.Object)
+	return o.Value("highlight_others_reviews") == true
+}
+
+// Viewer is seen[projectID] for username (the zero marks when there are
+// none), with the viewer filled in (store.NeedsSeen.Pending).
+func Viewer(seen map[string]store.NeedsSeen, projectID, username string, others bool) store.NeedsSeen {
+	s := seen[projectID]
+	s.User, s.Others = username, others
+	return s
 }

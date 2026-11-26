@@ -11,7 +11,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { /* Optional browser dependency. */ }
 
 test('Mind auto layout button re-lays out dragged cards; undo restores them', { skip: !chromium, timeout: 120000 }, async () => {
-  const web = path.resolve(__dirname, '../../web');
+  const web = path.resolve(__dirname, '../../ark_studio/web');
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname === '/') {

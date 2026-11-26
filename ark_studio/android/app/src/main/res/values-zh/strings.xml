@@ -213,6 +213,11 @@
     <string name="notify_ch_decision_desc">待决策事项和智能体会话的审批请求</string>
     <string name="notify_ch_session">会话错误</string>
     <string name="notify_ch_session_desc">你的智能体会话出错停止</string>
+    <string name="notify_ch_session_done">会话完成</string>
+    <string name="notify_ch_session_done_desc">你的智能体会话完成一轮、等待你回复</string>
+    <string name="notify_session_done">%1$s 已完成一轮，等待你回复</string>
+    <string name="notify_session_error">%1$s 出错停止</string>
+    <string name="notify_session_error_reason">%1$s 出错停止：%2$s</string>
     <string name="notify_ch_other">其他</string>
     <string name="notify_ch_other_desc">已完成的会话</string>
     <string name="notify_kind_review">新的待审阅</string>

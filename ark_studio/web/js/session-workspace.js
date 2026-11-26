@@ -26,7 +26,7 @@ import {
   sessionSupportsApproval, steerMoveOrder,
   blockSignature, liveActivity, threadBlocks, sessionPhase, shownStatus, busyWork, busyReason, pendingSteerItems, toolCommand, toolGroupSummary, toolKind, toolPaths,
   CUSTOM_MODEL_VALUE, defaultModelOption, modelEfforts, modelOptionLabel as modelOptionLabelEn, modelOptions,
-  modelPickerGroups, modelSourceSummary,
+  modelPickerGroups, modelSourceSummary, sessionHeaderModel, headerStateKey, sessionInfoFacts,
 } from "./session-model.js";
 import {
   sessionStream, attachSessionContext, sendSessionMessage, stopAgentSession, sendQueuedNow, fullToolItem, sessionImages, toolImage,
@@ -48,6 +48,7 @@ import { longPressMenu, swipeDownToClose, watchKeyboard } from "./session-touch.
 import { loadBlocks, toggleBlock } from "./session-sidebar-model.js";
 import { openTranscript } from "./session-library.js";
 import { delegateImageContextMenu } from "./image-copy.js";
+import { SESSION_NOTICES, sessionNotices, sessionTurnEnded, viewSession } from "./session-notices.js";
 
 // session-model.js is dependency-free; inject the app translator here.
 const withT = { t };
@@ -94,7 +95,7 @@ function statusDot(status) {
 }
 
 function statusPill(status) {
-  return h("span", { class: `sw-status ${status}`.trim() }, h("i"), statusText(status));
+  return h("span", { class: `sw-status ${status}`.trim() }, h("i"), capFirst(statusText(status)));
 }
 
 function sessionCwd(session) {
@@ -268,7 +269,6 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     h("div", { class: "sw-rail-foot" }, h("span", { class: "sw-live-dot" }), t("session.rail.foot")));
 
   const mainHeader = h("header", { class: "sw-main-head" });
-  const mainBar = h("div", { class: "sw-main-bar" });
   const thread = h("div", { class: "sw-thread", role: "log", "aria-live": "polite" });
   const column = h("div", { class: "sw-column" });
   const liveLabelNode = h("span", { class: "sw-live-label" });
@@ -290,7 +290,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   });
   // Main conversation and the sub-agents opened from it, as tabs.
   const tabStrip = h("div", { class: "sw-tabs", role: "tablist", hidden: true });
-  const main = h("section", { class: "sw-main" }, mainHeader, mainBar, tabStrip, threadWrap, activityChips.el, composerHost);
+  const main = h("section", { class: "sw-main" }, mainHeader, tabStrip, threadWrap, activityChips.el, composerHost);
 
   const sideHead = h("div", { class: "sw-side-head" });
   const sideTabs = h("div", { class: "sw-side-tabs", role: "tablist" });
@@ -328,6 +328,13 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     if (!history.state?.swSheet) closeMobilePanels(true);
   };
   window.addEventListener("popstate", onHistory);
+  // Finished sessions not opened yet (session-notices.js): the list's marks.
+  const onNotices = () => {
+    if (destroyed) { window.removeEventListener(SESSION_NOTICES, onNotices); return; }
+    paintList();
+  };
+  window.addEventListener(SESSION_NOTICES, onNotices);
+  let lastTurnEnds = "";
   const railHandle = h("div", { class: "sw-sheet-handle", "aria-hidden": "true" });
   const sideHandle = h("div", { class: "sw-sheet-handle", "aria-hidden": "true" });
   rail.prepend(railHandle);
@@ -523,6 +530,13 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       }
       return;
     }
+    // A turn ended (or failed) somewhere: the bubbles and marks follow now,
+    // not at the next poll, and the session on screen is marked seen.
+    const turnEnds = sessions.map((session) => `${session.id}@${session.turn_end?.at || ""}`).join("|");
+    if (turnEnds !== lastTurnEnds) {
+      if (lastTurnEnds) sessionTurnEnded(ctx);
+      lastTurnEnds = turnEnds;
+    }
     if (signature !== lastSessionSignature) {
       lastSessionSignature = signature;
       paintList();
@@ -544,6 +558,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     return items.map((session) => [
       session.id, session.status, session.title || "", session.last_activity_at,
       session.exit_code, session.error, session.counts?.stdout || 0, session.counts?.stderr || 0,
+      session.turn_end?.at || "",
     ].join(":")).join("|");
   }
 
@@ -787,8 +802,11 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   function sessionRowEl(session) {
     const active = isActiveSession(session);
     const depth = Math.max(0, Number(session.depth || 0));
+    // Stopped since the person last opened it (session-notices.js).
+    const unseen = sessionNotices(ctx).unseen.get(session.id) || "";
     return h("button", {
-      class: `sw-session ${session.id === selectedId ? "on" : ""} ${session.status} ${session.parent_id ? "subagent" : ""}`.trim(),
+      class: `sw-session ${session.id === selectedId ? "on" : ""} ${session.status} ${session.parent_id ? "subagent" : ""} ${unseen ? "unseen" : ""}`
+        .replace(/\s+/g, " ").trim(),
       type: "button",
       "aria-current": session.id === selectedId ? "true" : undefined,
       style: depth ? { paddingLeft: `${9 + depth * 11}px` } : undefined,
@@ -811,6 +829,9 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       h("div", { class: "sw-session-top" },
         statusDot(shownStatus(session, activityOf(session))),
         h("span", { class: "sw-session-title" }, sessionTitle(session)),
+        unseen ? h("span", {
+          class: `sw-unseen-dot ${unseen}`, title: t(`session.notice.unseen_${unseen}`), "aria-label": t(`session.notice.unseen_${unseen}`),
+        }) : null,
         h("span", { class: "sw-session-time", title: session.last_activity_at || "" }, sessionTime(session.last_activity_at))),
       h("div", { class: "sw-session-meta" },
         busyNote(session, { reasonOnly: true }),
@@ -850,8 +871,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       return;
     }
     clear(mainHeader);
-    clear(mainBar);
     const session = current();
+    viewSession(ctx, session?.id || "");
     if (!session) {
       mainHeader.appendChild(h("div", { class: "sw-main-empty sw-empty-line" },
         h("span", null, t("session.empty_line")),
@@ -893,17 +914,37 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       longPressMenu(titleEl);
       titleEl.addEventListener("contextmenu", (event) => { event.preventDefault(); openSessionMenu(event.clientX, event.clientY, titleEl); });
     } else {
+      // Two rows, no frame: name and the live state here, the thread tabs
+      // below.  Provider, access, workspace, times, id and full usage are in
+      // Session properties.
+      const head = sessionHeaderModel(session, { activity: activityOf(session), pending: pendingCount, usage: transcript?.usage });
+      const status = shownStatus(session, activityOf(session));
+      const stateLabel = capFirst(t(headerStateKey(head.state)) === headerStateKey(head.state) ? statusText(head.state) : t(headerStateKey(head.state)));
+      const modeButton = (mode, iconName, labelKey) => h("button", {
+        class: `sw-mode-btn ${threadMode === mode ? "on" : ""}`.trim(), type: "button", role: "radio",
+        "aria-checked": threadMode === mode ? "true" : "false", title: t(labelKey), "aria-label": t(labelKey),
+        dataset: { threadMode: mode }, onclick: () => setThreadMode(mode),
+      }, icon(iconName, "sm"));
       mainHeader.appendChild(h("div", { class: "sw-title-line" },
-        statusDot(shownStatus(session, activityOf(session))),
+        statusDot(head.state === "approval" ? "idle" : status),
         h("h2", { title }, title),
-        statusPill(shownStatus(session, activityOf(session))),
-        busyNote(session, { reasonOnly: true }),
         session.parent_id ? h("span", { class: "sw-mini-tag sub" }, t("session.tag.subagent")) : null,
         forkRelationLabel(session) ? h("span", { class: "sw-mini-tag side" }, forkRelationLabel(session)) : null,
-        h("span", { class: "spacer" }),
+        h("div", { class: "sw-head-status" },
+          head.state === "approval"
+            ? h("button", {
+              class: "sw-status approval", type: "button", title: t("session.details.open"),
+              onclick: () => { switchTab("overview"); requestAnimationFrame(() => sideBody.querySelector(".sw-approvals")?.scrollIntoView({ block: "nearest" })); },
+            }, h("i"), stateLabel, h("b", null, String(head.pending)))
+            : h("span", { class: `sw-status ${head.state}`.trim() }, h("i"), stateLabel),
+          busyNote(session, { reasonOnly: true }),
+          usageBadge()),
+        h("div", { class: "sw-mode", role: "radiogroup", "aria-label": t("session.mode.label") },
+          modeButton("thread", "message", "session.mode.thread"),
+          modeButton("raw", "command", "session.mode.raw")),
         h("div", { class: "sw-main-actions" },
-          active ? h("button", { class: "btn sm danger", title: t(`${stopLabelKey(session)}_hint`), onclick: stopSession },
-            icon("x", "sm"), t(stopLabelKey(session))) : null,
+          head.stop ? h("button", { class: "btn sm danger sw-head-stop", title: t(`${stopLabelKey(session)}_hint`), onclick: stopSession },
+            icon("stop", "sm"), h("span", null, t(stopLabelKey(session)))) : null,
           h("button", {
             class: "icon-btn sw-more", type: "button", title: t("session.menu.more"), "aria-label": t("session.menu.more"),
             "aria-haspopup": "menu", "data-session-menu": "",
@@ -912,42 +953,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
               openSessionMenu(rect.left, rect.bottom + 4, event.currentTarget);
             },
           }, icon("more", "sm")))));
-      mainHeader.appendChild(h("div", { class: "sw-title-meta" },
-        h("span", { class: "sw-meta-item" }, icon("cpu", "sm"), platformLabel(session)),
-        session.model ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), session.model) : null,
-        session.effort ? h("span", { class: "sw-meta-item" }, icon("sparkles", "sm"), t("session.meta.effort", { effort: session.effort })) : null,
-        session.worktree
-          ? h("span", {
-            class: `sw-meta-item sw-branch ${worktreeConflict(session) ? "conflict" : ""}`.trim(),
-            title: session.worktree.dirty
-              ? t("session.meta.worktree_dirty", { path: session.worktree.path || "", n: session.worktree.dirty })
-              : (session.worktree.path || ""),
-          }, icon("git", "sm"), worktreeLabel(session) || t("session.tag.worktree"),
-            worktreeConflict(session) ? h("b", { class: "sw-branch-warn" }, t("session.tag.shared")) : null)
-          : null,
-        h("span", { class: `sw-access ${session.access_mode || "read_only"}`.trim(), title: t("session.meta.access_hint") },
-          icon("shield", "sm"), session.access_label || permissionModeLabel(session.access_mode === "full_access" ? "full_access" : "read_only")),
-        session.agent ? h("span", { class: "sw-meta-item" }, icon("user", "sm"), session.agent) : null,
-        // The task chip has the node menu (unit-menu.js): Locate in research map and the rest.
-        session.task_ref ? h("span", { class: "sw-meta-item sw-task-ref", dataset: { unitRef: session.task_ref } }, icon("target", "sm"), session.task_ref) : null,
-        h("span", { class: "sw-meta-item sw-mono" }, icon("folder", "sm"), sessionCwd(session)),
-        h("span", { class: "spacer" }),
-        h("span", { class: "sw-meta-item" }, icon("clock", "sm"), session.started_at ? fmtDateTime(session.started_at) : t("session.meta.not_started"))));
     }
-
-    mainBar.appendChild(h("div", { class: "sw-mode" },
-      h("button", {
-        class: `sw-mode-btn ${threadMode === "thread" ? "on" : ""}`.trim(), type: "button",
-        onclick: () => setThreadMode("thread"),
-      }, icon("message", "sm"), t("session.mode.thread")),
-      h("button", {
-        class: `sw-mode-btn ${threadMode === "raw" ? "on" : ""}`.trim(), type: "button",
-        onclick: () => setThreadMode("raw"),
-      }, icon("command", "sm"), t("session.mode.raw"))));
-    mainBar.appendChild(h("span", { class: "spacer" }));
-    mainBar.appendChild(usageBadge());
-    mainBar.appendChild(h("span", { class: "sw-session-id sw-mono", title: session.id }, session.id));
-    mainBar.appendChild(liveBadge(session));
     paintTabs();
     composerHost.classList.toggle("hidden", Boolean(activeTab()));
     paintThread();
@@ -968,11 +974,12 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     };
     const phone = isPhone() ? [
       { label: t("session.props.open"), icon: "info", onClick: () => openMobilePanel("side") },
-      { label: t(threadMode === "thread" ? "session.mode.raw" : "session.mode.thread"), icon: "command",
-        onClick: () => setThreadMode(threadMode === "thread" ? "raw" : "thread") },
     ] : [];
     return [
       ...phone,
+      // Also on row 1 as a segmented control; narrow headers hide that.
+      { label: t(threadMode === "thread" ? "session.mode.raw" : "session.mode.thread"), icon: threadMode === "thread" ? "command" : "message",
+        onClick: () => setThreadMode(threadMode === "thread" ? "raw" : "thread") },
       { label: t("session.menu.rename"), icon: "edit", onClick: () => renameHeader(session) },
       session.task_ref ? { label: t("tasks.open_task"), icon: "target", onClick: () => ctx.openUnit(session.task_ref) } : null,
       { label: t("session.fork_tab"), icon: "git", onClick: () => forkInTab(session) },
@@ -1027,9 +1034,16 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     }, icon("sparkles", "sm"), t("session.usage.badge", { prefix, n: formatTokens(usage.total_tokens) }));
   }
 
+  // The token total for Session properties › Status (details in Token usage).
+  function usageText() {
+    const usage = transcript?.usage;
+    if (!usage) return t("session.usage.pending");
+    return t("session.usage.badge", { prefix: usage.estimated ? "≈" : "", n: formatTokens(usage.total_tokens) });
+  }
+
   function refreshUsageBadge() {
     const nodes = [
-      ...mainBar.querySelectorAll(".sw-usage"),
+      ...mainHeader.querySelectorAll(".sw-usage"),
       ...composerHost.querySelectorAll(".sw-usage"),
     ];
     for (const node of nodes) node.replaceWith(usageBadge());
@@ -1053,13 +1067,14 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     if (!active) {
       const errored = session.status === "errored";
       return h("span", { class: `sw-live ${errored ? "error" : "done"}`.trim() },
-        h("i"), errored ? (session.error || statusText("errored")) : t("session.live.completed", { time: sessionTime(session.ended_at) }));
+        h("i"), capFirst(errored ? (session.error || statusText("errored")) : t("session.live.completed", { time: sessionTime(session.ended_at) })));
     }
-    const busyText = busyNote(session)?.textContent || "";
-    const label = busyText || t(sessionPhase(session) === "waiting" ? "session.live.waiting" : session.status === "idle" ? "session.live.idle"
+    // The status row above has the busy reason; here what the agent does.
+    const busy = busyReason(session, activityOf(session)).length > 0;
+    const label = busy ? t("session.live.running") : t(sessionPhase(session) === "waiting" ? "session.live.waiting" : session.status === "idle" ? "session.live.idle"
       : session.status === "starting" ? "session.live.starting"
         : session.status === "stopping" ? "session.live.stopping" : "session.live.running");
-    return h("span", { class: "sw-live running" }, h("i"), label,
+    return h("span", { class: "sw-live running", "data-live": "" }, h("i"), capFirst(label),
       h("span", { class: "sw-live-sep" }, "·"),
       t("session.live.last_line", { time: sessionTime(session.last_activity_at) }));
   }
@@ -1111,8 +1126,6 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     if (key === selectedId) {
       mainData = data;
       refreshActivity(data.activity || data.items || [], current());
-      refreshUsageBadge();
-      if (railTab === "overview") paintSide();
     }
     if (key === viewKey() && data !== transcript) {
       transcript = data;
@@ -1120,6 +1133,11 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       transcriptError = "";
       transcriptLoading = false;
       paintThread();
+    }
+    // After `transcript` is current: the header's token total reads it.
+    if (key === selectedId) {
+      refreshUsageBadge();
+      if (railTab === "overview") paintSide();
     }
   }
 
@@ -1237,7 +1255,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
   function shownStatusOf(session) {
     if (!session) return "";
     const status = shownStatus(session);
-    return status === "running" ? "running" : status === "errored" ? "failed" : status === "idle" ? "" : "completed";
+    if (status === "idle" || (status === "done" && isActiveSession(session))) return ""; // waiting for the person
+    return status === "running" ? "running" : status === "errored" ? "failed" : "completed";
   }
 
   // Fork in new tab: the provider forks the conversation itself (Claude
@@ -2523,7 +2542,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       : t("tasks.thread.default_model"))}${choices.effort ? ` · ${choices.effort}` : ""}`;
     const configButton = h("button", {
       class: "sw-chip sw-config-btn", type: "button",
-      title: t(active ? "session.composer.config_locked" : "session.composer.config_next"),
+      title: `${configLabel} · ${t(active ? "session.composer.config_locked" : "session.composer.config_next")}`,
       "aria-expanded": composerConfigOpen ? "true" : "false",
       onclick: () => { composerConfigOpen = !composerConfigOpen; contextPickerOpen = false; composerSignature = ""; syncComposer(); },
     }, icon("sparkles", "sm"), h("span", { class: "sw-config-label" }, configLabel), icon("chevron", "sm"));
@@ -2546,8 +2565,11 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       accessWarning,
       lockHint) : null;
     for (const option of accessSelect.options) option.textContent = capFirst(option.textContent);
+    // Narrow panes show only the icon: the mode is in the tooltip.
+    const accessLabel = accessSelect.selectedOptions?.[0]?.textContent || "";
     const accessChip = h("label", {
-      class: `sw-chip sw-access-chip ${choices.access_mode}`.trim(), title: accessSelect.title,
+      class: `sw-chip sw-access-chip ${choices.access_mode}`.trim(),
+      title: [accessLabel, accessSelect.title].filter(Boolean).join(" · "),
     }, icon(choices.access_mode === "full_access" ? "shield" : choices.access_mode === "read_only" ? "eye" : "shield", "sm"),
       accessSelect);
     const box = h("div", { class: "sw-composer-box" },
@@ -2829,9 +2851,21 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       body);
   }
 
-  function fact(label, value, mono = "") {
-    return h("div", { class: "sw-fact" }, h("span", { class: "k" }, label),
-      h("span", { class: `v ${mono}`.trim() }, value ?? "—"));
+  // One property row: label, value ("mono" for ids and paths, "num" for
+  // counts and durations), optionally a copy button.
+  function fact(label, value, mono = "", { copy = "", id = "" } = {}) {
+    const text = typeof value === "string" ? value : "";
+    // Sentence case for words ("Full access"), never for ids and paths.
+    const shown = text && mono !== "mono" ? capFirst(text) : value;
+    return h("div", { class: "sw-fact", dataset: id ? { fact: id } : undefined }, h("span", { class: "k" }, label),
+      h("span", { class: `v ${mono}`.trim(), title: text.length > 24 ? text : undefined }, shown ?? "—"),
+      copy ? h("button", {
+        class: "icon-btn sw-fact-copy", type: "button", title: t("action.copy"), "aria-label": `${t("action.copy")} ${label}`,
+        onclick: async () => {
+          const ok = await copyText(copy);
+          ctx.toast(ok ? t("action.copied") : t("action.copy"), ok ? "ok" : "err");
+        },
+      }, icon("copy", "sm")) : null);
   }
 
   function progressStep(label, at, state) {
@@ -2853,12 +2887,12 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     return sideSection(t("session.section.token_usage"),
       h("div", { class: "sw-usage-detail" },
         h("div", { class: "sw-facts" },
-          fact(t("session.fact.total"), t("session.usage.badge", { prefix: usage.estimated ? "≈" : "", n: formatTokens(usage.total_tokens) }), "mono"),
-          fact(t("session.fact.input"), t("session.usage.tokens", { n: formatTokens(usage.input_tokens) }), "mono"),
-          fact(t("session.fact.output"), t("session.usage.tokens", { n: formatTokens(usage.output_tokens) }), "mono"),
-          usage.reasoning_tokens ? fact(t("session.fact.reasoning"), t("session.usage.tokens", { n: formatTokens(usage.reasoning_tokens) }), "mono") : null,
-          usage.cache_read_input_tokens ? fact(t("session.fact.cached_input"), t("session.usage.tokens", { n: formatTokens(usage.cache_read_input_tokens) }), "mono") : null,
-          fact(t("session.fact.source"), t(usage.estimated ? "session.usage.estimated" : "session.usage.reported"), "mono")),
+          fact(t("session.fact.total"), t("session.usage.badge", { prefix: usage.estimated ? "≈" : "", n: formatTokens(usage.total_tokens) }), "num"),
+          fact(t("session.fact.input"), t("session.usage.tokens", { n: formatTokens(usage.input_tokens) }), "num"),
+          fact(t("session.fact.output"), t("session.usage.tokens", { n: formatTokens(usage.output_tokens) }), "num"),
+          usage.reasoning_tokens ? fact(t("session.fact.reasoning"), t("session.usage.tokens", { n: formatTokens(usage.reasoning_tokens) }), "num") : null,
+          usage.cache_read_input_tokens ? fact(t("session.fact.cached_input"), t("session.usage.tokens", { n: formatTokens(usage.cache_read_input_tokens) }), "num") : null,
+          fact(t("session.fact.source"), t(usage.estimated ? "session.usage.estimated" : "session.usage.reported"))),
         h("div", { class: "sw-usage-note" }, icon("info", "sm"), confidence)),
       h("span", { class: `sw-usage-pill ${usage.estimated ? "estimated" : "reported"}`.trim() },
         t("session.usage.badge", { prefix: usage.estimated ? "≈" : "", n: formatTokens(usage.total_tokens) })));
@@ -2890,8 +2924,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       h("div", { class: "sw-facts" },
         fact(t("session.fact.support"), t(supported ? "session.approval.via_stdin" : "session.approval.unsupported")),
         fact(t("session.fact.protocol"), session.approvals?.protocol || "ark-permission-v1", "mono"),
-        fact(t("session.fact.pending"), String(pending.length)),
-        fact(t("session.fact.always_rules"), String(rules.length))),
+        fact(t("session.fact.pending"), String(pending.length), "num"),
+        fact(t("session.fact.always_rules"), String(rules.length), "num")),
       recent.length ? h("div", { class: "sw-approval-mini-list" }, recent.map((item) => h("div", {
         class: `sw-approval-mini ${item.status}`.trim(),
       },
@@ -2950,7 +2984,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     const sources = contextItemsFor(session);
     const errors = items.filter((item) => item.type === "error").length;
     const stat = (iconName, label, value) => h("div", { class: `sw-activity-stat ${value ? "" : "zero"}`.trim() },
-      icon(iconName, "sm"), h("b", null, String(value)), h("span", null, label));
+      icon(iconName, "sm"), h("b", null, String(value)), h("span", null, capFirst(label)));
     return sideSection(t("tasks.thread.activity"), h("div", { class: "sw-activity" },
       h("div", { class: "sw-activity-stats" },
         stat("terminal", t("tasks.thread.stat_commands"), summary.counts.command),
@@ -2999,26 +3033,19 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
       sideSection(t("session.section.progress"), progress),
       sideSection(t("filters.status"), h("div", { class: "sw-facts" },
         fact(t("session.fact.status"), [statusText(shownStatus(session, activityOf(session))),
-          busyNote(session, { reasonOnly: true })?.textContent].filter(Boolean).join(" · ")),
-        fact(t("session.fact.duration"), fmtDuration(session.started_at || session.created_at, session.ended_at)),
+          busyNote(session, { reasonOnly: true })?.textContent].filter(Boolean).join(" · "), "", { id: "status" }),
+        fact(t("session.fact.live"), liveBadge(session), "", { id: "live" }),
+        fact(t("session.fact.duration"), fmtDuration(session.started_at || session.created_at, session.ended_at), "num"),
         fact(t("session.fact.last_activity"), sessionTime(session.last_activity_at)),
-        fact(t("session.fact.exit"), session.exit_code === null || session.exit_code === undefined ? "—" : String(session.exit_code), "mono"),
-        fact("stdout", t("session.lines_n", { n: session.counts?.stdout || 0 }), "mono"), // i18n-ignore: stream name
-        fact("stderr", t("session.lines_n", { n: session.counts?.stderr || 0 }), "mono"), // i18n-ignore: stream name
-        session.pid ? fact("pid", String(session.pid), "mono") : null)),
+        fact(t("session.fact.tokens"), usageText(), "num", { id: "tokens" }),
+        fact(t("session.fact.exit"), session.exit_code === null || session.exit_code === undefined ? "—" : String(session.exit_code), "num"),
+        fact("stdout", t("session.lines_n", { n: session.counts?.stdout || 0 }), "num"), // i18n-ignore: stream name
+        fact("stderr", t("session.lines_n", { n: session.counts?.stderr || 0 }), "num"), // i18n-ignore: stream name
+        session.pid ? fact("PID", String(session.pid), "mono") : null)), // i18n-ignore: process id
       sideSection(t("type.agent"), h("div", { class: "sw-facts" },
-        fact(t("session.fact.platform"), platformLabel(session)),
-        session.model ? fact(t("session.fact.model"), session.model, "mono") : null,
-        session.effort ? fact(t("session.fact.effort"), session.effort, "mono") : null,
-        fact(t("session.fact.permission"), session.permission_label || session.access_label
-          || permissionModeLabel(sessionAccessMode(session))),
-        fact(t("session.fact.turn"), `#${session.turn || 1}`),
-        fact(t("session.fact.approvals"), t(session.capabilities?.supports_approval ? "session.approval.via_stdin" : "session.approval.unsupported")),
-        session.agent ? fact(t("session.fact.agent"), session.agent) : null,
-        fact(t("session.fact.project"), (session.project || {}).name || "—"),
-        fact(t("session.fact.workspace"), sessionCwd(session), "mono"),
-        session.parent_id ? fact(t("session.fact.parent"), session.parent_id, "mono") : null,
-        session.relation ? fact(t("session.fact.relation"), forkRelationLabel(session)) : null)),
+        sessionInfoFacts(session, { t, platform: platformLabel(session), cwd: sessionCwd(session), relation: forkRelationLabel(session) })
+          .map((item) => fact(item.label, item.value, item.mono ? "mono" : item.num ? "num" : "",
+            { id: item.id, copy: item.copy ? String(item.value) : "" })))),
       permissionHistorySection(session),
       approvalSection(session),
       sideChatSection(session),
@@ -3030,7 +3057,7 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
           session.worktree.head ? fact(t("session.fact.head"), session.worktree.head, "mono") : null,
           fact(t("session.fact.state"), worktreeConflict(session) ? t("session.worktree.shared")
             : session.worktree.dirty ? t("session.worktree.dirty", { n: session.worktree.dirty }) : t("session.worktree.clean")),
-          session.worktree.active_count ? fact(t("session.fact.active_sessions"), String(session.worktree.active_count), "mono") : null,
+          session.worktree.active_count ? fact(t("session.fact.active_sessions"), String(session.worktree.active_count), "num") : null,
           session.worktree.repository?.root ? fact(t("session.fact.repository"), session.worktree.repository.root, "mono") : null),
         worktreeConflict(session)
           ? h("div", { class: "sw-boundary danger" }, icon("alert", "sm"),
@@ -3590,6 +3617,8 @@ export function renderSessionWorkspace(ctx, { onLaunch, tasks = [], related: rel
     select,
     destroy() {
       destroyed = true;
+      viewSession(ctx, "");
+      window.removeEventListener(SESSION_NOTICES, onNotices);
       stopLiveTimer();
       stopContextWatch();
       for (const off of follows.values()) off();

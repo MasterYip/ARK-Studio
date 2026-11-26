@@ -33,7 +33,7 @@ const (
 type watchOptions struct {
 	URL, Token, TokenFile, Project, Name, Kinds, State string
 	Wait, Interval                                     float64
-	Once, JSON, Mine                                   bool
+	Once, JSON, Mine, ForYou                           bool
 	Until                                              bool    // exit after the first news (T-0053: a background watcher wakes the agent)
 	Max                                                float64 // with --until-update: seconds to watch before giving up
 	Host                                               string  // X-ARK-Host
@@ -72,7 +72,11 @@ type watchItem struct {
 	Actor   string `json:"actor"`
 	Summary string `json:"summary"`
 	Link    string `json:"link"`
-	Comment *struct {
+	// Routing (agentwatch): whether the update is meant for this agent and why.
+	ForYou   bool   `json:"for_you"`
+	Reason   string `json:"reason"`
+	Audience string `json:"audience"`
+	Comment  *struct {
 		ID int64 `json:"id"`
 	} `json:"comment"`
 	Message *struct {
@@ -114,8 +118,9 @@ func agentWatchFlags(errw io.Writer) (*flag.FlagSet, *watchOptions, *string) {
 	fs.BoolVar(&o.JSON, "json", false, "print each update as one JSON line")
 	fs.StringVar(&o.Kinds, "kinds", "", "only these kinds, comma-separated (see docs/agents/working-mode.md)")
 	fs.BoolVar(&o.Mine, "mine", false, "only units you or your agents created or that are assigned to you")
+	fs.BoolVar(&o.ForYou, "for-you", false, "only updates meant for you: on units you wrote, replies to your comments (always on with --until-update)")
 	fs.StringVar(&o.State, "state", watchStateFile, "cursor file (relative to the working directory)")
-	fs.BoolVar(&o.Until, "until-update", false, "wait until there is news (a person's update on your units or new agent rules), print it and exit; run it in the background so it wakes you")
+	fs.BoolVar(&o.Until, "until-update", false, "wait until there is news for you (a person's update on units you wrote, or new agent rules), print it and exit; run it in the background so it wakes you")
 	fs.Float64Var(&o.Max, "max", 6900, "with --until-update: give up after this many seconds (prints a line, exit 0)")
 	fs.StringVar(&o.Host, "host", os.Getenv("ARK_HOST"), "this device's id, sent as X-ARK-Host (env ARK_HOST; ark-server agent host-id)")
 	fs.IntVar(&o.OwnerPID, "owner-pid", watchEnvInt("ARK_OWNER_PID"), "your agent's process id: the watcher stops when it is gone; default: the nearest Codex or Claude Code process above the watcher (env ARK_OWNER_PID)")
@@ -169,9 +174,15 @@ func agentTokenFor(file, project, envName string) string {
 
 // setSessionHeader names the ARK session the helper runs in (X-ARK-Session
 // from ARK_SESSION_ID): the server then counts the writes as the session's.
+// Outside ARK, ARK_AGENT_SESSION (X-ARK-Agent-Session) tells this agent from
+// others that use the same token on this device, so people's answers on its
+// units reach it alone.
 func setSessionHeader(req *http.Request) {
 	if id := strings.TrimSpace(os.Getenv("ARK_SESSION_ID")); id != "" {
 		req.Header.Set("X-ARK-Session", id)
+	}
+	if id := strings.TrimSpace(os.Getenv("ARK_AGENT_SESSION")); id != "" {
+		req.Header.Set("X-ARK-Agent-Session", id)
 	}
 }
 
@@ -375,6 +386,9 @@ func watchOnce(ctx context.Context, client *http.Client, o *watchOptions, cursor
 	if o.Mine {
 		q.Set("mine", "1")
 	}
+	if o.Until || o.ForYou {
+		q.Set("for_you", "1") // wake only for updates meant for this agent
+	}
 	target := o.URL + "/api/agent/v1/updates"
 	if len(q) > 0 {
 		target += "?" + q.Encode()
@@ -430,6 +444,14 @@ func setWatchHeaders(req *http.Request, o *watchOptions) {
 	setSessionHeader(req)
 }
 
+// why is " (you submitted X-0065)" for an update routed to this agent, else "".
+func (it watchItem) why() string {
+	if it.ForYou && it.Audience == "session" && it.Reason != "" {
+		return " (" + it.Reason + ")"
+	}
+	return ""
+}
+
 func printWatchItem(out io.Writer, raw json.RawMessage, asJSON bool) {
 	if asJSON {
 		fmt.Fprintln(out, string(raw))
@@ -449,7 +471,7 @@ func printWatchItem(out io.Writer, raw json.RawMessage, asJSON bool) {
 		fmt.Fprintf(out, "             reply: POST %s {\"body\": \"...\"}\n", it.Message.Reply)
 		return
 	}
-	line := fmt.Sprintf("%s  %-16s %s", at, it.Kind, oneLine(it.Summary))
+	line := fmt.Sprintf("%s  %-16s %s%s", at, it.Kind, oneLine(it.Summary), it.why())
 	if it.Comment != nil {
 		line += fmt.Sprintf("  [comment %d]", it.Comment.ID)
 	}

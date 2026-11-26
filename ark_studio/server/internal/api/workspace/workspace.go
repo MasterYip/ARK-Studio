@@ -6,6 +6,7 @@
 package workspace
 
 import (
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -92,6 +93,12 @@ func (h *Handlers) Get(c api.Ctx, path string) error {
 			return api.Err(400, "path is required", "")
 		}
 		return reply(workspace.DiffFile(root, target, c.Query().First("base", "HEAD")))
+	case "/api/workspace/timeline":
+		return reply(workspace.Timeline(root, c.Query().First("path", ""), api.QInt(c.Query(), "limit", workspace.TimelineDefault, 1, workspace.TimelineMax)))
+	case "/api/workspace/preview-token":
+		return h.previewToken(c, p.Path, p.ID())
+	case "/api/workspace/show":
+		return reply(workspace.ShowFile(root, c.Query().First("path", ""), c.Query().First("rev", "")))
 	case "/api/workspace/terminals":
 		c.OK(ws.List(p.ID()))
 		return nil
@@ -235,6 +242,8 @@ func (h *Handlers) Post(c api.Ctx, path string, body *pyjson.Object) error {
 		return reply(workspace.RenamePath(root, body))
 	case "/api/workspace/delete":
 		return reply(workspace.DeletePath(root, body))
+	case "/api/workspace/replace":
+		return searchapi.Replace(c, root, body)
 	case "/api/workspace/terminals":
 		timeout := body.Value("timeout")
 		if !pyjson.Truthy(timeout) {
@@ -326,3 +335,33 @@ func (h *Handlers) Delete(c api.Ctx, id string) error {
 	c.OK(out)
 	return nil
 }
+
+// previewToken answers GET /api/workspace/preview-token: ?path=<file.html>
+// issues a token for the file's folder (the interactive HTML preview,
+// workspace/preview.go), ?renew=<token> extends one of the same person.
+func (h *Handlers) previewToken(c api.Ctx, root, projectID string) error {
+	q := c.Query()
+	expires := int64(workspace.PreviewTTL / time.Second)
+	if token := q.First("renew", ""); token != "" {
+		if _, ok := workspace.RenewPreview(token, projectID, c.Actor()); !ok {
+			return api.Err(404, "The preview has expired. Reload it.", "PREVIEW_EXPIRED")
+		}
+		c.OK(pyjson.NewObject("token", token, "expires_in", expires))
+		return nil
+	}
+	p, name, err := workspace.IssuePreview(root, projectID, c.Actor(), q.First("path", ""))
+	if err != nil {
+		return err
+	}
+	parts := strings.Split(name, "/")
+	for i, part := range parts {
+		parts[i] = url.PathEscape(part)
+	}
+	c.OK(pyjson.NewObject("token", p.Token, "dir", p.Dir, "expires_in", expires,
+		"url", PreviewPrefix+p.Token+"/"+strings.Join(parts, "/")))
+	return nil
+}
+
+// PreviewPrefix is the token-authorised file route of HTML previews
+// (internal/server answers it before the session checks).
+const PreviewPrefix = "/api/workspace/preview/"

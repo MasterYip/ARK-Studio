@@ -37,35 +37,20 @@ func deviceLabel(r *Pairing, agent string) string {
 // UserDevices lists the pairings of owner (newest first): codes still
 // waiting for a scan, paired devices and revoked ones, each with the
 // project the device is on now, its label and when it was last seen.
+// Pairings a newer sign-in of the same device replaces are left out
+// (deviceid.go).
 func (m *Manager) UserDevices(owner string, everyone bool) []any {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	lastSeen := map[string]float64{}
-	agents := map[string]string{}
-	for _, hash := range m.sorder {
-		s := m.sessions[hash]
-		if s == nil {
-			continue
-		}
-		if s.LastSeenAt >= lastSeen[s.PairingID] {
-			lastSeen[s.PairingID] = s.LastSeenAt
-			agents[s.PairingID] = s.UserAgent
-		}
-	}
+	lastSeen, agents := m.lastSeenLocked()
+	hidden := m.hiddenLocked()
 	var items []*pyjson.Object
 	for _, id := range m.order {
 		r := m.pairings[id]
-		if !ownedBy(r, owner, everyone) {
+		if !ownedBy(r, owner, everyone) || hidden[r.ID] != "" {
 			continue
 		}
-		item := r.Public()
-		var seen any
-		if v, ok := lastSeen[r.ID]; ok {
-			seen = ISO(v)
-		}
-		item.Set("label", deviceLabel(r, agents[r.ID])).Set("last_seen_at", seen).
-			Set("project_id", r.ProjectID).Set("scope", "user")
-		items = append(items, item)
+		items = append(items, m.deviceItemLocked(r, lastSeen, agents))
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		return pyjson.Str(items[i].Value("created_at")) > pyjson.Str(items[j].Value("created_at"))
@@ -85,15 +70,7 @@ func (m *Manager) RevokeOwned(pairID, owner string, everyone bool) (*pyjson.Obje
 	if !ownedBy(r, owner, everyone) {
 		return nil, merr(404, "Pairing session not found", "PAIRING_NOT_FOUND")
 	}
-	if r.RevokedAt == nil || *r.RevokedAt == 0 {
-		now := Clock()
-		r.RevokedAt = &now
-	}
-	for _, h := range append([]string(nil), m.sorder...) {
-		if m.sessions[h].PairingID == r.ID {
-			m.dropSession(h)
-		}
-	}
+	m.revokeLocked(r, "")
 	m.save()
 	return r.Public(), nil
 }

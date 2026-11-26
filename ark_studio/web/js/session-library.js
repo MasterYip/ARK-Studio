@@ -7,7 +7,7 @@ import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api, cachedThenFresh } from "./api.js";
 import { openModal, confirmDialog, toast } from "./components.js";
-import { openDownload } from "./download-link.js";
+import { saveDownload } from "./download-link.js";
 import { contextLinks, continueOptions, filterContexts, formatBytes, parseLinks, visibilityKey } from "./session-context-model.js";
 
 const OPEN_KEY = "ark.sessionLibrary.open";
@@ -103,7 +103,7 @@ export async function openTranscript(item) {
     body: h("div", { class: "stack" }, meta, body),
     actions: [
       { label: t("ctx.copy_context"), ghost: true, close: false, onClick: () => copyContext(item) },
-      { label: t("ctx.download"), ghost: true, close: false, onClick: () => { openDownload(sessionContextApi.rawUrl(item.id), { filename: `${item.id}.jsonl` }); } },
+      { label: t("ctx.download"), ghost: true, close: false, onClick: () => { saveDownload(sessionContextApi.rawUrl(item.id), { filename: `${item.id}.jsonl` }); } },
       { label: t("action.close"), primary: true },
     ],
   });

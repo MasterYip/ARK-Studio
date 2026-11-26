@@ -222,3 +222,53 @@ func Stream(c api.Ctx, kind string, run func(cancelled func() bool, emit dom.Emi
 	}
 	return nil
 }
+
+// Replace answers POST /api/workspace/replace: a preview (default) or, with
+// "apply": true and the previewed "files" ([{path, hash}]), the rewrite.
+// Changing files needs write access to the project.
+func Replace(c api.Ctx, root string, body *pyjson.Object) error {
+	if _, err := c.Require("write"); err != nil {
+		return err
+	}
+	str := func(key string) string {
+		if v, ok := body.Value(key).(string); ok {
+			return v
+		}
+		return ""
+	}
+	o := dom.Options{Case: api.BoolArg(body.Value("case")), Word: api.BoolArg(body.Value("word")), Regex: api.BoolArg(body.Value("regex"))}
+	if _, ok := body.Value("replace").(string); !ok {
+		return api.Err(400, "replace must be a string", "")
+	}
+	if !api.BoolArg(body.Value("apply")) {
+		out, err := dom.ReplacePreview(root, str("q"), o, str("include"), str("exclude"), str("replace"))
+		if err != nil {
+			return Err(err)
+		}
+		c.OK(out)
+		return nil
+	}
+	list, ok := body.Value("files").([]any)
+	if !ok {
+		return api.Err(400, "files must be a list of {path, hash}", "")
+	}
+	refs := make([]dom.FileRef, 0, len(list))
+	for _, item := range list {
+		o, ok := item.(*pyjson.Object)
+		if !ok {
+			return api.Err(400, "files must be a list of {path, hash}", "")
+		}
+		path, _ := o.Value("path").(string)
+		hash, _ := o.Value("hash").(string)
+		if path == "" {
+			return api.Err(400, "files must be a list of {path, hash}", "")
+		}
+		refs = append(refs, dom.FileRef{Path: path, Hash: hash})
+	}
+	out, err := dom.ReplaceApply(root, str("q"), o, str("replace"), refs)
+	if err != nil {
+		return Err(err)
+	}
+	c.OK(out)
+	return nil
+}

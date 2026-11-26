@@ -558,21 +558,51 @@ func buildGraph(sources *pyjson.Object, viewer string) *pyjson.Object {
 		}
 	}
 
-	// 4. Paired phones.
+	// 4. Paired phones.  A phone that sends a device id keeps one node across
+	// sign-ins (Go only, mobile/deviceid.go); older apps get one per pairing.
+	phoneGroups := map[string][]*pyjson.Object{} // the viewer's phones by type
 	for _, p := range iterate(sources.Value("phones")) {
 		phone := mustObj(p)
 		deviceID := "phone:" + pyjson.Str(phone.Value("id"))
+		if key := pyjson.Str(or(phone.Value("device_key"), "")); key != "" {
+			deviceID = "phone:d-" + key
+		}
 		owner := pyjson.Str(or(phone.Value("user"), ""))
 		seenAt, ok := parseTime(phone.Value("last_seen_at"))
 		d := g.device(deviceID, "label", or(phone.Value("label"), "Phone"), "kind", "phone", "scope", "personal",
 			"owner", ownerObj(owner), "status", passiveStatus(fptr(seenAt, ok), now, "request", "phone"))
 		d.Set("sources", []any{"mobile"})
-		d.Set("detail", pyjson.NewObject("permission", phone.Value("permission")))
+		detail := pyjson.NewObject("permission", phone.Value("permission"))
+		if pyjson.Truthy(phone.Value("device_key")) {
+			detail.Set("pair_id", phone.Value("id")).Set("device_known", true)
+		}
+		d.Set("detail", detail)
 		state := "unknown"
 		if deviceState(d) == "online" {
 			state = "ok"
 		}
 		g.connect(deviceID, "ark", "paired", "paired phone", state)
+		if owner != "" && pyEq(owner, viewer) {
+			group := strings.ToLower(owner) + "|" + pyjson.Str(d.Value("label"))
+			phoneGroups[group] = append(phoneGroups[group], phone)
+		}
+	}
+	// The viewer's phones of one type may be the same phone signed in
+	// several times: offer to merge them (Settings → Mobile does the same).
+	for _, group := range phoneGroups {
+		if len(group) < 2 {
+			continue
+		}
+		for _, phone := range group {
+			id := "phone:" + pyjson.Str(phone.Value("id"))
+			if key := pyjson.Str(or(phone.Value("device_key"), "")); key != "" {
+				id = "phone:d-" + key
+			}
+			d := g.dev(id)
+			mustObj(d.Value("detail")).Set("pair_id", phone.Value("id")).Set("same_type", int64(len(group)-1))
+			actions, _ := d.Value("actions").([]any)
+			d.Set("actions", append(append([]any{}, actions...), "merge"))
+		}
 	}
 
 	// 5. Privacy: personal devices of other members.

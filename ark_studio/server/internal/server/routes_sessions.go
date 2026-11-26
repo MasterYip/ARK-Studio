@@ -20,6 +20,7 @@ import (
 	"arkstudio/go/internal/project"
 	"arkstudio/go/internal/sessionctx"
 	"arkstudio/go/internal/sessions"
+	"arkstudio/go/internal/sessionstart"
 )
 
 // sessionsPorted are the contract routes this file answers (router.go registers them).
@@ -90,6 +91,7 @@ func (a *App) configureSessions() {
 	m.Catalog = a.Providers
 	m.GuessType = func(name string) string { t, _ := guessMime(name); return t }
 	m.OnChange = a.onSessionChange
+	m.ReferencedFiles = a.referencedFiles
 }
 
 // onSessionChange is App._on_session_change: keep the redacted mirror in step.
@@ -103,6 +105,9 @@ func (a *App) onSessionChange(s *sessions.Session, event string) {
 		return
 	}
 	if event == "delete" {
+		if a.Org != nil {
+			_ = a.Org.ForgetSession(context.Background(), s.ID) // session_notices.go
+		}
 		_, _ = sessionctx.RemoveMirror(p.Path, s.ID)
 	} else if !a.Sessions.IsActive(s) || event == "update" {
 		_, _ = sessionctx.MirrorInternal(p.Path, s.Folder, []string{a.AgentToken()})
@@ -397,6 +402,13 @@ func (c *reqCtx) sessionHooks() *sessions.Hooks {
 			return target, err
 		},
 		StartPoint: c.sessionStartPoint,
+		TaskFolder: func(in sessions.FolderInput) *sessionstart.Folder {
+			p, err := c.require("read")
+			if err != nil || p == nil {
+				return nil
+			}
+			return c.sessionFolder(p, in.Actor, in.TaskRef)
+		},
 		CoreRules: func(projectID, actor string) string {
 			p, err := c.require("read")
 			if err != nil || p.ID() != projectID {

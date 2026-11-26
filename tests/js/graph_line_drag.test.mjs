@@ -58,6 +58,9 @@ async function fixture(layout = "force") {
     "./presence-ui.js": ["attachPresenceOverlay", "createPresenceChip"],
     "./selection-model.js": ["siblingGroup", "groupDefaults"],
     "./read-edit-mode.js": ["rememberMode", "savedMode"],
+    "./users.js": ["currentUsername"],
+    "./components.js": ["toast"],
+    "./graph3d-model.js": ["loadViewChoice", "saveViewChoice", "loadGraph3DSettings", "saveGraph3DSettings", "graph3DAvailable"],
   };
   const nodeLayout = await loadNodeGraphLayout(context);
   const nodeCard = await loadNodeCard(context);

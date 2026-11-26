@@ -274,6 +274,36 @@ written last stays and replaces the others. For example, adding
 star. To remove a marker, write the tags without it. Project admins edit the
 groups in Settings › Appearance › Node markers.
 
+### Lines of work
+
+A line of work is the tag `branch:<name>` (the project may use another
+namespace: `GET /api/agent/v1/branches` returns it as `prefix`). When you
+create a unit, look at the `branch:` tags of the unit it is part_of or
+derived_from and carry them over if the work belongs to the same line; ARK
+does not copy them for you. A unit that serves two lines carries both tags.
+Line names are paths: a line that forks from another is its child,
+`<parent>/<child>` (for example `branch:hoi/stairs`). Start a new `branch:`
+tag only when the user asks or a plan forks into an independent sub-goal, and
+say so in the hand-off; never remove or rename a `branch:` tag without
+asking. `GET /api/agent/v1/branches` lists every line with its size,
+open units, what waits in Needs you, last activity, status (`active`,
+`quiet`, `stalled`, `done`) and the stored topic that shows it, if any.
+A project admin's agent sets the namespace with
+`POST /api/agent/v1/project/branches {"prefix": "line"}` (`null` goes back to
+`branch`).
+
+### Scheduled Assistant tasks
+
+Project admins set up scheduled tasks in Settings › Scheduled tasks: a fixed
+prompt the built-in Assistant runs daily, weekly or every few hours as the
+admin who saved it. Its writes appear in the activity log as
+`assistant:schedule:<id>`; in suggest mode it changes nothing and files its
+suggestions as one artifact in review. `GET /api/agent/v1/schedules` lists the
+tasks, their last runs and the failing ones; an agent with admin access saves,
+deletes or starts one with `POST /api/agent/v1/schedules`
+(`{"action": "save", "task": {...}}`, `{"action": "delete", "id"}`,
+`{"action": "run", "id"}`).
+
 ### Topics
 
 A topic (`type: topic`) is a node that shows a chosen subgraph of the project:

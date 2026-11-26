@@ -32,6 +32,23 @@ test("diff tabs: key, parse, viewer and title", () => {
   assert.equal(m.keyFromRoute(encodeURIComponent(tab.key)), tab.key);
 });
 
+test("rev tabs (Timeline): a commit's version, text viewers only, read-only", () => {
+  const key = m.revKey("./docs\\guide.md", "ABCDEF1234");
+  assert.equal(key, "rev:abcdef1234/docs/guide.md");
+  assert.deepEqual(m.parseKey(key), { kind: "rev", path: "docs/guide.md", rev: "abcdef1234" });
+  assert.equal(m.parseKey("rev:HEAD/x.md"), null, "only commit hashes");
+  assert.equal(m.parseKey("rev:abc/x.md"), null, "at least 4 hex digits");
+  assert.equal(m.parseKey("rev:abcdef12/"), null);
+  const tab = m.makeTab({ kind: "rev", path: "docs/guide.md", rev: "0123456789abcdef" });
+  assert.equal(tab.title, "guide.md (0123456)");
+  assert.equal(tab.rev, "0123456789abcdef");
+  assert.equal(m.viewerFor(tab), "markdown");
+  assert.equal(m.isEditable(tab), false);
+  assert.equal(m.viewerFor(m.makeTab({ kind: "rev", path: "a/pic.png", rev: "abcd" })), "unsupported");
+  assert.equal(m.viewerFor(m.makeTab({ kind: "rev", path: "main.go", rev: "abcd" })), "code");
+  assert.equal(m.keyFromRoute(encodeURIComponent(tab.key)), tab.key);
+});
+
 test("keys and routes round-trip", () => {
   assert.equal(m.workspaceKey("./src\\app.js"), "ws:src/app.js");
   assert.equal(m.mediaKey("12"), "media:12");
@@ -267,4 +284,19 @@ test("reopening by bare uid keeps the existing tab title", () => {
   assert.equal(m.findTab(s, "unit:A-1").title, "Alpha");
   s = m.openTab(s, { kind: "unit", uid: "A-1", title: "Alpha 2" });
   assert.equal(m.findTab(s, "unit:A-1").title, "Alpha 2");
+});
+
+test("view first: files open for reading, Edit (or unsaved changes) opens the editor", () => {
+  assert.equal(m.isEditing({ canEdit: true }), false, "view mode by default");
+  assert.equal(m.isEditing({ canEdit: true, chosen: true }), true);
+  assert.equal(m.isEditing({ canEdit: true, dirty: true }), true, "unsaved edits stay editable");
+  assert.equal(m.isEditing({ canEdit: true, viewFirst: false }), true, "setting off: edit at once");
+  assert.equal(m.isEditing({ canEdit: false, chosen: true, viewFirst: false }), false, "read-only people only view");
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  assert.equal(m.viewFirstEnabled(storage), true, "on by default");
+  m.setViewFirst(false, storage);
+  assert.equal(m.viewFirstEnabled(storage), false);
+  m.setViewFirst(true, storage);
+  assert.equal(m.viewFirstEnabled(storage), true);
 });

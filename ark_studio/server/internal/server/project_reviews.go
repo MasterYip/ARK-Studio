@@ -52,12 +52,13 @@ import (
 const (
 	needsSeenPath     = "/api/needs/seen"
 	needsAssignedPath = "/api/needs/assigned"
+	needsNewPath      = "/api/needs/new"
 	needsCardsMaxKeep = 1024 // databases whose cards are cached
 	needsSeenMaxItems = 200  // keys in one POST
 )
 
 var needsSeenGoOnly = []PortedRoute{{"goonly:exact:" + needsSeenPath, "POST"},
-	{"goonly:exact:" + needsAssignedPath, "GET,HEAD"}}
+	{"goonly:exact:" + needsAssignedPath, "GET,HEAD"}, {"goonly:exact:" + needsNewPath, "GET,HEAD"}}
 
 type needsCardsEntry struct {
 	sig      string
@@ -185,6 +186,7 @@ func (c *reqCtx) withNewReviews(projects []any) {
 	if err != nil {
 		return
 	}
+	others := c.app.Org.HighlightOthers(c.ctx, user)
 	type result struct {
 		fresh, total int
 		ok           bool
@@ -202,7 +204,7 @@ func (c *reqCtx) withNewReviews(projects []any) {
 				if !ok {
 					continue
 				}
-				mine := seen[pyjson.Str(item.Value("id"))]
+				mine := org.Viewer(seen, pyjson.Str(item.Value("id")), user, others)
 				var r result
 				if mayReview(item.Value("permission")) {
 					r.fresh, r.total = store.NewCards(e.cards, mine)
@@ -254,8 +256,17 @@ func (c *reqCtx) postNeedsSeen() error {
 	if err != nil {
 		return err
 	}
-	if !all && len(keys) == 0 && len(cleared) == 0 {
-		return apiErr(400, "send all: true, items or clear", "")
+	opened, err := needsKeys(body, "opened")
+	if err != nil {
+		return err
+	}
+	// "Mark as unread": forget that the person opened these items.
+	unopened, err := needsKeys(body, "unopened")
+	if err != nil {
+		return err
+	}
+	if !all && len(keys) == 0 && len(cleared) == 0 && len(opened) == 0 && len(unopened) == 0 {
+		return apiErr(400, "send all: true, items, opened, unopened or clear", "")
 	}
 	e, ok := c.app.needsFor(c.ctx, p.Path)
 	if !ok {
@@ -298,6 +309,14 @@ func (c *reqCtx) postNeedsSeen() error {
 			items[a] = current[a]
 		}
 	}
+	// Opened in the node details: the only thing that makes an item seen for
+	// the Needs you bubbles and the picker badge (store.OpenedPrefix).
+	for _, key := range opened {
+		if since, ok := current[key]; ok {
+			items[key] = since
+			items[store.OpenedPrefix+key] = since
+		}
+	}
 	for _, key := range cleared {
 		if keep[key] {
 			items[key] = current[key]
@@ -306,6 +325,15 @@ func (c *reqCtx) postNeedsSeen() error {
 	}
 	if err := c.app.Org.MarkReviewItemsSeen(c.ctx, user, id, items, store.MarkTimeOf(now)); err != nil {
 		return err
+	}
+	if len(unopened) > 0 {
+		forget := make([]string, len(unopened))
+		for i, k := range unopened {
+			forget[i] = store.OpenedPrefix + k
+		}
+		if err := c.app.Org.ForgetReviewItems(c.ctx, user, id, forget); err != nil {
+			return err
+		}
 	}
 	if err := c.app.Org.ForgetAssignments(c.ctx, user, id, store.AssignedKeys(e.assigned, user)); err != nil {
 		return err
@@ -316,10 +344,51 @@ func (c *reqCtx) postNeedsSeen() error {
 	}
 	var fresh, total int
 	if review {
-		fresh, total = store.NewCards(e.cards, seen[id])
+		fresh, total = store.NewCards(e.cards, org.Viewer(seen, id, user, c.app.Org.HighlightOthers(c.ctx, user)))
 	}
 	af, at := newAssigned(e.assigned, user, seen[id])
-	c.ok(pyjson.NewObject("review_new", int64(fresh+af), "review_total", int64(total+at)))
+	c.ok(pyjson.NewObject("review_new", int64(fresh+af), "review_total", int64(total+at), "new_keys", newKeysOf(e, review, org.Viewer(seen, id, user, c.app.Org.HighlightOthers(c.ctx, user)))))
+	return nil
+}
+
+func newKeysOf(e needsCardsEntry, review bool, seen store.NeedsSeen) []any {
+	out := []any{}
+	if !review {
+		return out
+	}
+	for _, k := range store.NewKeys(e.cards, seen) {
+		out = append(out, k)
+	}
+	return out
+}
+
+// getNeedsNew answers GET /api/needs/new: the Needs you items of the current
+// project the person has not opened in the node details yet.
+func (c *reqCtx) getNeedsNew() error {
+	p, err := c.require("read")
+	if err != nil {
+		return err
+	}
+	user := c.actor()
+	if user == "" || c.app.Org == nil {
+		c.ok(pyjson.NewObject("new_keys", []any{}))
+		return nil
+	}
+	e, ok := c.app.needsFor(c.ctx, p.Path)
+	if !ok {
+		if err := p.Store.DB.Read(c.ctx, func(q sqlitedb.Querier) error {
+			var err error
+			e, err = readNeeds(c.ctx, q)
+			return err
+		}); err != nil {
+			return err
+		}
+	}
+	seen, err := c.app.Org.ReviewSeen(c.ctx, user)
+	if err != nil {
+		return err
+	}
+	c.ok(pyjson.NewObject("new_keys", newKeysOf(e, c.mayWriteTo(p), org.Viewer(seen, p.ID(), user, c.app.Org.HighlightOthers(c.ctx, user)))))
 	return nil
 }
 

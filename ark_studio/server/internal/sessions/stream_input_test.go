@@ -27,6 +27,10 @@ func TestMain(m *testing.M) {
 		fakeClaude()
 		return
 	}
+	if os.Getenv("ARK_FAKE_ECHO") == "1" { // a one-shot agent that reports its argv and stdin (longargs_test.go)
+		fakeEcho()
+		return
+	}
 	os.Exit(m.Run())
 }
 
@@ -105,6 +109,12 @@ func fakeClaude() {
 		text, images, kind := describe(line)
 		if kind != "user" {
 			continue
+		}
+		if path := os.Getenv("ARK_FAKE_STDIN_FILE"); path != "" { // every user message, for long-prompt tests
+			if f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644); err == nil {
+				_, _ = f.WriteString(text)
+				_ = f.Close()
+			}
 		}
 		if strings.Contains(text, "crash") {
 			os.Exit(2)

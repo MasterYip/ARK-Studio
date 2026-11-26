@@ -9,6 +9,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  ensureDeviceId,
+  validDeviceId,
   MOBILE_BREAKPOINT,
   MOBILE_PRIMARY_TABS,
   MOBILE_SECONDARY_TABS,
@@ -194,4 +196,21 @@ test("service worker never contains an API cache branch", () => {
   assert.match(source, /isApiRequest\(url\)\) return;/);
   assert.doesNotMatch(source, /cache\.put\([^)]*api/i);
   assert.match(source, /CACHE_VERSION/);
+});
+
+test("a browser keeps one device id; the Android app's cookie wins", () => {
+  const store = new Map();
+  const storage = { getItem: (k) => store.get(k) ?? null, setItem: (k, v) => store.set(k, v) };
+  const doc = { cookie: "" };
+  const cryptoImpl = { getRandomValues: (bytes) => { bytes.fill(7); return bytes; } };
+  const first = ensureDeviceId({ storage, doc, cryptoImpl, secure: true });
+  assert.ok(validDeviceId(first));
+  assert.match(doc.cookie, /^ark_device=[A-Za-z0-9_-]+; Path=\/; Max-Age=\d+; SameSite=Lax; Secure$/);
+  doc.cookie = "";
+  assert.equal(ensureDeviceId({ storage, doc, cryptoImpl }), first, "the stored id survives a cleared cookie");
+  const app = "a".repeat(64);
+  doc.cookie = `other=1; ark_device=${app}`;
+  assert.equal(ensureDeviceId({ storage, doc, cryptoImpl }), app);
+  assert.equal(store.get("ark.device.id"), app);
+  assert.ok(!validDeviceId("short") && !validDeviceId("has space in it 123456"));
 });

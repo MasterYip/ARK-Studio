@@ -5,7 +5,9 @@ import { api } from "./api.js";
 import { sortNeedsValues } from "./needs-model.js";
 import { S, baseTypes, selectedTypes, typeChips, selectedStatuses, selectedImportance, activeFilterCount, filterDiffFromDefault, hasFilterDefault } from "./state.js";
 import { openContextMenu } from "./context-menu.js";
-import { railChip } from "./filter-chip-menu.js";
+import { attachChipGroupMenu, railChip } from "./filter-chip-menu.js";
+import { tagTree } from "./tag-tree.js";
+import { applyToggle, buildTagTree, subtreePaths, treePaths } from "./tag-tree-model.js";
 import { assigneeChip, assigneeFilterSection } from "./assignee.js";
 import { renderArkImportRail } from "./import-ark.js";
 import { isArkSource } from "./import-ark-model.js";
@@ -26,6 +28,8 @@ const TOASTS = () => document.getElementById("toast-root");
 export function toast(message, kind = "", { action = null, duration = 3000 } = {}) {
   const root = TOASTS();
   if (!root) return;
+  // A paired phone's skipped desktop-only call: the section says so itself.
+  if (String(message).includes(t("mobile.desktop_only"))) return;
   const el = h("div", { class: `toast ${kind} ${action ? "has-action" : ""}`.trim() }, h("span", null, message));
   const remove = () => el.remove();
   if (action) {
@@ -895,6 +899,8 @@ function buildFilterRail(host, ctx, { embedded = false } = {}) {
     const ai = priority.indexOf(a), bi = priority.indexOf(b);
     return (ai < 0 ? 50 : ai) - (bi < 0 ? 50 : bi) || a.localeCompare(b);
   });
+  // Line tags ("branch:a/b") show as a tree (tag-tree.js).
+  const linePrefix = state.project?.settings?.branches?.prefix || "branch";
   for (const ns of groupNames) {
     const isNeeds = ns === "needs";
     const values = isNeeds ? sortNeedsValues(namespaces[ns] || []) : (namespaces[ns] || []);
@@ -912,7 +918,12 @@ function buildFilterRail(host, ctx, { embedded = false } = {}) {
       dataset: { focusKey: `ns:${ns}` },
       // The click toggles `open` after this handler runs (Enter/Space too).
       onclick: () => railGroupOpen.set(ns, !details.open),
-    }, `${isNeeds ? t("needs.group") : nsLabel(ns)} (${values.length})`));
+    }, `${isNeeds ? t("needs.group") : ns === linePrefix ? t("needs.filter.branch") : nsLabel(ns)} (${values.length})`));
+    if (ns === linePrefix) {
+      details.appendChild(lineFilterTree(ctx, state, facets, ns, values));
+      host.appendChild(details);
+      continue;
+    }
     const list = h("div", { class: "tag-filter-cloud" });
     const tagBase = values.map((item) => item.tag);
     for (const value of values.slice(0, 20)) {
@@ -936,6 +947,49 @@ function buildFilterRail(host, ctx, { embedded = false } = {}) {
 
 
 
+}
+
+// The line tags of the rail as a tree: a parent row selects its own tag and
+// every tag below it; tags stay an include list OR-ed within the namespace.
+function lineFilterTree(ctx, state, facets, ns, values) {
+  const pre = `${ns}:`;
+  const roots = buildTagTree(values.map((value) => ({ path: value.value, n: value.count })));
+  const selected = state.filters.tags || [];
+  const mine = selected.filter((tag) => tag.startsWith(pre));
+  const unsetOn = (state.filters.tagsUnset || []).includes(ns);
+  const isOn = (path) => mine.includes(pre + path);
+  const setLines = (paths, { dropUnset = false } = {}) => {
+    if (dropUnset) state.filters.tagsUnset = (state.filters.tagsUnset || []).filter((item) => item !== ns);
+    ctx.setFilter("tags", [...selected.filter((tag) => !tag.startsWith(pre)), ...paths.map((path) => pre + path)]);
+  };
+  const minePaths = mine.map((tag) => tag.slice(pre.length));
+  const allPaths = treePaths(roots);
+  const menuNext = (action, item) => {
+    if (action === "only") return subtreePaths(item);
+    if (action === "all") return [];
+    return allPaths.filter((path) => !minePaths.includes(path));
+  };
+  return tagTree({
+    roots, isOn, prefix: pre,
+    foldKey: `rail:${state.project?.id || "local"}:${ns}`,
+    onToggle: (paths, on) => setLines(applyToggle(minePaths, paths, on)),
+    all: {
+      label: t("filters.all"), checked: !mine.length && !unsetOn,
+      onChange: () => setLines([], { dropUnset: true }),
+    },
+    extra: [{
+      key: "unset", label: `∅ ${t("filters.unset")}`, title: t("filters.unset_hint"),
+      n: facets.unset?.[ns] ?? 0, on: unsetOn, toggle: () => ctx.toggleFilterValue("tagsUnset", ns),
+    }],
+    rowMenu: (el, item) => attachChipGroupMenu(el, {
+      can: (action) => {
+        const next = menuNext(action, item);
+        if (action === "invert" && !next.length) return false;
+        return next.length !== minePaths.length || next.some((path) => !minePaths.includes(path));
+      },
+      run: (action) => setLines(menuNext(action, item), { dropUnset: action === "only" }),
+    }),
+  });
 }
 
 // Min. links: nodes with at least N links (in + out edges in the project

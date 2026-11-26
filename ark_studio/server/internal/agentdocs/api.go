@@ -116,7 +116,8 @@ func Capabilities() []any {
 		pyjson.NewObject("id", "watch.updates", "kind", "read", "method", "GET", "path", "/api/agent/v1/updates",
 			"summary", "Updates for this agent since a cursor: comments, replies, mentions, Send back / Accept / decisions, "+
 				"changes to your units, new decisions and tasks assigned to you, setup confirmations, messages. "+
-				"?since=<cursor>&wait=<seconds, max 60>&kinds=<a,b>&mine=1. Docs: agents/working-mode.md#watch-for-replies."),
+				"Each item says whether it is meant for you (for_you, reason, audience, target_sessions): act on those, the others are context. "+
+				"?since=<cursor>&wait=<seconds, max 60>&kinds=<a,b>&mine=1&for_you=1. Docs: agents/working-mode.md#watch-for-replies."),
 		pyjson.NewObject("id", "messages.list", "kind", "read", "method", "GET", "path", "/api/agent/v1/messages",
 			"summary", "Experimental: messages a person sent to their agents; also delivered as kind \"message\" in updates."),
 		pyjson.NewObject("id", "messages.ack", "kind", "write", "method", "POST", "path", "/api/agent/v1/messages/{id}/ack",

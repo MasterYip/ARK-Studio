@@ -97,9 +97,33 @@ test('background work keeps a session running between turns', { skip: !chromium 
       const reason = zh ? '1 个子智能体 · 1 个后台任务' : '1 sub-agent · 1 background task';
       await head.locator('.sw-status.running').waitFor({ timeout: 15000 });
       await head.locator('[data-busy-note]', { hasText: reason }).waitFor({ timeout: 15000 });
-      await page.locator('.sw-live.running', { hasText: `${running} · ${reason}` }).waitFor();
+      // The compact header: name and live state only; the rest is in Session properties.
+      assert.equal(await page.locator('.sw-main-head .sw-title-meta, .sw-main-bar').count(), 0, 'one header row');
+      assert.equal(await page.locator('.sw-main-head', { hasText: s.id }).count(), 0, 'no session id in the header');
+      await page.locator('.sw-side [data-fact="session_id"]', { hasText: s.id }).waitFor();
+      await page.locator('.sw-side [data-fact="live"] .sw-live.running').waitFor();
+      await page.locator('.sw-side [data-fact="access"]').waitFor();
+      // The composer sits at the bottom of the pane (above the status bar) at every width,
+      // on the pane's background; a narrow pane shows the access mode as its icon only.
+      for (const width of [1400, 1000]) {
+        await page.setViewportSize({ width, height: 900 });
+        await page.waitForTimeout(300);
+        const at = await page.evaluate(() => {
+          const status = getComputedStyle(document.body).getPropertyValue('--wb-status-h');
+          const comp = document.querySelector('.sw-composer');
+          const access = document.querySelector('.sw-access-chip');
+          return { composer: comp.getBoundingClientRect().bottom, pane: window.innerHeight - (parseFloat(status) || 0),
+            main: document.querySelector('.sw-main').getBoundingClientRect().bottom, bg: getComputedStyle(comp).backgroundColor,
+            accessClipped: access ? access.scrollWidth > access.clientWidth + 1 : false };
+        });
+        assert.ok(Math.abs(at.composer - at.pane) <= 4, `composer bottom ${at.composer} vs pane bottom ${at.pane} at ${width}`);
+        assert.ok(Math.abs(at.main - at.composer) <= 4, `composer is the last row (${at.main} / ${at.composer})`);
+        assert.equal(at.bg, 'rgba(0, 0, 0, 0)', 'the composer row has the pane background');
+        assert.equal(at.accessClipped, false, `access label not clipped at ${width}`);
+      }
+      await page.setViewportSize({ width: 1400, height: 900 });
       await page.locator('.sw-session [data-busy-note]', { hasText: reason }).first().waitFor();
-      await page.locator('.sw-fact', { hasText: `${zh ? '运行中' : 'running'} · ${reason}` }).first().waitFor();
+      await page.locator('.sw-fact', { hasText: `${running} · ${reason}` }).first().waitFor();
       // The chip still lists the watcher with the build.
       await page.locator('[data-activity-chip="background"]', { hasText: '2' }).waitFor();
       assert.equal(await page.locator('.sw-live-row:not(.hidden)').count(), 0, 'no typing indicator');

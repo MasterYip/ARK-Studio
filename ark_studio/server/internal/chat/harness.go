@@ -59,6 +59,16 @@ type Env struct {
 	Who           store.Who
 	// Scope is the person's other projects (nil: the current project only).
 	Scope *Scope
+	// Actor names the tool writes in the activity log (Go only; default
+	// "assistant:deepseek"; scheduled tasks use their own).
+	Actor string
+}
+
+func (e *Env) writeActor() string {
+	if e.Actor != "" {
+		return e.Actor
+	}
+	return "assistant:deepseek"
 }
 
 var typeWords = map[string]string{

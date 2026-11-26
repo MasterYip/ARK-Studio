@@ -1,3 +1,4 @@
+import { sessionNoticesPanel } from "../session-notices-panel.js";
 import { h, clear, fmtDate, relativeTime, copyText } from "../dom.js";
 import { t, hasKey, localizeServer } from "../i18n.js";
 
@@ -6,7 +7,9 @@ const gpuText = (text) => localizeServer(text, "server.gpu.");
 const gpuKind = (kind) => (kind && hasKey(`server.gpu.kind.${kind}`) ? t(`server.gpu.kind.${kind}`) : kind);
 import { icon } from "../icons.js";
 import { api, exportUrl, isPairedDevice } from "../api.js";
+import { exportFileName } from "../download-link.js";
 import { openModal, confirmDialog } from "../components.js";
+import { mergeDevices, removeStaleDevices, duplicateGroups } from "../device-merge.js";
 import { gpuRegistrationNote, openSetupResources } from "../gpu-note.js";
 import { formatRemaining } from "../mobile-core.js";
 import { pwaSnapshot, pwaStatusRow, promptInstall } from "../mobile-ui.js";
@@ -17,13 +20,15 @@ import {
 } from "../arrows.js";
 import {
   GRAPH_DEFAULTS, GRAPH_RANGES, controlToRaw, rawToControl,
-  normalizeGraphPhysics, formatPhysicsValue,
+  normalizeGraphPhysics, formatPhysicsValue, CLUSTER_DEFAULTS, CLUSTER_GROUPINGS,
 } from "../physics.js";
 import {
   getShortcut, setShortcut, resetShortcuts, formatShortcut, shortcutConflict,
   shortcutFromEvent, shortcutIsUsable, SHORTCUT_ACTIONS, getTagShortcuts,
-  setTagShortcut, removeTagShortcut,
+  setTagShortcut, removeTagShortcut, isChord, DEFAULT_SHORTCUTS,
 } from "../shortcuts.js";
+import { viewFirstEnabled, setViewFirst } from "../editor-model.js";
+import { editorAutoReveal, setEditorAutoReveal } from "../editor-entry.js";
 import {
   normalizeGraphDisplay, resolveGraphDisplay, setGraphDisplayValue, clearGraphDisplayTab,
 } from "../graph-display.js";
@@ -40,11 +45,13 @@ import { trashPanel } from "./trash-panel.js";
 import { agentRulesPanel } from "./agent-rules-panel.js";
 import { mobileTunnelPanel } from "./mobile-tunnel-panel.js";
 import { setupResourcesPanels } from "./setup-resources.js";
-import { renderProfilePanels, saveAppearanceOverride } from "../profile.js";
+import { renderProfilePanels, saveAppearanceOverride, highlightOthersReviews, saveHighlightOthersReviews } from "../profile.js";
+import { refreshNeeds } from "../needs-ui.js";
 import { appearanceOverrides, APPEARANCE_CHANGED } from "../appearance-overrides.js";
 import { homeFilterPanel } from "../home-filter-ui.js";
 import { SETTINGS_TABS, DEFAULT_SETTINGS_TAB, GRAPH_SECTION, resolveSettingsTab } from "../settings-tabs.js";
 import { markerSettingsPanel } from "./settings-markers.js";
+import { linesPanel, schedulesPanel } from "./settings-lines.js";
 import { appearancePanel } from "../appearance-panel.js";
 import { paletteMode } from "../appearance.js";
 import { applyAppearance } from "../appearance.js";
@@ -449,7 +456,56 @@ export function renderSettings(host, ctx) {
           h("span", { class: "range-end" }, "100")),
         h("div", { class: "physics-raw-range" }, `${t("settings.raw_range")}: ${formatPhysicsValue(field.key, min)} – ${formatPhysicsValue(field.key, max)} · ${t("settings.default")}: ${formatPhysicsValue(field.key, GRAPH_DEFAULTS[field.key])}`)));
     }
+    elements.push(...clusterRows({ getDraft, onChange, list }));
     return elements;
+  }
+
+  // Cluster by type: a toggle, two 0–1 strengths and the grouping.
+  function clusterRows({ getDraft, onChange, list }) {
+    const set = (key, value) => {
+      if (syncing.active) return;
+      getDraft()[key] = value;
+      onChange();
+      sync();
+    };
+    const toggle = h("input", { type: "checkbox", class: "settings-check", "data-cluster-toggle": "",
+      "aria-label": t("settings.cluster.enable"), onchange: () => set("cluster", toggle.checked) });
+    const by = h("select", { class: "select", "data-cluster-by": "", "aria-label": t("settings.cluster.by"),
+      onchange: () => set("cluster_by", by.value) },
+    ...CLUSTER_GROUPINGS.map((choice) => h("option", { value: choice }, t(`settings.cluster.by_${choice}`))));
+    const sliders = ["cluster_attract", "cluster_repel"].map((key) => {
+      const output = h("span", { class: "physics-raw" });
+      const range = h("input", { type: "range", class: "physics-range", min: "0", max: "100", step: "1",
+        "data-cluster-slider": key, "aria-label": t(`settings.cluster.${key}`),
+        oninput: () => set(key, Number(range.value) / 100) });
+      return { key, range, output };
+    });
+    const sync = () => {
+      const draft = getDraft();
+      toggle.checked = draft.cluster === true;
+      by.value = CLUSTER_GROUPINGS.includes(draft.cluster_by) ? draft.cluster_by : CLUSTER_DEFAULTS.cluster_by;
+      for (const { key, range, output } of sliders) {
+        const value = typeof draft[key] === "number" ? draft[key] : CLUSTER_DEFAULTS[key];
+        range.value = String(Math.round(value * 100));
+        output.textContent = value.toFixed(2);
+      }
+      section.classList.toggle("cluster-off", !toggle.checked);
+    };
+    const section = h("div", { class: "physics-row physics-cluster", "data-physics-cluster": "" },
+      h("div", { class: "physics-head" },
+        h("div", null,
+          h("div", { class: "physics-name" }, t("settings.cluster.enable")),
+          h("div", { class: "physics-hint" }, t("settings.cluster.hint"))),
+        h("div", { class: "physics-values" }, toggle)),
+      ...sliders.map(({ key, range, output }) => h("div", { class: "physics-cluster-line" },
+        h("span", { class: "physics-cluster-label" }, t(`settings.cluster.${key}`)),
+        h("div", { class: "physics-slider" },
+          h("span", { class: "range-end" }, "0"), range, h("span", { class: "range-end" }, "1")),
+        output)),
+      h("div", { class: "physics-cluster-line" },
+        h("span", { class: "physics-cluster-label" }, t("settings.cluster.by")), by));
+    list.push({ sync, inputs: [toggle, by, ...sliders.map((item) => item.range)] });
+    return [section];
   }
   const projectPhysicsNote = h("div", { class: "settings-note hidden", "data-override-note": "graph" });
   const physicsPanel = h("section", { class: "panel settings-panel" },
@@ -484,14 +540,40 @@ export function renderSettings(host, ctx) {
 
   // ------------------------------------------------------------ shortcuts
   const shortcutEditors = SHORTCUT_ACTIONS.map((action) => {
-    const button = h("button", { class: "shortcut-capture", type: "button" },
+    const button = h("button", { class: "shortcut-capture", type: "button", dataset: { shortcut: action.id } },
       formatShortcut(getShortcut(action.id)));
+    // Two-key shortcuts (Ctrl+K Ctrl+0): after the first keys the capture
+    // waits briefly for the second; without one the single keys are kept.
+    const chordable = isChord(DEFAULT_SHORTCUTS[action.id]);
     let captureHandler = null;
+    let first = "";
+    let chordTimer = 0;
     const stopCapture = () => {
       if (captureHandler) window.removeEventListener("keydown", captureHandler, true);
       captureHandler = null;
+      first = "";
+      clearTimeout(chordTimer);
       button.classList.remove("listening");
       button.textContent = formatShortcut(getShortcut(action.id));
+    };
+    const commitSpec = (spec) => {
+      if (!shortcutIsUsable(spec, action.id)) {
+        stopCapture();
+        ctx.toast(t("settings.shortcut_reserved"), "err");
+        return;
+      }
+      const conflict = shortcutConflict(action.id, spec);
+      if (conflict) {
+        stopCapture();
+        const other = SHORTCUT_ACTIONS.find((item) => item.id === conflict);
+        ctx.toast(t("settings.shortcut_duplicate",
+          { name: other ? `${other.prefixKey ? t(other.prefixKey) : ""}${t(other.labelKey, other.labelParams)}` : conflict }), "err");
+        return;
+      }
+      setShortcut(action.id, spec);
+      stopCapture();
+      ctx.toast(t("settings.shortcut_saved", { keys: formatShortcut(spec) }), "ok");
+      ctx.refresh();
     };
     const startCapture = () => {
       if (captureHandler) return;
@@ -503,32 +585,20 @@ export function renderSettings(host, ctx) {
         if (event.key === "Escape") { stopCapture(); return; }
         const spec = shortcutFromEvent(event);
         if (!spec) return;
-        if (!shortcutIsUsable(spec, action.id)) {
-          stopCapture();
-          ctx.toast(t("settings.shortcut_reserved"), "err");
-          return;
-        }
-        const conflict = shortcutConflict(action.id, spec);
-        if (conflict) {
-          stopCapture();
-          const other = SHORTCUT_ACTIONS.find((item) => item.id === conflict);
-          ctx.toast(t("settings.shortcut_duplicate",
-            { name: other ? t(other.labelKey) : conflict }), "err");
-          return;
-        }
-        setShortcut(action.id, spec);
-        stopCapture();
-        ctx.toast(t("settings.shortcut_saved", { keys: formatShortcut(spec) }), "ok");
-        ctx.refresh();
+        if (!chordable) { commitSpec(spec); return; }
+        if (first) { clearTimeout(chordTimer); commitSpec(`${first} ${spec}`); return; }
+        first = spec;
+        button.textContent = `${formatShortcut(spec)} …`;
+        chordTimer = setTimeout(() => commitSpec(first), 1500);
       };
       window.addEventListener("keydown", captureHandler, true);
     };
     button.addEventListener("click", startCapture);
     const row = h("div", { class: "shortcut-row" },
       h("div", null,
-        h("div", { class: "physics-name" }, t(action.labelKey)),
-        h("div", { class: "physics-hint" }, action.hintKey
-          ? t(action.hintKey) : action.fallback)),
+        h("div", { class: "physics-name" }, `${action.prefixKey ? t(action.prefixKey) : ""}${t(action.labelKey, action.labelParams)}`),
+        action.hintKey || action.fallback ? h("div", { class: "physics-hint" }, action.hintKey
+          ? t(action.hintKey) : action.fallback) : null),
       h("div", { class: "row tight" }, button));
     return row;
   });
@@ -943,6 +1013,33 @@ export function renderSettings(host, ctx) {
       mobilePairsHost.appendChild(h("div", { class: "physics-hint" }, t("settings.mobile.no_pairs")));
       return;
     }
+    // One phone signed in several times shows as several devices: offer to
+    // merge each group of the same type, and to remove devices unseen for
+    // 30 days.  Nothing is revoked without a confirmation.
+    const applyPairs = (data) => {
+      if (!data) return;
+      mobileState.pairs = data.pairs || mobileState.pairs;
+      renderMobilePairs();
+    };
+    for (const group of duplicateGroups(pairs)) {
+      const newest = group.reduce((a, b) => (String(b.last_seen_at || b.claimed_at || "") > String(a.last_seen_at || a.claimed_at || "") ? b : a));
+      mobilePairsHost.appendChild(h("div", { class: "settings-note" }, icon("info", "sm"),
+        h("div", null, t("settings.mobile.device_merge.found", { n: group.length, label: newest.label || t("settings.mobile.device_merge.phone") }),
+          " ", h("button", { class: "btn sm", type: "button", "data-device-merge": newest.id,
+            onclick: async () => applyPairs(await mergeDevices(newest.id, { toast: ctx.toast })) },
+          t("settings.mobile.device_merge.action")))));
+    }
+    const staleCount = pairs.filter((pair) => pair.stale).length;
+    if (staleCount) {
+      mobilePairsHost.appendChild(h("div", { class: "settings-note" }, icon("clock", "sm"),
+        h("div", null, t("settings.mobile.stale.found", { n: staleCount }),
+          " ", h("button", { class: "btn sm ghost", type: "button", "data-device-stale": "1",
+            onclick: async () => applyPairs(await removeStaleDevices({ toast: ctx.toast })) },
+          t("settings.mobile.stale.action", { n: staleCount })))));
+    }
+    if (pairs.some((pair) => pair.device_id_missing)) {
+      mobilePairsHost.appendChild(h("div", { class: "physics-hint" }, t("settings.mobile.device_id_missing")));
+    }
     for (const pair of pairs) {
       const revoked = Boolean(pair.revoked_at);
       const desktop = pair.source === "desktop";
@@ -973,7 +1070,8 @@ export function renderSettings(host, ctx) {
             + " · " + t("settings.mobile.pair_created", { date: fmtDate(pair.created_at) })
             + (pair.claimed_at ? " · " + t("settings.mobile.pair_claimed", { date: fmtDate(pair.claimed_at) }) : ""))),
         permissionPick,
-        revoked ? h("span", { class: "pill" }, t("settings.mobile.revoked"))
+        pair.stale && !revoked ? h("span", { class: "pill warn" }, t("settings.mobile.stale.pill")) : null,
+        revoked ? h("span", { class: "pill" }, t(pair.replaced_by ? "settings.mobile.replaced" : "settings.mobile.revoked"))
           : h("button", {
             class: "btn sm danger", type: "button",
             onclick: () => revokeMobilePair(pair.id),
@@ -1176,6 +1274,20 @@ export function renderSettings(host, ctx) {
     tunnelPanel.refresh();
   }
 
+  // ------------------------------------------------------------ editor
+  // How files open in the Editor (this browser): view first, reveal in Explorer.
+  const editorPrefsPanel = h("section", { class: "panel settings-panel", "data-editor-prefs": "" },
+    h("div", { class: "panel-head" }, h("h3", null, t("settings.editor.title")), browserBadge()),
+    h("label", { class: "display-toggle" },
+      h("input", { type: "checkbox", checked: viewFirstEnabled(), "data-view-first": "1",
+        onchange: (event) => setViewFirst(event.target.checked) }),
+      h("span", null, t("settings.editor.view_first"))),
+    h("p", { class: "muted small" }, t("settings.editor.view_first_hint")),
+    h("label", { class: "display-toggle" },
+      h("input", { type: "checkbox", checked: editorAutoReveal(), "data-auto-reveal": "1",
+        onchange: (event) => setEditorAutoReveal(event.target.checked) }),
+      h("span", null, t("editor.auto_reveal"))));
+
   const shortcutPanel = h("section", { class: "panel settings-panel" },
     h("div", { class: "panel-head" },
       h("h3", null, t("settings.shortcuts")),
@@ -1362,7 +1474,7 @@ export function renderSettings(host, ctx) {
     h("div", { class: "panel-head" },
       h("h3", null, t("settings.guide.title"))),
     foldSection({ id: "shortcut-guide", title: t("settings.fold.reference"),
-      summary: t("settings.fold.groups", { n: 6 }), body: h("div", { class: "shortcut-guide-grid" },
+      summary: t("settings.fold.groups", { n: 7 }), body: h("div", { class: "shortcut-guide-grid" },
       shortcutGuideGroup(t("settings.guide.global"), [
         shortcutGuideRow(formatShortcut(getShortcut("palette")), t("settings.guide.open_palette")),
         shortcutGuideRow(formatShortcut(getShortcut("chat")), t("settings.guide.open_chat")),
@@ -1401,6 +1513,13 @@ export function renderSettings(host, ctx) {
         shortcutGuideRow(t("settings.guide.ctrl_wheel"), t("settings.guide.pan_vertical")),
         shortcutGuideRow(t("settings.guide.shift_wheel"), t("settings.guide.pan_horizontal")),
         shortcutGuideRow(t("settings.guide.right_click"), t("settings.guide.context_menu")),
+      ]),
+      shortcutGuideGroup(t("settings.guide.needs"), [
+        shortcutGuideRow(formatShortcut(getShortcut("editorFoldAll")), t("settings.guide.needs_fold_all")),
+        shortcutGuideRow(formatShortcut(getShortcut("editorUnfoldAll")), t("settings.guide.needs_unfold_all")),
+        shortcutGuideRow(formatShortcut(getShortcut("editorFoldLevel1")).replace(/1$/, "1–7"), t("settings.guide.needs_fold_level")),
+        shortcutGuideRow(`${formatShortcut(getShortcut("editorFold"))} / ${formatShortcut(getShortcut("editorUnfold"))}`, t("settings.guide.needs_fold_current")),
+        shortcutGuideRow("← / →", t("settings.guide.needs_arrows")),
       ]),
       shortcutGuideGroup(t("settings.guide.text_editing"), [
         shortcutGuideRow("Enter", t("settings.guide.commit_title")),
@@ -2689,7 +2808,8 @@ export function renderSettings(host, ctx) {
       aboutLink(t("about.attribution"), "/ARK-Studio/blob/main/docs/agents/skills-attribution.md", "info")));
 
   // Stored agent session transcripts are opt-in per download (docs/guide/project-export.md).
-  const exportLink = h("a", { class: "btn primary", href: exportUrl("project", project.id), download: "",
+  // In the app the click goes through download-link.js (save dialog, progress).
+  const exportLink = h("a", { class: "btn primary", href: exportUrl("project", project.id), download: exportFileName(project.name, "project"),
     "data-download-project": "" }, icon("download", "sm"), t("settings.export.download"));
   const exportSessions = h("input", {
     type: "checkbox", "data-export-sessions": "",
@@ -3091,11 +3211,31 @@ export function renderSettings(host, ctx) {
       isOrgAdmin ? overviewShortcut("storage", "folder", t("storage.title"), t("settings.tab.storage_hint")) : null,
       overviewShortcut("guidance", "play", t("tour.title"), t("settings.overview.guide_hint"))));
 
+  // Needs you: others' review items count as new too (prefs, server side).
+  function othersReviewsPanel(ctx) {
+    const status = h("span", { class: "settings-status" });
+    const box = h("input", { type: "checkbox", checked: highlightOthersReviews(), "data-highlight-others": "",
+      onchange: async () => {
+        try {
+          await saveHighlightOthersReviews(box.checked);
+          status.textContent = t("toast.saved");
+          ctx.S.needsNew = null;
+          refreshNeeds(ctx);
+        } catch (err) { box.checked = !box.checked; status.textContent = err.message; }
+      } });
+    return h("section", { class: "panel settings-panel", "data-others-reviews": "" },
+      h("div", { class: "panel-head" }, h("h3", null, t("needs.others.title")), status),
+      h("label", { class: "row tight" }, box, t("needs.others.label")),
+      h("p", { class: "muted small" }, t("needs.others.hint")));
+  }
+
   const sectionPanels = {
     appearance: [palettePanel],
     graph: [graphLayout],
     markers: [markerSettingsPanel(ctx, { registerSave, setDirty,
       readOnly: !ctx.S.session?.local && ctx.S.session?.project_permission !== "admin" })],
+    lines: ctx.S.project?.id ? [linesPanel(ctx)] : [],
+    schedules: ctx.S.project?.id ? [schedulesPanel(ctx)] : [],
     projectAgents: [projectAgentsPanel],
     agentRules: [agentRulesPanel(ctx, "project")],
     projectAssistant: [projectAssistantPanel],
@@ -3112,14 +3252,15 @@ export function renderSettings(host, ctx) {
     deleteProject: !demoProject && ctx.S.session?.project_permission === "admin" ? [deleteProjectPanel] : [],
     profile: profilePanels,
     account: [accountPanel, cachePanel()],
+    notifications: ctx.S.project?.id && !ctx.S.project?.demo ? [sessionNoticesPanel(ctx)] : [],
     environment: [linuxPanel],
-    display: [appearancePanel(), ...(ctx.S.project?.id ? [homeFilterPanel(ctx)] : [])],
+    display: [appearancePanel(), ...(ctx.S.project?.id ? [homeFilterPanel(ctx)] : []), othersReviewsPanel(ctx)],
     advanced: [advancedPanel],
     overview: [overviewPanel],
     infohubSource: [hubPanel],
     appearanceOverride: appearanceOverridePanels,
     graphOverride: graphOverridePanels,
-    shortcuts: [shortcutPanel, shortcutGuidePanel, tagShortcutPanel],
+    shortcuts: [editorPrefsPanel, shortcutPanel, shortcutGuidePanel, tagShortcutPanel],
     guidance: [guidancePanel],
     assistant: [assistantPanel],
     personalAgents: [personalAgentsPanel],
@@ -3137,6 +3278,8 @@ export function renderSettings(host, ctx) {
     overview: { label: t("settings.tab.overview"), icon: "info", hint: t("settings.tab.overview_hint") },
     browser: { label: t("settings.browser_scope"), icon: "monitor", hint: t("settings.tab.browser_hint") },
     appearance: { label: t("settings.tab.appearance"), icon: "palette", hint: t("settings.tab.appearance_hint") },
+    lines: { label: t("lines.title"), icon: "route", hint: t("lines.tab_hint") },
+    schedules: { label: t("schedule.title"), icon: "clock", hint: t("schedule.tab_hint") },
     agents: { label: t("settings.tab.agents"), icon: "cpu", hint: t("settings.tab.agents_hint") },
     resources: { label: t("settings.tab.resources"), icon: "settings", hint: t("settings.tab.resources_hint") },
     access: { label: t("settings.tab.access"), icon: "smartphone", hint: t("settings.tab.access_hint") },

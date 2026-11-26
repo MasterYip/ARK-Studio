@@ -476,6 +476,9 @@ func (s *Store) needsYou(ctx context.Context, q sqlitedb.Querier) ([]any, error)
 			Set("review_since", o.Value("opened_at")).Set("review_round", o.Value("round")).
 			Set("assignee", nil).Set("assignee_effective", nil).Set("assignee_from", nil)
 	}
+	if err := s.setNeedsBranches(ctx, q, objects, groups); err != nil { // Go only (branches.go)
+		return nil, err
+	}
 	items = append(groups, items...)
 	if len(fromIDs) > 0 {
 		sort.Slice(fromIDs, func(i, j int) bool { return fromIDs[i] < fromIDs[j] })

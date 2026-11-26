@@ -7,6 +7,7 @@ ARK serves these libraries locally; no CDN is needed for Markdown rendering.
 | DOMPurify | 3.4.17 | https://github.com/cure53/DOMPurify | Apache-2.0 OR MPL-2.0 |
 | Marked | 18.2.0 | https://github.com/markedjs/marked | MIT |
 | jsdiff | 8.0.2 | https://github.com/kpdecker/jsdiff | BSD-3-Clause |
+| three.js | r170 (0.170.0) | https://github.com/mrdoob/three.js | MIT |
 
 `dompurify/purify.es.js` is the upstream `dist/purify.es.mjs`, renamed for the
 same JavaScript MIME type and release caching as other ARK modules.
@@ -19,3 +20,7 @@ diff; jsdiff aligns similar changed lines before comparing their characters
 locally, with bounded work for large inputs.
 
 Existing KaTeX, Mermaid and d3-quadtree distributions retain their own licenses.
+
+`three/three.module.min.js` is the unmodified `build/three.module.min.js` of the
+`three@0.170.0` npm release (692 KB, 171 KB gzip). Only the graph's 3D view uses
+it, and loads it on first use; it is not part of the offline app shell.

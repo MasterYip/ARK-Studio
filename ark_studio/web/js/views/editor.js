@@ -25,14 +25,22 @@
 
 import { h, clear, richText, highlightCode, fmtDateTime, typesetMermaid } from "../dom.js";
 import { dirOf } from "../rich-model.js";
-import { vizBlock } from "../viz.js";
+import { vizBlock, vizFrame } from "../viz.js";
 import { createImageViewer, openImageLightbox } from "../image-viewer.js";
 import { t, localizeServer } from "../i18n.js";
 import { icon } from "../icons.js";
-import { api, authenticatedUrl, mediaUrl } from "../api.js";
+import { api, authenticatedUrl, mediaUrl, appUrl } from "../api.js";
 import { confirmDialog, toast } from "../components.js";
 import { openContextMenu } from "../context-menu.js";
-import { getShortcut, shortcutMatches, shortcutLabel } from "../shortcuts.js";
+import { getShortcut, shortcutMatches, shortcutLabel, matchChord, FOLD_ACTIONS } from "../shortcuts.js";
+import {
+  outlineFor, supportsOutline, itemIds, currentIndex, foldVisibility, foldAllIds, foldLevelIds, foldAt, revealIds,
+} from "../outline-model.js";
+import { EDITOR_DOC, createOutlinePanel, createTimelinePanel } from "./editor-panels.js";
+import {
+  SECTION_IDS, SECTIONS_KEY, parseSections, toggleSection, toggleMaximized as toggleSectionMax, revealSection,
+  sectionLayout, resizeAt,
+} from "../explorer-sections-model.js";
 import { renderNodeTab, saveNodeTab, dropNodeTab } from "./node-editor.js";
 import {
   registerSurface, restoreLine, rememberLine, caretLine, caretLineOf, previewAnchors, textareaAnchors,
@@ -40,12 +48,13 @@ import {
 } from "../scroll-sync.js";
 import { shellActive, viewHost, showView, isViewDisplayed, setStatusSegment, viewShown } from "../workbench.js";
 import { parseDiffRows, diffStat } from "../files-model.js";
-import { crumbSegments, dropdownRows, moveSelection } from "../breadcrumb-model.js";
+import { crumbSegments, dropdownRows, moveSelection, revealPlan } from "../breadcrumb-model.js";
 import {
   createState, openTab, pinTab, activateTab, closeTargets, dirtyAmong,
   findTab, activeTab, storeKey,
   pushRecent, viewerFor, isEditable, isTextViewer, languageFor, baseName,
   routeForKey, parseKey, makeTab, prettyJson, parseCsv, csvDelimiter, TEXT_LIMIT_BYTES,
+  viewFirstEnabled, setViewFirst, isEditing,
 } from "../editor-model.js";
 import {
   createLayout, getGroup, groupOrder, focusGroup, updateGroup, splitGroup, removeGroup,
@@ -55,6 +64,8 @@ import {
 } from "../editor-layout.js";
 
 const SIDE_KEY = "ark.editor.side";
+const AUTO_REVEAL_KEY = "ark.editor.autoReveal";
+const EMPTY_SET = new Set();
 const EMPTY_STATE = createState();
 const DRAG_TYPE = "text/x-ark-editor-tab";
 const session = {
@@ -77,6 +88,16 @@ const session = {
   scope: "",
   scopeStates: new Map(),   // scope -> { layout, recent } kept while switching
   sessions: null,       // task sessions for the scope picker (lazy)
+  folds: new Map(),     // doc key -> Set of folded outline ids (Outline and preview share it, this session only)
+  lines: new Map(),     // `${group}|${key}` -> line at the cursor (source) or at the top (preview)
+  chord: null,          // { combo, timer } after the first key of a two-key shortcut
+  revealed: "",         // the Explorer row last revealed
+  revealedKey: "",      // the tab last auto-revealed
+  treeLoads: new Map(), // dir path -> pending tree request
+  editing: new Set(),   // `${group}|${key}`: Edit was picked for this tab (view first)
+  htmlRuns: new Set(),  // attachment HTML the person chose to run (opt-in, like ```html blocks)
+  htmlPreviews: new Map(), // ws key -> { token, url, at } of the interactive HTML preview
+  fullscreen: false,    // the Editor fills the window (no top bar, activity bar, sidebars)
   sideMode: "files",    // classic layout: explorer column shows files | changes
   termOpen: false,      // classic layout: terminal drawer under the viewer
   // Phones start with the explorer hidden (it overlays the viewer there).
@@ -119,6 +140,10 @@ function ensureProject(ctx) {
   session.tree.clear();
   session.expanded = new Set([""]);
   session.quickResults = null;
+  session.folds.clear();
+  session.lines.clear();
+  session.revealed = "";
+  session.revealedKey = "";
 }
 
 function scopedStoreKey(scope = session.scope) {
@@ -181,6 +206,7 @@ function commitLayout(next, { paint = true } = {}) {
   syncRoute();
   if (paint) paintChanges(previous);
   else markFocus();
+  activeChanged();
 }
 
 // Set a document's dirty flag in every group that shows it.
@@ -235,6 +261,7 @@ export function openInEditor(ctx, source, { preview = false, line = 0 } = {}) {
   if (ctx.S.tab === "editor") {
     syncRoute();
     paintChanges(previous);
+    activeChanged();
   } else {
     ctx.navigateWorkspace("editor", tab.key);
   }
@@ -289,6 +316,7 @@ async function requestClose(action, key = session.state.active, groupId = sessio
   const next = closeInGroup(session.layout, groupId, keys);
   for (const k of keys) {
     session.modes.delete(`${groupId}|${k}`);
+    session.editing.delete(`${groupId}|${k}`);
     if (groupsWithKey(next, k).length) continue;
     session.buffers.delete(k);
     session.diffs.delete(k);
@@ -385,6 +413,7 @@ function tabContextMenu(event, key, groupId = session.layout.focused) {
       tab?.preview || tab?.path ? { separator: true } : null,
       tab?.preview ? { label: t("editor.keep_open"), icon: "pin", onClick: () => commit(pinTab(group, key), { group: groupId }) } : null,
       tab?.path ? { label: t("editor.copy_path"), icon: "copy", onClick: () => navigator.clipboard?.writeText(tab.path) } : null,
+      tab?.path ? { label: t("editor.reveal"), icon: "folder", onClick: () => revealInExplorer(tab.path, { explicit: true }) } : null,
       { separator: true },
       syncScrollItem(),
     ].filter(Boolean),
@@ -392,6 +421,7 @@ function tabContextMenu(event, key, groupId = session.layout.focused) {
 }
 
 function tabIcon(tab) {
+  if (tab.kind === "rev") return "clock";
   const viewer = viewerFor(tab);
   if (viewer === "node") return "node";
   if (viewer === "diff") return "git";
@@ -804,6 +834,13 @@ async function loadBuffer(tab, { force = false } = {}) {
         mtimeNs: data.mtime_ns, size: data.size, mtime: data.mtime, language: data.language,
         eol: data.eol, readOnly: Boolean(data.read_only),
       });
+    } else if (tab.kind === "rev") {
+      const data = await api.workspaceShow(tab.path, tab.rev);
+      Object.assign(buffer, {
+        status: "ready", content: data.content, saved: data.content, hash: data.hash, size: data.size,
+        mtime: data.time, language: data.language, readOnly: true,
+        commit: { rev: data.rev, short: data.short, subject: data.subject || "", author: data.author || "", time: data.time || "" },
+      });
     } else if (tab.kind === "media") {
       const response = await fetch(rawUrlFor(tab), { headers: { Range: `bytes=0-${TEXT_LIMIT_BYTES - 1}` } });
       if (!response.ok) {
@@ -822,6 +859,7 @@ async function loadBuffer(tab, { force = false } = {}) {
     Object.assign(buffer, { status: "error", error: err.message || String(err), errorKind: errorKind(err) });
   }
   if (session.buffers.get(tab.key) === buffer && editorVisible()) repaintKey(tab.key);
+  notifyDoc();
   return buffer;
 }
 
@@ -846,6 +884,7 @@ async function saveActive(groupId = session.layout.focused) {
     Object.assign(buffer, { saved: buffer.content, hash: saved.hash, mtimeNs: saved.mtime_ns, size: saved.size, mtime: saved.mtime, conflict: false });
     commitDirty(tab.key, false);
     toast(t("editor.saved", { name: tab.title }), "ok");
+    panels.timeline?.forget(tab.path);
   } catch (err) {
     if (err.status === 409) buffer.conflict = true;
     toast(err.message, "err");
@@ -912,6 +951,25 @@ function scheduleMirror(key, onlyGroup = "") {
 export function editorKeyDown(event) {
   if (session.ctx?.S?.tab !== "editor") return false;
   if (document.querySelector(".modal-backdrop")) return false;
+  if (shortcutMatches(event, getShortcut("editorFullscreen"))) {
+    event.preventDefault();
+    setEditorFullscreen(!session.fullscreen);
+    return true;
+  }
+  if (session.fullscreen && event.key === "Escape" && !session.chord
+    && !document.querySelector(".palette-backdrop, .graph-menu, .ed-crumb-menu, .modal-backdrop")) {
+    setEditorFullscreen(false);
+    return true;
+  }
+  if (foldKeyDown(event)) return true;
+  // Ctrl+E: edit / view, from the editor (not from other fields).
+  if (shortcutMatches(event, getShortcut("editorEdit"))) {
+    const active = document.activeElement;
+    if (!active || active === document.body || active.closest?.(".ed-group")) {
+      if (toggleEditing()) { event.preventDefault(); return true; }
+    }
+    return false;
+  }
   if (shortcutMatches(event, getShortcut("editorSave"))) {
     event.preventDefault();
     saveActive();
@@ -1007,7 +1065,7 @@ function countLines(text) {
 
 // Plain textarea over a highlighted <pre>: inert spans only (highlightCode),
 // native undo/IME/selection, line numbers in a synced gutter.
-function codeEditor(tab, buffer, { editable, language, onCursor, groupId = "" }) {
+function codeEditor(tab, buffer, { editable, language, onCursor, groupId = "", onRequestEdit = null }) {
   const gutterText = h("pre", { class: "ed-gutter-text", "aria-hidden": "true" });
   const gutter = h("div", { class: "ed-gutter" }, gutterText);
   const highlight = h("pre", { class: "ed-highlight", "aria-hidden": "true" });
@@ -1036,6 +1094,21 @@ function codeEditor(tab, buffer, { editable, language, onCursor, groupId = "" })
     const col = upto.length - upto.lastIndexOf("\n");
     onCursor?.(line, col);
   };
+  // Put the caret on a line (1-based) and scroll it to the upper third;
+  // `select` selects the whole line (Search results).
+  const gotoLine = (target, { select = false, focus = true } = {}) => {
+    const text = textarea.value;
+    let start = 0;
+    for (let n = 1; n < target && start >= 0; n += 1) start = text.indexOf("\n", start) + 1 || -1;
+    if (start < 0) return;
+    const end = text.indexOf("\n", start);
+    if (focus) textarea.focus({ preventScroll: true });
+    textarea.setSelectionRange(start, select ? (end < 0 ? text.length : end) : start);
+    const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
+    textarea.scrollTop = Math.max(0, (target - 1) * lineHeight - textarea.clientHeight / 3);
+    syncScroll();
+    cursor();
+  };
   paintHighlight();
   textarea.addEventListener("scroll", syncScroll);
   textarea.addEventListener("input", () => {
@@ -1047,6 +1120,12 @@ function codeEditor(tab, buffer, { editable, language, onCursor, groupId = "" })
     cursor();
   });
   textarea.addEventListener("keydown", (event) => {
+    // Reading: Enter switches to editing (view first).
+    if (!editable && onRequestEdit && event.key === "Enter" && !event.ctrlKey && !event.altKey && !event.metaKey && !event.shiftKey) {
+      event.preventDefault();
+      onRequestEdit();
+      return;
+    }
     if (event.key === "Tab" && !event.ctrlKey && !event.altKey && !event.metaKey && editable) {
       event.preventDefault();
       // execCommand keeps the native undo stack intact.
@@ -1057,23 +1136,11 @@ function codeEditor(tab, buffer, { editable, language, onCursor, groupId = "" })
   for (const name of ["keyup", "click", "focus"]) textarea.addEventListener(name, cursor);
   const shell = h("div", { class: `ed-code ${editable ? "" : "readonly"}`.trim() },
     gutter, h("div", { class: "ed-code-main" }, highlight, textarea));
-  // Opened at a line (Search result): select that line and centre it.
+  // Opened at a line (Search result: the line selected; Outline: the caret there).
   if (session.pendingLine?.key === tab.key) {
-    const target = session.pendingLine.line;
+    const { line: target, select = true } = session.pendingLine;
     session.pendingLine = null;
-    requestAnimationFrame(() => {
-      const text = textarea.value;
-      let start = 0;
-      for (let n = 1; n < target && start >= 0; n += 1) start = text.indexOf("\n", start) + 1 || -1;
-      if (start < 0) return;
-      const end = text.indexOf("\n", start);
-      textarea.focus({ preventScroll: true });
-      textarea.setSelectionRange(start, end < 0 ? text.length : end);
-      const lineHeight = parseFloat(getComputedStyle(textarea).lineHeight) || 20;
-      textarea.scrollTop = Math.max(0, (target - 1) * lineHeight - textarea.clientHeight / 3);
-      syncScroll();
-      cursor();
-    });
+    requestAnimationFrame(() => gotoLine(target, { select }));
   }
   // Another group edited the same buffer: take its text, keep our caret.
   const setValue = (text) => {
@@ -1085,7 +1152,7 @@ function codeEditor(tab, buffer, { editable, language, onCursor, groupId = "" })
     textarea.scrollLeft = scrollLeft;
     if (!frame) frame = requestAnimationFrame(() => { paintHighlight(); syncScroll(); });
   };
-  return { el: shell, textarea, focus: () => textarea.focus(), setValue };
+  return { el: shell, textarea, focus: () => textarea.focus(), setValue, gotoLine };
 }
 
 function mediaViewer(tab, viewer, view) {
@@ -1371,7 +1438,13 @@ function workspaceCrumbs(tab, groupId) {
   const button = (label, dir, highlight, extra = {}) => h("button", {
     class: `ed-crumb-seg ${extra.leaf ? "leaf" : ""}`.trim(), type: "button", "aria-haspopup": "dialog",
     title: extra.title || label, dataset: { crumbPath: extra.path ?? dir },
-    onclick: (event) => { event.stopPropagation(); openCrumbMenu(event.currentTarget, dir, highlight, groupId); },
+    onclick: (event) => {
+      event.stopPropagation();
+      openCrumbMenu(event.currentTarget, dir, highlight, groupId);
+      // The folder also opens in the Explorer.
+      const path = extra.path ?? dir;
+      if (path && !extra.leaf) revealInExplorer(path, { folder: true });
+    },
     onkeydown: (event) => {
       if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
       const all = [...event.currentTarget.parentElement.querySelectorAll(".ed-crumb-seg")];
@@ -1400,6 +1473,10 @@ function focusBreadcrumbs() {
 
 function sourceLabel(tab, groupId = session.layout.focused) {
   if (tab.kind === "ws") return workspaceCrumbs(tab, groupId);
+  if (tab.kind === "rev") {
+    return h("span", { class: "ed-crumb" }, icon("clock", "sm"), h("span", { class: "leaf mono" }, tab.path),
+      h("span", { class: "ed-badge" }, tab.rev.slice(0, 7)));
+  }
   if (tab.kind === "media") {
     const label = tab.unit ? `${tab.unit}${tab.unitTitle ? ` · ${tab.unitTitle}` : ""}` : t("editor.attachment");
     const unitCrumb = tab.unit
@@ -1550,8 +1627,8 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
   }
   const main = view.main;
   clear(main);
-  Object.assign(view, { editor: null, toolbar: null, statusEl: null, cursorEl: null, status: null });
-  const finish = () => { if (groupId === session.layout.focused) markFocus(); };
+  Object.assign(view, { editor: null, toolbar: null, statusEl: null, cursorEl: null, status: null, fold: null });
+  const finish = () => { if (groupId === session.layout.focused) markFocus(); notifyDoc(); };
   if (!tab) {
     main.appendChild(emptyState());
     finish();
@@ -1571,7 +1648,6 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
     finish();
     return;
   }
-  const editable = isEditable(tab, viewer);
   const textual = isTextViewer(viewer);
   let buffer = textual ? session.buffers.get(tab.key) : null;
   if (textual && (!buffer || buffer.status === "loading")) {
@@ -1580,6 +1656,18 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
     finish();
     return;
   }
+  // View first: an editable file opens for reading; Edit (or Ctrl+E) opens
+  // the editor for this tab (canEditTab, startEditing).
+  const canEdit = canEditTab(tab, viewer, buffer);
+  const editable = isEditing({ canEdit, viewFirst: viewFirstEnabled(), chosen: session.editing.has(`${groupId}|${tab.key}`), dirty: tab.dirty });
+  const mode = session.modes.get(`${groupId}|${tab.key}`) || "preview";
+  const htmlTools = viewer === "html" && mode !== "source" && buffer?.status === "ready" ? htmlToolbar(tab, groupId) : null;
+  const editBtn = canEdit ? h("button", {
+    class: `btn sm ${editable ? "ghost on" : "ed-edit"}`.trim(), type: "button", dataset: { editToggle: editable ? "view" : "edit" },
+    title: `${t(editable ? "editor.view_mode" : "editor.edit")} (${shortcutLabel(getShortcut("editorEdit"))})`,
+    "aria-pressed": editable ? "true" : "false",
+    onclick: () => (editable ? stopEditing(groupId, tab) : startEditing(groupId, tab)),
+  }, icon(editable ? "eye" : "pen", "sm"), t(editable ? "editor.view_mode" : "editor.edit")) : null;
   const save = editable ? h("button", { class: "btn sm ed-save", type: "button", onclick: () => saveActive(groupId), title: shortcutLabel(getShortcut("editorSave")) },
     icon("save", "sm"), t("files.save")) : null;
   const revert = editable ? h("button", { class: "btn sm ghost", type: "button", onclick: () => revertActive(groupId) }, icon("refresh", "sm"), t("files.revert")) : null;
@@ -1587,18 +1675,29 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
   const toolbar = h("div", { class: "ed-toolbar" },
     sourceLabel(tab, groupId),
     tab.preview ? h("span", { class: "ed-badge preview" }, t("editor.preview_tab")) : null,
-    !editable && tab.kind !== "url" ? h("span", { class: "ed-badge ro", title: t("editor.read_only_hint") }, icon("ban", "sm"), t("editor.read_only")) : null,
+    !editable && tab.kind !== "url" ? h("span", { class: "ed-badge ro", title: t(tab.kind === "rev" ? "editor.rev_hint" : "editor.read_only_hint") }, icon("ban", "sm"), t("editor.read_only")) : null,
     h("span", { class: "spacer" }),
+    htmlTools ? htmlTools.el : null,
     textual && buffer?.status === "ready" ? modeToggle(tab, viewer, groupId) : null,
-    textual && tab.kind === "ws" ? h("button", { class: "btn sm ghost", type: "button", title: t("files.reload"), onclick: () => reloadActive(groupId) }, icon("refresh", "sm")) : null,
-    revert, save,
-    tab.kind !== "url" ? h("button", { class: "icon-btn", type: "button", title: t("editor.open_system"), "aria-label": t("editor.open_system"), onclick: () => openSystem(tab) }, icon("external", "sm")) : null,
-    tab.kind !== "url" ? h("a", { class: "icon-btn", href: rawUrlFor(tab, { download: true }), download: tab.title, title: t("editor.download"), "aria-label": t("editor.download") }, icon("download", "sm")) : null);
+    textual && tab.kind === "ws" && !htmlTools ? h("button", { class: "btn sm ghost", type: "button", title: t("files.reload"), onclick: () => reloadActive(groupId) }, icon("refresh", "sm")) : null,
+    editBtn, revert, save,
+    tab.kind === "rev" ? h("button", { class: "btn sm ghost", type: "button", dataset: { revCompare: tab.rev },
+      onclick: () => openInEditor(session.ctx, { kind: "diff", path: tab.path, base: tab.rev }, { preview: true }) }, icon("git", "sm"), t("editor.timeline.compare")) : null,
+    tab.kind === "rev" ? h("button", { class: "btn sm ghost", type: "button",
+      onclick: () => openInEditor(session.ctx, { kind: "ws", path: tab.path }) }, icon("edit", "sm"), t("editor.timeline.open_current")) : null,
+    tab.kind !== "url" && tab.kind !== "rev" ? h("button", { class: "icon-btn", type: "button", title: t("editor.open_system"), "aria-label": t("editor.open_system"), onclick: () => openSystem(tab) }, icon("external", "sm")) : null,
+    tab.kind !== "url" && tab.kind !== "rev" ? h("a", { class: "icon-btn", href: rawUrlFor(tab, { download: true }), download: tab.title, title: t("editor.download"), "aria-label": t("editor.download") }, icon("download", "sm")) : null,
+    // One full-screen button per view: the HTML page's own, else the Editor's (F11 always).
+    htmlTools ? null : fullscreenButton());
   main.appendChild(toolbar);
   paintToolbarState();
 
   const banners = h("div", { class: "ed-banners" });
-  if (tab.kind === "media" && textual) banners.appendChild(h("div", { class: "ed-banner info" }, icon("info", "sm"), t("editor.read_only_hint")));
+  if (tab.kind === "rev" && buffer?.commit) {
+    const c = buffer.commit;
+    banners.appendChild(h("div", { class: "ed-banner info ed-rev-banner" }, icon("clock", "sm"),
+      t("editor.rev_banner", { rev: c.short, subject: c.subject, author: c.author, time: fmtDateTime(c.time) })));
+  }
   if (buffer?.truncated) banners.appendChild(h("div", { class: "ed-banner warn" }, icon("alert", "sm"), t("editor.truncated")));
   if (buffer?.conflict) {
     banners.appendChild(h("div", { class: "ed-banner warn" }, icon("alert", "sm"), t("files.conflict"),
@@ -1638,7 +1737,6 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
     else body.appendChild(mediaViewer(tab, viewer, view));
     return;
   }
-  const mode = session.modes.get(`${groupId}|${tab.key}`) || "preview";
   const useSource = viewer === "code" || mode === "source";
   syncViews.delete(`${groupId}|${tab.key}`);
   if (!useSource) {
@@ -1646,6 +1744,9 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
       const preview = markdownPreview(tab, buffer.content);
       body.appendChild(preview);
       const rich = preview.querySelector(".rich") || preview;
+      // Focusable, so the folding keys work while reading.
+      body.tabIndex = -1;
+      decorateFolds(view, tab, buffer, rich, body);
       const surface = registerSurface({
         doc: tab.key, group: groupId, kind: "preview", scrollEl: () => body, watch: rich,
         anchors: () => previewAnchors(body, rich, countLines(buffer.content)),
@@ -1658,8 +1759,9 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
       body.appendChild(h("div", { class: "ed-markdown" }, diagram));
       typesetMermaid(diagram);
     } else if (viewer === "html") {
-      // Never inserted into ARK's DOM: sandboxed opaque-origin frame, opt-in.
-      body.appendChild(h("div", { class: "ed-markdown ed-html" }, vizBlock(buffer.content, { key: tab.key })));
+      // Never inserted into ARK's DOM: a sandboxed opaque-origin frame filling the pane.
+      body.appendChild(htmlTools.stage);
+      htmlTools.start();
     }
     else if (viewer === "json") {
       const pretty = prettyJson(buffer.content);
@@ -1669,9 +1771,12 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
     return;
   }
   const bound = codeEditor(tab, buffer, {
-    editable: editable && !buffer.readOnly, groupId,
+    editable, groupId, onRequestEdit: canEdit && !editable ? () => startEditing(groupId, tab) : null,
     language: viewer === "markdown" ? "markdown" : viewer === "json" ? "json" : language,
-    onCursor: (line, col) => { cursorEl.textContent = t("editor.cursor", { line, col }); },
+    onCursor: (line, col) => {
+      cursorEl.textContent = t("editor.cursor", { line, col });
+      if (session.lines.get(`${groupId}|${tab.key}`) !== line) { session.lines.set(`${groupId}|${tab.key}`, line); notifyDoc(); }
+    },
   });
   view.editor = { key: tab.key, ...bound };
   body.appendChild(bound.el);
@@ -1774,18 +1879,553 @@ function emptyState() {
         h("span", { class: "path mono" }, item.path || item.caption || item.unit || item.url || "")))) : null);
 }
 
-// --------------------------------------------------------------- explorer
-async function loadDir(path) {
-  const node = session.tree.get(path);
-  if (node && (node.loading || node.entries)) return;
-  session.tree.set(path, { loading: true });
-  try {
-    const data = await api.workspaceTree(path, 1);
-    session.tree.set(path, { entries: data.entries || [], truncated: Boolean(data.truncated) });
-  } catch (err) {
-    session.tree.set(path, { entries: [], error: err.message });
+// ------------------------------------------------ view first, HTML, fullscreen
+function readOnlyPerson() {
+  return session.ctx?.S?.session?.project_permission === "read";
+}
+
+// An editable project file, writable on disk, and a person who may write.
+function canEditTab(tab, viewer = viewerFor(tab), buffer = session.buffers.get(tab.key)) {
+  return isEditable(tab, viewer) && !buffer?.readOnly && !readOnlyPerson();
+}
+
+function startEditing(groupId, tab) {
+  const viewer = viewerFor(tab);
+  if (!canEditTab(tab, viewer)) return;
+  const key = `${groupId}|${tab.key}`;
+  session.editing.add(key);
+  if (viewer !== "code") {
+    const current = syncViews.get(key);
+    if (current) rememberLine(current);
+    session.modes.set(key, "source");
   }
-  paintSide();
+  paintGroup(groupId);
+  requestAnimationFrame(() => session.views.get(groupId)?.editor?.focus());
+}
+
+function stopEditing(groupId, tab) {
+  if (tab.dirty) { toast(t("editor.save_first"), "err"); return; }
+  const key = `${groupId}|${tab.key}`;
+  session.editing.delete(key);
+  if (viewerFor(tab) !== "code") {
+    const current = syncViews.get(key);
+    if (current) rememberLine(current);
+    session.modes.set(key, "preview");
+  }
+  paintGroup(groupId);
+}
+
+// Ctrl+E: edit / view the focused group's file.
+function toggleEditing() {
+  const groupId = session.layout.focused;
+  const tab = activeTab(getGroup(session.layout, groupId));
+  if (!tab || !canEditTab(tab)) return false;
+  const chosen = session.editing.has(`${groupId}|${tab.key}`);
+  if (chosen || (!viewFirstEnabled() && !tab.dirty)) stopEditing(groupId, tab);
+  else startEditing(groupId, tab);
+  return true;
+}
+
+// Interactive HTML: project files run in a sandboxed frame (opaque origin)
+// served by the token-scoped preview route, so relative css/js/images load;
+// attachments and old versions run their text alone (no network), and an
+// attachment only after Run (viz.js rules).
+const HTML_SANDBOX = "allow-scripts allow-popups allow-forms allow-modals allow-pointer-lock allow-downloads";
+const PREVIEW_REUSE_MS = 20 * 60_000;
+const PREVIEW_RENEW_MS = 10 * 60_000;
+const previewTimers = new Map();
+
+function keepPreviewAlive(key, frame) {
+  clearInterval(previewTimers.get(key));
+  previewTimers.set(key, setInterval(async () => {
+    const info = session.htmlPreviews.get(key);
+    if (!frame.isConnected || !info) {
+      clearInterval(previewTimers.get(key));
+      previewTimers.delete(key);
+      return;
+    }
+    try {
+      await api.workspacePreviewRenew(info.token);
+      info.at = Date.now();
+    } catch {
+      session.htmlPreviews.delete(key);   // the next reload asks for a new one
+    }
+  }, PREVIEW_RENEW_MS));
+}
+
+function htmlToolbar(tab) {
+  const live = tab.kind === "ws";
+  const stage = h("div", { class: "ed-html-stage" });
+  let frame = null;
+  const newTab = live ? h("a", {
+    class: "icon-btn", target: "_blank", rel: "noopener noreferrer", hidden: true,
+    title: t("editor.html.new_tab"), "aria-label": t("editor.html.new_tab"), dataset: { htmlNewTab: "1" },
+  }, icon("external", "sm")) : null;
+  const run = async ({ fresh = false } = {}) => {
+    if (live) {
+      let info = session.htmlPreviews.get(tab.key);
+      if (fresh || !info || Date.now() - info.at > PREVIEW_REUSE_MS) {
+        try {
+          const data = await api.workspacePreviewToken(tab.path);
+          info = { token: data.token, url: appUrl(data.url), at: Date.now() };
+          session.htmlPreviews.set(tab.key, info);
+        } catch (err) {
+          stage.replaceChildren(h("div", { class: "ed-html-note err" }, icon("alert", "sm"), localizeServer(err.message) || err.message));
+          return;
+        }
+      }
+      frame = h("iframe", {
+        class: "ed-html-frame", src: info.url, title: tab.title, sandbox: HTML_SANDBOX,
+        referrerpolicy: "no-referrer", allow: "fullscreen",
+      });
+      newTab.href = info.url;
+      newTab.hidden = false;
+      keepPreviewAlive(tab.key, frame);
+    } else {
+      frame = vizFrame(session.buffers.get(tab.key)?.content || "", { title: tab.title });
+      frame.classList.add("ed-html-frame");
+    }
+    stage.replaceChildren(frame);
+  };
+  const reload = h("button", {
+    class: "icon-btn", type: "button", title: t("editor.html.reload"), "aria-label": t("editor.html.reload"), dataset: { htmlReload: "1" },
+    onclick: () => { session.htmlRuns.add(tab.key); run({ fresh: live }); },
+  }, icon("refresh", "sm"));
+  const full = h("button", {
+    class: "icon-btn", type: "button", title: t("editor.html.fullscreen"), "aria-label": t("editor.html.fullscreen"),
+    onclick: () => frame?.requestFullscreen?.().catch?.(() => {}),
+  }, icon("expand", "sm"));
+  const badge = h("span", { class: "ed-badge sandbox", title: t(live ? "editor.html.sandbox_hint" : "viz.sandbox_hint") }, icon("shield", "sm"),
+    h("span", { class: "ed-badge-text" }, t("viz.sandboxed")));
+  const el = h("span", { class: "ed-html-tools" }, badge, reload, newTab, full);
+  const start = () => {
+    if (tab.kind === "media" && !session.htmlRuns.has(tab.key)) {
+      stage.replaceChildren(h("div", { class: "ed-html-optin" }, icon("shield", "sm"), h("span", null, t("viz.opt_in_hint")),
+        h("button", { class: "btn sm primary", type: "button", onclick: () => { session.htmlRuns.add(tab.key); run(); } },
+          icon("play", "sm"), t("viz.run"))));
+      return;
+    }
+    run();
+  };
+  return { el, stage, start };
+}
+
+// Full screen: the Editor (tabs and content) covers the whole window.
+// Not remembered; leaving the Editor, Esc or the button ends it.
+function leaveFullscreenOffEditor() {
+  if (!String(location.hash).startsWith("#/editor")) setEditorFullscreen(false);
+}
+
+export function setEditorFullscreen(on) {
+  const next = Boolean(on) && Boolean(session.host?.isConnected);
+  session.fullscreen = next;
+  document.body.classList.toggle("ed-fullscreen", next);
+  window.removeEventListener("hashchange", leaveFullscreenOffEditor);
+  if (next) window.addEventListener("hashchange", leaveFullscreenOffEditor);
+  for (const button of document.querySelectorAll(".ed-fullscreen-btn")) paintFullscreenButton(button);
+}
+
+function paintFullscreenButton(button) {
+  const on = session.fullscreen;
+  button.classList.toggle("on", on);
+  button.setAttribute("aria-pressed", on ? "true" : "false");
+  const label = `${t(on ? "editor.fullscreen_exit" : "editor.fullscreen")} (${shortcutLabel(getShortcut("editorFullscreen"))})`;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+  button.replaceChildren(icon(on ? "minimize" : "maximize", "sm"));
+}
+
+function fullscreenButton() {
+  const button = h("button", { class: "icon-btn ed-fullscreen-btn", type: "button", onclick: () => setEditorFullscreen(!session.fullscreen) });
+  paintFullscreenButton(button);
+  return button;
+}
+
+/** Palette: the view-first setting. */
+export function toggleViewFirst(on) {
+  setViewFirst(on);
+  if (editorVisible()) paintView();
+}
+
+// ------------------------------------------------- outline, folding, panels
+// The Outline and Timeline views (./editor-panels.js) follow the focused
+// group's document; EDITOR_DOC tells them something changed (at most once a
+// frame).  Folding state is per document for this session and shared by the
+// Outline and the Markdown preview.
+let docFrame = 0;
+function notifyDoc() {
+  if (docFrame) return;
+  docFrame = requestAnimationFrame(() => {
+    docFrame = 0;
+    window.dispatchEvent(new CustomEvent(EDITOR_DOC));
+  });
+}
+
+// The focused group's active tab changed: tell the panels, reveal it.
+function activeChanged() {
+  notifyDoc();
+  const tab = activeTab(session.state);
+  if (!tab?.path || tab.key === session.revealedKey) return;
+  session.revealedKey = tab.key;
+  if (autoReveal() && editorVisible()) revealInExplorer(tab.path);
+}
+
+const outlineCache = new WeakMap();   // buffer -> { content, items, version }
+function outlineItems(buffer, viewer, language) {
+  if (!buffer || buffer.status !== "ready") return [];
+  const cached = outlineCache.get(buffer);
+  if (cached && cached.content === buffer.content) return cached.items;
+  const items = outlineFor(buffer.content, { viewer, language });
+  outlineCache.set(buffer, { content: buffer.content, items, version: (cached?.version || 0) + 1 });
+  return items;
+}
+
+// What the panels need about the focused group's document.
+function docInfo(groupId = session.layout.focused) {
+  const tab = activeTab(getGroup(session.layout, groupId));
+  if (!tab) return null;
+  const viewer = viewerFor(tab);
+  const textual = isTextViewer(viewer);
+  const buffer = textual ? session.buffers.get(tab.key) : null;
+  const language = buffer?.language || languageFor(tab.title || tab.path) || viewer;
+  const supported = textual && supportsOutline({ viewer, language });
+  const items = supported ? outlineItems(buffer, viewer, language) : [];
+  const line = session.lines.get(`${groupId}|${tab.key}`) || 1;
+  return {
+    key: tab.key, tab, groupId, viewer, language, supported, items, line,
+    loading: textual && (!buffer || buffer.status === "loading"),
+    version: (buffer && outlineCache.get(buffer)?.version) || 0,
+    collapsed: session.folds.get(tab.key) || EMPTY_SET,
+    current: currentIndex(items, line),
+    historyPath: ["ws", "rev", "diff"].includes(tab.kind) ? tab.path : "",
+    rev: tab.kind === "rev" ? tab.rev : tab.kind === "diff" ? tab.base : "",
+  };
+}
+
+// Markdown preview: a fold toggle on each heading (top-level blocks only).
+function decorateFolds(view, tab, buffer, rich, body) {
+  const items = outlineItems(buffer, "markdown", "markdown");
+  const ids = itemIds(items);
+  const byLine = new Map(items.map((item, index) => [item.line, ids[index]]));
+  const entries = [...rich.children].map((el) => {
+    const match = /^H([1-6])$/.exec(el.tagName);
+    if (!match) return { level: 0, el };
+    const id = byLine.get(Number(el.dataset.sourceLine)) || "";
+    if (id) {
+      el.classList.add("ed-fold-heading");
+      el.dataset.foldId = id;
+      el.prepend(h("button", {
+        class: "ed-fold-toggle", type: "button", tabindex: "-1", "aria-expanded": "true",
+        onmousedown: (event) => event.preventDefault(),
+        onclick: (event) => { event.preventDefault(); event.stopPropagation(); toggleFold(tab.key, id); },
+      }, icon("chevron", "sm")));
+    }
+    return { level: Number(match[1]), id, el };
+  });
+  view.fold = { key: tab.key, entries, rich, body };
+  applyFolds(view);
+  let frame = 0;
+  body.addEventListener("scroll", () => {
+    if (frame) return;
+    frame = requestAnimationFrame(() => { frame = 0; trackPreviewLine(view); });
+  }, { passive: true });
+  requestAnimationFrame(() => trackPreviewLine(view));
+}
+
+function applyFolds(view) {
+  const fold = view?.fold;
+  if (!fold) return;
+  const collapsed = session.folds.get(fold.key) || EMPTY_SET;
+  const hidden = foldVisibility(fold.entries, collapsed);
+  fold.entries.forEach((entry, index) => {
+    entry.el.classList.toggle("ed-folded-away", hidden[index]);
+    if (!entry.id) return;
+    const closed = collapsed.has(entry.id);
+    entry.el.classList.toggle("ed-folded", closed);
+    const toggle = entry.el.querySelector(":scope > .ed-fold-toggle");
+    if (toggle) {
+      toggle.setAttribute("aria-expanded", String(!closed));
+      toggle.title = t(closed ? "editor.fold.unfold_section" : "editor.fold.fold_section");
+      toggle.setAttribute("aria-label", toggle.title);
+    }
+  });
+}
+
+// The preview's line at its top edge (Outline highlight, "fold current").
+function trackPreviewLine(view) {
+  const fold = view.fold;
+  if (!fold?.body.isConnected) return;
+  // After a jump the chosen heading stays current until the reader scrolls
+  // (near the end of a document it cannot reach the top).
+  if (fold.pinned && Math.abs(fold.body.scrollTop - fold.pinned) < 4) return;
+  fold.pinned = null;
+  const top = fold.body.getBoundingClientRect().top + 8;
+  let line = 0;
+  for (const entry of fold.entries) {
+    const at = Number(entry.el.dataset.sourceLine);
+    if (!at || entry.el.classList.contains("ed-folded-away")) continue;
+    if (line && entry.el.getBoundingClientRect().top > top) break;
+    line = at;
+  }
+  const key = `${view.id}|${fold.key}`;
+  if (line && session.lines.get(key) !== line) {
+    session.lines.set(key, line);
+    notifyDoc();
+  }
+}
+
+function setFolds(key, next) {
+  session.folds.set(key, next);
+  for (const view of session.views.values()) {
+    if (view.fold?.key === key) applyFolds(view);
+  }
+  notifyDoc();
+}
+
+function toggleFold(key, id) {
+  const next = new Set(session.folds.get(key) || EMPTY_SET);
+  if (next.has(id)) next.delete(id); else next.add(id);
+  setFolds(key, next);
+}
+
+// Run a folding command (shortcuts.js FOLD_ACTIONS) on the focused document.
+function runFold(id) {
+  const doc = docInfo();
+  const action = FOLD_ACTIONS.find((item) => item.id === id);
+  if (!doc || !action || !doc.supported || !doc.items.length) return false;
+  let next;
+  if (id === "editorFoldAll") next = foldAllIds(doc.items);
+  else if (id === "editorUnfoldAll") next = new Set();
+  else if (action.level) next = foldLevelIds(doc.items, action.level);
+  else next = foldAt(doc.items, panels.outline?.focusedLine() || doc.line, doc.collapsed, id === "editorFold");
+  setFolds(doc.key, next);
+  setViewStatus(session.views.get(doc.groupId), t(action.labelKey, action.labelParams));
+  return true;
+}
+
+// Folding keys work while an editor group (source or preview) or the
+// Outline has focus.  Two-key shortcuts wait CHORD_WAIT ms for the second
+// key; without one, Ctrl+K still opens the command palette.
+const CHORD_WAIT = 1200;
+let chordHintEl = null;
+let chordHintTimer = 0;
+function showChordHint(text, hideAfter = 0) {
+  clearTimeout(chordHintTimer);
+  if (!chordHintEl?.isConnected) {
+    chordHintEl = h("div", { class: "ed-chord-hint", role: "status", "aria-live": "polite" });
+    document.body.appendChild(chordHintEl);
+  }
+  chordHintEl.textContent = text;
+  chordHintEl.hidden = false;
+  if (hideAfter) chordHintTimer = setTimeout(() => { if (chordHintEl) chordHintEl.hidden = true; }, hideAfter);
+}
+
+function endChord() {
+  if (!session.chord) return;
+  clearTimeout(session.chord.timer);
+  session.chord = null;
+  if (chordHintEl) chordHintEl.hidden = true;
+}
+
+function foldSpecs() {
+  return Object.fromEntries(FOLD_ACTIONS.map((action) => [action.id, getShortcut(action.id)]));
+}
+
+function foldFocus() {
+  return Boolean(document.activeElement?.closest?.(".ed-group, .ed-outline"));
+}
+
+function foldKeyDown(event) {
+  if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return false; // i18n-ignore: key names
+  if (session.chord) {
+    const { combo } = session.chord;
+    endChord();
+    event.preventDefault();
+    const found = matchChord(event, foldSpecs(), combo);
+    if (found.type === "match") {
+      if (!runFold(found.id)) showChordHint(t("editor.fold.nothing"), 1600);
+    } else {
+      showChordHint(t("editor.chord_unknown", { keys: shortcutLabel(combo) }), 1600);
+    }
+    return true;
+  }
+  if (!foldFocus()) return false;
+  const found = matchChord(event, foldSpecs(), "");
+  if (found.type === "match") {
+    event.preventDefault();
+    if (!runFold(found.id)) showChordHint(t("editor.fold.nothing"), 1600);
+    return true;
+  }
+  if (found.type === "prefix") {
+    event.preventDefault();
+    const timer = setTimeout(() => {
+      const combo = session.chord?.combo;
+      endChord();
+      if (combo && combo === getShortcut("palette")) window.dispatchEvent(new CustomEvent("ark:open-palette"));
+    }, CHORD_WAIT);
+    session.chord = { combo: found.combo, timer };
+    showChordHint(t("editor.chord_wait", { keys: shortcutLabel(found.combo) }));
+    return true;
+  }
+  return false;
+}
+
+// Show outline item `index` in the focused group (opening folded sections).
+function jumpTo(index) {
+  const doc = docInfo();
+  const item = doc?.items[index];
+  if (!item) return;
+  const open = revealIds(doc.items, index, doc.collapsed);
+  if (open.length) setFolds(doc.key, new Set([...doc.collapsed].filter((id) => !open.includes(id))));
+  const view = session.views.get(doc.groupId);
+  session.lines.set(`${doc.groupId}|${doc.key}`, item.line);
+  if (view?.editor?.key === doc.key) {
+    view.editor.gotoLine(item.line);
+  } else if (view?.fold?.key === doc.key) {
+    const target = view.fold.entries.find((entry) => Number(entry.el.dataset.sourceLine) === item.line)?.el
+      || view.fold.rich.querySelector(`[data-source-line="${item.line}"]`);
+    if (target) {
+      view.fold.body.scrollTop += target.getBoundingClientRect().top - view.fold.body.getBoundingClientRect().top - 8;
+      view.fold.pinned = view.fold.body.scrollTop;
+      target.classList.remove("ed-jump-flash");
+      void target.offsetWidth;
+      target.classList.add("ed-jump-flash");
+    }
+    view.fold.body.focus({ preventScroll: true });
+  } else if (view) {
+    session.pendingLine = { key: doc.key, line: item.line, select: false };
+    session.modes.set(`${doc.groupId}|${doc.key}`, "source");
+    paintGroup(doc.groupId);
+  }
+  notifyDoc();
+}
+
+const panels = { outline: null, timeline: null };
+const panelHost = {
+  doc: () => (editorVisible() ? docInfo() : null),
+  jump: (index) => jumpTo(index),
+  toggle: (id) => { const doc = docInfo(); if (doc) toggleFold(doc.key, id); },
+  fold: (id) => runFold(id),
+  openRev: (path, entry, { pin = false } = {}) => openInEditor(session.ctx, { kind: "rev", path, rev: entry.rev }, { preview: !pin }),
+  openDiff: (path, entry) => openInEditor(session.ctx, { kind: "diff", path, base: entry.rev }, { preview: true }),
+};
+
+function outlinePanel() { return (panels.outline ||= createOutlinePanel(panelHost)); }
+function timelinePanel() { return (panels.timeline ||= createTimelinePanel(panelHost)); }
+
+export function editorFold(id) { return runFold(id); }
+
+// ------------------------------------------------------- reveal in explorer
+export function autoReveal() {
+  try { return localStorage.getItem(AUTO_REVEAL_KEY) !== "0"; } catch { return true; }
+}
+
+export function setAutoReveal(on) {
+  try { localStorage.setItem(AUTO_REVEAL_KEY, on ? "1" : "0"); } catch { /* storage unavailable */ }
+  if (on) {
+    session.revealedKey = "";
+    activeChanged();
+  }
+}
+
+/** Reveal the focused group's file in the Explorer (shows the Explorer). */
+export function revealActive() {
+  const tab = activeTab(session.state);
+  if (tab?.path) revealInExplorer(tab.path, { explicit: true });
+  else toast(t("editor.reveal_none"));
+}
+
+function explorerShown() {
+  return shellActive() ? isViewDisplayed("explorer") : Boolean(session.sideOpen && session.host?.isConnected);
+}
+
+// Expand the folders down to `path`, highlight it and scroll it into view.
+// `explicit` (a command, not auto-reveal) also shows the Explorer, leaves a
+// quick-open filter and focuses the row.  `folder`: `path` is a folder (a
+// breadcrumb segment), which is expanded too.
+async function revealInExplorer(path, { explicit = false, folder = false } = {}) {
+  const { dirs, target } = revealPlan(path, { folder });
+  if (!target) return;
+  if (explicit) {
+    if (!editorExplorerVisible()) setExplorerVisible(true);
+    if (!sectionLayout(sections()).find((item) => item.id === "files").open) setSections(revealSection(sections(), "files"));
+    if (session.quickResults) { session.quick = ""; session.quickResults = null; paintSide(); }
+  }
+  for (const dir of dirs) session.expanded.add(dir);
+  session.revealed = target;
+  if (!explicit && (!explorerShown() || session.quickResults)) return;
+  await loadDir("");
+  for (const dir of dirs) await loadDir(dir);
+  if (session.revealed !== target) return;   // a newer reveal
+  paintSide(false);
+  requestAnimationFrame(() => {
+    const side = explorerSide();
+    const row = [...(side?.querySelectorAll(".ed-tree-row") || [])].find((el) => el.dataset.path === target);
+    if (!row) return;
+    row.scrollIntoView({ block: "nearest" });
+    row.classList.remove("ed-reveal-flash");
+    void row.offsetWidth;
+    row.classList.add("ed-reveal-flash");
+    if (explicit) row.focus({ preventScroll: true });
+  });
+}
+
+/** Commands for the palette while the Editor is open. */
+export function editorPaletteCommands() {
+  if (session.ctx?.S?.tab !== "editor") return [];
+  const cat = t("nav.editor");
+  return [
+    ...FOLD_ACTIONS.map((action) => ({
+      id: `editor-${action.id}`, label: t(action.labelKey, action.labelParams), cat, keys: shortcutLabel(getShortcut(action.id)),
+      run: () => { if (!runFold(action.id)) toast(t("editor.fold.nothing")); },
+    })),
+    { id: "editor-reveal", label: t("editor.reveal"), cat, run: () => revealActive() },
+    { id: "editor-auto-reveal", label: t(autoReveal() ? "editor.auto_reveal_off" : "editor.auto_reveal_on"), cat, run: () => setAutoReveal(!autoReveal()) },
+    { id: "editor-edit", label: `${t("editor.edit")} / ${t("editor.view_mode")}`, cat, keys: shortcutLabel(getShortcut("editorEdit")), run: () => toggleEditing() },
+    { id: "editor-fullscreen", label: t(session.fullscreen ? "editor.fullscreen_exit" : "editor.fullscreen"), cat, keys: shortcutLabel(getShortcut("editorFullscreen")), run: () => setEditorFullscreen(!session.fullscreen) },
+    { id: "editor-view-first", label: t(viewFirstEnabled() ? "editor.view_first_off" : "editor.view_first_on"), cat, run: () => toggleViewFirst(!viewFirstEnabled()) },
+    { id: "editor-outline", label: t("editor.show_outline"), cat, run: () => showSection("outline") },
+    { id: "editor-timeline", label: t("editor.show_timeline"), cat, run: () => showSection("timeline") },
+  ];
+}
+
+/** Files changed outside the Editor (Search › Replace): reload clean buffers, flag edited ones. */
+export function workspaceFilesChanged(paths) {
+  for (const path of paths || []) {
+    const key = `ws:${path}`;
+    const buffer = session.buffers.get(key);
+    if (!buffer || buffer.status !== "ready") continue;
+    if (buffer.content !== buffer.saved) {
+      buffer.conflict = true;
+      if (editorVisible()) repaintKey(key, { keepEditor: true });
+      continue;
+    }
+    session.buffers.delete(key);
+    if (editorVisible() && shownGroups().some((id) => getGroup(session.layout, id)?.active === key)) {
+      const tab = groupOrder(session.layout).map((id) => findTab(getGroup(session.layout, id), key)).find(Boolean);
+      if (tab) loadBuffer(tab);
+    }
+  }
+}
+
+// --------------------------------------------------------------- explorer
+function loadDir(path) {
+  const node = session.tree.get(path);
+  if (node?.entries) return Promise.resolve();
+  if (node?.loading) return session.treeLoads.get(path) || Promise.resolve();
+  session.tree.set(path, { loading: true });
+  const job = (async () => {
+    try {
+      const data = await api.workspaceTree(path, 1);
+      session.tree.set(path, { entries: data.entries || [], truncated: Boolean(data.truncated) });
+    } catch (err) {
+      session.tree.set(path, { entries: [], error: err.message });
+    }
+    session.treeLoads.delete(path);
+    paintSide(false);
+  })();
+  session.treeLoads.set(path, job);
+  return job;
 }
 
 function treeRows(path, depth, container) {
@@ -1798,7 +2438,7 @@ function treeRows(path, depth, container) {
     const open = session.expanded.has(entry.path);
     const key = isDir ? "" : `ws:${entry.path}`;
     const row = h("button", {
-      class: `ed-tree-row ${isDir ? "dir" : "file"} ${key && key === session.state.active ? "on" : ""}`.trim(),
+      class: `ed-tree-row ${isDir ? "dir" : "file"} ${key && key === session.state.active ? "on" : ""} ${entry.path === session.revealed ? "revealed" : ""}`.replace(/\s+/g, " ").trim(),
       type: "button", title: entry.path, dataset: { path: entry.path, type: entry.type },
       style: { paddingLeft: `${8 + depth * 12}px` },
       onclick: () => {
@@ -1838,6 +2478,162 @@ function runQuick(text) {
   }, 160);
 }
 
+// ------------------------------------------------------- explorer sections
+// The Explorer panel holds stacked sections (VS Code style): Files, Outline,
+// Timeline and Search.  Each has a header (click to fold, its buttons, a
+// maximize toggle); the line above a header resizes; the state is kept in
+// this browser (explorer-sections-model.js).
+let sectionState = null;
+function sections() {
+  if (!sectionState) {
+    let stored = null;
+    try { stored = localStorage.getItem(SECTIONS_KEY); } catch { stored = null; }
+    sectionState = parseSections(stored);
+  }
+  return sectionState;
+}
+
+function setSections(next) {
+  if (next === sectionState) return;
+  sectionState = next;
+  try { localStorage.setItem(SECTIONS_KEY, JSON.stringify(next)); } catch { /* storage unavailable */ }
+  paintSections();
+}
+
+const SECTION_TITLES = {
+  files: "editor.section.files", outline: "workbench.view.outline", timeline: "workbench.view.timeline", search: "workbench.view.search",
+};
+
+function sectionActions(id) {
+  const button = (iconName, label, onClick, data = {}) => h("button", {
+    class: "icon-btn", type: "button", title: t(label), "aria-label": t(label), dataset: data,
+    onclick: (event) => { event.stopPropagation(); onClick(); },
+  }, icon(iconName, "sm"));
+  if (id === "files") {
+    return [
+      button("target", "editor.reveal", () => revealActive(), { secAction: "reveal" }),
+      button("refresh", "action.refresh", () => { session.tree.clear(); paintSide(); }, { secAction: "refresh" }),
+    ];
+  }
+  if (id === "outline") {
+    return [
+      button("collapseAll", "editor.fold.all", () => { if (!runFold("editorFoldAll")) toast(t("editor.fold.nothing")); }, { secAction: "fold-all" }),
+      button("expandAll", "editor.fold.unfold_all", () => runFold("editorUnfoldAll"), { secAction: "unfold-all" }),
+    ];
+  }
+  if (id === "timeline") return [button("refresh", "action.refresh", () => timelinePanel().refresh(), { secAction: "refresh" })];
+  return [];
+}
+
+function ensureSections(side) {
+  let wrap = side.querySelector(":scope > .ed-sections");
+  if (wrap) return wrap;
+  clear(side);
+  wrap = h("div", { class: "ed-sections" });
+  SECTION_IDS.forEach((id, index) => {
+    const toggle = h("button", {
+      class: "ed-sec-toggle", type: "button", dataset: { secToggle: id },
+      onclick: () => setSections(toggleSection(sections(), id)),
+    }, icon("chevron", "sm"), h("span", { class: "ed-sec-title" }, t(SECTION_TITLES[id])));
+    const max = h("button", {
+      class: "icon-btn ed-sec-max", type: "button", dataset: { secMax: id },
+      onclick: (event) => { event.stopPropagation(); setSections(toggleSectionMax(sections(), id)); },
+    });
+    const head = h("div", { class: "ed-sec-head" }, toggle, h("div", { class: "ed-sec-actions" }, ...sectionActions(id), max));
+    head.addEventListener("dblclick", (event) => { if (!event.target.closest("button")) setSections(toggleSectionMax(sections(), id)); });
+    const body = h("div", { class: "ed-sec-body" });
+    const section = h("section", { class: "ed-sec", dataset: { sec: id }, "aria-label": t(SECTION_TITLES[id]) });
+    if (index > 0) section.appendChild(sash(id, wrap));
+    section.append(head, body);
+    wrap.appendChild(section);
+  });
+  wrap.querySelector('[data-sec="outline"] > .ed-sec-body').appendChild(outlinePanel().el);
+  wrap.querySelector('[data-sec="timeline"] > .ed-sec-body').appendChild(timelinePanel().el);
+  side.append(...(shellActive() ? [] : [sideHead()]), wrap);
+  return wrap;
+}
+
+// The line above a section's header: drag to share height with the open
+// section above.
+function sash(id, wrap) {
+  const el = h("div", { class: "ed-sec-sash", role: "separator", "aria-orientation": "horizontal", title: t("editor.section.resize") });
+  el.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    const heights = {};
+    for (const sec of wrap.querySelectorAll(":scope > .ed-sec")) heights[sec.dataset.sec] = sec.getBoundingClientRect().height;
+    const start = event.clientY;
+    let last = null;
+    el.setPointerCapture?.(event.pointerId);
+    wrap.classList.add("resizing");
+    const move = (ev) => {
+      const sizes = resizeAt(sections(), id, heights, ev.clientY - start);
+      if (!sizes) return;
+      last = sizes;
+      sectionState = { ...sections(), sizes };
+      paintSections();
+    };
+    const up = () => {
+      el.removeEventListener("pointermove", move);
+      el.removeEventListener("pointerup", up);
+      el.removeEventListener("pointercancel", up);
+      wrap.classList.remove("resizing");
+      if (last) setSections({ ...sections(), sizes: last });
+    };
+    el.addEventListener("pointermove", move);
+    el.addEventListener("pointerup", up);
+    el.addEventListener("pointercancel", up);
+  });
+  return el;
+}
+
+function paintSections() {
+  const wrap = explorerSide()?.querySelector(":scope > .ed-sections");
+  if (!wrap) return;
+  const state = sections();
+  for (const item of sectionLayout(state)) {
+    const section = wrap.querySelector(`:scope > [data-sec="${item.id}"]`);
+    if (!section) continue;
+    const wasOpen = section.classList.contains("open");
+    section.classList.toggle("open", item.open);
+    section.classList.toggle("collapsed", !item.open);
+    section.style.flex = item.open ? `${item.weight} 1 0px` : "0 0 auto";
+    section.querySelector(":scope > .ed-sec-head .ed-sec-toggle")?.setAttribute("aria-expanded", item.open ? "true" : "false");
+    const max = section.querySelector(":scope > .ed-sec-head .ed-sec-max");
+    if (max) {
+      const on = state.max === item.id;
+      const label = t(on ? "editor.section.restore" : "editor.section.maximize");
+      max.title = label;
+      max.setAttribute("aria-label", label);
+      max.setAttribute("aria-pressed", on ? "true" : "false");
+      max.replaceChildren(icon(on ? "minimize" : "maximize", "sm"));
+    }
+    const body = section.querySelector(":scope > .ed-sec-body");
+    body.hidden = !item.open;
+    if (!item.open) continue;
+    if (item.id === "search") {
+      const panel = session.ctx?.searchPanel;
+      if (panel && panel.el.parentElement !== body) body.appendChild(panel.el);
+      if (!wasOpen) panel?.shown?.();
+    } else if (item.id === "outline" && !wasOpen) outlinePanel().shown();
+    else if (item.id === "timeline" && !wasOpen) timelinePanel().shown();
+  }
+}
+
+/** Show (expand) a section of the Explorer, showing the Explorer too. */
+function showSection(id, { focus = true } = {}) {
+  if (!editorExplorerVisible()) setExplorerVisible(true);
+  if (!explorerSide()?.querySelector(":scope > .ed-sections")) paintSide();
+  setSections(revealSection(sections(), id));
+  if (!focus) return;
+  requestAnimationFrame(() => explorerSide()?.querySelector(`[data-sec="${id}"] .ed-sec-toggle`)?.focus({ preventScroll: true }));
+}
+
+/** Ctrl+Shift+F in the Editor: the Search section, prefilled with `text`. */
+export function focusSearchSection(text = "") {
+  showSection("search", { focus: false });
+  requestAnimationFrame(() => session.ctx?.searchPanel?.focus(text));
+}
+
 // The Explorer: with the workbench shell it is the "Explorer" view (in
 // whichever sidebar/panel holds it); in the classic layout it is the
 // Editor's own left column.
@@ -1873,9 +2669,12 @@ function paintSide(rebuildInput = true) {
     }
     return;
   }
-  const list = side.querySelector(".ed-tree");
-  if (rebuildInput || !list || !side.querySelector(".ed-scope")) {
-    clear(side);
+  const wrap = ensureSections(side);
+  const filesBody = wrap.querySelector('[data-sec="files"] > .ed-sec-body');
+  const list = filesBody.querySelector(".ed-tree");
+  if (rebuildInput || !list || !filesBody.querySelector(".ed-scope")) {
+    clear(filesBody);
+    if (classic) side.querySelector(":scope > .ed-side-head")?.replaceWith(sideHead());
     loadScopes();
     const input = h("input", {
       class: "input ed-quick", type: "search", placeholder: t("editor.quick_open"),
@@ -1890,9 +2689,10 @@ function paintSide(rebuildInput = true) {
         if (event.key === "Escape") { event.target.value = ""; runQuick(""); }
       },
     });
-    side.append(sideHead(), scopePicker(), input, h("div", { class: "ed-tree", role: "tree" }));
+    filesBody.append(scopePicker(), input, h("div", { class: "ed-tree", role: "tree" }));
   }
-  const tree = side.querySelector(".ed-tree");
+  paintSections();
+  const tree = filesBody.querySelector(".ed-tree");
   clear(tree);
   if (session.quickResults) {
     if (!session.quickResults.length) tree.appendChild(h("div", { class: "ed-tree-note" }, t("editor.no_matches")));
@@ -1950,6 +2750,7 @@ function scopePicker() {
 export function focusQuickOpen() {
   if (!explorerSide()?.querySelector(".ed-quick")) return;
   if (!editorExplorerVisible()) setExplorerVisible(true);
+  showSection("files", { focus: false });
   explorerSide()?.querySelector(".ed-quick")?.focus();
 }
 
@@ -2013,4 +2814,6 @@ export function renderEditor(host, ctx) {
   paintSide();
   paintView();
   refreshStrips();
+  session.revealedKey = "";
+  activeChanged();
 }

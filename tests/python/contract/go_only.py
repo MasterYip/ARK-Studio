@@ -50,6 +50,11 @@ ROUTES = {
     # ark_studio/server/internal/org/reviewseen.go (test internal/server/project_reviews_test.go).
     # Table review_seen (statediff GO_ONLY_TABLES).
     "goonly:exact:/api/needs/seen": "project picker badges: the person opened the Needs you list or some of its items",
+    "goonly:exact:/api/needs/new": "Needs you items the person has not opened in the node details yet (bubble colours)",
+    # ark_studio/server/internal/server/session_notices.go, ark_studio/server/internal/sessions/finish.go,
+    # ark_studio/server/internal/org/sessionseen.go (test internal/server/session_notices_test.go).
+    # Table session_seen (statediff GO_ONLY_TABLES); session payloads carry "turn_end".
+    "goonly:exact:/api/agent-sessions/notices": "finished sessions the person has not opened yet; seen marks and notification switches",
     # ark_studio/server/internal/server/notifications.go, ark_studio/server/internal/sessions/alerts.go
     # (test internal/server/notifications_test.go)
     "goonly:exact:/api/notifications": "Android notifications: what needs the person across their projects since a cursor",
@@ -82,6 +87,22 @@ ROUTES = {
     "goonly:exact:/api/agent/v1/presence": "T-0043: an agent announces the unit it works on (state working|done)",
     # ark_studio/server/internal/server/routes_support.go (test routes_support_test.go)
     "goonly:exact:/api/project/support": "Board and Home support panel: live sessions, recent agents, hosts, library counts and deadlines",
+    # ark_studio/server/internal/server/routes_branches.go, ark_studio/server/internal/store/branches.go (Q-0003;
+    # tests branches_test.go, internal/server/routes_branches_test.go)
+    "goonly:exact:/api/project/branches": "lines of work (branch:<name> tags): size, Needs you items, last activity, "
+                                          "sessions, status and the topic that shows each line",
+    "goonly:exact:/api/agent/v1/branches": "lines of work for agents (same reply as /api/project/branches)",
+    "goonly:exact:/api/agent/v1/project/branches": "a project admin's agent sets the line tag namespace (settings.branches)",
+    # ark_studio/server/internal/server/routes_schedules.go, ark_studio/server/internal/schedules,
+    # ark_studio/server/internal/chat/scheduled.go (tests schedules_test.go, routes_schedules_test.go).
+    # File <project>/schedules.json and logs/schedules/ (not in the database).
+    "goonly:exact:/api/project/schedules": "scheduled Assistant tasks: list with state and runs (GET), save/delete/run (POST, admins)",
+    "goonly:exact:/api/project/schedules/transcript": "the messages of one scheduled task run",
+    "goonly:exact:/api/agent/v1/schedules": "scheduled Assistant tasks for agents (same as /api/project/schedules)",
+    "goonly:exact:/api/project/branches/suggest": "line tags proposed for units without one (part_of / derived_from); "
+                                                  "nothing is written",
+    "goonly:exact:/api/project/branch-topic": "a line as a topic page that is not stored (the units with its tag)",
+    "goonly:exact:/api/project/branches/rename": "move a line and the lines below it (tag path rewrite, preview, undo)",
     # ark_studio/server/internal/server/routes_trash.go, ark_studio/server/internal/store/trash.go (tests
     # store/trash_test.go, internal/server/routes_trash_test.go).  The archive activity row also keeps the
     # removed links ("links") and a restore from the bin recreates them (state only; replies unchanged).
@@ -224,7 +245,7 @@ def _strip_member(body: bytes, name: str) -> bytes:
 
 NEEDS_REVIEW_MEMBERS = ("parents", "links", "delivery", "verdict", "review_round", "review_since", "review_by",
                         "review_note", "review_anchors", "review_base", "review_changes", "review_focus", "review_prev",
-                        "auto_group")
+                        "auto_group", "branches")
 
 
 def _strip_needs_review(body: bytes) -> bytes:
@@ -1181,7 +1202,41 @@ def _project_markers(py, go) -> bool:
     return isinstance(data, dict) and isinstance(data.get("settings"), dict)
 
 
+# ------------------------------------------------------ lines of work
+# settings.branches = {"prefix": "<namespace>"} (ark_studio/server/internal/settings/branches.go;
+# tests internal/server/routes_branches_test.go): present only once a project
+# admin has set a prefix other than "branch"; Python refuses the section.
+# Needs you items carry "branches" (stripped with the other review members).
+
+BRANCHES = "branches"
+
+
+def _strip_project_branches(body: bytes) -> bytes:
+    """Remove settings.branches from GET/PATCH /api/project/settings."""
+    payload = _json(body)
+    settings = payload.get("settings") if isinstance(payload, dict) else None
+    if not isinstance(settings, dict) or BRANCHES not in settings:
+        return body
+    settings.pop(BRANCHES)
+    return json.dumps(payload, ensure_ascii=False).encode()
+
+
+AUGMENTED["/api/project/settings"] = _chain(_strip_project_graph_display, _strip_project_markers, _strip_project_branches)
+
+
+def _project_branches(py, go) -> bool:
+    """PATCH /api/project/settings with branches: Python 400 unknown section, Go 200."""
+    if py.status != 400 or go.status != 200 or b"unknown settings section: branches" not in py.body:
+        return False
+    data = _json(go.body)
+    return isinstance(data, dict) and isinstance(data.get("settings"), dict)
+
+
 FIXES += [
+    Fix("project-branches", "PATCH", "/api/project/settings",
+        "ark_studio/server/internal/settings/branches.go (Branches; tests internal/server/routes_branches_test.go)",
+        "lines of work: the tag namespace (settings.branches.prefix); Python refuses the unknown section",
+        _project_branches),
     Fix("project-markers", "PATCH", "/api/project/settings",
         "ark_studio/server/internal/store/markers/markers.go (Parse; tests markers_test.go)",
         "node marker groups (settings.markers); Python refuses the unknown section", _project_markers),

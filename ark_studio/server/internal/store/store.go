@@ -72,6 +72,7 @@ type Store struct {
 	signal            chan struct{}
 	ovMu              sync.Mutex // overview cache (overview.go)
 	ovCache           []overviewEntry
+	branches          branchCache // lines of work (branches.go, Go only)
 }
 
 // Open is Store.__init__: open/migrate ark.sqlite3 and prepare logs/.

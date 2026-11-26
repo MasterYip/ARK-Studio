@@ -1060,10 +1060,22 @@ func (m *Manager) UpdateProfile(ctx context.Context, username string, body *pyjs
 				merged.Set("seen_version", v)
 			}
 		}
+		if prefs.Has("highlight_others_reviews") {
+			// Go-only: review items assigned to someone else count as new
+			// for this person too (default off: they count as seen).
+			switch v := prefs.Value("highlight_others_reviews"); v {
+			case true:
+				merged.Set("highlight_others_reviews", true)
+			case false, nil:
+				merged.Delete("highlight_others_reviews")
+			default:
+				return nil, orgErr(400, "highlight_others_reviews must be true or false", "PROFILE_INVALID")
+			}
+		}
 		var extra []string
 		for _, k := range prefs.Keys() {
 			if k != "lang" && k != "theme" && k != "display" && k != "appearance" && k != "workbench" && k != "projects" &&
-				k != "mind_layout" && k != "home_filter" && k != "seen_version" {
+				k != "mind_layout" && k != "home_filter" && k != "seen_version" && k != "highlight_others_reviews" {
 				extra = append(extra, k)
 			}
 		}

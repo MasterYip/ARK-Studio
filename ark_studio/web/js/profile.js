@@ -243,6 +243,20 @@ export async function saveSeenServerVersion(version) {
   try { localStorage.setItem(SEEN_VERSION_KEY, version); } catch { /* storage unavailable */ }
 }
 
+// ----------------------------------------- others' review items (Needs you)
+// prefs.highlight_others_reviews (server: org.HighlightOthers): review items
+// assigned to someone else count as new for this person too.  Off by
+// default: they count as seen (grey, no dot).
+
+export function highlightOthersReviews() {
+  return prefsState.profile?.prefs?.highlight_others_reviews === true;
+}
+
+export async function saveHighlightOthersReviews(on) {
+  const data = await api.updateMe({ prefs: { highlight_others_reviews: Boolean(on) } });
+  prefsState.profile = data.profile;
+}
+
 // ------------------------------------------------- Home shows (per project)
 // What the Home header graph draws (home-filter-model.js): on the account
 // profile (prefs.home_filter), where the server reads it for the overview;

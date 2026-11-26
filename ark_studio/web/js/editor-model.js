@@ -5,12 +5,13 @@
 // state object; callers own persistence and rendering.
 //
 // A tab entry:
-//   { key, title, kind: "ws" | "media" | "url" | "unit" | "diff", path?, mediaId?,
+//   { key, title, kind: "ws" | "media" | "url" | "unit" | "diff" | "rev", path?, mediaId?,
 //     url?, uid?, unit?, base?, preview: bool, dirty: bool }
 // key is stable per source: "ws:<project-relative path>", "media:<id>",
-// "url:<href>", "unit:<uid>" (an ARK node) or "diff:<base>/<path>" (a git
-// diff of a project file against a base ref); reopening the same source
-// focuses the existing tab.
+// "url:<href>", "unit:<uid>" (an ARK node), "diff:<base>/<path>" (a git
+// diff of a project file against a base ref) or "rev:<commit>/<path>" (a
+// project file as it was at a commit, read-only, from the Timeline);
+// reopening the same source focuses the existing tab.
 
 export const EDITOR_STORE_PREFIX = "ark.editor.v1.";
 export const EDITOR_TAB_LIMIT = 40;
@@ -79,6 +80,11 @@ export function diffKey(path, base = "HEAD") {
   return `diff:${encodeURIComponent(String(base || "HEAD").trim() || "HEAD")}/${normalizePath(path)}`;
 }
 
+const REV_RE = /^[0-9a-f]{4,40}$/i;
+export function revKey(path, rev) {
+  return `rev:${String(rev || "").trim().toLowerCase()}/${normalizePath(path)}`;
+}
+
 export function parseKey(key) {
   const text = String(key || "");
   const index = text.indexOf(":");
@@ -102,6 +108,12 @@ export function parseKey(key) {
     try { base = decodeURIComponent(value.slice(0, slash)).trim(); } catch { return null; }
     const path = normalizePath(value.slice(slash + 1));
     return base && path ? { kind, path, base } : null;
+  }
+  if (kind === "rev") {
+    const slash = value.indexOf("/");
+    const rev = slash > 0 ? value.slice(0, slash) : "";
+    const path = normalizePath(value.slice(slash + 1));
+    return REV_RE.test(rev) && path ? { kind, path, rev } : null;
   }
   return null;
 }
@@ -158,6 +170,11 @@ function mimeViewer(mime) {
 export function viewerFor(entry = {}) {
   if (entry.kind === "unit") return "node";
   if (entry.kind === "diff") return "diff";
+  // An old version (Timeline) is shown as text only.
+  if (entry.kind === "rev") {
+    const viewer = viewerFor({ ...entry, kind: "ws" });
+    return TEXT_VIEWERS.has(viewer) ? viewer : "unsupported";
+  }
   const name = entry.name || entry.path || entry.url || "";
   const url = String(entry.url || "");
   const ext = fileExtension(name);
@@ -208,6 +225,7 @@ function cleanTab(raw) {
     kind: parsed.kind,
     title: String(raw.title || "").slice(0, 200)
       || (parsed.kind === "diff" ? `${baseName(parsed.path)} (${parsed.base})` : "")
+      || (parsed.kind === "rev" ? `${baseName(parsed.path)} (${parsed.rev.slice(0, 7)})` : "")
       || parsed.uid || baseName(parsed.path || parsed.url || `attachment ${parsed.mediaId}`),
     preview: Boolean(raw.preview),
     dirty: Boolean(raw.dirty),
@@ -217,6 +235,7 @@ function cleanTab(raw) {
   if (parsed.url) tab.url = parsed.url;
   if (parsed.uid) tab.uid = parsed.uid;
   if (parsed.base) tab.base = parsed.base;
+  if (parsed.rev) tab.rev = parsed.rev;
   for (const field of ["name", "mime", "mediaKind", "mediaUrl", "unit", "unitTitle", "caption", "rawUrl"]) {
     if (raw[field] !== undefined && raw[field] !== null && raw[field] !== "") {
       tab[field] = String(raw[field]).slice(0, 2000);
@@ -232,6 +251,7 @@ export function makeTab(source = {}) {
     else if (source.kind === "url") key = linkKey(source.url);
     else if (source.kind === "unit") key = unitKey(source.uid ?? source.id);
     else if (source.kind === "diff") key = diffKey(source.path, source.base);
+    else if (source.kind === "rev") key = revKey(source.path, source.rev);
     else key = workspaceKey(source.path);
   }
   return cleanTab({ ...source, key });
@@ -474,4 +494,28 @@ export function csvDelimiter(name, text = "") {
   if (fileExtension(name) === "tsv") return "\t";
   const first = String(text).split(/\r?\n/, 1)[0] || "";
   return (first.match(/\t/g) || []).length > (first.match(/,/g) || []).length ? "\t" : ",";
+}
+
+// ------------------------------------------------------------- view first
+// Files open for reading (rendered Markdown and HTML, viewers, read-only
+// code); editing is one click or Ctrl+E away and stays on for that tab
+// while it is open.  Settings › Appearance & input can turn this off.
+export const VIEW_FIRST_KEY = "ark.editor.viewFirst";
+
+export function viewFirstEnabled(storage = globalThis.localStorage) {
+  try { return storage?.getItem(VIEW_FIRST_KEY) !== "0"; } catch { return true; }
+}
+
+export function setViewFirst(on, storage = globalThis.localStorage) {
+  try { storage?.setItem(VIEW_FIRST_KEY, on ? "1" : "0"); } catch { /* storage unavailable */ }
+}
+
+/**
+ * Whether a tab shows its editor.  `canEdit`: an editable project file and
+ * a person who may write; `chosen`: Edit was picked for this tab; unsaved
+ * changes keep the editor open.
+ */
+export function isEditing({ canEdit = false, viewFirst = true, chosen = false, dirty = false } = {}) {
+  if (!canEdit) return false;
+  return Boolean(dirty || chosen || !viewFirst);
 }

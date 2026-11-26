@@ -21,7 +21,7 @@ const AA_TOLERANCE = Number(process.env.ARK_AA_TOLERANCE || 14);
 const IMAGE = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#e11d48"/><circle cx="40" cy="40" r="22" fill="#fde047"/></svg>');
 
 test('cards and thumbnails scale as one picture; Force labels keep their screen size', { skip: !chromium, timeout: 180000 }, async () => {
-  const web = path.resolve(__dirname, '../../web');
+  const web = path.resolve(__dirname, '../../ark_studio/web');
   let releaseImage;
   const imageGate = new Promise((resolve) => { releaseImage = resolve; });
   const server = createServer(async (req, res) => {

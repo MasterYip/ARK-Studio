@@ -269,15 +269,27 @@ test("core rules cover reading, planning, progress, results, Needs you, decision
   assert.ok(rules.includes("GET /api/agent/v1/setup/paths"));
   assert.ok(rules.includes("POST /api/agent/v1/setup/task-space-decision"));
   assert.ok(rules.includes("do not pick a place yourself"));
-  assert.ok(rules.includes("never a new top-level dir elsewhere"));
-  assert.ok(rules.includes("Scratch files only in the OS temp dir"));
+  assert.ok(rules.includes("Never a new top-level dir elsewhere"));
+  // Only registered places (the session workspace for scratch); folders per
+  // unit of work: the task's, or a node's own with no task above
+  // (T-0128/T-0132, 2026-11-25/26).
+  assert.ok(rules.includes("Write or change files only in the places registered in setup for this device"));
+  assert.ok(rules.includes("an ARK session's own workspace for scratch"));
+  assert.ok(rules.includes("go in the folder of the task they belong to"));
+  assert.ok(rules.includes("that node's own folder"));
+  assert.ok(rules.includes("GET /api/agent/v1/setup/paths?unit=<UID>"));
+  assert.ok(rules.includes("`ark-server agent folder <UID>`"));
+  assert.ok(rules.includes("each time you move on to another node or task"));
+  assert.ok(rules.includes("keeps that node's folder"));
+  assert.ok(rules.includes("anything a task needs later must be moved into its folder"));
+  assert.ok(rules.includes("do not start the work"));
   assert.ok(rules.includes("never guess a path"));
   assert.ok(rules.includes("`ark-server agent host-id`"));
   // Task spaces are not synced between devices: paths in ARK stay absolute,
   // with their device; a task: link is only an addition (D-0037, 2026-11-24).
   assert.ok(rules.includes("In ARK write paths as absolute paths with the device they are on"));
   assert.ok(rules.includes("A task: link may be added next to it, never instead of it."));
-  assert.ok(rules.includes("with its absolute path and device written in ARK?"));
+  assert.ok(rules.includes("with its absolute path and device written in ARK, and is nothing a task needs left only in the session workspace"));
   assert.doesNotMatch(rules, /not absolute paths/);
   assert.doesNotMatch(rules, /POST \/api\/agent\/v1\/setup\/resource/);
 });

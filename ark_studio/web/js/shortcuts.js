@@ -1,14 +1,39 @@
 const STORAGE_KEY = "ark.shortcuts.v1";
 const TAG_STORAGE_KEY = "ark.tagShortcuts.v1";
 export const DEFAULT_SHORTCUTS = {
-  palette: "Ctrl+K",
+  // Ctrl+K is the prefix of the folding chords, so the palette has its own key.
+  palette: "Ctrl+P",
   chat: "Alt+J",
   sync: "Alt+R",
   locateMap: "Alt+M",
   newUnit: "N",
   editorSave: "Ctrl+S",
   editorClose: "Ctrl+W",
+  // Folding in the Editor (VS Code keys): two-key chords start with Ctrl+K.
+  editorFoldAll: "Ctrl+K Ctrl+0",
+  editorUnfoldAll: "Ctrl+K Ctrl+J",
+  editorFoldLevel1: "Ctrl+K Ctrl+1",
+  editorFoldLevel2: "Ctrl+K Ctrl+2",
+  editorFoldLevel3: "Ctrl+K Ctrl+3",
+  editorFoldLevel4: "Ctrl+K Ctrl+4",
+  editorFoldLevel5: "Ctrl+K Ctrl+5",
+  editorFoldLevel6: "Ctrl+K Ctrl+6",
+  editorFoldLevel7: "Ctrl+K Ctrl+7",
+  editorFold: "Ctrl+Shift+[",
+  editorUnfold: "Ctrl+Shift+]",
+  // Files open for reading: edit / view, and the Editor filling the window.
+  editorEdit: "Ctrl+E",
+  editorFullscreen: "F11",
 };
+
+// The Editor's folding commands, in the order Settings and the palette list them.
+export const FOLD_ACTIONS = [
+  { id: "editorFoldAll", labelKey: "editor.fold.all" },
+  { id: "editorUnfoldAll", labelKey: "editor.fold.unfold_all" },
+  ...[1, 2, 3, 4, 5, 6, 7].map((n) => ({ id: `editorFoldLevel${n}`, labelKey: "editor.fold.level", labelParams: { n }, level: n })),
+  { id: "editorFold", labelKey: "editor.fold.current" },
+  { id: "editorUnfold", labelKey: "editor.fold.unfold_current" },
+];
 
 // Global actions shown in Settings → Personal → Shortcuts.  Contextual graph
 // keys (Tab/Enter/arrows) remain documented in the graph reference because they
@@ -29,6 +54,14 @@ export const SHORTCUT_ACTIONS = [
     hintKey: "settings.editor_save_shortcut_hint" },
   { id: "editorClose", labelKey: "settings.editor_close_shortcut",
     hintKey: "settings.editor_close_shortcut_hint" },
+  { id: "editorEdit", labelKey: "settings.editor_edit_shortcut",
+    hintKey: "settings.editor_edit_shortcut_hint" },
+  { id: "editorFullscreen", labelKey: "settings.editor_fullscreen_shortcut",
+    hintKey: "settings.editor_fullscreen_shortcut_hint" },
+  // Folding: "Editor: …" like the other Editor keys; the first row explains them.
+  ...FOLD_ACTIONS.map((action, index) => ({
+    ...action, prefixKey: "settings.editor_prefix", hintKey: index === 0 ? "settings.editor_fold_shortcut_hint" : "",
+  })),
 ];
 
 const MODS = ["Ctrl", "Alt", "Shift", "Meta"];
@@ -47,7 +80,10 @@ const RESERVED_ALLOWED = {
 export function getShortcuts() {
   try {
     const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    return { ...DEFAULT_SHORTCUTS, ...(parsed && typeof parsed === "object" ? parsed : {}) };
+    const saved = parsed && typeof parsed === "object" ? { ...parsed } : {};
+    // Saved settings copy every key; an old palette "Ctrl+K" is the former default.
+    if (saved.palette === "Ctrl+K" || saved.palette === "Meta+K") delete saved.palette;
+    return { ...DEFAULT_SHORTCUTS, ...saved };
   } catch {
     return { ...DEFAULT_SHORTCUTS };
   }
@@ -109,11 +145,30 @@ export function formatShortcut(spec, spaces = false) {
 }
 
 // Compact label for hints: "Ctrl K", "Alt J"; Meta shows as ⌘ on Apple devices.
+// A chord ("Ctrl+K Ctrl+0") reads "Ctrl K, Ctrl 0".
 export function shortcutLabel(spec) {
   const apple = typeof navigator !== "undefined"
     && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent || "");
-  return String(spec || "").split("+").filter(Boolean)
-    .map((part) => (part === "Meta" ? (apple ? "⌘" : "Win") : part)).join(" ");
+  return chordParts(spec).map((combo) => combo.split("+").filter(Boolean)
+    .map((part) => (part === "Meta" ? (apple ? "⌘" : "Win") : part)).join(" ")).join(", ");
+}
+
+// Shift changes event.key for punctuation and digits ("{" for "["): these
+// keys are recorded and matched by their physical key.
+const CODE_KEYS = {
+  BracketLeft: "[", BracketRight: "]", Backslash: "\\", Minus: "-", Equal: "=", Comma: ",", Period: ".",
+  Slash: "/", Semicolon: ";", Quote: "'", Backquote: "`",
+  Digit0: "0", Digit1: "1", Digit2: "2", Digit3: "3", Digit4: "4", Digit5: "5", Digit6: "6", Digit7: "7", Digit8: "8", Digit9: "9",
+};
+const KEY_CODES = Object.fromEntries(Object.entries(CODE_KEYS).map(([code, key]) => [key, code]));
+
+/** The key combos of a shortcut: one, or two for a chord ("Ctrl+K Ctrl+0"). */
+export function chordParts(spec) {
+  return String(spec || "").trim().split(/\s+/).filter(Boolean);
+}
+
+export function isChord(spec) {
+  return chordParts(spec).length > 1;
 }
 
 export function shortcutFromEvent(event) {
@@ -126,17 +181,26 @@ export function shortcutFromEvent(event) {
   if (event.metaKey) mods.push("Meta");
   if (!mods.length) {
     // Bare single keys are allowed for actions such as New unit (N).
+    if (/^F([1-9]|1[0-2])$/.test(key)) return key;
     return /^[A-Za-z0-9]$/.test(key) ? key.toUpperCase() : null;
   }
   let name = key.length === 1 ? key.toUpperCase() : key;
+  if (CODE_KEYS[event.code]) name = CODE_KEYS[event.code];
   if (name === " ") name = "Space";
   return [...mods, name].join("+");
 }
 
 export function shortcutIsUsable(spec, name = "") {
   if (!spec) return false;
+  const parts = chordParts(spec);
+  if (parts.length > 2) return false;
+  // A chord's keys each need a modifier (Ctrl+K Ctrl+0); reserved browser
+  // keys are fine as its second key.
+  if (parts.length === 2) return parts.every((part) => ["Ctrl", "Alt", "Meta"].some((mod) => part.startsWith(`${mod}+`)));
   if (RESERVED.has(spec) && !RESERVED_ALLOWED[name]?.has(spec)) return false;
   if (/^[A-Za-z0-9]$/.test(spec)) return true;
+  // Function keys alone (F11: the Editor full screen); F5 and F12 stay the browser's.
+  if (/^F([1-9]|1[0-2])$/.test(spec)) return true;
   return ["Ctrl", "Alt", "Shift", "Meta"].some((mod) => spec.startsWith(`${mod}+`));
 }
 
@@ -148,8 +212,13 @@ export function shortcutConflict(name, spec) {
   return "";
 }
 
+// One key combo (not a chord): see matchChord for two-key shortcuts.
 export function shortcutMatches(event, spec) {
-  if (!spec) return false;
+  if (!spec || isChord(spec)) return false;
+  return comboMatches(event, spec);
+}
+
+function comboMatches(event, spec) {
   const parts = String(spec).split("+").filter(Boolean);
   const key = parts.pop();
   if (!key) return false;
@@ -162,6 +231,33 @@ export function shortcutMatches(event, spec) {
   if (event.altKey !== want.Alt) return false;
   if (event.shiftKey !== want.Shift) return false;
   if (event.metaKey !== want.Meta) return false;
+  if (KEY_CODES[key] && event.code === KEY_CODES[key]) return true;
   const actual = event.key === " " ? "Space" : event.key;
   return String(actual).toLowerCase() === String(key).toLowerCase();
+}
+
+/**
+ * Two-key shortcuts.  `specs` maps action ids to shortcuts; `pending` is the
+ * first combo of a chord already pressed ("" when none).  Returns
+ * { type: "match", id } for a complete shortcut, { type: "prefix", combo }
+ * when the key starts a chord, or { type: "none" }.
+ */
+export function matchChord(event, specs, pending = "") {
+  const entries = Object.entries(specs || {});
+  if (pending) {
+    for (const [id, spec] of entries) {
+      const parts = chordParts(spec);
+      if (parts.length === 2 && parts[0] === pending && comboMatches(event, parts[1])) return { type: "match", id };
+    }
+    return { type: "none" };
+  }
+  for (const [id, spec] of entries) {
+    const parts = chordParts(spec);
+    if (parts.length === 1 && comboMatches(event, parts[0])) return { type: "match", id };
+  }
+  for (const [, spec] of entries) {
+    const parts = chordParts(spec);
+    if (parts.length === 2 && comboMatches(event, parts[0])) return { type: "prefix", combo: parts[0] };
+  }
+  return { type: "none" };
 }

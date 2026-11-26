@@ -1,11 +1,13 @@
 // Research > Topics: nodes that hold a curated subgraph.  A topic shows the
 // members it lists or that match its rule, minus the ones it excludes, in a
-// narrative order on its own canvas; it chooses which of their links to show.
+// narrative order on its own graph; it chooses which of their links to show.
+// The explorer on the right (topic-explorer.js) lists topics, lines and the
+// open topic's outline.
 import {
-  h, clear, emptyState, typeColor, typeBadge, statusPill, richText, fmtDate, relativeTime, typesetMath, typesetMermaid,
+  h, clear, emptyState, typeColor, typeBadge, statusPill, richText, fmtDate, typesetMath, typesetMermaid,
 } from "../dom.js";
 import { api, mediaUrl } from "../api.js";
-import { t, typeLabel, statusLabel, relLabel } from "../i18n.js";
+import { t, relLabel } from "../i18n.js";
 import { icon } from "../icons.js";
 import { filtersToParams } from "../state.js";
 import { GraphView } from "../graph.js";
@@ -15,9 +17,13 @@ import { mindGraphOptions } from "../mind.js";
 import { openModal, viewToggle, attachGraphHeight } from "../components.js";
 import { openNewTopic, openMemberPicker } from "../topic-actions.js";
 import {
-  layoutFromMembers, layoutChanges, visibleEdges, previewPoints, ruleParts, filterTopic,
-  outlineMove, outlineDrop, dropPosition, foldable, foldLevel, subtreeIds, foldChord,
+  layoutFromMembers, layoutChanges, visibleEdges, ruleParts, filterTopic,
+  foldable, foldChord,
 } from "../topic-model.js";
+import { branchTopicEntries, lineLabel } from "../needs-model.js";
+import { topicExplorer } from "../topic-explorer.js";
+import { outlineRows, foldCommand, ancestorKeys } from "../topic-explorer-model.js";
+import { openLineRename } from "./settings-lines.js";
 
 const SELECTED_KEY = "ark.topic.selected.v1";
 const BODY_KEY = "ark.topic.body.v1";
@@ -51,36 +57,57 @@ export function topicTitle(topic) {
 export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   const S = ctx.S;
   clear(host);
-  const listHost = h("div", { class: "topic-bar-items", role: "tablist" }, h("div", { class: "muted" }, t("topic.loading")));
   const mainHost = h("section", { class: "topic-main" });
   const search = h("input", { class: "input topic-search", placeholder: t("filters.keyword"), value: S.filters.q || "" });
+  let topics = [];
+  // Lines of work (GET /api/project/branches): each line is a topic, a stored
+  // one when a topic's rule is its tag, else an automatic one ("auto").
+  let lines = [];
+  const state = { graph: null, data: null, full: false, seq: 0, pendingLayout: null, lineOf: new Map() };
+  const lineTopic = (line) => ({ uid: line.ref, title: line.name, virtual: true, branch: line.name, updated_at: line.last,
+    member_count: line.units, preview: { members: [], edges: [] }, line });
+  const known = (ref) => topics.find((topic) => topic.uid === ref || String(topic.id) === String(ref))
+    || lines.filter((line) => line.auto).map(lineTopic).find((topic) => topic.uid === ref);
+  const explorer = topicExplorer(ctx, {
+    titleOf: topicTitle,
+    openTopic: (topic) => { S.topicTrail = []; open(topic); },
+    // A line with a stored topic opens that topic; a path that is only the
+    // parent of other lines opens as an automatic line too.
+    openLine: (row) => {
+      S.topicTrail = [];
+      if (row.line && !row.line.auto) open(known(row.line.ref) || { uid: row.line.ref });
+      else if (row.line) open(lineTopic(row.line));
+      else open({ uid: row.ref, title: row.key, virtual: true });
+    },
+    newTopic: () => openNewTopic(ctx),
+    lineSettings: () => ctx.openSettingsAt?.("lines"),
+    drill: (unit) => drillInto(ctx, state.data?.topic, unit),
+    onToggle: () => { setTimeout(() => state.graph?.repairView?.(), 220); },
+  });
+  state.explorer = explorer;
   const page = h("div", { class: "page topic-page" },
-    h("div", { class: "page-head" },
-      h("div", null,
-        h("div", { class: "eyebrow" }, t("nav.research")),
-        h("h1", { class: "page-title" }, t("plan.topic.title")),
-        h("p", { class: "page-sub" }, t("plan.topic.subtitle"))),
+    h("div", { class: "topic-page-head" },
+      h("h1", { class: "topic-page-title", title: t("plan.topic.subtitle") }, icon("layers", "sm"), t("plan.topic.title")),
       h("div", { class: "head-actions" },
         search,
         h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")),
-        h("button", { class: "primary-btn", "data-topic-new": "1", onclick: () => openNewTopic(ctx) }, icon("plus", "sm"), t("topic.new")))),
-    h("div", { class: "topic-layout" },
-      h("div", { class: "topic-bar" }, listHost),
-      mainHost));
+        h("button", { class: "primary-btn", "data-topic-new": "1", onclick: () => openNewTopic(ctx) }, icon("plus", "sm"), t("topic.new")),
+        explorer.toggleButton)),
+    h("div", { class: "topic-layout" }, mainHost, explorer.sash, explorer.el),
+    explorer.backdrop);
   host.appendChild(page);
+  explorer.applyShown();
 
-  let topics = [];
-  const state = { graph: null, data: null, full: false, seq: 0, pendingLayout: null };
-  const known = (ref) => topics.find((topic) => topic.uid === ref || String(topic.id) === String(ref));
-  const markActive = () => {
-    for (const el of listHost.querySelectorAll(".topic-pill")) {
-      const on = el.dataset.topicCard === S.topicRef;
-      el.classList.toggle("on", on);
-      el.setAttribute("aria-selected", on ? "true" : "false");
-    }
+  const loadLines = async () => {
+    try {
+      const data = await api.branches();
+      lines = branchTopicEntries(data.items || []);
+      state.lineOf = new Map(lines.filter((line) => !line.auto && line.via === "rule").map((line) => [line.ref, line.tag]));
+    } catch { lines = []; /* an older server has no lines */ }
   };
+  const paintList = () => explorer.setTopics(topics, lines);
   // Switching topics, views or history entries replaces only the topic area;
-  // the page, the topic bar and the tab's data stay as they are.
+  // the page, the explorer and the tab's data stay as they are.
   const open = (topic, { push = true, reload = false } = {}) => {
     const same = !reload && topic.uid === S.topicRef && state.data?.topic?.uid === topic.uid;
     S.topicRef = topic.uid;
@@ -88,8 +115,7 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
       const hash = topicHash(topic);
       if (location.hash !== hash) history.pushState(null, "", hash);
     }
-    markActive();
-    listHost.querySelector(".topic-pill.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    explorer.setActive(topic.uid);
     if (!same) openTopicMain(ctx, mainHost, topic.uid, state);
   };
   ctx.topicPage = {
@@ -109,8 +135,8 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
         ? topics.find((item) => item.default === route.sub)
         : known(route.topicRef || S.topicRef || rememberedTopic(ctx));
       if (!topic && route.topicRef) {
-        // A topic created after the bar loaded (e.g. by an agent): open it
-        // directly and refresh the bar so its card appears.
+        // A topic created after the list loaded (e.g. by an agent): open it
+        // directly and refresh the list so it appears.
         topic = { uid: route.topicRef };
         api.topics().then((data) => { topics = data.items || topics; paintList(); }).catch(() => {});
       }
@@ -126,27 +152,13 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
     },
     reload: async () => {
       try {
-        topics = (await api.topics()).items || [];
+        [topics] = await Promise.all([api.topics().then((data) => data.items || []), loadLines()]);
         paintList();
       } catch { /* the topic area still reloads */ }
       openTopicMain(ctx, mainHost, S.topicRef, state);
     },
   };
 
-  const paintList = () => {
-    clear(listHost);
-    if (!topics.length) {
-      listHost.appendChild(h("div", { class: "topic-list-empty muted" }, t("topic.none_yet")));
-      return;
-    }
-    let previousDefault = null;
-    for (const topic of topics) {
-      if (previousDefault && !topic.default) listHost.appendChild(h("span", { class: "topic-bar-divider", "aria-hidden": "true" }));
-      previousDefault = Boolean(topic.default);
-      listHost.appendChild(topicPill(topic, topic.uid === S.topicRef, () => { S.topicTrail = []; open(topic); }));
-    }
-    listHost.querySelector(".topic-pill.on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
-  };
   let searchTimer;
   search.addEventListener("input", () => {
     clearTimeout(searchTimer);
@@ -160,8 +172,9 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
     if (rememberedTopic(ctx) === missing) rememberTopic(ctx, "");
     const next = topics.find((topic) => topic.uid !== missing);
     S.topicRef = next?.uid || "";
-    paintList();
+    explorer.setActive(S.topicRef);
     if (next) { open(next, { push: false }); return true; }
+    explorer.setOutline(null);
     clear(mainHost);
     mainHost.appendChild(emptyState(t("topic.empty_title"), t("topic.empty_hint"),
       h("button", { class: "btn primary", onclick: () => openNewTopic(ctx) }, t("topic.new"))));
@@ -169,10 +182,10 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   };
   const load = async () => {
     try {
-      topics = (await api.topics()).items || [];
+      [topics] = await Promise.all([api.topics().then((data) => data.items || []), loadLines()]);
     } catch (err) {
-      clear(listHost);
-      listHost.appendChild(h("div", { class: "muted" }, err.message));
+      clear(mainHost);
+      mainHost.appendChild(h("div", { class: "muted" }, err.message));
       return;
     }
     let ref;
@@ -187,6 +200,7 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
       }
     }
     S.topicRef = ref || "";
+    explorer.setActive(S.topicRef);
     paintList();
     if (!S.topicRef) {
       clear(mainHost);
@@ -199,69 +213,47 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   load();
 }
 
+// The graph's layout per topic: Force until another one (Node: the topic's
+// saved arrangement, Tree, Mind) is picked in the graph toolbar.
+const LAYOUT_KEY = "ark.topic.layout.v1";
+
+function topicLayout(ctx, uid) {
+  try {
+    const saved = localStorage.getItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}:${uid}`);
+    return ["force", "tree", "mind", "node"].includes(saved) ? saved : "force";
+  } catch { return "force"; }
+}
+
+function rememberTopicLayout(ctx, uid, layout) {
+  try { localStorage.setItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}:${uid}`, layout); } catch { /* storage unavailable */ }
+}
+
+// The document view: scroll to a member's section, unfolding the way to it.
+function revealSection(article, uid) {
+  const section = article.querySelector(`.topic-art-section[data-unit-ref="${CSS.escape(uid)}"]`);
+  if (!section) return;
+  section.dispatchEvent(new CustomEvent("topic-reveal", { bubbles: true }));
+  section.querySelector(":scope > .topic-art-head")?.scrollIntoView({ block: "center", behavior: "smooth" });
+}
+
 // Built-in topics keep their old addresses (#/research/story, ...).
 function topicHash(topic) {
   const key = topic.default || topic.meta?.default;
   return key && DEFAULT_TITLES[key] ? `#/research/${key}` : `#/research/topic/${encodeURIComponent(topic.uid)}`;
 }
 
-function topicPill(topic, active, onOpen) {
-  const preview = topic.preview || { members: [], edges: [] };
-  return h("button", {
-    type: "button", role: "tab", "aria-selected": active ? "true" : "false",
-    class: `topic-pill ${active ? "on" : ""} ${topic.default ? "default" : ""}`.replace(/\s+/g, " ").trim(),
-    dataset: { unitRef: topic.uid, topicCard: topic.uid, topicDefault: topic.default || "" },
-    title: `${topic.title} · ${topic.uid}`, onclick: onOpen,
-  },
-    thumbnail(preview),
-    h("div", { class: "topic-pill-text" },
-      h("div", { class: "topic-pill-title" }, topicTitle(topic)),
-      h("div", { class: "topic-pill-meta" },
-        h("span", { class: "uid" }, topic.uid),
-        h("span", null, t("topic.members_n", { n: topic.member_count ?? preview.members.length })),
-        preview.rule ? h("span", { class: "topic-rule-badge", title: t("topic.rule_badge_hint") }, icon("filter", "sm")) : null),
-      h("div", { class: "topic-pill-time muted" }, relativeTime(topic.updated_at))));
-}
-
-function thumbnail(preview) {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 100 100");
-  svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-  svg.setAttribute("class", "topic-thumb");
-  svg.setAttribute("aria-hidden", "true");
-  const points = previewPoints(preview.members || []);
-  const at = new Map(points.map((p) => [p.id, { x: 10 + p.x * 80, y: 10 + p.y * 80 }]));
-  for (const [a, b] of preview.edges || []) {
-    const p = at.get(a), q = at.get(b);
-    if (!p || !q) continue;
-    const line = document.createElementNS(ns, "line");
-    line.setAttribute("x1", p.x); line.setAttribute("y1", p.y);
-    line.setAttribute("x2", q.x); line.setAttribute("y2", q.y);
-    line.setAttribute("class", "topic-thumb-edge");
-    svg.appendChild(line);
-  }
-  for (const point of points) {
-    const p = at.get(point.id);
-    const dot = document.createElementNS(ns, "circle");
-    dot.setAttribute("cx", p.x); dot.setAttribute("cy", p.y);
-    dot.setAttribute("r", points.length > 24 ? 2.2 : 3.4);
-    dot.setAttribute("fill", typeColor(point.type));
-    svg.appendChild(dot);
-  }
-  return svg;
-}
-
 async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
   const S = ctx.S;
-  const view = ["canvas", "graph", "outline", "timeline"].includes(S.topicView) ? S.topicView : "canvas";
-  const needsBody = view === "outline" && outlineBodyVisible();
+  // Views: the graph (default), the document (each member as a section with
+  // its body) and the timeline.  The outline lives in the explorer.
+  const view = { outline: "document", canvas: "graph" }[S.topicView] || (["graph", "document", "timeline"].includes(S.topicView) ? S.topicView : "graph");
+  const needsBody = view === "document" && outlineBodyVisible();
   const seq = ++state.seq;
   let data = state.data;
   // Metadata-only outlines can reuse the graph's lightweight response.
   if (!(reuse && data?.topic?.uid === ref && (!needsBody || state.full))) {
     try {
-      data = await api.topic(ref, { full: needsBody });
+      data = await api.topic(ref, { full: needsBody, exact: Boolean(S.lineExact) });
     } catch (err) {
       if (seq !== state.seq) return;
       // A remembered topic that no longer exists (deleted, or a demo that
@@ -291,11 +283,24 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
   const previous = S.topicTrail || [];
   const back = previous.findIndex((item) => item.uid === topic.uid);
   const trail = S.topicTrail = (back >= 0 ? previous.slice(0, back) : previous).slice(-4);
+  // A line's topic (automatic, or stored with the line's tag as its rule):
+  // adding and removing nodes edits their line tag; an automatic topic keeps
+  // no layout of its own.
+  const lineTag = topic.virtual ? topic.uid : state.lineOf?.get(topic.uid) || "";
   const design = async (body, { quiet = false } = {}) => {
     try {
-      let next = await api.designTopic(topic.id, body);
-      const full = Boolean(S.filters.q?.trim()) || (view === "outline" && outlineBodyVisible());
-      if (full) next = await api.topic(topic.uid, { full: true });
+      let next;
+      if (lineTag && (body.add || body.remove || (topic.virtual && body.restore))) {
+        await editLine(lineTag, body);
+        next = await api.topic(topic.uid, { full: state.full, exact: Boolean(S.lineExact) });
+        state.data = next;
+        if (!quiet) paint(next);
+        return next;
+      }
+      if (topic.virtual) return state.data;
+      next = await api.designTopic(topic.id, body);
+      const full = Boolean(S.filters.q?.trim()) || (view === "document" && outlineBodyVisible());
+      if (full) next = await api.topic(topic.uid, { full: true, exact: Boolean(ctx.S.lineExact) });
       state.data = next;
       state.full = full;
       if (!quiet) paint(next);
@@ -306,30 +311,33 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
     }
   };
 
-  const hasGraph = view === "canvas" || view === "graph";
+  const hasGraph = view === "graph";
   const linksMode = hasGraph && Boolean(S.topicLinksMode);
   const canvasHost = h("div", { class: "graph-host" });
   const panel = h("div", { class: "graph-panel topic-canvas" }, canvasHost);
-  const outline = h("div", { class: "topic-outline" });
   const timeline = h("div", { class: "topic-timeline" });
   const article = h("div", { class: "topic-article-wrap" });
   const linkRow = h("div", { class: "topic-link-row" });
   const foot = h("div", { class: "topic-foot" });
   const counts = h("span", { class: "count" });
 
+  // Auto layout arranges the Node and Mind layouts; Force lays itself out.
+  const layout = topicLayout(ctx, topic.uid);
+  const autoLayoutBtn = hasGraph ? h("button", {
+    class: `btn sm ghost ${["node", "mind"].includes(layout) ? "" : "hidden"}`.trim(), title: t("topic.auto_layout_hint"),
+    dataset: { topicAutoLayout: "1" }, onclick: () => { state.graph?.autoLayout(); },
+  }, icon("refresh", "sm"), t("topic.auto_layout")) : null;
   const toolbar = h("div", { class: "toolbar topic-toolbar" },
-    viewToggle(view, [["canvas", t("topic.view.canvas"), "layers"], ["graph", t("topic.view.graph"), "graph"],
-      ["outline", t("topic.view.outline"), "list"], ["timeline", t("topic.view.timeline"), "gantt"]], (value) => {
+    viewToggle(view, [["graph", t("topic.view.graph"), "graph"],
+      ["document", t("topic.view.document"), "book"], ["timeline", t("topic.view.timeline"), "gantt"]], (value) => {
       ctx.topicPage?.setView(value);
     }),
     counts,
     h("div", { class: "spacer" }),
-    h("button", { class: "btn sm", "data-topic-add": "1", onclick: () => openMemberPicker(ctx, state.data, (ids) => design({ add: ids })) },
-      icon("plus", "sm"), t("topic.add_nodes")),
-    hasGraph ? h("button", {
-      class: "btn sm ghost", title: t("topic.auto_layout_hint"),
-      onclick: () => { state.graph?.autoLayout(); },
-    }, icon("refresh", "sm"), t("topic.auto_layout")) : null);
+    h("button", { class: "btn sm", "data-topic-add": "1", title: lineTag ? t("branch.add_hint", { tag: lineTag }) : undefined,
+      onclick: () => openMemberPicker(ctx, state.data, (ids) => design({ add: ids })) },
+    icon("plus", "sm"), lineTag ? t("branch.add_nodes") : t("topic.add_nodes")),
+    autoLayoutBtn);
 
   clear(host);
   host.append(
@@ -339,16 +347,30 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
         h("span", { class: "muted" }, "›")) : null,
       h("div", { class: "topic-title-row" },
         h("i", { class: "topic-glyph", style: { background: typeColor("topic") } }, icon("layers", "sm")),
-        h("h2", { class: "topic-title", dataset: { unitRef: topic.uid }, title: t("topic.title_hint"),
-          onclick: (event) => ctx.openUnit(topic.uid, { x: event.clientX, y: event.clientY }) }, topicTitle(topic)),
+        topic.virtual
+          ? h("h2", { class: "topic-title line", title: t("branch.auto_hint") }, topicTitle(topic))
+          : h("h2", { class: "topic-title", dataset: { unitRef: topic.uid }, title: t("topic.title_hint"),
+            onclick: (event) => ctx.openUnit(topic.uid, { x: event.clientX, y: event.clientY }) }, topicTitle(topic)),
         h("span", { class: "uid" }, topic.uid),
-        statusPill(topic.status)),
+        topic.virtual ? h("span", { class: "topic-auto-badge", title: t("branch.auto_hint") }, t("branch.auto"))
+          : lineTag ? h("span", { class: "topic-line-badge", title: lineTag }, t("branch.line")) : null,
+        topic.virtual ? null : statusPill(topic.status),
+        topic.virtual ? h("label", { class: "row tight topic-line-exact", title: t("branch.exact_hint") },
+          h("input", { type: "checkbox", checked: Boolean(S.lineExact),
+            onchange: (event) => { S.lineExact = event.target.checked; ctx.topicPage?.openRef(topic.uid, { keepTrail: true }); } }),
+          t("branch.exact")) : null,
+        topic.virtual ? h("button", {
+          class: "btn sm", type: "button", title: t("branch.pin_hint"),
+          onclick: () => pinLine(ctx, topic, Boolean(S.lineExact)),
+        }, icon("plus", "sm"), t("branch.pin")) : null,
+        lineTag ? h("button", {
+          class: "btn sm ghost", type: "button", title: t("lines.rename_hint"),
+          onclick: () => openLineRename(ctx, lineTag.slice(lineTag.indexOf(":") + 1), () => ctx.topicPage?.reload()),
+        }, t("lines.rename")) : null),
       topicBody(topic.body)),
     toolbar, ...(linksMode ? [linkRow] : []),
-    view === "canvas"
-      ? topicCanvasSplit(ctx, panel, outline)
-      : view === "graph" ? attachGraphHeight(h("div", { class: "topic-split solo" }, panel), ctx, ".topic-canvas")
-        : view === "timeline" ? timeline : article,
+    view === "graph" ? attachGraphHeight(h("div", { class: "topic-split solo" }, panel), ctx, ".topic-canvas")
+      : view === "timeline" ? timeline : article,
     foot);
 
   // ---------------------------------------------------------------- canvas
@@ -357,7 +379,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
     saveTimer = null;
     const pending = state.pendingLayout;
     state.pendingLayout = null;
-    if (!pending) return;
+    if (!pending || topic.virtual) return;
     const items = layoutChanges(state.data.members, pending);
     if (!items.length) return;
     for (const item of items) {
@@ -374,7 +396,11 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
     const base = mindGraphOptions(ctx);
     const graph = new GraphView(canvasHost, {
       ...base,
-      layout: view === "graph" ? "force" : "node",
+      layout,
+      onLayoutChange: (next) => {
+        rememberTopicLayout(ctx, topic.uid, next);
+        autoLayoutBtn?.classList.toggle("hidden", !["node", "mind"].includes(next));
+      },
       persistLayout: false,
       cameraKey: `${ctx.S.project?.id || ""}:topic:${topic.uid}`,
       edgeFilterKey: `ark.edgeFilter.v1:topic:${topic.uid}`,
@@ -394,6 +420,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
       },
       onSelect: (node, dbl, event) => {
         if (node) ctx.openUnit(node.uid || node.id, event ? { x: event.clientX, y: event.clientY } : null);
+        state.explorer?.markSelected(node?.uid || "");
       },
       onOpenTopic: (node) => {
         drillInto(ctx, topic, node);
@@ -419,8 +446,9 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
         else if (after) paint(after);
       },
       onAddOrphan: async (world = {}) => {
-        const created = await api.createUnit({ type: "note", title: t("mind.new_node"), status: "open", importance: "p2", origin: "topic" });
-        await api.designTopic(topic.id, { add: [{ unit: created.unit.id, x: world.x, y: world.y }] });
+        const created = await api.createUnit({ type: "note", title: t("mind.new_node"), status: "open", importance: "p2", origin: "topic",
+          ...(lineTag ? { tags: [lineTag] } : {}) });
+        if (!topic.virtual) await api.designTopic(topic.id, { add: [{ unit: created.unit.id, x: world.x, y: world.y }] });
         return { unit: created.unit, link: null, parentId: null, orphan: true, world };
       },
       // While choosing links a click shows/hides the link in this topic;
@@ -431,11 +459,11 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
       onEdgeClick: (edge, source, target) => {
         if (!S.topicLinksMode) base.onEdgeClick?.(edge, source, target);
       },
-      nodeMenuExtras: (nodes, node) => memberMenu(ctx, state, nodes, node, design, base.nodeMenuExtras),
+      nodeMenuExtras: (nodes, node) => memberMenu(ctx, state, nodes, node, design, base.nodeMenuExtras, lineTag),
       // Del / "Remove from topic" keeps the node in the project (undoable);
       // "Delete node" moves it to the recycle bin, as on the Map.
       deleteMenuItems: (nodes, { edit, removeSelected }) => [
-        { label: t("topic.remove_from"), icon: "x", onClick: edit(() => removeSelected()) },
+        { label: lineTag ? t("branch.remove_from") : t("topic.remove_from"), icon: "x", onClick: edit(() => removeSelected()) },
         {
           label: t("topic.delete_node"), icon: "trash",
           onClick: edit(async () => {
@@ -455,7 +483,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
     if (seq !== state.seq || !host.isConnected) return;
     try {
       if (S.filters.q?.trim() && !state.full) {
-        fullRequest ||= api.topic(topic.uid, { full: true });
+        fullRequest ||= api.topic(topic.uid, { full: true, exact: Boolean(ctx.S.lineExact) });
         const full = await fullRequest;
         fullRequest = null;
         if (seq !== state.seq || !host.isConnected) return;
@@ -483,13 +511,23 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
     counts.append(t("topic.counts", { n: members.length, links: edges.length - hiddenCount }),
       hiddenCount ? h("span", { class: "muted" }, ` · ${t("topic.hidden_links", { n: hiddenCount })}`) : "");
     if (linksMode) paintLinkFilter(ctx, linkRow, edges, next.subgraph, design);
-    if (view === "canvas") paintOutline(ctx, outline, next, design, original.members);
+    state.explorer?.setOutline({
+      topic, data: next, allMembers: original.members, design,
+      removeLabel: lineTag ? t("branch.remove_from") : t("topic.remove_from"),
+      // The document view keeps its own Ctrl+K chords.
+      ownChords: view === "document",
+      locate: (uid) => {
+        if (state.graph) state.graph.locate(uid);
+        else if (view === "document") revealSection(article, uid);
+      },
+    });
     if (view === "timeline") paintTimeline(ctx, timeline, next);
-    if (view === "outline") paintArticle(ctx, article, next, {
+    if (view === "document") paintArticle(ctx, article, next, {
+      onSelect: (uid) => state.explorer?.markSelected(uid),
       allMembers: original.members,
       full: state.full,
       loadFull: async () => {
-        const full = await api.topic(topic.uid, { full: true });
+        const full = await api.topic(topic.uid, { full: true, exact: Boolean(ctx.S.lineExact) });
         if (seq !== state.seq) return null;
         state.data = full;
         state.full = true;
@@ -506,63 +544,6 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
   }
   await state.applyFilters();
   if (state.graph && !data.members.length) state.graph.emptyEl?.classList.remove("hidden");
-}
-
-function topicCanvasSplit(ctx, panel, outline) {
-  const key = `ark.topicSplit.v1:${ctx.S.project?.path || "default"}`;
-  let ratio = null;
-  try {
-    const saved = Number(localStorage.getItem(key));
-    if (saved >= .2 && saved <= .8) ratio = saved;
-  } catch { /* storage unavailable */ }
-  const handle = h("div", { class: "topic-split-resize", role: "separator", tabindex: 0,
-    "aria-orientation": "vertical", "aria-label": t("topic.resize_outline"),
-    "aria-valuemin": "20", "aria-valuemax": "80", "aria-valuenow": String(Math.round((ratio ?? .65) * 100)) });
-  const wrap = h("div", { class: "topic-split" }, panel, handle, outline);
-  const apply = (value, save = false) => {
-    const width = wrap.clientWidth - handle.offsetWidth;
-    const min = width > 460 ? Math.max(.2, 240 / width) : .2;
-    const max = width > 460 ? Math.min(.8, 1 - 220 / width) : .8;
-    ratio = Math.max(min, Math.min(max, value));
-    wrap.style.setProperty("--topic-graph-width", `${ratio}fr`);
-    wrap.style.setProperty("--topic-outline-width", `${1 - ratio}fr`);
-    handle.setAttribute("aria-valuenow", String(Math.round(ratio * 100)));
-    if (save) try { localStorage.setItem(key, String(ratio)); } catch { /* storage unavailable */ }
-  };
-  if (ratio != null) apply(ratio);
-  let drag = null;
-  handle.addEventListener("pointerdown", event => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    const width = wrap.clientWidth - handle.offsetWidth;
-    drag = { id: event.pointerId, x: event.clientX, width, graph: panel.getBoundingClientRect().width };
-    handle.setPointerCapture(event.pointerId);
-    handle.focus();
-  });
-  handle.addEventListener("pointermove", event => {
-    if (drag?.id !== event.pointerId) return;
-    apply((drag.graph + event.clientX - drag.x) / Math.max(1, drag.width));
-  });
-  const finish = event => {
-    if (drag?.id !== event.pointerId) return;
-    drag = null;
-    if (ratio != null) apply(ratio, true);
-  };
-  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) handle.addEventListener(name, finish);
-  handle.addEventListener("keydown", event => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const current = panel.getBoundingClientRect().width / Math.max(1, wrap.clientWidth - handle.offsetWidth);
-    apply(event.key === "Home" ? .2 : event.key === "End" ? .8 : current + (event.key === "ArrowLeft" ? -.025 : .025), true);
-  });
-  handle.addEventListener("dblclick", () => {
-    ratio = null;
-    wrap.style.removeProperty("--topic-graph-width");
-    wrap.style.removeProperty("--topic-outline-width");
-    handle.setAttribute("aria-valuenow", "65");
-    try { localStorage.removeItem(key); } catch { /* storage unavailable */ }
-  });
-  return attachGraphHeight(wrap, ctx, ".topic-canvas");
 }
 
 // The introduction stays short above the canvas; long ones fold open.
@@ -583,8 +564,16 @@ function topicBody(body) {
   return wrap;
 }
 
-function memberMenu(ctx, state, nodes, node, design, baseExtras) {
+function memberMenu(ctx, state, nodes, node, design, baseExtras, lineTag = "") {
   const items = [];
+  if (lineTag) {
+    items.push({
+      label: t("branch.remove_from"), icon: "x",
+      onClick: async () => {
+        if (await design({ remove: nodes.map((item) => item.id) })) ctx.toast(t("branch.removed_n", { n: nodes.length, tag: lineTag }), "ok");
+      },
+    });
+  }
   if (nodes.length === 1) {
     items.push({
       label: t("topic.add_linked"), icon: "link",
@@ -604,6 +593,31 @@ function memberMenu(ctx, state, nodes, node, design, baseExtras) {
     });
   }
   return [...items, ...(baseExtras?.(nodes, node) || [])];
+}
+
+// Line topics: adding a node gives it the line's tag, removing takes the tag
+// away (POST /api/units/batch); the nodes themselves stay.
+async function editLine(tag, body) {
+  const ids = (list) => [...new Set((list || []).map((item) => (item && typeof item === "object" ? item.unit : item)).filter((id) => id != null))];
+  const add = [...ids(body.add), ...ids(body.restore)];
+  const remove = ids(body.remove);
+  if (add.length) await api.batchUpdate({ units: add, tags_add: [tag] });
+  if (remove.length) await api.batchUpdate({ units: remove, tags_remove: [tag] });
+}
+
+// "Pin as topic": a stored topic whose rule is the line's tag; it grows with
+// the line and can be edited like any topic.
+async function pinLine(ctx, topic, exact = false) {
+  try {
+    // The rule keeps the lines below it unless "only this line" is on.
+    const created = await api.createUnit({ type: "topic", title: lineLabel(topic.title), status: "open", importance: "p2",
+      design: { rule: exact ? { tags: [topic.uid] } : { tag_trees: [topic.uid] } } });
+    ctx.toast(t("branch.pinned", { title: topic.title }), "ok");
+    await ctx.topicPage?.reload();
+    ctx.openTopic(created.unit.uid);
+  } catch (err) {
+    ctx.toast(err.message, "err");
+  }
 }
 
 function paintLinkFilter(ctx, host, edges, subgraph, design) {
@@ -632,90 +646,6 @@ function paintLinkFilter(ctx, host, edges, subgraph, design) {
     host.append(h("button", { class: "linklike", type: "button", onclick: () => design({ hidden_links: [] }) },
       t("topic.links_show_all", { n: subgraph.hidden_links.length })));
   }
-}
-
-function paintOutline(ctx, host, data, design, allMembers = data.members || []) {
-  clear(host);
-  const members = data.members || [];
-  host.append(h("div", { class: "topic-outline-head" },
-    h("b", null, t("topic.narrative")),
-    h("span", { class: "muted" }, t("topic.narrative_hint"))));
-  if (!members.length) {
-    host.append(h("div", { class: "muted topic-outline-empty" }, t(data.filtered ? "common.no_results" : "topic.no_members")));
-    return;
-  }
-  const act = async (unit, op) => {
-    const body = outlineMove(allMembers, unit.id, op);
-    if (!body) return;
-    await design(body.items.length ? body : { order: body.order });
-    host.querySelector(`.topic-step[data-unit-ref="${CSS.escape(unit.uid)}"]`)?.focus();
-  };
-  const list = h("div", { class: "topic-steps topic-tree", role: "tree" });
-  let dragId = null;
-  const clearMarks = () => list.querySelectorAll(".drop-before, .drop-after, .drop-inside")
-    .forEach((el) => el.classList.remove("drop-before", "drop-after", "drop-inside"));
-  const positionOf = (event, row) => {
-    const rect = row.getBoundingClientRect();
-    return dropPosition((event.clientY - rect.top) / Math.max(1, rect.height));
-  };
-  for (const unit of members) {
-    const m = unit.member || {};
-    const row = h("div", {
-      class: "topic-step topic-node", role: "treeitem", tabindex: 0, draggable: "true",
-      "aria-level": String((m.depth || 0) + 1),
-      dataset: { unitRef: unit.uid, depth: String(m.depth || 0) }, style: { "--depth": String(m.depth || 0) },
-      title: t("topic.outline_keys_hint"),
-      onkeydown: (event) => {
-        if (event.target !== row) return;
-        if (event.key === "Tab") { event.preventDefault(); act(unit, event.shiftKey ? "outdent" : "indent"); }
-        else if (event.altKey && event.key === "ArrowUp") { event.preventDefault(); act(unit, "up"); }
-        else if (event.altKey && event.key === "ArrowDown") { event.preventDefault(); act(unit, "down"); }
-        else if (event.key === "Enter") ctx.openUnit(unit.uid);
-      },
-      ondragstart: (event) => {
-        dragId = unit.id;
-        event.dataTransfer.effectAllowed = "move";
-        event.dataTransfer.setData("text/plain", unit.uid);
-        row.classList.add("dragging");
-      },
-      ondragend: () => { dragId = null; row.classList.remove("dragging"); clearMarks(); },
-      ondragover: (event) => {
-        if (dragId == null || dragId === unit.id) return;
-        const position = positionOf(event, row);
-        if (!outlineDrop(allMembers, dragId, unit.id, position)) { clearMarks(); return; }
-        event.preventDefault();
-        event.dataTransfer.dropEffect = "move";
-        clearMarks();
-        row.classList.add(`drop-${position}`);
-      },
-      ondragleave: (event) => { if (!row.contains(event.relatedTarget)) row.classList.remove("drop-before", "drop-after", "drop-inside"); },
-      ondrop: async (event) => {
-        event.preventDefault();
-        const body = dragId == null ? null : outlineDrop(allMembers, dragId, unit.id, positionOf(event, row));
-        const moved = members.find((other) => other.id === dragId);
-        clearMarks();
-        dragId = null;
-        if (!body) return;
-        await design(body);
-        if (moved) host.querySelector(`.topic-step[data-unit-ref="${CSS.escape(moved.uid)}"]`)?.focus();
-      },
-    },
-      h("span", { class: "topic-step-grip", "aria-hidden": "true" }, "⋮⋮"),
-      h("span", { class: `topic-step-no ${m.source === "rule" ? "rule" : ""}`.trim(),
-        title: m.source === "rule" ? t("topic.from_rule") : t("topic.manual") }, m.path || String(m.step || "")),
-      h("div", { class: "topic-step-body" },
-        h("button", { class: "topic-step-title linklike", type: "button", onclick: () => ctx.openUnit(unit.uid) },
-          h("i", { class: "topic-pick-dot", style: { background: typeColor(unit.type) } }), unit.title),
-        h("div", { class: "topic-step-meta" },
-          h("span", { class: "uid" }, unit.uid), h("span", null, typeLabel(unit.type)), h("span", null, statusLabel(unit.status)),
-          m.parent_source === "link" ? h("span", { class: "muted", title: t("topic.parent_link_hint") }, t("topic.parent_link")) : null,
-          unit.type === "topic" ? h("button", { class: "linklike", type: "button", onclick: () => drillInto(ctx, data.topic, unit) }, t("topic.open")) : null),
-      ),
-      h("button", { class: "icon-btn topic-step-remove", type: "button", title: t("topic.remove_from"),
-        onclick: () => design({ remove: [unit.id] }) }, icon("x", "sm")));
-    list.append(row);
-  }
-  host.append(list);
 }
 
 // ------------------------------------------------------------------ timeline
@@ -809,7 +739,7 @@ function sectionBody(unit) {
   return parts;
 }
 
-function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.members || [] }) {
+function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.members || [], onSelect = null }) {
   clear(host);
   const members = data.members || [];
   const uid = data.topic.uid;
@@ -821,7 +751,15 @@ function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.membe
   let showBody = outlineBodyVisible();
   let showInfo = outlineInfoVisible();
   let focusId = members[0].id;
+  let lastToggle = null;
   const sections = new Map();
+  const canFold = (id) => foldable(allMembers).has(id);
+  // Links, chips and controls inside a heading keep their own clicks.
+  const ownClick = (event) => Boolean(event.target.closest?.("a, button, input, select, textarea, .chip, .tag"));
+  const select = (id, { notify = true } = {}) => {
+    for (const [other, item] of sections) item.head.classList.toggle("selected", other === id);
+    if (notify) onSelect?.(sections.get(id)?.unit.uid || "");
+  };
   const doc = h("article", { class: "topic-article", "aria-label": topicTitle(data.topic) });
   const stack = [{ depth: -1, el: doc }];
   for (const unit of members) {
@@ -832,15 +770,36 @@ function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.membe
     const info = h("div", { class: "topic-art-info", hidden: !showInfo });
     const body = h("div", { class: "topic-art-detail", hidden: !showBody });
     const children = h("div", { class: "topic-art-children" });
+    // Click toggles the fold at once (a row with nothing to fold is only
+    // selected); double-click opens Node details instead of the Editor and
+    // undoes the fold its first click made.  Enter: details, Space / ← / →:
+    // fold, Alt+Enter and the menu still open the Editor.
     const head = h("div", {
-      class: "topic-art-head", tabindex: 0, role: "button",
+      class: "topic-art-head", tabindex: 0, role: "button", title: t("topic.art_head_hint"),
       onclick: (event) => {
-        if (event.target.closest("a,button:not(.topic-art-head)")) return;
+        if (ownClick(event)) return;
         focusId = unit.id;
-        run({ cmd: "toggle" });
+        select(unit.id);
+        if (event.detail > 1) return; // the second click of a double click
+        if (canFold(unit.id)) { run({ cmd: "toggle" }); lastToggle = { id: unit.id, at: Date.now() }; }
+      },
+      ondblclick: (event) => {
+        if (ownClick(event)) return;
+        event.stopPropagation(); // not the global double-click-to-Editor
+        event.preventDefault();
+        window.getSelection?.()?.removeAllRanges?.();
+        focusId = unit.id;
+        if (lastToggle?.id === unit.id && Date.now() - lastToggle.at < 1000) run({ cmd: "toggle" });
+        lastToggle = null;
+        ctx.openUnit(unit.uid, { x: event.clientX, y: event.clientY });
       },
       onkeydown: (event) => {
-        if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusId = unit.id; run({ cmd: "toggle" }); }
+        if (event.target !== head || event.ctrlKey || event.metaKey || event.altKey) return;
+        focusId = unit.id;
+        if (event.key === "Enter") { event.preventDefault(); select(unit.id); ctx.openUnit(unit.uid); }
+        else if (event.key === " ") { event.preventDefault(); select(unit.id); run({ cmd: "toggle" }); }
+        else if (event.key === "ArrowLeft") { event.preventDefault(); run({ cmd: "fold" }); }
+        else if (event.key === "ArrowRight") { event.preventDefault(); run({ cmd: "unfold" }); }
       },
       onfocus: () => { focusId = unit.id; },
     },
@@ -921,23 +880,22 @@ function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.membe
   }
 
   function run(command) {
-    const all = new Set(foldable(allMembers));
-    if (command.cmd === "unfoldAll") folded = new Set();
-    else if (command.cmd === "foldAll") folded = all;
-    else if (command.cmd === "foldLevel") folded = foldLevel(members, folded, command.level);
-    else if (command.cmd === "showLevel") {
-      // Toolbar: everything above level N open, level N and deeper folded.
-      folded = new Set(members.filter((unit) => (unit.member?.depth || 0) >= command.level - 1 && all.has(unit.id)).map((unit) => unit.id));
-    } else if (command.cmd === "foldRecursive") for (const id of subtreeIds(members, focusId)) folded.add(id);
-    else if (command.cmd === "unfoldRecursive") for (const id of subtreeIds(members, focusId)) folded.delete(id);
-    else if (command.cmd === "fold") folded.add(focusId);
-    else if (command.cmd === "unfold") folded.delete(focusId);
-    else if (command.cmd === "toggle") {
-      if (folded.has(focusId)) folded.delete(focusId); else folded.add(focusId);
-    }
-    folded = new Set([...folded].filter((id) => all.has(id)));
+    folded = foldCommand(outlineRows(members), folded, command, { foldable: foldable(allMembers), focus: focusId });
     apply();
   }
+
+  // The explorer's outline asks for a section: unfold the way to it, select it.
+  doc.addEventListener("topic-reveal", (event) => {
+    const id = [...sections].find(([, item]) => item.section === event.target)?.[0];
+    if (id == null) return;
+    const up = ancestorKeys(outlineRows(members), id);
+    if (up.some((key) => folded.has(key))) {
+      for (const key of up) folded.delete(key);
+      apply();
+    }
+    focusId = id;
+    select(id, { notify: false });
+  });
 
   let armed = null;
   const typing = (target) => target?.closest?.("input, textarea, select, [contenteditable=''], [contenteditable='true'], .cm-editor");

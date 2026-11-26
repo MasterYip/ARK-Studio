@@ -48,6 +48,16 @@ func TestTaskChosenContinuesWithSendBacks(t *testing.T) {
 	has(t, Compose(Facts{Setup: ready, Task: task}), ModeContinue, "waiting for my review")
 }
 
+// A send-back is why the task came back: the Start section keeps it whole.
+func TestLongSendBackIsNotCut(t *testing.T) {
+	body := strings.Repeat("Redo the colour grade of shot 3. ", 600) + "\nSecond paragraph.\r\nLast line <END>"
+	task := &Task{UID: "T-0042", Title: "Render", Status: "active",
+		Open: []Comment{{ID: 127, Kind: "sent_back", Author: "MasterYip", Body: body}}}
+	s := Compose(Facts{Setup: ready, Task: task})
+	has(t, s, ModeContinue, strings.TrimSpace(strings.Repeat("Redo the colour grade of shot 3. ", 600)),
+		"\n  Second paragraph.\n  Last line <END>")
+}
+
 func TestResume(t *testing.T) {
 	f := Facts{Setup: Setup{Known: true, ProjectState: "unset"}, Resume: &Resume{Turn: 3, Status: "stopped", Notice: "context limit"},
 		Task:   &Task{UID: "T-0007", Title: "Draft", Status: "active", LastProgress: "2026-11-24 09:00 UTC · wrote section 2"},

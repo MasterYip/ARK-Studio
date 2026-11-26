@@ -157,17 +157,25 @@ func watchLabel(o *watchOptions) string {
 // queueCodex wakes the Codex session with the news.
 func queueCodex(o *watchOptions, head string, items []json.RawMessage, project string) error {
 	var lines []string
+	exact := len(items) > 0 // every update was routed to this agent (it wrote the unit)
 	for i, raw := range items {
-		if i == 10 {
-			break
-		}
 		var it watchItem
-		if json.Unmarshal(raw, &it) == nil && it.Summary != "" {
-			lines = append(lines, "- "+oneLine(it.Summary))
+		if json.Unmarshal(raw, &it) != nil {
+			exact = false
+			continue
+		}
+		exact = exact && it.Audience == "session"
+		if i < 10 && it.Summary != "" {
+			lines = append(lines, "- "+oneLine(it.Summary)+it.why())
 		}
 	}
-	msg := head + "\n" + strings.Join(lines, "\n") + "\nThis message comes from the ARK watcher you started for this project. " +
-		"If you are not working on ARK project " + project + ", ignore it. Otherwise act on the updates under the core rules " +
+	msg := head + "\n" + strings.Join(lines, "\n") + "\nThis message comes from the ARK watcher you started for this project. "
+	if !exact {
+		msg += "If you are not working on ARK project " + project + ", ignore it. Otherwise act"
+	} else {
+		msg += "Act"
+	}
+	msg += " on the updates under the core rules " +
 		"(GET /api/agent/v1/units/<ID>/comments for the full comments, reply with reply_to, resolve), then start the ARK watcher again."
 	return exec.Command(o.codex, "queue", "--thread", o.CodexThread, "--message", msg).Run()
 }

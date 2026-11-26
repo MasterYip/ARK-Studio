@@ -12,10 +12,13 @@ package server
 
 import (
 	"strings"
+	"time"
 
+	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
 	"arkstudio/go/internal/org"
 	"arkstudio/go/internal/sessions"
+	"arkstudio/go/internal/store"
 )
 
 // SessionHeader names the ARK session an agent request comes from.
@@ -64,4 +67,52 @@ func (c *reqCtx) resolveAgentSession() (string, string) {
 		return "", ""
 	}
 	return id, "header"
+}
+
+// AgentSessionHeader is the agent's own session id when it runs outside ARK
+// (a Claude Code or Codex session; the CLI helpers send ARK_AGENT_SESSION).
+// It tells two agents with the same token on one device apart.
+const AgentSessionHeader = "X-ARK-Agent-Session"
+
+var reAgentSessionID = pyRe(`^[A-Za-z0-9][A-Za-z0-9._:-]{0,99}$`, false)
+
+// agentWriter is who the request writes as besides its ARK session: the
+// personal token, the device and the agent's own session id.
+func (c *reqCtx) agentWriter() store.ActivityAgent {
+	var w store.ActivityAgent
+	if c.token != nil {
+		w.Token = strOrEmptyAny(c.token.row.Get("id"))
+	}
+	if h := pytext.Strip(c.header("X-ARK-Host")); reAgentSessionID.MatchString(h) {
+		w.Host = h
+	}
+	if s := pytext.Strip(c.header(AgentSessionHeader)); reAgentSessionID.MatchString(s) {
+		w.AgentSession = s
+	}
+	return w
+}
+
+// agentSelf is the request's writer identity, as agent writes record it.
+func (c *reqCtx) agentSelf() store.Writer {
+	id, _ := c.agentSessionLink()
+	w := c.agentWriter()
+	return store.Writer{Session: id, AgentSession: w.AgentSession, Token: w.Token, Host: w.Host}
+}
+
+// sessionWakeable reports whether ARK can still wake an ARK session: it
+// exists, nobody closed it, and it runs or finished recently and can be
+// resumed (as the session nudger sees it).
+func (a *App) sessionWakeable(id string) bool {
+	if a.Sessions == nil {
+		return false
+	}
+	s, err := a.Sessions.Get(id)
+	if err != nil || a.Sessions.NudgeExcluded(s) {
+		return false
+	}
+	if a.Sessions.IsActive(s) {
+		return true
+	}
+	last, err := time.Parse(time.RFC3339, pyjson.Str(a.Sessions.MetaValue(s, "last_activity_at")))
+	return err == nil && time.Since(last) < nudgeResumeWindow && a.Sessions.Resumable(s)
 }

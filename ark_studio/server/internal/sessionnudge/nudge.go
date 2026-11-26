@@ -231,8 +231,18 @@ func Compose(s Session, projectName string, items []*pyjson.Object, notices []No
 	if projectName != "" {
 		project = projectName + " (" + s.ProjectID + ")"
 	}
+	// exact: every update was routed to this session (agentwatch routing:
+	// it wrote the unit or the comment); otherwise some went to the whole
+	// project because no writer of the unit could be woken.
+	exact := len(people) > 0
+	for _, it := range people {
+		exact = exact && pyjson.Str(it.Value("audience")) == "session"
+	}
 	var parts []string
-	if len(people) > 0 {
+	switch {
+	case exact:
+		parts = append(parts, fmt.Sprintf("%d new update(s) from people on units this session worked on, while you were idle", len(people)))
+	case len(people) > 0:
 		parts = append(parts, fmt.Sprintf("%d new update(s) from people while you were idle", len(people)))
 	}
 	if len(jobs) > 0 {
@@ -247,7 +257,13 @@ func Compose(s Session, projectName string, items []*pyjson.Object, notices []No
 			fmt.Fprintf(&b, "- and %d more\n", len(people)-maxListed)
 			break
 		}
-		fmt.Fprintf(&b, "- %s\n", pyjson.Str(it.Value("summary")))
+		line := pyjson.Str(it.Value("summary"))
+		if pyjson.Str(it.Value("audience")) == "session" {
+			if why := strValue(it.Value("reason")); why != "" {
+				line += " (" + why + ")"
+			}
+		}
+		fmt.Fprintf(&b, "- %s\n", line)
 	}
 	for i, it := range jobs {
 		if i == maxListed {
@@ -269,9 +285,11 @@ func Compose(s Session, projectName string, items []*pyjson.Object, notices []No
 		writeTail(&b, nt.Tail)
 	}
 	if len(people) > 0 {
-		b.WriteString("Read GET /api/agent/v1/updates, act on them under the core rules (reply with reply_to, resolve, " +
-			"record decisions, set review for what I must look at), then go on. If you already handled them, say so in one line. " +
-			"If you are not working on ARK project " + project + " in this session, ignore this message.")
+		b.WriteString("Read GET /api/agent/v1/updates, act on the items with for_you under the core rules (reply with reply_to, resolve, " +
+			"record decisions, set review for what I must look at), then go on. If you already handled them, say so in one line.")
+		if !exact {
+			b.WriteString(" If you are not working on ARK project " + project + " in this session, ignore this message.")
+		}
 	}
 	if len(jobs)+len(notices) > 0 {
 		if len(people) > 0 {

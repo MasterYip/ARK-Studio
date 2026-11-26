@@ -483,7 +483,8 @@ test("one turn state drives the badge, the indicator, the composer and Stop", ()
   assert.equal(sessionModel.sessionPhase(waiting), "waiting");
   assert.equal(sessionModel.turnRunning(waiting), false);
   assert.equal(sessionModel.liveActivity(items, waiting), null, "no working indicator while it waits");
-  assert.equal(sessionModel.shownStatus(waiting), "idle");
+  assert.equal(sessionModel.shownStatus(waiting), "done", "the main turn ended: done (green), waiting for the person");
+  assert.equal(sessionModel.shownStatus({ ...waiting, turn_end: { outcome: "error", at: "x", reason: "API Error" } }), "errored");
   assert.equal(model.composerAction(waiting), "none", "no Stop button for a turn that is not running");
   assert.equal(model.composerAction(waiting, { hasContent: true }), "steer", "the message goes straight in");
   assert.equal(model.stopLabelKey(waiting), "session.stop_end");
@@ -522,11 +523,11 @@ test("between turns, running sub-agents or background tasks keep the session run
   const listed = waiting({ busy: { subagents: 0, background: 2 } });
   assert.equal(sessionModel.shownStatus(listed), "running");
   assert.deepEqual(JSON.parse(JSON.stringify(sessionModel.busyReason(listed))), [{ key: "session.busy.background_n", n: 2 }]);
-  // Only the ARK watcher runs: idle.  The chip still shows it.
+  // Only the ARK watcher runs: done.  The chip still shows it.
   activity = activityModel.sessionActivity([bash("w", "powershell -NoProfile -File ark-watch.ps1")], { session: waiting() });
   assert.equal(activity.runningBackground, 1);
   assert.equal(activity.busyBackground, 0);
-  assert.equal(sessionModel.shownStatus(waiting(), activity), "idle");
+  assert.equal(sessionModel.shownStatus(waiting(), activity), "done");
   assert.deepEqual(sessionModel.busyReason(waiting(), activity).length, 0);
   assert.equal(model.stopBackgroundMode(waiting(), sessionModel.busyWork(waiting(), activity)), false);
   // A background command and the watcher: one background task.

@@ -55,3 +55,52 @@ export function gpuOwnership(gpu, processes, jobs, { processUtilAvailable = fals
     totalMemPct: total ? clampPct(used / total * 100) : 0,
   };
 }
+
+// ---------------------------------------------------------------- occupied-only
+// "Occupied" = a server where at least one GPU has a process of this project's
+// running job: exactly the cards that carry the blue highlight (gpuOwnership
+// above, same probe and job data; no extra probe).
+
+const ACTIVE_JOB = ["starting", "running"];
+
+/** True when one of `jobs` (this project's) owns a process on any GPU of the server. */
+export function serverOccupied(server, jobs) {
+  const system = server?.system || {};
+  const mine = (jobs || []).filter((job) => ACTIVE_JOB.includes(job.status) && job.server === server?.server);
+  if (!mine.length) return false;
+  return (server?.gpus || []).some((gpu) => gpuOwnership(gpu, system.processes || [], mine).jobs.length > 0);
+}
+
+/**
+ * The cards to draw.  Off: every server in probe order.  On: only occupied
+ * servers, occupied first, probe order kept among them.  `count` feeds the
+ * toggle label; `empty` asks for the "not using any server" line.
+ */
+export function occupiedView(servers, jobs, occupiedOnly = false) {
+  const list = (servers || []).map((server) => ({ server, occupied: serverOccupied(server, jobs) }));
+  const count = list.filter((item) => item.occupied).length;
+  const ordered = occupiedOnly
+    ? [...list.filter((item) => item.occupied), ...list.filter((item) => !item.occupied)]
+    : list;
+  const shown = occupiedOnly ? ordered.filter((item) => item.occupied) : ordered;
+  return { shown, count, empty: Boolean(occupiedOnly && list.length && !shown.length) };
+}
+
+// The toggle is remembered per account and project on this browser.
+export const OCCUPIED_PREFIX = "ark.gpuOccupiedOnly.v1";
+
+export function occupiedKey(user = "", projectId = "") {
+  const part = (value) => encodeURIComponent(String(value || "_")).replaceAll(".", "%2E");
+  return `${OCCUPIED_PREFIX}.${part(user)}.${part(projectId)}`;
+}
+
+export function loadOccupiedOnly(storage, user, projectId) {
+  try { return storage?.getItem(occupiedKey(user, projectId)) === "1"; } catch { return false; }
+}
+
+export function saveOccupiedOnly(storage, user, projectId, on) {
+  try {
+    if (on) storage?.setItem(occupiedKey(user, projectId), "1");
+    else storage?.removeItem(occupiedKey(user, projectId));
+  } catch { /* storage full or disabled */ }
+}

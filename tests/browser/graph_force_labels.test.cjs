@@ -15,7 +15,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { /* Optional browser dependency. */ }
 
 test('Force labels are centred, wrap the same in every state and never overlap', { skip: !chromium, timeout: 240000 }, async () => {
-  const web = path.resolve(__dirname, '../../web');
+  const web = path.resolve(__dirname, '../../ark_studio/web');
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname === '/') {

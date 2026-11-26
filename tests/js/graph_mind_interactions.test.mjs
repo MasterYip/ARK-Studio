@@ -34,6 +34,11 @@ async function fixture(layout = "mind") {
     "./locate-map-model.js": { locateCamera(node, zoom) { return { zoom, pan: { x: -node.x * zoom, y: -node.y * zoom } }; } },
     "./presence-ui.js": { attachPresenceOverlay: () => null, createPresenceChip: () => ({ el: null, destroy() {} }) },
     "./read-edit-mode.js": { rememberMode() {}, savedMode: () => "read" },
+    "./users.js": { currentUsername: () => "" },
+    "./components.js": { toast() {} },
+    "./graph3d-model.js": {
+      loadViewChoice: () => "2d", saveViewChoice() {}, loadGraph3DSettings: () => ({}), saveGraph3DSettings() {}, graph3DAvailable: () => false,
+    },
   };
   const i18n = new vm.SyntheticModule(Object.keys(imports["./i18n.js"]), function () {
     for (const [name, value] of Object.entries(imports["./i18n.js"])) this.setExport(name, value);

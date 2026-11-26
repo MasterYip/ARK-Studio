@@ -58,3 +58,13 @@ test("keyboard selection skips non-selectable rows and clamps", () => {
   assert.equal(m.moveSelection(rows, 0, -1), 0);
   assert.equal(m.moveSelection([], 0, 1), -1);
 });
+
+test("reveal in explorer: folders to expand and the row to highlight", () => {
+  assert.deepEqual(m.revealPlan("docs/guide/intro.md"), { dirs: ["docs", "docs/guide"], target: "docs/guide/intro.md" });
+  assert.deepEqual(m.revealPlan("README.md"), { dirs: [], target: "README.md" });
+  assert.deepEqual(m.revealPlan("docs\\guide\\"), { dirs: ["docs"], target: "docs/guide" });
+  // A breadcrumb folder: that folder opens too.
+  assert.deepEqual(m.revealPlan("docs/guide", { folder: true }), { dirs: ["docs", "docs/guide"], target: "docs/guide" });
+  assert.deepEqual(m.revealPlan("./a/./b.txt"), { dirs: ["a"], target: "a/b.txt" });
+  assert.deepEqual(m.revealPlan(""), { dirs: [], target: "" });
+});

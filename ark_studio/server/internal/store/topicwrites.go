@@ -215,7 +215,7 @@ func cleanRule(rule any) (*pyjson.Object, error) {
 	if q != "" {
 		clean.Set("q", q)
 	}
-	for _, key := range []string{"types", "statuses", "importance", "tags", "tags_unset", "origins", "assignees"} {
+	for _, key := range []string{"types", "statuses", "importance", "tags", "tags_unset", "origins", "assignees", "tag_trees"} {
 		values, err := words(key)
 		if err != nil {
 			return nil, err

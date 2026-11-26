@@ -25,6 +25,7 @@ package server
 
 import (
 	"fmt"
+	"os"
 	"strings"
 	"unicode/utf8"
 
@@ -32,6 +33,7 @@ import (
 	"arkstudio/go/internal/compat/pytext"
 	"arkstudio/go/internal/platform/clock"
 	"arkstudio/go/internal/project"
+	"arkstudio/go/internal/sessionstart"
 	"arkstudio/go/internal/setup"
 	"arkstudio/go/internal/store"
 )
@@ -62,6 +64,30 @@ func (c *reqCtx) setupPathsGet() error {
 	setup.Unlock()
 	if err != nil {
 		return setupAPIErr(err)
+	}
+	// The places this device may write to, and the exact task folder of the
+	// unit asked about (?unit=) or of the ARK session the request comes from.
+	out.Set("writable", setup.WritableRoots(out))
+	unit := strings.TrimSpace(c.query.First("unit", ""))
+	var f *sessionstart.Folder
+	if unit != "" {
+		f = c.taskFolderFacts(p, out, unit, v.HostID == setup.MachineFingerprint())
+		// Asked for a unit on this machine: the folder is made now, so the
+		// agent has its registered place from the first file.
+		if f.Path != "" && !f.Exists && v.HostID == setup.MachineFingerprint() && f.TaskSpace != "" {
+			if st, err := os.Stat(f.TaskSpace); err == nil && st.IsDir() && os.MkdirAll(f.Path, 0o755) == nil {
+				f.Exists = true
+			}
+		}
+	} else {
+		f = c.sessionFolderOfRequest(p, out, v)
+	}
+	if f != nil {
+		base, _ := out.Value("task_folder").(*pyjson.Object)
+		out.Set("task_folder", taskFolderObject(base, f))
+		if f.Path != "" {
+			out.Set("next", "write this work's files only in task_folder.path ("+f.Path+"); write its absolute path and this device in ARK")
+		}
 	}
 	c.ok(out)
 	return nil
@@ -124,6 +150,16 @@ func (c *reqCtx) taskSpaceDecision(p *project.Project, env *setup.Env, v *setup.
 	}
 	if err := setup.CheckTaskSpaceOptions(options, rec); err != nil {
 		return setupAPIErr(err)
+	}
+	// A task space is kept: never the OS temp dir or an ARK session folder.
+	sessRoot := ""
+	if c.app.Sessions != nil {
+		sessRoot = c.app.Sessions.Root
+	}
+	for i, o := range options {
+		if why := setup.ScratchPlace(o.Path, sessRoot); why != "" {
+			return apiErr(400, fmt.Sprintf("options[%d] (%s) cannot be a task space: %s; offer a kept folder", i, o.Path, why), "SETUP_INVALID")
+		}
 	}
 	key, need, err := env.TaskSpaceDecisionTarget(v)
 	if err != nil {

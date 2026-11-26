@@ -54,6 +54,15 @@ type Viewer struct {
 	Session    string          // the ARK session asking (the session nudger), "" for an agent token
 	Mine       bool            // only units the agent or its user created or is assigned to
 	Kinds      map[string]bool // nil = every kind
+	// Self is who asks, as agent writes record their writer (routing.go):
+	// the ARK session, the agent's own session id, the token and the device.
+	Self store.Writer
+	// SessionAlive reports whether an ARK session can still be woken; an
+	// update on a unit whose owner sessions all ended goes to the project
+	// again.  nil = every session counts.
+	SessionAlive func(id string) bool
+	// ForYou keeps only the items meant for this viewer (for_you).
+	ForYou bool
 }
 
 // ParseKinds parses ?kinds=a,b (empty = nil, every kind).
@@ -204,6 +213,9 @@ func Items(rows []store.UpdateRow, v Viewer, messages map[int64]*pyjson.Object) 
 			if v.Kinds != nil && !v.Kinds[pyjson.Str(it.Value("kind"))] {
 				continue
 			}
+			if v.annotate(r, it); v.ForYou && it.Value("for_you") != true {
+				continue
+			}
 			out = append(out, it)
 		}
 	}
@@ -240,7 +252,9 @@ func (v Viewer) classify(r store.UpdateRow, messages map[int64]*pyjson.Object, a
 	if r.UnitID != 0 && r.UID == "" {
 		return nil // the unit is gone (purged)
 	}
-	mine := v.mine(r)
+	// The viewer's units: its user's (mine) or ones it wrote itself (owned,
+	// routing.go), which may belong to another account's agents.
+	mine := v.mine(r) || v.owns(r)
 	if v.Mine && !mine && !strings.HasPrefix(r.Action, "setup.") {
 		return nil
 	}

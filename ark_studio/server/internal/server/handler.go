@@ -102,6 +102,7 @@ func (a *App) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		// Agent writes move the agent's presence cursor (routes_presence.go, Go only).
 		c.ctx = store.WithActivityObserver(c.ctx, c.observeActivity)
 		c.ctx = store.WithActivitySession(c.ctx, c.agentSessionLink)
+		c.ctx = store.WithActivityAgent(c.ctx, c.agentWriter) // agent_session.go: routes answers back (agentwatch)
 	}
 	if replayClockOn {
 		clock.SetReplay(nil)

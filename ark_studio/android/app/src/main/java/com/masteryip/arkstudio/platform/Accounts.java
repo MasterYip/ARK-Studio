@@ -3,10 +3,12 @@ package com.masteryip.arkstudio.platform;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.os.Build;
+import android.provider.Settings;
 import android.webkit.CookieManager;
 
 import com.masteryip.arkstudio.api.ArkClient;
 import com.masteryip.arkstudio.data.AccountSession;
+import com.masteryip.arkstudio.data.DeviceId;
 import com.masteryip.arkstudio.data.PairingLink;
 import com.masteryip.arkstudio.data.ServerEntry;
 import com.masteryip.arkstudio.data.ServerIdentity;
@@ -15,6 +17,7 @@ import com.masteryip.arkstudio.data.ServerUrl;
 import com.masteryip.arkstudio.data.SessionVault;
 
 import java.net.URI;
+import java.util.UUID;
 
 /**
  * Saved servers plus the signed-in device session of each.
@@ -33,12 +36,50 @@ public final class Accounts {
     private static final String KEY_APP_MODE = "app_mode";
     public static final String MODE_WEB = "web";
     public static final String MODE_NATIVE = "native";
+    private static final String KEY_INSTALL_ID = "install_id";
+    private static volatile String deviceId;
 
     private Accounts() {
     }
 
     private static SharedPreferences prefs(Context c) {
-        return c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        SharedPreferences prefs = c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+        if (deviceId == null) deviceId(c, prefs);
+        return prefs;
+    }
+
+    /**
+     * This phone's hashed device id ({@link DeviceId}): ARK keeps one device
+     * per phone across sign-ins. The native screens send it as a header, the
+     * WebView as the {@code ark_device} cookie, so both modes are one device.
+     * Falls back to a random install id when ANDROID_ID is unusable.
+     */
+    public static String deviceId(Context c) {
+        String known = deviceId;
+        return known != null ? known
+                : deviceId(c, c.getApplicationContext().getSharedPreferences(PREFS, Context.MODE_PRIVATE));
+    }
+
+    private static synchronized String deviceId(Context c, SharedPreferences prefs) {
+        if (deviceId != null) return deviceId;
+        String raw = null;
+        try {
+            raw = Settings.Secure.getString(c.getApplicationContext().getContentResolver(),
+                    Settings.Secure.ANDROID_ID);
+        } catch (RuntimeException unavailable) {
+            // fall back to the install id
+        }
+        if (!DeviceId.usable(raw)) {
+            raw = prefs.getString(KEY_INSTALL_ID, null);
+            if (raw == null) {
+                raw = "install-" + UUID.randomUUID();
+                prefs.edit().putString(KEY_INSTALL_ID, raw).apply();
+            }
+        }
+        String id = DeviceId.hash(raw);
+        ArkClient.setDeviceId(id);
+        deviceId = id;
+        return id;
     }
 
     public static ServerStore servers(Context c) {
@@ -175,6 +216,13 @@ public final class Accounts {
                     .append("; HttpOnly; SameSite=Lax; Max-Age=31536000");
             if (PairingLink.isHttps(session.serverUrl)) value.append("; Secure");
             cookies.setCookie(session.serverUrl, value.toString());
+            String device = ArkClient.deviceId();
+            if (!device.isEmpty()) {
+                // Not HttpOnly: the web app reads it, so the WebView is this device too.
+                cookies.setCookie(session.serverUrl, "ark_device=" + device
+                        + "; Path=/; SameSite=Lax; Max-Age=315360000"
+                        + (PairingLink.isHttps(session.serverUrl) ? "; Secure" : ""));
+            }
             cookies.flush();
         } catch (RuntimeException noWebView) {
             // WebView provider missing/updating: the native screens still work.

@@ -10,8 +10,8 @@ import { mediaSource, mediaPreviewable } from "./editor-media.js";
 import { draftFromUnit, mediaKinds } from "./node-model.js";
 import { assigneePicker, assigneeLabel } from "./assignee.js";
 import { commentsSection } from "./comments.js";
-import { NEEDS_CHANGED, acceptUnit, reviewPanel, sendBackUnit, markNeedsSeen } from "./needs-ui.js";
-import { markAssignedRead, needsUnitKey } from "./needs-model.js";
+import { NEEDS_CHANGED, acceptUnit, reviewPanel, sendBackUnit, markNeedsSeen, markOpened } from "./needs-ui.js";
+import { markAssignedRead, needsUnitKey, openedKeys } from "./needs-model.js";
 import { canDecideReview } from "./review-model.js";
 import { openNodeHistory } from "./node-history.js";
 import { openContextMenu } from "./context-menu.js";
@@ -123,8 +123,11 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
   ctx.S.selectedId = unit.id;
   ctx.S.detail = unit;
   ctx.S.drawerOpen = true;
+  // Opened in the node details: the only thing that makes a Needs you item seen.
+  const opened = openedKeys(unit, ctx.S.needsYou || []);
   const seenKey = needsUnitKey(unit, ctx.S.needsAssigned);
-  if (seenKey) markNeedsSeen(ctx, { items: [seenKey] });
+  if (opened.length) markOpened(ctx, opened);
+  else if (seenKey) markNeedsSeen(ctx, { items: [seenKey] });
   // Opening an assigned unit reads its notice (the server does the same).
   const assigned = markAssignedRead(ctx.S.needsAssigned || [], unit.uid);
   if (assigned !== ctx.S.needsAssigned && JSON.stringify(assigned) !== JSON.stringify(ctx.S.needsAssigned || [])) {

@@ -6,16 +6,20 @@
 // virtualised list (only visible rows exist, highlighted on demand).
 // Debounced; a newer query aborts the running one (the server stops too).
 // F4 / Shift+F4 step through results.
+// Replace (files only, people with write access): the toggle left of the box
+// opens the replace field; Replace all and a file's replace button show what
+// would change and ask before anything is written (/api/workspace/replace).
 
 import { h, clear, typeColor } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api } from "./api.js";
+import { openModal, toast } from "./components.js";
 import { isLocateShortcut, locateUnit } from "./locate-map.js";
 import {
   SEARCH_STORE_KEY, normalizeQuery, searchParams, queryError, groupResults, resultSummary,
   resultRows, nextMatch, moveRow, highlightSegments, matchPreview,
-  emptyPayload, applySearchEvent, visibleRange, scrollForRow, SEARCH_ROW_HEIGHT,
+  emptyPayload, applySearchEvent, visibleRange, scrollForRow, SEARCH_ROW_HEIGHT, replaceBody,
 } from "./search-model.js";
 
 const DEBOUNCE = 150;
@@ -25,7 +29,7 @@ function storedQuery() {
   try { return normalizeQuery(JSON.parse(localStorage.getItem(SEARCH_STORE_KEY) || "{}")); } catch { return normalizeQuery({}); }
 }
 
-export function createSearchPanel(ctx) {
+export function createSearchPanel(ctx, { onReplaced = null } = {}) {
   let query = storedQuery();
   let groups = groupResults(null, null);
   let rows = [];
@@ -75,15 +79,48 @@ export function createSearchPanel(ctx) {
       save();
     },
   }, icon("more", "sm"));
+  // Replace: people with write access only.
+  const canReplace = () => ctx.S?.session?.project_permission !== "read";
+  const replaceInput = h("input", {
+    class: "input wb-replace-input", type: "text", placeholder: t("search.replace_placeholder"), "aria-label": t("search.replace_placeholder"),
+    value: query.replace, spellcheck: "false",
+  });
+  const replaceAllBtn = h("button", {
+    class: "icon-btn wb-replace-all", type: "button", title: t("search.replace_all"), "aria-label": t("search.replace_all"),
+    onclick: () => replaceFiles(null),
+  }, icon("check", "sm"));
+  const replaceRow = h("div", { class: "wb-replace-row", hidden: !query.replaceOpen }, replaceInput, replaceAllBtn);
+  const replaceToggle = h("button", {
+    class: "icon-btn wb-replace-toggle", type: "button", title: t("search.toggle_replace"), "aria-label": t("search.toggle_replace"),
+    "aria-expanded": query.replaceOpen ? "true" : "false",
+    onclick: () => {
+      query = { ...query, replaceOpen: !query.replaceOpen };
+      replaceRow.hidden = !query.replaceOpen;
+      replaceToggle.setAttribute("aria-expanded", query.replaceOpen ? "true" : "false");
+      replaceToggle.replaceChildren(icon(query.replaceOpen ? "chevron" : "chevronRight", "sm"));
+      root.classList.toggle("replacing", query.replaceOpen);
+      save();
+      rowCache = new Map();
+      paintRows();
+      if (query.replaceOpen) replaceInput.focus();
+    },
+  }, icon(query.replaceOpen ? "chevron" : "chevronRight", "sm"));
+  replaceInput.addEventListener("input", () => { query = { ...query, replace: replaceInput.value }; save(); });
+  replaceInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && (event.ctrlKey || event.metaKey || event.altKey)) { event.preventDefault(); replaceFiles(null); }
+  });
   const summary = h("div", { class: "wb-search-summary", "aria-live": "polite" });
   const canvas = h("div", { class: "wb-search-canvas" });
   const list = h("div", { class: "wb-search-results", role: "tree", tabindex: "0", "aria-label": t("search.results") }, canvas);
   list.addEventListener("scroll", () => queuePaint(false));
   if (typeof ResizeObserver === "function") new ResizeObserver(() => queuePaint(false)).observe(list);
-  const root = h("div", { class: "wb-search" },
+  const root = h("div", { class: `wb-search ${query.replaceOpen ? "replacing" : ""}`.trim() },
     h("div", { class: "wb-search-box" },
-      h("div", { class: "wb-search-field" }, input,
-        toggle("case", "search.case", "Aa"), toggle("word", "search.word", "ab"), toggle("regex", "search.regex", ".*")), // i18n-ignore: VS Code option glyphs
+      canReplace() ? replaceToggle : null,
+      h("div", { class: "wb-search-fields" },
+        h("div", { class: "wb-search-field" }, input,
+          toggle("case", "search.case", "Aa"), toggle("word", "search.word", "ab"), toggle("regex", "search.regex", ".*")), // i18n-ignore: VS Code option glyphs
+        canReplace() ? replaceRow : null),
       detailsBtn),
     details, summary, list);
 
@@ -282,7 +319,7 @@ export function createSearchPanel(ctx) {
 
   function rowIdentity(row) {
     if (row.type === "group") return `${row.key}|${row.open}|${row.group.count}`;
-    if (row.type === "item") return `${row.key}|${row.open}|${row.item.matches.length}`;
+    if (row.type === "item") return `${row.key}|${row.open}|${row.item.matches.length}|${query.replaceOpen}`;
     return row.key;
   }
 
@@ -303,6 +340,10 @@ export function createSearchPanel(ctx) {
         node ? nodeGlyph(row.item.type) : icon("file", "sm"),
         h("span", { class: "name" }, row.item.title),
         h("span", { class: "dir" }, node ? row.item.uid : row.item.path.split("/").slice(0, -1).join("/")),
+        !node && query.replaceOpen && canReplace() ? h("button", {
+          class: "icon-btn wb-replace-file", type: "button", title: t("search.replace_in_file"), "aria-label": t("search.replace_in_file"),
+          onclick: (event) => { event.stopPropagation(); replaceFiles([row.item.path]); },
+        }, icon("check", "sm")) : null,
         h("span", { class: "count" }, String(row.item.matches.length)));
     } else {
       const node = row.item.kind === "node";
@@ -324,6 +365,67 @@ export function createSearchPanel(ctx) {
       openInEditorTab(rows[Number(el.dataset.row)]);
     });
     return el;
+  }
+
+  // Preview what would change, ask, then write.  `paths`: only these files
+  // (a result's replace button), else every matching file.
+  let replacing = false;
+  async function replaceFiles(paths) {
+    if (replacing || !canReplace()) return;
+    if (!query.q.trim()) { input.focus(); return; }
+    const regexError = queryError(query);
+    if (regexError) { toast(regexError, "err"); return; }
+    replacing = true;
+    replaceAllBtn.disabled = true;
+    try {
+      const preview = await api.workspaceReplace(replaceBody(query));
+      let files = preview.files || [];
+      if (paths) files = files.filter((file) => paths.includes(file.path));
+      if (!files.length) { toast(t("search.replace_nothing")); return; }
+      const count = files.reduce((sum, file) => sum + file.count, 0);
+      if (!(await confirmReplace(files, count, preview))) return;
+      const done = await api.workspaceReplace(replaceBody(query, {
+        apply: true, files: files.map((file) => ({ path: file.path, hash: file.hash })),
+      }));
+      const replaced = done.replaced || [];
+      if (replaced.length) toast(t("search.replace_done", { n: done.total, files: replaced.length }), "ok");
+      for (const item of (done.conflicts || []).slice(0, 3)) toast(`${item.path}: ${item.reason}`, "err");
+      onReplaced?.(replaced.map((item) => item.path));
+      schedule(0);
+    } catch (err) {
+      toast(err.message || String(err), "err");
+    } finally {
+      replacing = false;
+      replaceAllBtn.disabled = false;
+    }
+  }
+
+  function confirmReplace(files, count, preview) {
+    const sampleRow = (sample) => h("div", { class: "wb-replace-sample" },
+      h("span", { class: "ln" }, String(sample.line)),
+      h("div", { class: "wb-replace-lines" },
+        h("del", null, sample.before),
+        h("ins", null, sample.after)));
+    const body = h("div", { class: "wb-replace-preview" },
+      h("p", { class: "wb-replace-lead" }, t("search.replace_confirm", {
+        n: count, files: files.length, from: query.q, to: query.replace || t("search.replace_empty"),
+      })),
+      preview.truncated ? h("p", { class: "warn" }, t("search.replace_truncated")) : null,
+      h("div", { class: "wb-replace-files" }, files.slice(0, 50).map((file) => h("div", { class: "wb-replace-file-item", dataset: { path: file.path } },
+        h("div", { class: "wb-replace-file-head" }, icon("file", "sm"), h("span", { class: "name" }, file.path),
+          h("span", { class: "count" }, String(file.count))),
+        (file.samples || []).map(sampleRow)))),
+      files.length > 50 ? h("p", { class: "muted" }, t("search.replace_more", { n: files.length - 50 })) : null);
+    return new Promise((resolve) => {
+      openModal({
+        title: t("search.replace_title"), body, wide: true,
+        actions: [
+          { label: t("action.cancel"), ghost: true, onClick: () => resolve(false) },
+          { label: t("search.replace_apply", { n: count }), primary: true, onClick: () => resolve(true) },
+        ],
+        onClose: () => resolve(false),
+      });
+    });
   }
 
   // F4 / Shift+F4 (global while the view has results): next/previous result.

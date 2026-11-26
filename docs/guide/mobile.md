@@ -97,7 +97,6 @@ Equivalent environment configuration:
 | `ARK_ALLOWED_HOSTS` | extra Host-header allow-list entries |
 | `ARK_APP_RELEASE_REPO` | GitHub `owner/name` whose latest release provides the Android APK (default `MasterYip/ARK-Studio`; for forks) |
 | `ARK_APP_RELEASE_API` | GitHub API base for that lookup (default `https://api.github.com`; GitHub Enterprise) |
-| `ARK_DOWNLOAD_DIR` | folder with this server's own `ARK-Studio-android.apk`, served instead of the GitHub release (default: `dist/` beside a web root on disk; a binary with the web UI built in has none) |
 
 The equivalent flags are `--auth-user`, `--auth-password`,
 `--auth-password-file`, `--auth-password-hash`, `--auth-session-ttl`,
@@ -714,18 +713,20 @@ by name and caches the answer for an hour; a failed lookup keeps the last good
 answer and is retried after 5 minutes, and with no answer at all the links
 point to the release page. Forks set `ARK_APP_RELEASE_REPO` (and
 `ARK_APP_RELEASE_API` for GitHub Enterprise). The reply also carries the
-release `version`, `release_url` and, per app, `qr_svg` and whether a local
-build exists (`local`, `local_url`).
+release `version`, `release_url` and, per app, `qr_svg` (`local` is always
+false: the APK always comes from GitHub).
 
 The old server paths keep working for older apps and bookmarks:
 `/download/ARK-Studio-android.apk` (aliases `/download/ark.apk` and
-`/download/ARK-Studio-webapp.apk`) serves a build copied to the server's
-`dist/ARK-Studio-android.apk` when there is one, and otherwise redirects (302)
-to the latest release's APK. A release binary has the web UI built in and no
-`dist/` folder beside it; set `ARK_DOWNLOAD_DIR` to the folder holding
-`ARK-Studio-android.apk` so phones that cannot reach GitHub download the APK
-and its updates from the server (`/download/android-apps.json` then reports
-`source: "server"` with the APK's version code).
+`/download/ARK-Studio-webapp.apk`) redirect (302) to the latest release's APK,
+or to the release page when the release cannot be found. The app's update
+check reads `/download/android-apps.json` on its server: `source: "github"`,
+the release asset's URL, size and SHA-256, and the version code and name the
+server reads from the asset (a few range requests in the background, once
+per release; `null` until then, when the app compares the release tag with the one it was built
+from). The app downloads the APK from GitHub, checks the SHA-256 and compares
+the downloaded APK's version code and signature with the installed app
+before installing. A server does not serve APKs itself.
 
 The release is one APK with two modes. Web mode is the default and opens the full
 same-origin WebView workspace. Native mode opens the native Home, Tasks, Runs, GPU,

@@ -11,10 +11,13 @@ import { api } from "../api.js";
 import {
   filterNeeds, needsFacets, needsFilterActive, needsHistoryTags, needsOutcomeTags, needsValueOf, normalizeNeedsFilter,
   pruneSelection, reviewView, selectAll, selectedItems, selectionState, sortMineFirst, splitForReview, unitItems, groupNeeds,
+  groupNeedsTree, itemBranches, treeItems,
 } from "../needs-model.js";
 import {
   NEEDS_CHANGED, applyToEach, closeNeedsFilters, needsEntryCard, needsFilterBar, needsFilterFor, needsProjectKey, saveNeedsFilter,
-  watchNeedsSeen,
+  watchNeedsSeen, branchesData, refreshBranches, storedNeedsLayout, needsLayoutToggle, lineTreeSections,
+  countBubbleEl, needsNewKeys, refreshNeedsNew,
+  lineFoldBar, registerLineTree,
 } from "../needs-ui.js";
 import { currentUsername } from "../users.js";
 import { assigneeChip } from "../assignee.js";
@@ -37,11 +40,12 @@ function draw(host, ctx) {
   if (selection.project !== projectKey) selection = { project: projectKey, uids: new Set() };
   clear(host);
   const all = ctx.S.needsYou || [];
+  if (!needsNewKeys(ctx)) refreshNeedsNew(ctx);
   const tab = (id, label, n) => h("button", {
     class: `seg-btn ${view === id ? "on" : ""}`.trim(), type: "button", dataset: { reviewView: id },
     "aria-pressed": String(view === id),
     onclick: () => { if (view !== id) ctx.navigateWorkspace("research", id === "history" ? "review/history" : "review"); },
-  }, label, n == null ? null : h("span", { class: "review-tab-n" }, String(n)));
+  }, label, n == null ? null : countBubbleEl(ctx, n, all, { cls: "review-tab-n" }));
   const page = h("div", { class: "page review-page", dataset: { view } },
     h("div", { class: "page-head" },
       h("div", null,
@@ -95,11 +99,16 @@ function waitingView(page, ctx, all, projectKey) {
     },
   });
   allBox.indeterminate = state.some;
+  // By line or one list: the same switch and choice as Home's Needs you.
+  const hasLines = sorted.some((item) => itemBranches(item).length);
+  if (hasLines) refreshBranches(ctx);
+  const byLine = hasLines && storedNeedsLayout(ctx) === "branch" && items.some((item) => itemBranches(item).length);
   page.appendChild(h("div", { class: "review-toolbar" },
     h("label", { class: "review-all" }, allBox, h("span", null, t("needs.bulk_all"))),
     h("span", { class: "muted review-shown", dataset: { shown: String(items.length), total: String(sorted.length) } },
       needsFilterActive(filter) ? t("needs.filter.shown", { n: items.length, total: sorted.length }) : t("review.count", { n: items.length })),
-    needsFilterBar(needsFacets(sorted), filter, setFilter)));
+    needsFilterBar(needsFacets(sorted), filter, setFilter, { foldKey: `needs:${projectKey}` }),
+    hasLines ? needsLayoutToggle(ctx, redraw) : null));
   const chosen = selectedItems(selection.uids, units);
   if (chosen.length) page.appendChild(bulkBar(ctx, chosen, redraw));
   if (!items.length) {
@@ -108,23 +117,55 @@ function waitingView(page, ctx, all, projectKey) {
         onclick: () => { closeNeedsFilters(); setFilter(normalizeNeedsFilter({})); } }, t("filters.clear"))));
     return;
   }
+  const select = {
+    has: (uid) => selection.uids.has(uid),
+    onChange: (uids, on) => {
+      for (const uid of uids) if (on) selection.uids.add(uid); else selection.uids.delete(uid);
+      redraw();
+      // The page is redrawn: keep focus on the box that was toggled.
+      document.querySelector(`.review-list .needs-row[data-unit-ref="${CSS.escape(uids[0])}"] .needs-select`)?.focus();
+    },
+  };
+  if (byLine) {
+    // A tree of lines (needs-model.js groupNeedsTree, as on Home):
+    // stalled lines first, "No line" last; an item on two lines shows once.
+    const wrap = h("div", { class: "needs-branches review-list review-branches" });
+    page.appendChild(wrap);
+    stopRows?.();
+    stopRows = null;
+    const all = [];
+    const tree = groupNeedsTree(items, branchesData(ctx)?.items || []);
+    const cards = (section) => {
+      const entries = groupNeeds(section.items);
+      all.push(...entries);
+      return h("div", { class: "needs-list" }, entries.map((entry) => needsEntryCard(ctx, entry, {
+        select, ...(entry.kind === "item" ? { lines: section.extra[entry.item.uid] || [], plus: true } : {}),
+      })));
+    };
+    // A group's box selects its units and those of the lines below it.
+    const headExtra = (node, head) => {
+      const groupUnits = unitItems(treeItems(node));
+      const groupState = selectionState(selection.uids, groupUnits);
+      const groupBox = h("input", {
+        type: "checkbox", class: "review-select-group", checked: groupState.all, disabled: !groupUnits.length,
+        "aria-label": t("review.select_group", { name: node.name || t("needs.branch.none") }),
+        onchange: (event) => { selection.uids = selectAll(selection.uids, groupUnits, event.target.checked); redraw(); },
+      });
+      groupBox.indeterminate = groupState.some;
+      head.prepend(groupBox);
+    };
+    wrap.append(lineFoldBar(ctx, tree, redraw), ...lineTreeSections(ctx, tree, { cards, headExtra, rerender: redraw }));
+    registerLineTree(wrap, ctx, tree, redraw);
+    watchNeedsSeen(ctx, wrap, null, all, { filtered: needsFilterActive(filter), shownCount: () => all.length });
+    return;
+  }
   // Built as the list is scrolled (progressive-list.js); a redraw keeps as
   // many rows as were shown.
   const list = h("div", { class: "needs-list review-list" });
   page.appendChild(list);
   stopRows?.();
   // One card per item, per delivery of several units, per review group.
-  stopRows = fillProgressively(list, groupNeeds(items), (entry) => needsEntryCard(ctx, entry, {
-    select: {
-      has: (uid) => selection.uids.has(uid),
-      onChange: (uids, on) => {
-        for (const uid of uids) if (on) selection.uids.add(uid); else selection.uids.delete(uid);
-        redraw();
-        // The page is redrawn: keep focus on the box that was toggled.
-        document.querySelector(`.review-list .needs-row[data-unit-ref="${CSS.escape(uids[0])}"] .needs-select`)?.focus();
-      },
-    },
-  }), { initial: REVIEW_ROWS, chunk: REVIEW_ROWS, previous: shownRows, onCount: (n) => { shownRows = n; } });
+  stopRows = fillProgressively(list, groupNeeds(items), (entry) => needsEntryCard(ctx, entry, { select }), { initial: REVIEW_ROWS, chunk: REVIEW_ROWS, previous: shownRows, onCount: (n) => { shownRows = n; } });
   watchNeedsSeen(ctx, list, list, groupNeeds(items), { filtered: needsFilterActive(filter) });
 }
 

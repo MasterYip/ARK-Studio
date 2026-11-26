@@ -133,19 +133,18 @@ func TestMobileAppsResolveTheLatestRelease(t *testing.T) {
 		t.Fatalf("GitHub asked %d times, want 2", n)
 	}
 
-	// A dist/ build is still served by /download.
+	// A file in dist/ is not served: the APK always comes from GitHub.
 	if err := os.MkdirAll(dist, 0o755); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dist, "ARK-Studio-android.apk"), []byte("NATIVE"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	w = docsGet(app, "GET", "/download/ARK-Studio-android.apk", nil)
-	if w.Code != 200 || w.Body.String() != "NATIVE" ||
-		w.Header().Get("Content-Type") != "application/vnd.android.package-archive" {
-		t.Fatalf("dist: %d %q %s", w.Code, w.Body, w.Header().Get("Content-Type"))
+	t.Setenv("ARK_DOWNLOAD_DIR", dist)
+	if w = docsGet(app, "GET", "/download/ARK-Studio-android.apk", nil); w.Code != 302 {
+		t.Fatalf("dist: %d", w.Code)
 	}
-	if out = getMobileApps(t, app); !out.Apps["native"].Local || out.Apps["native"].Size != 6 {
+	if out = getMobileApps(t, app); out.Apps["native"].Local || out.Apps["native"].Size != 0 {
 		t.Fatalf("local flags: %+v", out.Apps)
 	}
 }

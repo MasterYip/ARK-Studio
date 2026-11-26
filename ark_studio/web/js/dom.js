@@ -1,6 +1,7 @@
 import { icon } from "./icons.js";
 import { t, locale, typeLabel } from "./i18n.js";
 import { authenticatedUrl } from "./api.js";
+import { saveDownload } from "./download-link.js";
 import { resolveRichUrl, embedKind, hashText, isVizLang, EXPLICIT_ANCHOR_RE, headingAnchors } from "./rich-model.js";
 import { vizBlock } from "./viz.js";
 import { sanitizeRichHtml } from "./rich-html.js";
@@ -53,6 +54,30 @@ export function h(tag, props, ...children) {
   return el;
 }
 
+/**
+ * Size a textarea to its content (shown whole by default) and keep it in
+ * step while typing; the person can still drag it taller or shorter.
+ */
+export function autoGrowTextarea(el, { max = 0 } = {}) {
+  let dragged = false;
+  const fit = () => {
+    if (dragged) return;
+    if (!el.isConnected) { requestAnimationFrame(fit); return; }
+    el.style.height = "auto";
+    const full = el.scrollHeight + 2;
+    el.style.height = `${max ? Math.min(max, full) : full}px`;
+  };
+  el.classList.add("autogrow");
+  el.addEventListener("input", fit);
+  // A drag on the resize handle wins over auto-fit for this textarea.
+  el.addEventListener("pointerdown", (event) => {
+    const r = el.getBoundingClientRect();
+    if (event.clientX > r.right - 18 && event.clientY > r.bottom - 18) dragged = true;
+  });
+  requestAnimationFrame(fit);
+  return el;
+}
+
 export function append(el, children) {
   for (const child of children.flat(Infinity)) {
     if (child === null || child === undefined || child === false) continue;
@@ -98,7 +123,8 @@ export function tagChip(tag, { onClick = null, removable = false, onRemove = nul
   const value = idx > 0 ? tag.slice(idx + 1) : tag;
   // ``needs:`` is set by ARK: show readable labels and never offer removal.
   const needs = ns === "needs";
-  const el = h("span", { class: `tag ${cls}`.trim(), title: tag, onclick: onClick || undefined },
+  // Line tags (branch:<name>, Q-0003) stand out so lines are visible at a glance.
+  const el = h("span", { class: `tag ${ns === "branch" ? "tag-branch" : ""} ${cls}`.replace(/\s+/g, " ").trim(), title: tag, onclick: onClick || undefined },
     ns ? h("span", { class: "tag-ns" }, needs ? t("needs.group") : ns) : null,
     ns ? ":" : null,
     h("span", null, needs ? t(`needs.value.${value}`) : value));
@@ -766,14 +792,10 @@ export async function copyText(text) {
   }
 }
 
+/** Saves text or a Blob as a file (download-link.js: the app's dialog, or the browser's download). */
 export function download(filename, content, type = "text/plain;charset=utf-8") {
   const blob = content instanceof Blob ? content : new Blob([content], { type });
-  const url = URL.createObjectURL(blob);
-  const a = h("a", { href: url, download: filename });
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1200);
+  return saveDownload(blob, { filename });
 }
 
 export function percent(a, b) { return b ? Math.round((a / b) * 100) : 0; }

@@ -114,6 +114,8 @@ const SERVER_PERMISSIONS: &[&str] = &[
     "allow-go-local-home",
     "allow-link-server",
     "allow-copy-image-png",
+    // "WM-HOI finished a turn" from ARK pages (web/js/session-notices.js).
+    "allow-show-notification",
     "allow-device-id",
     "allow-measure-paths",
     // Resources: open a location over SSH or in VS Code / Cursor (remote_open.rs).
@@ -123,8 +125,12 @@ const SERVER_PERMISSIONS: &[&str] = &[
     "allow-ssh-config-ensure",
     "allow-ssh-key-candidates",
     "allow-choose-ssh-key",
-    // "Show in folder" on a finished download (shell.js, downloads.rs).
+    // "Show in folder" on a finished download (shell.js, downloads.rs);
+    // "Save as" for page downloads (web/js/download-link.js).
     "allow-show-download",
+    "allow-save-download",
+    "allow-save-bytes",
+    "allow-cancel-download",
     // "ARK Studio 2.x.y is available" in the app window (shell.js) and the
     // About dot: read the update state, "Later" for a version, and open the
     // app's own settings at a section (Settings > App on any ARK page).
@@ -521,6 +527,158 @@ fn show_download(app: AppHandle, webview: tauri::Webview, id: String) -> Result<
     let id: u64 = id.parse().map_err(|_| "Unknown download.".to_string())?;
     let path = state(&app).downloads.saved(id).ok_or_else(|| "The downloaded file is no longer there.".to_string())?;
     app.opener().reveal_item_in_dir(path).map_err(|e| e.to_string())
+}
+
+/// The longest a page may hand over as bytes to save (`save_bytes`: logs,
+/// prompt exports; files from the server go through `save_download`).
+const SAVE_BYTES_MAX: usize = 256 * 1024 * 1024;
+
+/// The page's own URL when it is an ARK page of this app (local or a
+/// server the app opened).
+fn ark_page_url(app: &AppHandle, webview: &tauri::Webview) -> Result<Url, String> {
+    match caller(app, webview) {
+        Caller::Local | Caller::Remote(_) => webview.url().map_err(|e| e.to_string()),
+        _ => Err("Not an ARK page of ARK Studio.".into()),
+    }
+}
+
+/// The system "Save as" dialog, starting in the Downloads folder with
+/// `name`; None when the user cancels. `ARK_DESKTOP_SAVE_TO` (tests) skips
+/// the dialog and saves under a free name in that folder.
+async fn ask_save_path(app: &AppHandle, name: &str) -> Option<PathBuf> {
+    if let Some(dir) = std::env::var_os("ARK_DESKTOP_SAVE_TO").filter(|v| !v.is_empty()) {
+        let dir = PathBuf::from(dir);
+        let _ = std::fs::create_dir_all(&dir);
+        return Some(downloads::unique_path(&dir, name, |p| p.exists()));
+    }
+    let dir = download_dir(app);
+    let title = if system_zh() { "保存文件" } else { "Save file" };
+    let dialog = app.dialog().file().set_title(title).set_directory(dir).set_file_name(name);
+    tauri::async_runtime::spawn_blocking(move || dialog.blocking_save_file().and_then(|p| p.into_path().ok()))
+        .await
+        .ok()
+        .flatten()
+}
+
+fn saved_reply(app: &AppHandle, path: &Path) -> serde_json::Value {
+    let id = state(app).downloads.record_saved(path);
+    json!({
+        "state": "saved",
+        "id": id.to_string(),
+        "name": path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default(),
+        "path": path.to_string_lossy(),
+    })
+}
+
+/// Saves a file of the page's own server (web/js/download-link.js): the
+/// app requests it with the page's cookies, shows the "Save as" dialog with
+/// the server's file name and streams it to the chosen path, reporting
+/// progress to the page (`__ARK_DOWNLOAD_EVENT__` with the page's ticket).
+/// Replies {state: "saved", id, name, path} | {state: "cancelled"} (dialog)
+/// | {state: "aborted"} (the page's Cancel); errors are the server's text.
+#[tauri::command]
+async fn save_download(
+    app: AppHandle,
+    webview: tauri::Webview,
+    url: String,
+    name: Option<String>,
+    ticket: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let page = ark_page_url(&app, &webview)?;
+    let target = page.join(&url).map_err(|_| "Not a download address.".to_string())?;
+    if !downloads::same_origin(&page, &target) {
+        return Err("Only files of this ARK server can be saved here.".into());
+    }
+    let ticket = ticket.unwrap_or_default();
+    // The page's session: cookies of the server (HttpOnly ones too).
+    let cookies = webview
+        .cookies_for_url(target.clone())
+        .map(|list| list.iter().map(|c| format!("{}={}", c.name(), c.value())).collect::<Vec<_>>().join("; "))
+        .unwrap_or_default();
+    let loopback = matches!(target.host_str(), Some("127.0.0.1" | "localhost" | "[::1]"));
+    let mut client = reqwest::Client::builder()
+        .user_agent(user_agent(&app))
+        .connect_timeout(Duration::from_secs(20))
+        // No overall limit (a project archive can take many minutes); a
+        // stalled connection still ends.
+        .read_timeout(Duration::from_secs(180));
+    if loopback {
+        client = client.no_proxy();
+    }
+    let client = client.build().map_err(|e| e.to_string())?;
+    let mut request = client.get(target.clone());
+    if !cookies.is_empty() {
+        request = request.header(reqwest::header::COOKIE, cookies);
+    }
+    let response = request.send().await.map_err(|e| downloads::net_error(&e))?;
+    if !response.status().is_success() {
+        return Err(downloads::response_error(response).await);
+    }
+    let suggested = response
+        .headers()
+        .get(reqwest::header::CONTENT_DISPOSITION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(downloads::disposition_name)
+        .or(name)
+        .unwrap_or_default();
+    let file_name = downloads::file_name(Path::new(&suggested), target.as_str());
+    let Some(path) = ask_save_path(&app, &file_name).await else {
+        return Ok(json!({ "state": "cancelled" }));
+    };
+    let shown = path.file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_default();
+    let list = &state(&app).downloads;
+    let mut last = std::time::Instant::now() - Duration::from_secs(1);
+    let progress = |received: u64, total: Option<u64>| {
+        if list.take_cancelled(&ticket) {
+            return false;
+        }
+        if last.elapsed() >= Duration::from_millis(250) || total == Some(received) {
+            last = std::time::Instant::now();
+            let ev = json!({ "ticket": ticket, "state": "progress", "name": shown, "received": received, "total": total.unwrap_or(0) });
+            let _ = webview.eval(format!("window.__ARK_DOWNLOAD_EVENT__&&window.__ARK_DOWNLOAD_EVENT__({ev})"));
+        }
+        true
+    };
+    match downloads::fetch_to(response, &path, progress).await {
+        Ok(_) => Ok(saved_reply(&app, &path)),
+        Err(downloads::SaveError::Cancelled) => Ok(json!({ "state": "aborted", "name": shown })),
+        Err(downloads::SaveError::Failed(e)) => Err(e),
+    }
+}
+
+/// Stops the `save_download` with this ticket (the page's Cancel).
+#[tauri::command]
+fn cancel_download(app: AppHandle, webview: tauri::Webview, ticket: String) -> Result<(), String> {
+    ark_page_url(&app, &webview)?;
+    state(&app).downloads.cancel(&ticket);
+    Ok(())
+}
+
+/// Saves bytes the page made (a log, an export built in the page) through
+/// the "Save as" dialog; the file name comes in the `x-ark-name` header
+/// (percent-encoded). Replies like `save_download`.
+#[tauri::command]
+async fn save_bytes(app: AppHandle, webview: tauri::Webview, request: tauri::ipc::Request<'_>) -> Result<serde_json::Value, String> {
+    ark_page_url(&app, &webview)?;
+    let tauri::ipc::InvokeBody::Raw(bytes) = request.body() else {
+        return Err("Expected the file's bytes.".into());
+    };
+    if bytes.len() > SAVE_BYTES_MAX {
+        return Err("The file is too large.".into());
+    }
+    let raw = request.headers().get("x-ark-name").and_then(|v| v.to_str().ok()).unwrap_or("");
+    let decoded = url::form_urlencoded::parse(format!("x={}", raw.replace('+', "%2B")).as_bytes())
+        .next()
+        .map(|(_, v)| v.to_string())
+        .unwrap_or_default();
+    let file_name = downloads::file_name(Path::new(&decoded), "");
+    let Some(path) = ask_save_path(&app, &file_name).await else {
+        return Ok(json!({ "state": "cancelled" }));
+    };
+    let mut part = downloads::PartFile::create(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    part.write(bytes).map_err(|e| format!("{}: {e}", path.display()))?;
+    part.finish().map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(saved_reply(&app, &path))
 }
 
 /// Windows 11 draws a 1 px frame border around shadowed undecorated windows;
@@ -1040,6 +1198,22 @@ fn notify(app: &AppHandle, title: &str, body: &str) {
     if let Err(e) = app.notification().builder().title(title).body(body).show() {
         eprintln!("ark-studio: notification: {e}");
     }
+}
+
+/// A system notification for an ARK page ("WM-HOI finished a turn",
+/// web/js/session-notices.js): plain text, cut to a sensible length.
+#[tauri::command]
+fn show_notification(app: AppHandle, webview: tauri::Webview, title: String, body: String) -> Result<(), String> {
+    if matches!(caller(&app, &webview), Caller::Other) {
+        return Err("Not an ARK page of ARK Studio.".into());
+    }
+    let title: String = title.chars().filter(|c| !c.is_control()).take(120).collect();
+    let body: String = body.chars().filter(|c| *c == '\n' || !c.is_control()).take(400).collect();
+    if title.trim().is_empty() {
+        return Err("A notification needs a title.".into());
+    }
+    notify(&app, &title, &body);
+    Ok(())
 }
 
 /// "ARK Studio 2.x.y is available": once per version.
@@ -2126,6 +2300,7 @@ pub fn run() {
             open_app_settings,
             open_local_settings,
             copy_image_png,
+            show_notification,
             device_id,
             measure_paths,
             open_ssh_terminal,
@@ -2136,6 +2311,9 @@ pub fn run() {
             ssh_key_candidates,
             choose_ssh_key,
             show_download,
+            save_download,
+            save_bytes,
+            cancel_download,
             choose_project_folder,
             tray_menu_ready,
             tray_menu_action,

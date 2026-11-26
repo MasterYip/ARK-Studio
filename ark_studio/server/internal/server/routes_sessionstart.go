@@ -29,12 +29,50 @@ var sessionStartGoOnly = []PortedRoute{{"goonly:exact:" + sessionStartPath, "GET
 
 // sessionStartFacts are the setup readiness of the device sessions run on
 // (this server) for actor, and the state of task taskRef ("" = none).
-func (c *reqCtx) sessionStartFacts(p *project.Project, actor, taskRef string) sessionstart.Facts {
+func (c *reqCtx) sessionStartFacts(p *project.Project, actor, taskRef string, folder *sessionstart.Folder) sessionstart.Facts {
 	f := sessionstart.Facts{Setup: c.sessionSetupFacts(p, actor)}
 	if taskRef != "" {
 		f.Task = c.sessionTaskFacts(p, taskRef)
 	}
+	f.Folder = folder
+	if f.Folder == nil {
+		f.Folder = c.sessionFolder(p, actor, taskRef)
+	}
 	return f
+}
+
+// sessionFolder is the task folder of taskRef on the device sessions run on
+// (this server) for actor; nil when setup cannot be read.
+func (c *reqCtx) sessionFolder(p *project.Project, actor, taskRef string) *sessionstart.Folder {
+	paths := c.sessionPaths(p, actor)
+	if paths == nil {
+		return nil
+	}
+	return c.taskFolderFacts(p, paths, taskRef, true)
+}
+
+// sessionPaths is GET setup/paths for actor on this server's device.
+func (c *reqCtx) sessionPaths(p *project.Project, actor string) *pyjson.Object {
+	if actor == "" {
+		actor = c.actor()
+	}
+	perm := "admin"
+	if c.app.Auth != nil {
+		perm = "read"
+		if pr, err := c.app.Org.ProjectPermission(c.ctx, actor, p.ID()); err == nil && pr != "" {
+			perm = pr
+		}
+	}
+	rank := org.PermissionRank[perm]
+	v := setup.NewViewer(setup.Viewer{User: actor, Admin: rank >= org.PermissionRank["admin"], CanWrite: rank >= org.PermissionRank["write"],
+		TokenKind: "personal", HostID: setup.MachineFingerprint()})
+	setup.Lock()
+	paths, err := c.setupEnv(p).Paths(v)
+	setup.Unlock()
+	if err != nil {
+		return nil
+	}
+	return paths
 }
 
 func (c *reqCtx) sessionSetupFacts(p *project.Project, actor string) sessionstart.Setup {
@@ -82,7 +120,7 @@ func (c *reqCtx) sessionTaskFacts(p *project.Project, ref string) *sessionstart.
 	if err != nil || u == nil {
 		return nil
 	}
-	t := &sessionstart.Task{UID: strOrEmpty(u.Value("uid")), Title: strOrEmpty(u.Value("title")), Status: strOrEmpty(u.Value("status")),
+	t := &sessionstart.Task{UID: strOrEmpty(u.Value("uid")), Type: strOrEmpty(u.Value("type")), Title: strOrEmpty(u.Value("title")), Status: strOrEmpty(u.Value("status")),
 		LastProgress: sessionstart.LastProgress(strOrEmpty(u.Value("body")))}
 	if comments, err := p.Store.Comments(c.ctx, t.UID); err == nil {
 		for _, x := range comments {
@@ -112,7 +150,7 @@ func (c *reqCtx) sessionStartPoint(in sessions.StartInput) *sessionstart.Start {
 	if err != nil || p == nil {
 		return nil
 	}
-	f := c.sessionStartFacts(p, in.Actor, in.TaskRef)
+	f := c.sessionStartFacts(p, in.Actor, in.TaskRef, in.Folder)
 	f.Prompt, f.Chosen, f.Resume = in.Prompt, in.Chosen, in.Resume
 	st := sessionstart.Compose(f)
 	return &st
@@ -126,7 +164,7 @@ func (c *reqCtx) sessionStartGet() error {
 		return err
 	}
 	task := strings.TrimSpace(c.query.First("task", ""))
-	f := c.sessionStartFacts(p, c.actor(), task)
+	f := c.sessionStartFacts(p, c.actor(), task, nil)
 	mode := sessionstart.DefaultMode(f)
 	st := sessionstart.Compose(f)
 	setupOut := pyjson.NewObject("known", f.Setup.Known, "needs_setup", f.Setup.NeedsSetup(), "needs_device", f.Setup.NeedsDevice(),

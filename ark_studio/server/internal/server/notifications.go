@@ -34,9 +34,14 @@ package server
 //             (seen keys a:<uid>); read-only members get them too.
 //   approval  pending approval requests of the person's agent sessions
 //             (high priority)
-//   session_error  the person's sessions that errored, or that ARK stopped
-//             when it restarted, in the last notifySessionWindow (high)
-//   session_done   the person's sessions that ended normally (low)
+//   session_error  the person's sessions whose main turn failed, or that ARK
+//             stopped when it restarted, in the last notifySessionWindow
+//             (high); body: the short reason
+//   session_done   the person's sessions whose main turn ended cleanly and
+//             that wait for them (sessionItems; sessions from before
+//             turn_end: ended normally, low)
+//   Both only until the person opens the session (session_notices.go) and
+//   only while their switches in Settings › Personal are on.
 // Agents' progress, comments and the person's own actions (assigning
 // yourself included) are not items.
 //
@@ -53,6 +58,7 @@ import (
 	"time"
 
 	"arkstudio/go/internal/compat/pyjson"
+	"arkstudio/go/internal/org"
 	"arkstudio/go/internal/platform/clock"
 	"arkstudio/go/internal/sessions"
 	"arkstudio/go/internal/store"
@@ -63,6 +69,9 @@ const (
 	notifyOverlap       = 2 * time.Minute
 	notifySessionWindow = 24 * time.Hour
 	notifyMaxItems      = 200
+	// notifyViewGrace: a finish waits this long before the phone hears of it,
+	// so the browser that shows the session can mark it seen first.
+	notifyViewGrace = 20 * time.Second
 )
 
 var notificationsGoOnly = []PortedRoute{{"goonly:exact:" + notificationsPath, "GET,HEAD"}}
@@ -241,8 +250,14 @@ func assignedItems(p notifyProject, cards []store.AssignedCard, seen store.Needs
 	return out
 }
 
-// sessionItems are the approval and session items of the projects.
-func sessionItems(alerts []sessions.Alert, projects map[string]notifyProject, user string, auth bool, now time.Time) []notifyItem {
+// sessionItems are the approval and session items of the projects.  A
+// session with a turn_end (sessions/finish.go) notifies once per finish
+// while its owner has not opened it (session_notices.go unseenFinishes),
+// after notifyViewGrace so a person watching it in the browser marks it seen
+// first; older sessions keep the process-end rule.  prefs are the person's
+// switches (Settings › Personal).
+func sessionItems(alerts []sessions.Alert, unseen map[string]sessions.Finish, finished map[string]bool,
+	prefs org.SessionNotifyPrefs, projects map[string]notifyProject, user string, auth bool, now time.Time) []notifyItem {
 	var out []notifyItem
 	for _, a := range alerts {
 		p, ok := projects[a.ProjectID]
@@ -263,19 +278,34 @@ func sessionItems(alerts []sessions.Alert, projects map[string]notifyProject, us
 			out = append(out, notifyItem{id: "approval:" + a.ID + ":" + ap.ID, kind: "approval", priority: "high",
 				title: title, body: body, project: p, link: link, at: store.ParseTime(ap.RequestedAt), count: 1})
 		}
+		if finished[a.ID] {
+			f, ok := unseen[a.ID]
+			at := store.ParseTime(f.At)
+			if !ok || now.Sub(at) < notifyViewGrace || !finishWithin(f, now, notifySessionWindow) {
+				continue
+			}
+			if f.Outcome == "error" && prefs.Error {
+				out = append(out, notifyItem{id: "session_error:" + a.ID + ":" + f.At, kind: "session_error",
+					priority: "high", title: title, body: f.Reason, project: p, link: link, at: at, count: 1})
+			} else if f.Outcome == "done" && prefs.Done {
+				out = append(out, notifyItem{id: "session_done:" + a.ID + ":" + f.At, kind: "session_done",
+					priority: "default", title: title, project: p, link: link, at: at, count: 1})
+			}
+			continue
+		}
 		ended := store.ParseTime(a.EndedAt)
 		if ended.IsZero() || now.Sub(ended) > notifySessionWindow {
 			continue
 		}
 		switch {
-		case a.Status == "errored" || a.Restarted:
+		case (a.Status == "errored" || a.Restarted) && prefs.Error:
 			body := a.Error
 			if a.Restarted {
 				body = a.Notice
 			}
 			out = append(out, notifyItem{id: "session_error:" + a.ID + ":" + a.EndedAt, kind: "session_error",
 				priority: "high", title: title, body: body, project: p, link: link, at: ended, count: 1})
-		case a.Status == "stopped" && a.ExitCode == int64(0):
+		case a.Status == "stopped" && a.ExitCode == int64(0) && prefs.Done:
 			out = append(out, notifyItem{id: "session_done:" + a.ID + ":" + a.EndedAt, kind: "session_done",
 				priority: "low", title: title, project: p, link: link, at: ended, count: 1})
 		}
@@ -352,7 +382,22 @@ func (c *reqCtx) getNotifications() error {
 		}
 	}
 	if c.app.Sessions != nil {
-		items = append(items, sessionItems(c.app.Sessions.Alerts(), byID, user, auth, now)...)
+		seen, prefs := map[string]string{}, org.SessionNotifyPrefs{Done: true, Error: true}
+		if c.app.Org != nil {
+			if seen, prefs, err = c.app.Org.SessionSeen(c.ctx, user); err != nil {
+				return err
+			}
+		}
+		all := c.app.Sessions.Finishes()
+		finished := map[string]bool{}
+		for _, f := range all {
+			finished[f.ID] = f.Outcome != ""
+		}
+		unseen := map[string]sessions.Finish{}
+		for _, f := range unseenFinishes(all, "", user, auth, seen) {
+			unseen[f.ID] = f
+		}
+		items = append(items, sessionItems(c.app.Sessions.Alerts(), unseen, finished, prefs, byID, user, auth, now)...)
 	}
 	sort.SliceStable(items, func(i, j int) bool {
 		if !items[i].at.Equal(items[j].at) {

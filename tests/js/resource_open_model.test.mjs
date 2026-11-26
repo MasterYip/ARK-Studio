@@ -165,14 +165,14 @@ test("managed aliases", () => {
 test("ssh config entry for a server", () => {
   const entry = sshConfigEntry({ alias: "ark-lab-1", ...server, identityFile: "C:\\Users\\me\\.ssh\\id_rsa_lab_1" });
   assert.equal(entry, [
-    "Host ark-lab-1", "  HostName 203.0.113.7", "  Port 2222", "  User user",
+    "Host ark-lab-1 203.0.113.7", "  HostName 203.0.113.7", "  Port 2222", "  User user",
     "  IdentityFile C:/Users/me/.ssh/id_rsa_lab_1", "  IdentitiesOnly yes",
   ].join("\n"));
   // No key: the agent / default keys, no IdentitiesOnly.
-  assert.equal(sshConfigEntry({ alias: "ark-a", host: "gpu-a" }), "Host ark-a\n  HostName gpu-a");
+  assert.equal(sshConfigEntry({ alias: "ark-a", host: "gpu-a" }), "Host ark-a gpu-a\n  HostName gpu-a");
   // The snippet is the same block the desktop app writes (remote_open.rs).
   assert.equal(sshConfigSnippet([{ alias: "ark-a", host: "gpu-a", port: 2222 }]),
-    `${MANAGED_BEGIN}\nHost ark-a\n  HostName gpu-a\n  Port 2222\n${MANAGED_END}\n`);
+    `${MANAGED_BEGIN}\nHost ark-a gpu-a\n  HostName gpu-a\n  Port 2222\n${MANAGED_END}\n`);
   assert.equal(MANAGED_BEGIN, "# >>> ARK Studio managed hosts (edits inside are replaced) >>>");
   assert.equal(sshConfigSnippet([]), null);
 });
@@ -246,7 +246,7 @@ test("ssh config entry with a key and with a password", () => {
   const withKey = sshConfigEntry({ alias: "ark-lab-1", ...server, identityFile: key, auth: "key" });
   assert.ok(withKey.endsWith("\n  IdentityFile C:/Users/me/.ssh/id_rsa_lab_1\n  IdentitiesOnly yes"));
   const pwd = sshConfigEntry({ alias: "ark-lab-1", ...server, identityFile: key, auth: "password" });
-  assert.equal(pwd, "Host ark-lab-1\n  HostName 203.0.113.7\n  Port 2222\n  User user");
+  assert.equal(pwd, "Host ark-lab-1 203.0.113.7\n  HostName 203.0.113.7\n  Port 2222\n  User user");
   assert.equal(sshConfigEntry({ alias: "ark-lab-1", ...server }), pwd);
   // Key login without a path: agent / default keys, no IdentitiesOnly.
   assert.equal(sshConfigEntry({ alias: "ark-lab-1", ...server, auth: "key" }), pwd);

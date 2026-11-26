@@ -7,7 +7,6 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -44,7 +43,30 @@ var reMobileRevoke = pyRe(`^/api/mobile/pairs/([^/]+)/revoke$`, false)
 // full access as its user or read-only.
 var reMobilePairPermission = pyRe(`^/api/mobile/pairs/([^/]+)/permission$`, false)
 
-var mobileGoOnly = []PortedRoute{{`goonly:regex:^/api/mobile/pairs/([^/]+)/permission$`, "POST"}}
+var mobileGoOnly = []PortedRoute{{`goonly:regex:^/api/mobile/pairs/([^/]+)/permission$`, "POST"},
+	{"goonly:exact:" + mobileMergePath, "POST"}, {"goonly:exact:" + mobileStalePath, "POST"}}
+
+// Go only (mobile/deviceid.go): merge one person's devices into one, and
+// list or revoke devices unseen for 30 days.
+const (
+	mobileMergePath = "/api/mobile/pairs/merge"
+	mobileStalePath = "/api/mobile/pairs/stale"
+)
+
+// clientDeviceID is the phone's device id (Go only, mobile/deviceid.go):
+// the sign-in body's device_id, the X-ARK-Device header or the ark_device
+// cookie (the web app and the Android WebView).
+func (c *reqCtx) clientDeviceID(body *pyjson.Object) string {
+	if body != nil {
+		if id := pytext.Strip(strOrEmptyAny(body.Value("device_id"))); id != "" {
+			return id
+		}
+	}
+	if id := pytext.Strip(c.header("X-ARK-Device")); id != "" {
+		return id
+	}
+	return auth.ParseCookie(c.header("Cookie"), "ark_device")
+}
 
 // ----------------------------------------------------------- addresses
 
@@ -793,6 +815,9 @@ func (c *reqCtx) guardMobile() error {
 		}
 		c.session = session
 		c.bindMobile(user, ms)
+		if id := c.clientDeviceID(nil); id != "" {
+			c.app.Mobile.AdoptDevice(ms, id)
+		}
 		// A desktop link (Go only, mobile/desktop.go) lists and creates
 		// projects, nothing else.
 		if c.app.Mobile.IsDesktopLink(ms) {
@@ -833,24 +858,14 @@ func (c *reqCtx) guardMobile() error {
 
 // androidApps lists the Android app.  Go-only: url is the APK asset of
 // the latest GitHub release (app_release.go), or the release page when it
-// cannot be resolved, so every app is available; qr_svg encodes url for a
-// phone.  local, local_url, size and updated describe a dist/ build on this
-// server, when there is one.
+// cannot be resolved; qr_svg encodes url for a phone.  The APK always comes
+// from GitHub: local is false (a server does not serve its own builds; the
+// fields stay for older pages).
 func (a *App) androidApps(rel *appRelease) *pyjson.Object {
 	out := pyjson.NewObject()
-	dist := a.apkDir()
-	for _, item := range []struct{ key, file, path, appID, title string }{
-		{"native", "ARK-Studio-android.apk", "/download/ARK-Studio-android.apk", "com.masteryip.arkstudio", "ARK Studio (native)"},
+	for _, item := range []struct{ key, path, appID, title string }{
+		{"native", "/download/ARK-Studio-android.apk", "com.masteryip.arkstudio", "ARK Studio (native)"},
 	} {
-		var size int64
-		var updated any
-		present := false
-		if dist != "" {
-			if fi, err := os.Stat(filepath.Join(dist, item.file)); err == nil && fi.Mode().IsRegular() {
-				present, size = true, fi.Size()
-				updated = fi.ModTime().UTC().Format("2006-01-02T15:04:05") + "+00:00"
-			}
-		}
 		url, file, direct := rel.url(item.key)
 		svg, err := qr.SVG(url)
 		if err != nil {
@@ -858,7 +873,7 @@ func (a *App) androidApps(rel *appRelease) *pyjson.Object {
 		}
 		out.Set(item.key, pyjson.NewObject("available", true, "url", url, "file", file, "direct", direct,
 			"version", rel.Version, "qr_svg", svg, "app_id", item.appID, "title", item.title,
-			"local", present, "local_url", "."+item.path, "size", size, "updated", updated))
+			"local", false, "local_url", "."+item.path, "size", int64(0), "updated", nil))
 	}
 	return out
 }
@@ -937,6 +952,11 @@ func (c *reqCtx) mobileStatus(token string, required bool) (*pyjson.Object, erro
 	}
 	s := c.app.Mobile.SessionForToken(token)
 	authenticated := s != nil
+	if authenticated {
+		if id := c.clientDeviceID(nil); id != "" {
+			c.app.Mobile.AdoptDevice(s, id)
+		}
+	}
 	reason := ""
 	if token != "" && s == nil {
 		reason = "invalid_or_expired"
@@ -1117,6 +1137,10 @@ func (c *reqCtx) mobilePost(path string, body *pyjson.Object) (bool, error) {
 			c.ok(out)
 		}
 		return true, err
+	case path == mobileMergePath:
+		return true, c.mobileMerge(body)
+	case path == mobileStalePath:
+		return true, c.mobileStale(body)
 	case reMobileRevoke.MatchString(path):
 		// A person revokes their own devices (a pairing is the user's, not a
 		// project's); audited in the org log.
@@ -1259,7 +1283,11 @@ func (c *reqCtx) claimPairing(body *pyjson.Object) (*pyjson.Object, error) {
 			return nil, err
 		}
 	}
-	result, err := c.app.Mobile.Claim(token, p.ID(), c.clientIP(), c.header("User-Agent"))
+	ua := c.header("User-Agent")
+	if device := pytext.Prefix(pytext.Strip(strOrEmptyAny(body.Value("device"))), 80); device != "" {
+		ua = device + " · " + ua
+	}
+	result, err := c.app.Mobile.ClaimDevice(token, p.ID(), c.clientIP(), ua, c.clientDeviceID(body))
 	if err != nil {
 		return nil, mobileErr(err)
 	}
@@ -1341,7 +1369,7 @@ func (c *reqCtx) mobileLogin(body *pyjson.Object) error {
 	if device != "" {
 		ua = device + " · " + agent
 	}
-	result, err := c.app.Mobile.Claim(pyjson.Str(pair.Value("token")), p.ID(), "login:"+client, ua)
+	result, err := c.app.Mobile.ClaimDevice(pyjson.Str(pair.Value("token")), p.ID(), "login:"+client, ua, c.clientDeviceID(body))
 	if err != nil {
 		return mobileErr(err)
 	}
@@ -1442,6 +1470,59 @@ func (c *reqCtx) mobilePairPermission(pairID string, body *pyjson.Object) error 
 	return nil
 }
 
+// mobileMerge merges the person's devices into one (Settings → Mobile and
+// the resources graph): {ids: [pair ids]} or {like: pair id} (every active
+// device of the same type), dry_run previews.  The most recently used
+// device stays signed in; the others are revoked.
+func (c *reqCtx) mobileMerge(body *pyjson.Object) error {
+	if c.mobileSession != nil {
+		return apiErr(403, "A paired phone cannot manage pairing codes.", "MOBILE_SCOPE")
+	}
+	var ids []string
+	if list, ok := body.Value("ids").([]any); ok {
+		for _, v := range list {
+			ids = append(ids, pyjson.Str(v))
+		}
+	}
+	like := pytext.Strip(strOrEmptyAny(body.Value("like")))
+	dryRun := pyjson.Truthy(body.Value("dry_run"))
+	plan, err := c.app.Mobile.MergeDevices(c.actor(), c.app.Auth == nil, ids, like, dryRun)
+	if err != nil {
+		return mobileErr(err)
+	}
+	if !dryRun {
+		if revoked, ok := plan.Value("revoke").([]any); ok {
+			for _, r := range revoked {
+				if err := c.auditPair("mobile.pair.merge", r.(*pyjson.Object)); err != nil {
+					return err
+				}
+			}
+		}
+	}
+	plan.Set("pairs", c.userDevices())
+	c.ok(plan)
+	return nil
+}
+
+// mobileStale lists (dry_run) or revokes the person's devices unseen for 30
+// days.  Nothing is revoked without this call.
+func (c *reqCtx) mobileStale(body *pyjson.Object) error {
+	if c.mobileSession != nil {
+		return apiErr(403, "A paired phone cannot manage pairing codes.", "MOBILE_SCOPE")
+	}
+	dryRun := pyjson.Truthy(body.Value("dry_run"))
+	stale := c.app.Mobile.StaleDevices(c.actor(), c.app.Auth == nil, dryRun)
+	if !dryRun {
+		for _, r := range stale {
+			if err := c.auditPair("mobile.pair.revoke_stale", r.(*pyjson.Object)); err != nil {
+				return err
+			}
+		}
+	}
+	c.ok(pyjson.NewObject("stale", stale, "dry_run", dryRun, "pairs", c.userDevices()))
+	return nil
+}
+
 // auditPair writes a device change to the org log.
 func (c *reqCtx) auditPair(action string, pair *pyjson.Object) error {
 	actorID, err := c.app.Org.UserIDFor(c.ctx, c.actor())
@@ -1474,27 +1555,13 @@ var apkByPath = map[string]apkInfo{
 	"/download/ARK-Studio-webapp.apk":  {"ARK-Studio-android.apk", "ARK Studio (native)"},
 }
 
-// sendAPK serves <apkDir>/<apk> (app_manifest.go) (do_GET's ANDROID_APKS
-// branch).  Go-only: without a local build it redirects (302) to the latest
-// GitHub release asset (or the release page) instead of answering 404, so
-// older apps that download updates from the server keep working.
+// sendAPK answers the old download paths (do_GET's ANDROID_APKS branch).
+// Go-only: a 302 to the APK asset of the latest GitHub release, or to the
+// release page when it cannot be resolved.  The server never serves an APK
+// itself.
 func (c *reqCtx) sendAPK(apk apkInfo) error {
-	target := ""
-	if dir := c.app.apkDir(); dir != "" {
-		target = filepath.Join(dir, apk.file)
-	}
-	fi, err := os.Stat(target)
-	if target == "" || err != nil || !fi.Mode().IsRegular() {
-		url, _, _ := c.app.appRelease.resolve(c.ctx).url("native")
-		c.redirect(url, 302, nil)
-		return nil
-	}
-	data, err := os.ReadFile(target)
-	if err != nil {
-		return err
-	}
-	c.send(200, data, "application/vnd.android.package-archive", headerList{
-		{"Content-Disposition", `attachment; filename="` + apk.file + `"`}, {"Cache-Control", "no-store"}}, true)
+	url, _, _ := c.app.appRelease.resolve(c.ctx).url("native")
+	c.redirect(url, 302, nil)
 	return nil
 }
 

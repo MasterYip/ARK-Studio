@@ -100,6 +100,7 @@ type Comment struct {
 // Task is the task chosen for the session.
 type Task struct {
 	UID          string
+	Type         string // "task", or the type of another unit the session was started on
 	Title        string
 	Status       string
 	InReview     bool
@@ -137,7 +138,8 @@ type Resume struct {
 type Facts struct {
 	Setup  Setup
 	Task   *Task
-	Prompt string // the first message ("" = none)
+	Folder *Folder // where the work's files go on the session's device (nil = not known)
+	Prompt string  // the first message ("" = none)
 	Chosen *Chosen
 	Resume *Resume
 }
@@ -216,7 +218,7 @@ func Compose(f Facts) Start {
 	if f.Task != nil && st.Task == "" {
 		st.Task = f.Task.UID
 	}
-	return st
+	return withFolder(st, f.Folder)
 }
 
 func en(lines []Line, vars map[string]string) []string {
@@ -270,8 +272,20 @@ func clip(s string, n int) string {
 	return s
 }
 
+// commentBody is a whole comment in the Start list: a send-back is the
+// reason the task came back, so it is never cut; its later lines are
+// indented under the list item.
+func commentBody(body string) string {
+	body = strings.TrimSpace(strings.ReplaceAll(body, "\r\n", "\n"))
+	return strings.ReplaceAll(body, "\n", "\n  ")
+}
+
 func continueStart(t *Task) Start {
-	head := fmt.Sprintf("Start: continue %s \"%s\" (status %s", t.UID, t.Title, t.Status)
+	what := t.UID
+	if t.Type != "" && t.Type != "task" {
+		what = "the " + t.Type + " " + t.UID
+	}
+	head := fmt.Sprintf("Start: continue %s \"%s\" (status %s", what, t.Title, t.Status)
 	if t.InReview {
 		head += ", waiting for my review"
 	} else if t.LastOutcome != "" {
@@ -290,7 +304,7 @@ func continueStart(t *Task) Start {
 			if c.Kind == "sent_back" {
 				kind = "send-back"
 			}
-			lines = append(lines, fmt.Sprintf("- #%d %s by %s: %s", c.ID, kind, c.Author, clip(c.Body, 400)))
+			lines = append(lines, fmt.Sprintf("- #%d %s by %s: %s", c.ID, kind, c.Author, commentBody(c.Body)))
 		}
 		if n := t.SendBacks(); n > 0 {
 			summary += fmt.Sprintf(" (%d send-back comment(s))", n)

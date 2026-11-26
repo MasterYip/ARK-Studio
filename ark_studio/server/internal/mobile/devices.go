@@ -6,27 +6,18 @@ import (
 
 // ProjectDevices is PairingManager.project_devices: claimed, unrevoked
 // phones of a project with their newest session request (read-only; used by
-// the resources graph).  last_seen_at is nil without a session.
+// the resources graph).  last_seen_at is nil without a session.  Pairings
+// a newer sign-in of the same device replaces are left out.
 func (m *Manager) ProjectDevices(projectID string) []*pyjson.Object {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	lastSeen := map[string]float64{}
-	agents := map[string]string{}
-	for _, hash := range m.sorder {
-		s := m.sessions[hash]
-		if s == nil {
-			continue
-		}
-		if s.LastSeenAt >= lastSeen[s.PairingID] {
-			lastSeen[s.PairingID] = s.LastSeenAt
-			agents[s.PairingID] = s.UserAgent
-		}
-	}
+	lastSeen, agents := m.lastSeenLocked()
+	hidden := m.hiddenLocked()
 	out := []*pyjson.Object{}
 	for _, id := range m.order {
 		r := m.pairings[id]
 		if r == nil || r.ProjectID != projectID || (r.RevokedAt != nil && *r.RevokedAt != 0) ||
-			r.ClaimedAt == nil || *r.ClaimedAt == 0 {
+			r.ClaimedAt == nil || *r.ClaimedAt == 0 || hidden[r.ID] != "" {
 			continue
 		}
 		label := deviceLabel(r, agents[r.ID])
@@ -34,8 +25,13 @@ func (m *Manager) ProjectDevices(projectID string) []*pyjson.Object {
 		if v, ok := lastSeen[r.ID]; ok {
 			seen = v
 		}
-		out = append(out, pyjson.NewObject("id", r.ID, "user", r.User, "label", label, "permission", r.Permission,
-			"source", r.Source, "claimed_at", *r.ClaimedAt, "last_seen_at", seen))
+		item := pyjson.NewObject("id", r.ID, "user", r.User, "label", label, "permission", r.Permission,
+			"source", r.Source, "claimed_at", *r.ClaimedAt, "last_seen_at", seen)
+		// Go only (deviceid.go): one graph node per device across sign-ins.
+		if r.DeviceKey != "" {
+			item.Set("device_key", r.DeviceKey[:12])
+		}
+		out = append(out, item)
 	}
 	return out
 }

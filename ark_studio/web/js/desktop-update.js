@@ -6,13 +6,18 @@
 // * "ARK Studio 2.x.y is available · Update / Later" on the app's local
 //   Home, only when the app window does not show this notice itself (older
 //   apps; newer ones show it on every page: desktop shell).
+// * On a server's Home in an app that shows no notices itself (2.1.1 and
+//   older), when the server's release version is newer than the app: "ARK
+//   Studio 2.x.y is available" with the steps to update and the GitHub
+//   release page.
 // Models: desktop-update-model.js; shared update state: update-state.js.
 import { h } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { toast } from "./components.js";
 import {
-  loadDismissed, releaseUrl, saveDismissed, serverNotice, shellShowsUpdates, updateBanner,
+  loadDismissed, OLD_APP_DISMISS_KEY, oldAppNotice, releaseUrl, saveDismissed, serverNotice, shellShowsUpdates,
+  updateBanner,
 } from "./desktop-update-model.js";
 import { appUpdateHub, latestUpdate, onUpdate, refreshUpdate, watchUpdates } from "./update-state.js";
 import { serverVersion, updatedNoticeCard } from "./about.js";
@@ -21,12 +26,13 @@ import { saveSeenServerVersion, seenServerVersion } from "./profile.js";
 /** A placeholder that fills with the notices that apply. */
 export function desktopUpdateBanner() {
   const slot = h("div", { class: "desktop-update-slot" });
-  const parts = { updated: null, server: null, available: null };
+  const parts = { updated: null, server: null, available: null, oldApp: null };
   const draw = () => {
     slot.replaceChildren(...Object.values(parts).filter(Boolean));
   };
   appUpdateHub().then((found) => {
     if (found?.role !== "local") showServerNotice(parts, draw);
+    if (found?.role === "remote") showOldAppNotice(parts, draw);
     if (!found) return;
     const { hub, role } = found;
     const show = (info) => {
@@ -65,6 +71,28 @@ function showServerNotice(parts, draw) {
   h("a", { class: "server-updated-link", href: releaseUrl(version), target: "_blank", rel: "noopener noreferrer" },
     t("server.updated.changes")),
   h("button", { class: "btn sm ghost", type: "button", "data-server-updated-close": "", onclick: close }, t("app.updated.close")));
+  draw();
+}
+
+function showOldAppNotice(parts, draw) {
+  let dismissed = null;
+  try { dismissed = localStorage.getItem(OLD_APP_DISMISS_KEY); } catch { /* storage unavailable */ }
+  const notice = oldAppNotice(globalThis.window?.__ARK_DESKTOP__, serverVersion(), dismissed);
+  if (!notice) return;
+  const close = () => {
+    parts.oldApp = null;
+    draw();
+    try { localStorage.setItem(OLD_APP_DISMISS_KEY, notice.version); } catch { /* storage unavailable */ }
+  };
+  parts.oldApp = h("section", { class: "panel desktop-update-banner", "data-desktop-old-app": notice.version,
+    "aria-label": t("desktop.update.available", { version: notice.version }) },
+  icon("download", "sm"),
+  h("b", { class: "desktop-update-title" }, t("desktop.update.available", { version: notice.version })),
+  h("span", { class: "muted desktop-update-status" }, t("desktop.update.old_app_steps", { current: notice.current })),
+  h("span", { class: "desktop-update-actions" },
+    h("a", { class: "btn sm primary", href: notice.url, target: "_blank", rel: "noopener noreferrer" },
+      t("desktop.update.release_page")),
+    h("button", { class: "btn sm ghost", type: "button", onclick: close }, t("app.updated.close"))));
   draw();
 }
 

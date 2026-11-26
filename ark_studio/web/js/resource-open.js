@@ -14,7 +14,7 @@ import { openModal, toast } from "./components.js";
 import {
   openActions, effectiveConnection, configNames, sshCommand, validAlias, validHost, validUser, SSH_KINDS,
   cleanConnection, managedAlias, sshConfigSnippet, identityForConfig, configMatchFits, remoteEditorUrl, keySuggestion,
-  authMode, keySetupCommands, sshFormPrefill, sshFormBody, gpuDeviceId, machineName, resolveAlias, staleAliases,
+  authMode, keySetupCommands, openPlan, sshFormPrefill, sshFormBody, gpuDeviceId, machineName, resolveAlias, staleAliases,
 } from "./resource-open-model.js";
 import { graphHostId } from "./location-size-model.js";
 import { desktopDeviceId } from "./location-size.js";
@@ -180,30 +180,19 @@ export async function prepareConnection(conn, { name = "" } = {}) {
     try { found = (await d.sshConfigMatch([c.alias, managed, c.host].filter(Boolean))) || []; } catch { found = []; }
   }
   const r = resolveAlias({ name, conn: c, found, added: d?.sshConfigMatch ? null : readMap(ADDED_KEY) });
-  if (r.known) return { ...c, alias: r.alias };
-  // No alias: key login uses the key file remembered on this computer.
+  // The key file and login mode remembered on this computer (never on ARK).
   const keyFile = readMap(KEYFILE_KEY)[r.alias || c.host] || "";
-  const direct = keyFile && authMode({ auth: c.auth, identityFile: keyFile }) === "key" ? { ...c, identityFile: keyFile } : c;
-  if (!r.alias) return direct;
-  // A browser cannot write ~/.ssh/config: open with user@host:port at once
-  // and offer the entry (with the person's key) for next time.
-  if (!d?.sshConfigEnsure) {
-    const snippet = sshConfigSnippet([{ alias: r.alias, host: c.host, user: c.user || "", port: c.port || null,
-      identityFile: keyFile, auth: authMode({ auth: c.auth, identityFile: keyFile }) }]);
-    if (snippet) {
-      toast(t("resources.sshcfg.direct_opened", { alias: r.alias }), "", { duration: 15000, action: {
-        label: t("resources.sshcfg.copy"),
-        onClick: async () => {
-          const ok = await copyText(snippet);
-          if (ok) writeMap(ADDED_KEY, r.alias, `${connKey(c)}#${authMode({ auth: c.auth, identityFile: keyFile })}`);
-          toast(t(ok ? "resources.sshcfg.copied" : "resources.open.copy_failed"), ok ? "ok" : "err");
-        },
-      } });
-    }
-    return direct;
+  const auth = readMap(AUTH_KEY)[r.alias || c.host] || c.auth || "";
+  const plan = openPlan({ resolved: r, desktop: Boolean(d?.sshConfigEnsure), auth, keyFile });
+  if (plan === "alias") return { ...c, alias: r.alias };
+  if (plan === "direct") {
+    // Desktop terminal: -i with the remembered key (sshArgs, key login only).
+    return keyFile && authMode({ auth, identityFile: keyFile }) === "key" ? { ...c, auth: "key", identityFile: keyFile } : c;
   }
-  // Desktop app: write Host ark-<machine> once (it asks first), then open.
-  return sshConfigDialog(c, r.alias, { name });
+  // "write" (desktop app writes Host ark-<machine> <address>, asking first)
+  // or "confirm" (a browser shows the entry with Copy and "Added, open";
+  // remembered per machine afterwards).
+  return sshConfigDialog({ ...c, auth: auth || c.auth }, r.alias, { name });
 }
 
 /**
@@ -222,7 +211,8 @@ export function sshConfigDialog(conn, alias, { name = "" } = {}) {
     const savedMode = readMap(AUTH_KEY)[alias] || "";
     // The mode: the person's earlier choice, else the server entry's, else
     // detected from a remembered key path.
-    let mode = authMode({ auth: savedMode || conn.auth, identityFile: savedKey });
+    // Unknown means key login (ssh's default; a password is the explicit choice).
+    let mode = savedMode || conn.auth || savedKey ? authMode({ auth: savedMode || conn.auth, identityFile: savedKey }) : "key";
     let detected = !savedMode && !conn.auth;
     const key = h("input", {
       class: "input mono", value: savedKey, spellcheck: "false", maxlength: 1024,

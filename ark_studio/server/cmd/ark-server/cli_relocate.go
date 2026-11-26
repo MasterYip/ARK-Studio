@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -160,4 +161,66 @@ func agentRelocate(argv []string, out, errw io.Writer) int {
 		return 1
 	}
 	return printReply(out, code, raw)
+}
+
+// agentFolder is `ark-server agent folder <UID>` (T-0132, 2026-11-26): the
+// absolute folder for a unit's work on this device (setup/paths?unit=), as
+// one line, created by ARK when the task space is on this machine.
+func agentFolder(argv []string, out, errw io.Writer) int {
+	fs := flag.NewFlagSet("ark-server agent folder", flag.ContinueOnError)
+	fs.SetOutput(errw)
+	o := &agentAPIOptions{}
+	tokenEnv := agentAPIFlags(fs, o)
+	asJSON := fs.Bool("json", false, "print the whole task_folder object")
+	fs.Usage = func() {
+		fmt.Fprintln(errw, "usage: ark-server agent folder <UID> [--json]\n\n"+
+			"Prints the folder for that unit's work on this device: its task's folder, or the\n"+
+			"unit's own folder when no task is above it.\n\noptions:")
+		fs.PrintDefaults()
+	}
+	var uid string
+	if len(argv) > 0 && !strings.HasPrefix(argv[0], "-") {
+		uid, argv = argv[0], argv[1:]
+	}
+	if err := fs.Parse(argv); err != nil {
+		return 2
+	}
+	if uid == "" && fs.NArg() > 0 {
+		uid = fs.Arg(0)
+	}
+	if uid == "" {
+		fs.Usage()
+		return 2
+	}
+	if !o.ready(*tokenEnv, errw, "folder") {
+		return 2
+	}
+	code, raw, err := o.call("GET", "/api/agent/v1/setup/paths?unit="+url.QueryEscape(uid), nil)
+	if err != nil {
+		fmt.Fprintln(errw, "ark-server agent folder:", err)
+		return 1
+	}
+	if code != 200 {
+		return printReply(errw, code, raw)
+	}
+	var reply struct {
+		TaskFolder map[string]any `json:"task_folder"`
+		Missing    []string       `json:"missing"`
+	}
+	if json.Unmarshal(raw, &reply) != nil {
+		return printReply(errw, code, raw)
+	}
+	if *asJSON {
+		b, _ := json.MarshalIndent(reply.TaskFolder, "", "  ")
+		fmt.Fprintln(out, string(b))
+		return 0
+	}
+	path, _ := reply.TaskFolder["path"].(string)
+	if path == "" {
+		note, _ := reply.TaskFolder["note"].(string)
+		fmt.Fprintln(errw, "ark-server agent folder: no folder for "+uid+"; "+note)
+		return 1
+	}
+	fmt.Fprintln(out, path)
+	return 0
 }

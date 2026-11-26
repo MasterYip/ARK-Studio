@@ -140,12 +140,17 @@ async function mount({ payload, dashboard = null } = {}) {
     this.setExport("sizeBadge", () => new El("span"));
     this.setExport("refreshLocationSize", async () => ({ queued: true, message: "queued" }));
   }, { context });
+  // device-merge.js: the merge dialog (Go tests cover the merge itself).
+  const deviceMerge = new vm.SyntheticModule(["mergeDevices"], function () {
+    this.setExport("mergeDevices", async () => null);
+  }, { context });
   const layout = await loadNodeGraphLayout(context);
   const view = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/resources-view.js", import.meta.url), "utf8"), { context });
   const modules = { "./dom.js": domModule, "./i18n.js": i18n, "./icons.js": icons, "./api.js": api,
     "./context-menu.js": menu, "./node-graph-layout.js": layout, "./resources-model.js": model,
-    "./location-size-model.js": sizeModel, "./location-size.js": sizeDom, "./resource-open.js": resourceOpen };
+    "./location-size-model.js": sizeModel, "./location-size.js": sizeDom, "./resource-open.js": resourceOpen,
+    "./device-merge.js": deviceMerge };
   await view.link((specifier) => modules[specifier] || (() => { throw new Error(`unexpected import ${specifier}`); })());
   await view.evaluate();
   const panel = view.namespace.resourcesGraphPanel({ toast() {}, navigateWorkspace() {} });

@@ -440,7 +440,7 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 			"type", orV(args.Value("type"), "note"), "title", orV(args.Value("title"), "Untitled"),
 			"body", orV(args.Value("body"), ""), "status", orV(args.Value("status"), "open"),
 			"importance", orV(args.Value("importance"), "p2"), "tags", tags, "origin", "assistant"),
-			"assistant:deepseek", t.Who)
+			e.writeActor(), t.Who)
 		if err != nil {
 			return nil, err
 		}
@@ -453,7 +453,7 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 				patch.Set(k, v)
 			}
 		}
-		unit, err := t.Store.UpdateUnit(e.Ctx, orEmpty(args.Value("ref")), patch, "assistant:deepseek", t.Who)
+		unit, err := t.Store.UpdateUnit(e.Ctx, orEmpty(args.Value("ref")), patch, e.writeActor(), t.Who)
 		if err != nil {
 			return nil, err
 		}
@@ -468,7 +468,7 @@ func (e *Env) tool(name string, args *pyjson.Object) (*pyjson.Object, error) {
 		if note == "" {
 			note = "Created by DeepSeek assistant"
 		}
-		l, err := t.Store.CreateLink(e.Ctx, orEmpty(args.Value("source")), orEmpty(args.Value("target")), relation, note, "assistant:deepseek")
+		l, err := t.Store.CreateLink(e.Ctx, orEmpty(args.Value("source")), orEmpty(args.Value("target")), relation, note, e.writeActor())
 		if err != nil {
 			return nil, err
 		}

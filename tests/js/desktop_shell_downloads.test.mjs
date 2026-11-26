@@ -50,3 +50,17 @@ test("the app routes every window's downloads through its handler", () => {
 test("the shell's link rule still leaves download links to the webview", () => {
   assert.match(shell, /a\.hasAttribute\("download"\)\) return;/);
 });
+
+test("2.1.7: pages save through the app's Save as dialog", () => {
+  for (const cmd of ["save_download", "save_bytes", "cancel_download"]) {
+    assert.match(build, new RegExp(`"${cmd}"`), `build.rs declares ${cmd}`);
+    assert.match(lib, new RegExp(`"allow-${cmd.replace(/_/g, "-")}"`), `server pages may call ${cmd}`);
+    assert.match(lib, new RegExp(`generate_handler!\\[[\\s\\S]*${cmd},`), `${cmd} is registered`);
+  }
+  assert.match(shell, /saveDownload: function \(url, opts\)/);
+  assert.match(shell, /invoke\("save_bytes", bytes, \{ headers:/);
+  // Progress of a page's own download goes back to the page, not a shell card.
+  assert.match(shell, /if \(ev\.ticket\) \{\s*window\.dispatchEvent\(new CustomEvent\("ark-download-progress"/);
+  // Only files of the page's own server, with its cookies.
+  assert.match(lib, /fn save_download[\s\S]*?same_origin\(&page, &target\)[\s\S]*?cookies_for_url/);
+});

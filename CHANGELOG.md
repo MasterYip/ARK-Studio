@@ -6,6 +6,160 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.7] - 2026-11-26
+
+### Added
+
+- Sessions show how their main conversation's last turn ended: a pulsing
+  blue dot while it works, green when it finished and waits for your reply,
+  red when it stopped with an error (API error, usage limit, crash), grey
+  when it was stopped or closed. Sessions that stopped since you last opened
+  them are marked in the list and counted on Execute and Runs (orange, red
+  while one failed); opening the session clears it on every device. A stop
+  also notifies you: a toast in ARK, a system notification from the desktop
+  app or the browser when the page is in the background, and the Android app
+  ("WM-HOI 已完成一轮，等待你回复", "SandBox 出错停止：…"). Settings ›
+  Personal › Session alerts has a switch for finished turns and one for
+  errors (both on). `GET`/`POST /api/agent-sessions/notices`; session
+  payloads carry `turn_end`.
+- Needs you: review items assigned to someone else count as seen for you
+  (grey, no dot, not in "N new" or the project picker's count) unless you
+  turn on Settings › Personal › Display › "Highlight others' reviews"
+  (prefs.highlight_others_reviews, stored on your account).
+- Needs you and Review: a small orange dot marks a card not opened in Node
+  details yet (a review group while any member is not), and the right-click
+  or long-press menu offers "Mark as unread" / "Mark as read" (stored per
+  person on the server). Rows put the owner at the far right; line chips
+  are small grey metadata.
+- Needs you counts are orange while an item has not been opened in Node
+  details yet and grey once every item was ("3 · 1 new" when some are):
+  the line groups on Home and in Research › Review, the Needs you and
+  Review counts and the Home tab badge. Only opening an item in Node
+  details counts as seen; a new review round makes it new again. The
+  project picker's "new" badge counts the same way. `GET /api/needs/new`;
+  `POST /api/needs/seen` takes `opened` and answers `new_keys`.
+- The line tree of Needs you and Research › Review folds like the Editor
+  outline: Expand all / Collapse all / L1-L3 above the list, the Editor's
+  fold keys (Ctrl+K Ctrl+0, Ctrl+K Ctrl+J, Ctrl+K Ctrl+1-7, Ctrl+Shift+[ / ])
+  while the list has focus, ← / → on a group head; also in the command
+  palette and the shortcut reference. Folds are remembered per person and
+  project.
+- Scheduled Assistant tasks (Settings › Scheduled tasks): a fixed prompt the
+  built-in Assistant runs daily, weekly or every few hours as the admin who
+  saved it, in suggest mode (the default: nothing changes, the suggestions
+  become one node to review) or apply mode. Templates: maintain line tags,
+  tidy orphan nodes, stalled lines summary. Each run is logged with its
+  summary, the nodes it touched and its transcript; failures show in
+  Settings and in Needs you; a run stops at its model-call, change and
+  token limits; a task never runs twice at once, and runs missed while the
+  server was down run once. `GET/POST /api/project/schedules`,
+  `GET/POST /api/agent/v1/schedules`.
+- Line names are paths (`branch:hoi/pilot/stairs`): Needs you on Home and
+  Research › Review groups lines as a foldable tree whose parents roll up
+  counts, last activity and the stalled status; the line filter and the
+  Topics "Lines" section are trees; a line's topic shows the lines below it
+  (or "This line only"); "Rename / move" rewrites a line and the lines
+  below it with a preview and Undo (`POST /api/project/branches/rename`).
+  Research › Review shares Home's by-line layout and switch.
+- Settings › Lines: the line tag prefix and "Suggest line tags", a list of
+  proposed tags to apply row by row or all at once. Needs you's "No line"
+  group and the Topics "Lines" section link to it. A topic that carries
+  exactly one line tag is that line's topic.
+- Lines of work: a line is the tag `branch:<name>` (the namespace is the
+  project setting `branches.prefix`). Home's Needs you is grouped by line
+  (stalled lines first, "No line" last; a switch goes back to one list and
+  is remembered per person and project), with a line filter, a "Stalled"
+  badge for a line whose waiting items saw no activity for three days, and
+  a link to the line's topic. Every line is a topic: a topic whose rule is
+  the line's tag shows it; otherwise Topics lists an automatic topic page
+  under "Lines", which "Pin as topic" stores. On a line's topic, adding and
+  removing nodes edits their tag. `GET /api/project/branches`,
+  `GET /api/agent/v1/branches`, `GET /api/project/branch-topic` and
+  `GET /api/project/branches/suggest` (line tags proposed from part_of
+  links, nothing written). Rule C2 tells agents to carry the parent's line
+  tags over and to start or remove a line only when asked.
+- A server's Home in ARK Studio 2.1.1 or older (apps that look for updates
+  only at start) says when the server runs a newer release and how to
+  update the app, with a link to that release on GitHub.
+- Phones: one phone is one device. The app sends a stable device ID when it
+  signs in, so signing in again after an update no longer adds another device;
+  Settings › Mobile merges a phone's earlier sign-ins and lists stale devices.
+- Graph: an optional 3D view (the 3D button in the graph toolbar on the Map,
+  topic graphs and Ideas), and an optional "cluster by type" force that
+  groups nodes of the same type.
+- Editor: an Outline of Markdown headings and code symbols, a Timeline, the
+  Explorer follows the open file, folding, find and replace, and an HTML
+  preview.
+- GPU tab: "Occupied only" shows just the servers this project is using.
+
+### Changed
+
+- Research › Topics: the strip of topic cards is gone and the page head is
+  one slim row. An Explorer on the right (like the Editor's) holds Topics
+  (nested by part_of), Lines (branch: paths as a tree, with counts) and the
+  open topic's Outline (click selects the node in the graph, drag to
+  arrange, folding with the Ctrl+K chords); it folds, resizes, hides and
+  remembers its state, and is a drawer on phones. The Canvas view is gone:
+  a topic opens in the Graph, Force layout by default; a layout picked in
+  the graph toolbar (Node keeps the saved positions) is remembered per
+  topic. The former Outline view is now Document.
+- The Android APK always comes from the GitHub release: the server no
+  longer serves a copy from `ARK_DOWNLOAD_DIR` (removed) or `dist/`.
+  `/download/android-apps.json` reports `source: "github"` with the asset's
+  URL, size, SHA-256 and the version code and name read from it, and the old
+  `/download/*.apk` paths redirect to the asset.
+- Agents ARK launches are told the exact folder for their work on this
+  device: the folder of the task it belongs to, or, for an idea, question,
+  claim or result with no task above it, that node's own folder. The Start
+  section and ARK-TASK.md name the starting node's folder (created at
+  launch) and how to get the folder of any other node the session moves on
+  to; `ark-server agent folder <UID>` prints it. Agents may keep their own
+  scratch in the session workspace.
+- `GET /api/agent/v1/setup/paths` lists every place registered for the
+  device (`writable`) and, for a unit (`?unit=`, which also creates the
+  folder) or the calling session, the exact folder (`task_folder.path`).
+- Codex sessions with write access can write to the registered task space,
+  repositories and storage of the device; everything else stays read-only.
+- Without a task space, agents ask for one before writing any file; a task
+  space in the OS temp dir or a session workspace is refused.
+- After each turn, a session shows a warning listing files the agent made
+  outside the registered places, and results recorded in ARK that still
+  sit in the session workspace. Scratch is not reported; nothing is deleted.
+- The core rules (C10, P4, self-check) say files go only in registered
+  places and task-related files go in the folder of the task (or node) they
+  belong to.
+- Messages to an agent session have no practical length limit any more:
+  prompts, Start sections, send-back comments, attached units and snippets,
+  steer and follow-up messages arrive whole (up to 1,000,000 characters;
+  longer text is refused with a clear error instead of being cut). Long
+  prompts reach Codex and Claude Code through stdin and other agents through
+  a file in the session workspace, so they also work on Windows.
+- The command palette opens with Ctrl+P (Ctrl+K starts the folding
+  shortcuts). In the Chinese interface, lines of work are called 研究线.
+- Your comments, Accept, Send back and decisions wake only the agents that
+  wrote or last edited the node, not every session of the project.
+- Desktop app: every download asks where to save it and shows its progress.
+- Desktop app: the SSH entry it writes to `~/.ssh/config` is named after the
+  address, and key login always goes through that entry, so keys with a
+  non-default name work in VS Code and the terminal.
+- Desktop and Android updates come only from the GitHub release. Phones
+  with 2.1.2 to 2.1.6 update in the app.
+
+### Fixed
+
+- Phones: notifications (toasts) sit between the screen edges above the tab
+  bar and wrap long text; half of each one used to be off the left edge.
+- Paired phones: Settings no longer asks the server for things only a
+  computer may manage (providers, personal settings, agent tokens, members,
+  storage, …), so opening it shows no "not available to a paired device"
+  errors; those sections say "Manage this on a computer." instead.
+- Phones: in a session conversation, a tool row with a long summary
+  ("Edited 2 files, ran a command, searched once, read 2 files", a
+  sub-agent's task) no longer runs past the right edge of the screen; it
+  wraps, and its arrow and open button stay visible. Your messages keep a
+  margin on the left again.
+- A click right after a page loads is no longer ignored.
+
 ## [2.1.6] - 2026-11-24
 
 ### Added
@@ -52,6 +206,15 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ### Fixed
 
+- One phone no longer shows as several devices. The Android app (from
+  2.1.7) and the web app send a hashed device id with sign-in and every
+  request; a new sign-in from the same phone replaces its earlier one (the
+  old token is revoked once the new one is used), and the app's native and
+  web modes count as one device. Settings › Mobile and the resources graph
+  offer "Merge into one device" for a person's phones of one type (preview
+  first, the most recently used sign-in stays), and Settings lists devices
+  unused for 30 days with a one-click removal. Older apps keep working
+  without the merge-on-sign-in.
 - Open in VS Code no longer uses an SSH alias that was never written to
   `~/.ssh/config`; it uses the machine's own alias or writes it first.
 - Links typed in Chinese text end where the Chinese text or full-width

@@ -12,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"arkstudio/go/internal/apkinfo"
 	"arkstudio/go/internal/compat/pytext"
 )
 
@@ -27,6 +28,7 @@ const (
 	releaseTTL         = time.Hour       // a good answer is reused this long
 	releaseRetry       = 5 * time.Minute // a failed lookup is not retried sooner
 	releaseTimeout     = 5 * time.Second
+	apkInfoTimeout     = 3 * time.Minute // reading an APK's version from its release asset (in the background)
 )
 
 // releaseAsset matches the versioned release asset of each app
@@ -79,6 +81,8 @@ type releaseResolver struct {
 	goodAt   time.Time
 	failedAt time.Time
 	client   *http.Client
+	infos    map[string]apkinfo.Info // by asset URL: read once per release (apkInfo)
+	tried    map[string]time.Time    // by asset URL: when a read started
 }
 
 func releaseRepo() string {
@@ -234,4 +238,119 @@ func (r *releaseResolver) fetchText(ctx context.Context, client *http.Client, ur
 	}
 	data, err := io.ReadAll(io.LimitReader(resp.Body, 256<<10))
 	return string(data), err
+}
+
+// apkInfo is the package and version of an APK asset, read from its
+// AndroidManifest.xml with HTTP range requests (the end of the zip and the
+// manifest entry, not the whole APK).  The read runs in the background (the
+// download host can be slow); until it is done, and after a failure until
+// the next try (releaseRetry), ok is false.
+func (r *releaseResolver) apkInfo(url string, size int64) (apkinfo.Info, bool) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if info, ok := r.infos[url]; ok {
+		return info, true
+	}
+	if size <= 0 || !strings.HasPrefix(url, "https://") {
+		return apkinfo.Info{}, false
+	}
+	if at, ok := r.tried[url]; ok && time.Since(at) < releaseRetry+apkInfoTimeout {
+		return apkinfo.Info{}, false
+	}
+	if r.tried == nil {
+		r.tried = map[string]time.Time{}
+	}
+	r.tried[url] = time.Now()
+	client := r.client
+	if client == nil {
+		client = http.DefaultClient
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), apkInfoTimeout)
+		defer cancel()
+		info, err := apkinfo.Read(&rangeReader{ctx: ctx, client: client, url: url, size: size}, size)
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		if err != nil {
+			r.tried[url] = time.Now().Add(-apkInfoTimeout) // try again after releaseRetry
+			return
+		}
+		if r.infos == nil {
+			r.infos = map[string]apkinfo.Info{}
+		}
+		r.infos[url] = info
+	}()
+	return apkinfo.Info{}, false
+}
+
+// rangeReader is an io.ReaderAt over HTTP range requests, in 64 KiB blocks
+// (a zip reader reads small pieces near each other).
+type rangeReader struct {
+	ctx    context.Context
+	client *http.Client
+	url    string
+	size   int64
+	blocks map[int64][]byte
+}
+
+const rangeBlock = 64 << 10
+
+func (rr *rangeReader) ReadAt(p []byte, off int64) (int, error) {
+	if off >= rr.size {
+		return 0, io.EOF
+	}
+	n := 0
+	for n < len(p) && off+int64(n) < rr.size {
+		pos := off + int64(n)
+		start := pos - pos%rangeBlock
+		block, err := rr.block(start)
+		if err != nil {
+			return n, err
+		}
+		c := copy(p[n:], block[pos-start:])
+		if c == 0 {
+			return n, io.ErrUnexpectedEOF
+		}
+		n += c
+	}
+	if n < len(p) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+func (rr *rangeReader) block(start int64) ([]byte, error) {
+	if b, ok := rr.blocks[start]; ok {
+		return b, nil
+	}
+	if len(rr.blocks) >= 64 {
+		return nil, fmt.Errorf("apk asset: too many reads")
+	}
+	end := min(start+rangeBlock, rr.size) - 1
+	req, err := http.NewRequestWithContext(rr.ctx, "GET", rr.url, nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("User-Agent", "ARK-Studio-server")
+	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
+	resp, err := rr.client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusPartialContent {
+		return nil, fmt.Errorf("apk asset: HTTP %d to a range request", resp.StatusCode)
+	}
+	data, err := io.ReadAll(io.LimitReader(resp.Body, rangeBlock+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) != end-start+1 {
+		return nil, fmt.Errorf("apk asset: short range")
+	}
+	if rr.blocks == nil {
+		rr.blocks = map[int64][]byte{}
+	}
+	rr.blocks[start] = data
+	return data, nil
 }

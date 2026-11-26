@@ -15,13 +15,23 @@ the bottom tab bar).
 | Ctrl+B / Ctrl+Alt+B / Ctrl+J | Show/hide the left sidebar / right sidebar / bottom panel |
 | Ctrl+Shift+F | Search (prefilled with the selected text) |
 | F4 / Shift+F4 | Next / previous search result |
+| Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J | Editor: fold all / unfold all |
+| Ctrl+K Ctrl+1 … Ctrl+K Ctrl+7 | Editor: fold to level 1 … 7 headings |
+| Ctrl+Shift+[ / Ctrl+Shift+] | Editor: fold / unfold the current section |
+| Ctrl+E | Editor: edit / view the active file |
+| F11 | Editor: full screen (Esc leaves it) |
+
+The folding keys work while the editor, the Markdown preview or the Outline
+has focus, and can be changed in Settings › Appearance & input › Shortcuts.
+Ctrl+K starts the two-key shortcuts there; the command palette is Ctrl+P and
+lists the folding commands too.
 
 ## Views
 
 | View | Default place | What it shows |
 |---|---|---|
 | Filters | left | The filter rail of Research and Map |
-| Explorer | left | Project files (Editor) |
+| Explorer | left | The Editor's Files, Outline, Timeline and Search sections |
 | Search | left | Full-text search over nodes and project files |
 | Changes | left | Git changes; diffs open as Editor tabs |
 | Details | right | The node inspector |
@@ -97,6 +107,67 @@ and files over 1 MiB are skipped); a notice says when results were cut.
 Results appear while the search runs, and typing again cancels the running
 search. Files ignored by git (`.gitignore`) are not searched. Route details:
 [design note §17](../development/design.md#17-workbench-search-routes).
+
+## Editor: Explorer, Outline and Timeline
+
+In the Editor the Explorer holds four stacked sections: **Files**,
+**Outline**, **Timeline** and **Search** (the Search view with Replace; in
+other workspaces Search is its own view). Click a header to fold or unfold
+its section, drag the line above a header to resize, and use the header's
+last button (or double-click the header) to maximize a section and restore
+the others. Ctrl+Shift+F in the Editor opens the Search section. The
+arrangement is kept in this browser.
+
+- **Reveal**: the Explorer follows the active tab: it opens the file's
+  folders, highlights the file and scrolls to it. Turn this off in the
+  Explorer's **…** menu (*Reveal the active file automatically*); *Reveal in
+  Explorer* is also in a tab's right-click menu, the Explorer's header and
+  the palette. Clicking a folder in the path above the editor lists that
+  folder and opens it in the Explorer.
+- **Outline**: a tree of the file's headings or symbols. Click an entry to go
+  there; the entry for the section you are reading or typing in is
+  highlighted. Folding a section in the Outline folds it in the Markdown
+  preview and the other way round (per file, for this session).
+- **Folding in the preview**: hover a heading and click the arrow left of it
+  to fold its section. *Fold to level n* keeps headings down to level n
+  visible and folds their sections. The source view is a plain text editor
+  and does not hide lines; the folding keys then fold the Outline (the
+  preview shows the same folds).
+- **Timeline**: the commits that changed the file (renames followed), with
+  author and age. Click a commit to open that version read-only, or use
+  *Compare with current file* (also on the version's toolbar) for a diff.
+  Projects that are not git repositories show no history.
+
+## Editor: view first, HTML pages and full screen
+
+- **View first**: files open for reading. Markdown and HTML show rendered,
+  images, PDF and media in their viewers, other text read-only with syntax
+  colours. **Edit** in the toolbar, Ctrl+E or Enter in the read-only text
+  opens the editor for that tab; **View** goes back (after saving). People
+  with read access only get the view. Turn it off in Settings › Appearance &
+  input › Editor (*Open files in view mode*).
+- **HTML pages** run in the preview with their scripts, and relative files
+  (css, js, images, data next to the page) load. The page runs in a sandbox
+  with an opaque origin: it cannot read your ARK session, cookies, storage
+  or the ARK page, and its own requests may only reach the page's folder
+  (scripts, styles and images may also come from https libraries). The
+  toolbar has reload, open in a new tab (sandboxed the same way), page full
+  screen and Rendered / Source. The link is valid for 30 minutes and is
+  renewed while the tab is open. HTML attachments of nodes run their own
+  text only, after *Run*.
+- **Full screen**: the button at the right of the toolbar (or F11) lets the
+  Editor cover the whole window, without the top bar, activity bar and
+  sidebars; Esc or the button ends it.
+
+## Search: Replace
+
+The arrow left of the search box opens **Replace** (people with write access
+only). *Replace all* (Ctrl+Enter in the replace box), or the button on a
+file's result row, first lists every file with the changed lines, and writes
+nothing until you confirm. Replace works on project files only; nodes are not
+changed. With *regular expression* on, `$1`…`$99` and `$&` insert groups and
+`$$` a dollar sign. A file changed on disk after the preview is skipped and
+reported; open editor tabs reload replaced files.
 
 ## Editor: Source and Preview side by side
 

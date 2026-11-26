@@ -1,7 +1,7 @@
 // Settings → Project → Setup / Resources (docs/operations/multi-user-setup.md).
 // One project may be maintained by several people: each registers their own
 // resources and machine paths. Every project member sees the full register.
-import { h, clear, richText } from "../dom.js";
+import { h, clear, richText, autoGrowTextarea } from "../dom.js";
 import { t, hasKey, localizeServer } from "../i18n.js";
 import { icon } from "../icons.js";
 import { api } from "../api.js";
@@ -562,6 +562,7 @@ export function setupResourcesPanels(ctx) {
     const objective = h("textarea", { class: "input", rows: 2, maxlength: 4000, value: profile.objective || "",
       disabled: !info.can_confirm });
     objective.value = profile.objective || "";
+    autoGrowTextarea(objective);
     const policies = state.policies?.effective || {};
     const policyRow = h("div", { class: "setupres-policies" },
       ...Object.entries(policies).map(([key, value]) => h("span", {

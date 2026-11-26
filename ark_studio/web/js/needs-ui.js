@@ -12,16 +12,21 @@ import { attachImageContextMenu } from "./image-copy.js";
 import {
   borrowedSources, decisionOptions, groupExplain, groupNeeds, needsFilterActive, needsKind, needsLightboxItems,
   normalizeNeedsFilter, previewKind, runBatch, setNeedsGroupAll, toggleNeedsValue, NEEDS_FILTER_GROUPS,
-  needsSeenBody, assignedClearKeys, assignedEntries, dropAssigned,
+  needsSeenBody, assignedClearKeys, assignedEntries, dropAssigned, branchStatus, needsLayout, needsLayoutKey,
+  lineLabel, foldTree, foldCommandOf, treeDepth, unseenCount, countBubble, treeItems,
+  cardKeys, cardUnseen,
 } from "./needs-model.js";
+import { FOLD_ACTIONS, getShortcut, matchChord, shortcutLabel } from "./shortcuts.js";
 import {
   anchorLabel, anchorUnit, changeSummary, changesText, clockLabel, diffBlocks, keyNumber, noteParts, reviewCardText,
 } from "./review-model.js";
 import { authorName, threadComments } from "./comments-model.js";
-import { displayName } from "./users.js";
+import { currentUsername, displayName } from "./users.js";
 import { assigneeChip } from "./assignee.js";
 import { attachChipGroupMenu } from "./filter-chip-menu.js";
 import { needsGroupAction } from "./filter-group-model.js";
+import { tagTree } from "./tag-tree.js";
+import { buildTagTree, subtreePaths } from "./tag-tree-model.js";
 
 /** Fired on `document` after the needs list was reloaded (refreshNeeds). */
 export const NEEDS_CHANGED = "ark:needs-changed";
@@ -46,22 +51,102 @@ export function markNeedsSeen(ctx, body) {
   if (last?.sent === sent && Date.now() - last.at < SEEN_REPEAT_MS) return;
   lastSeen.set(project, { sent, at: Date.now() });
   api.markNeedsSeen(body).then((counts) => {
+    if (Array.isArray(counts?.new_keys)) setNeedsNew(ctx, counts.new_keys);
     window.dispatchEvent(new CustomEvent(REVIEW_SEEN, { detail: { project, counts } }));
   }).catch(() => { lastSeen.delete(project); /* read-only member or offline: no badge to clear */ });
+}
+
+// ------------------------------------------------------------ unseen
+// ctx.S.needsNew = { project, keys: Set } — the items not opened yet
+// (server: GET /api/needs/new).  The count bubbles are orange while their
+// items include one of these, grey otherwise.
+
+/** The unseen keys of the current project, or null while unknown. */
+export function needsNewKeys(ctx) {
+  const cached = ctx.S.needsNew;
+  return cached && cached.project === needsProjectKey(ctx) ? cached.keys : null;
+}
+
+function setNeedsNew(ctx, keys) {
+  const next = new Set(keys);
+  const old = needsNewKeys(ctx);
+  ctx.S.needsNew = { project: needsProjectKey(ctx), keys: next };
+  if (!old || old.size !== next.size || [...next].some((k) => !old.has(k))) {
+    document.dispatchEvent(new CustomEvent(NEEDS_CHANGED, { detail: { ctx } }));
+    ctx.syncNeedsBadge?.();
+  }
+}
+
+let newRequest = null;
+/** Reloads the unseen keys (after the list changed). */
+export function refreshNeedsNew(ctx) {
+  if (newRequest) return newRequest;
+  const project = needsProjectKey(ctx);
+  newRequest = api.needsNew().then((data) => {
+    if (project === needsProjectKey(ctx) && Array.isArray(data?.new_keys)) setNeedsNew(ctx, data.new_keys);
+  }).catch(() => { /* older server or offline: bubbles stay orange */ }).finally(() => { newRequest = null; });
+  return newRequest;
+}
+
+/**
+ * "Mark as read / unread" (the person's opened marks, server side): read
+ * marks the keys opened, unread forgets them so the dot and the orange
+ * bubble come back.
+ */
+export async function setOpened(ctx, keys = [], opened = true) {
+  if (!keys.length) return;
+  try {
+    const counts = await api.markNeedsSeen(opened ? { items: keys, opened: keys } : { unopened: keys });
+    if (Array.isArray(counts?.new_keys)) setNeedsNew(ctx, counts.new_keys);
+    window.dispatchEvent(new CustomEvent(REVIEW_SEEN, { detail: { project: ctx.S.project?.id || "", counts } }));
+  } catch (err) { toast(err.message, "err"); }
+}
+
+/** The small orange dot of a card not opened yet (null when seen or unknown). */
+export function unseenDot(ctx, keys) {
+  return cardUnseen(keys, needsNewKeys(ctx))
+    ? h("span", { class: "needs-unseen-dot", title: t("needs.unseen_dot"), "aria-label": t("needs.unseen_dot") }) : null;
+}
+
+/**
+ * Right-click / long press on a card (the unit menu, unit-menu.js, which
+ * reads `menuExtras` of the row): Mark as read or unread first.
+ */
+function attachSeenMenu(ctx, el, keys) {
+  el.menuExtras = () => [cardUnseen(keys, needsNewKeys(ctx))
+    ? { id: "needs-read", label: t("needs.mark_read"), icon: "check", onClick: () => setOpened(ctx, keys, true) }
+    : { id: "needs-unread", label: t("needs.mark_unread"), icon: "eye", onClick: () => setOpened(ctx, keys, false) }];
+  return el;
+}
+
+/** Marks a unit opened in the node details (and its review groups). */
+export function markOpened(ctx, keys = []) {
+  // Not deduplicated like the list's seen marks: opening again after
+  // "Mark as unread" must count.
+  if (keys.length && !keys.every((k) => !(needsNewKeys(ctx)?.has(k) ?? true))) setOpened(ctx, keys, true);
+}
+
+/** A count bubble span: orange while something in `items` is not opened, grey once all are. */
+export function countBubbleEl(ctx, total, items, { cls = "needs-count", title } = {}) {
+  const fresh = needsNewKeys(ctx);
+  const b = countBubble(total, unseenCount(items, fresh), (n) => t("needs.new_n", { n }));
+  return h("span", { class: `${cls} ${b.state === "seen" ? "seen" : "new"}`, dataset: { unseen: String(b.unseen) },
+    title: title || (b.unseen ? t("needs.unseen_hint", { n: b.unseen }) : t("needs.all_seen_hint")) }, b.text);
 }
 
 /**
  * Marks the cards of `entries` (groupNeeds output) shown in `list` as seen
  * once `root` was on screen for a moment, and again when more rows appear.
  */
-export function watchNeedsSeen(ctx, root, list, entries, { filtered = false } = {}) {
+export function watchNeedsSeen(ctx, root, list, entries, { filtered = false, shownCount = null } = {}) {
   if (typeof IntersectionObserver === "undefined") return;
   let timer = 0;
   let visible = false;
   const send = () => {
     timer = 0;
     if (!visible || !root.isConnected || document.hidden) return;
-    markNeedsSeen(ctx, needsSeenBody(entries, list ? list.children.length : 0, { filtered }));
+    const shown = shownCount ? shownCount() : list ? list.children.length : 0;
+    markNeedsSeen(ctx, needsSeenBody(entries, shown, { filtered }));
   };
   const arm = () => { clearTimeout(timer); timer = setTimeout(send, SEEN_AFTER_MS); };
   const observer = new IntersectionObserver((records) => {
@@ -84,6 +169,7 @@ export function needsProjectKey(ctx) {
 // keeps its scroll position).
 export async function refreshNeeds(ctx) {
   refreshAssigned(ctx);
+  refreshNeedsNew(ctx);
   try {
     const data = await api.project();
     ctx.S.needsYou = data.needs_you || [];
@@ -177,18 +263,67 @@ export function closeNeedsFilters() { openGroup = ""; }
 function valueLabel(group, value) {
   if (group === "type") return typeLabel(value);
   if (group === "kind") return t(`needs.kind.${value}`);
+  if (group === "branch") return value ? value.split("/").at(-1) : t("needs.branch.none");
   return value ? displayName(value) : t("assignee.none");
 }
 
-/** The filter bar; `onChange(next)` stores and redraws. */
-export function needsFilterBar(facets, filter, onChange) {
-  const groupLabel = { type: t("filters.types"), kind: t("needs.filter.kind"), assignee: t("needs.filter.assignee") };
+// The line group as a tree (tag-tree.js): a parent row shows or hides the
+// lines below it; "" (no line) is a plain row under the tree.
+function needsLineTree(values, filter, group, apply, foldKey) {
+  const hidden = filter[group] || [];
+  const roots = buildTagTree(values.filter((item) => item.value)
+    .map((item) => ({ path: item.value, n: item.n, own: item.exact == null || item.exact > 0 })), { rolledUp: true, order: "name" });
+  const all = values.map((item) => item.value);
+  const loose = values.find((item) => !item.value);
+  const isOn = (path) => !hidden.includes(path);
+  // Lines listed only as the parent of others: hiding them changes nothing.
+  const grouping = new Set(values.filter((item) => item.value && item.exact === 0).map((item) => item.value));
+  const counted = values.filter((item) => !grouping.has(item.value));
+  const shown = counted.filter((item) => isOn(item.value)).length;
+  return tagTree({
+    roots, isOn, foldKey,
+    onToggle: (paths, on) => {
+      const set = new Set(paths);
+      const kept = hidden.filter((value) => !grouping.has(value));
+      apply({ ...filter, [group]: on ? kept.filter((value) => !set.has(value)) : [...new Set([...kept, ...paths])] });
+    },
+    all: {
+      label: t("filters.all"), checked: shown === counted.length, indeterminate: shown > 0 && shown < counted.length,
+      onChange: (on) => apply(setNeedsGroupAll(filter, group, on, all)),
+    },
+    extra: loose ? [{
+      key: "", label: t("needs.branch.none"), title: t("needs.branch.none_hint"), n: loose.n,
+      on: isOn(""), toggle: () => apply(toggleNeedsValue(filter, group, "", all)),
+    }] : [],
+    rowMenu: (el, item) => {
+      const subtree = subtreePaths(item);
+      const next = (action) => {
+        if (action === "only") return all.filter((value) => !subtree.includes(value));
+        return needsGroupAction(filter, group, action, all, item.path)[group];
+      };
+      attachChipGroupMenu(el, {
+        can: (action) => {
+          const list = next(action);
+          return list.length !== hidden.length || list.some((value) => !hidden.includes(value));
+        },
+        run: (action) => apply({ ...filter, [group]: next(action) }),
+      });
+    },
+  });
+}
+
+/** The filter bar; `onChange(next)` stores and redraws; `foldKey`: where the line tree keeps its folded rows. */
+export function needsFilterBar(facets, filter, onChange, { foldKey = "needs" } = {}) {
+  const groupLabel = { type: t("filters.types"), kind: t("needs.filter.kind"), assignee: t("needs.filter.assignee"),
+    branch: t("needs.filter.branch") };
   const bar = h("div", { class: "needs-filters", role: "group", "aria-label": t("needs.filter.label") });
   for (const group of NEEDS_FILTER_GROUPS) {
     const values = facets[group] || [];
     if (!values.length) continue;
-    const hidden = (filter[group] || []).filter((value) => values.some((item) => item.value === value));
-    const shown = values.length - hidden.length;
+    // Lines above others without items of their own only group them: not counted.
+    const counted = group === "branch" ? values.filter((item) => !item.value || item.exact !== 0) : values;
+    const hidden = (filter[group] || []).filter((value) => counted.some((item) => item.value === value));
+    const shown = counted.length - hidden.length;
     const apply = (next) => { openGroup = group; onChange(next); };
     const allToggle = h("input", {
       type: "checkbox", checked: hidden.length === 0,
@@ -196,12 +331,12 @@ export function needsFilterBar(facets, filter, onChange) {
       onchange: (event) => apply(setNeedsGroupAll(filter, group, event.target.checked, values.map((item) => item.value))),
     });
     allToggle.indeterminate = hidden.length > 0 && shown > 0;
-    const chips = h("div", { class: "type-filter" }, values.map(({ value, n }) => {
+    const chips = group === "branch" ? null : h("div", { class: "type-filter" }, values.map(({ value, n }) => {
       const on = !hidden.includes(value);
       const chip = h("button", {
         type: "button", class: `type-chip ${on ? "on" : ""}`.trim(), "aria-pressed": String(on),
         dataset: { group, value },
-        onclick: () => apply(toggleNeedsValue(filter, group, value)),
+        onclick: () => apply(toggleNeedsValue(filter, group, value, values.map((item) => item.value))),
       }, group === "type" ? h("i", { style: { "--dot": typeColor(value) } }) : null,
       valueLabel(group, value), h("span", { class: "n" }, String(n)));
       // Only this / Select all / Invert (right click, long press, Alt+click).
@@ -211,7 +346,10 @@ export function needsFilterBar(facets, filter, onChange) {
           const next = needsGroupAction(filter, group, action, all, value)[group];
           return next.length !== hidden.length || next.some((item) => !hidden.includes(item));
         },
-        run: (action) => apply(needsGroupAction(filter, group, action, all, value)),
+        run: (action) => {
+          const next = needsGroupAction(filter, group, action, all, value);
+          apply(next);
+        },
       });
     }));
     const details = h("details", {
@@ -219,10 +357,10 @@ export function needsFilterBar(facets, filter, onChange) {
       open: openGroup === group ? true : undefined,
     },
     h("summary", null, h("span", null, groupLabel[group]),
-      h("b", null, hidden.length ? `${shown}/${values.length}` : t("filters.all")), icon("chevron", "sm")),
-    h("div", { class: "needs-filter-pop" },
-      h("label", { class: "type-all-toggle" }, allToggle, t("filters.all")),
-      chips));
+      h("b", null, hidden.length ? `${shown}/${counted.length}` : t("filters.all")), icon("chevron", "sm")),
+    h("div", { class: `needs-filter-pop ${group === "branch" ? "tree" : ""}`.trim() },
+      group === "branch" ? needsLineTree(values, filter, group, apply, foldKey)
+        : [h("label", { class: "type-all-toggle" }, allToggle, t("filters.all")), chips]));
     details.addEventListener("toggle", () => {
       if (details.open) {
         openGroup = group;
@@ -261,7 +399,7 @@ document.addEventListener("keydown", (event) => {
 // media thumbnails, then actions.  "Comment" leaves a note the agent reads
 // without changing the status.  `select` adds a leading checkbox:
 // `{ checked, onChange(checked) }`.
-export function needsRow(ctx, item, { select = null } = {}) {
+export function needsRow(ctx, item, { select = null, lines = [], plus = false } = {}) {
   const kind = needsKind(item);
   // Opens the unit, at the first place the review note points to in it.
   const first = (item.review_anchors || []).find((a) => a.ok !== false && a.kind === "heading" && (!a.unit || a.unit === item.uid));
@@ -293,23 +431,28 @@ export function needsRow(ctx, item, { select = null } = {}) {
     "aria-label": t("review.select_item", { uid: item.uid, title: item.title || "" }),
     onchange: (event) => select.onChange(event.target.checked),
   }) : null;
-  return h("article", {
-    class: `needs-row kind-${kind} ${select?.checked ? "selected" : ""}`.trim(),
+  const keys = cardKeys(item);
+  const dot = unseenDot(ctx, keys);
+  return attachSeenMenu(ctx, h("article", {
+    class: `needs-row kind-${kind} ${select?.checked ? "selected" : ""} ${dot ? "unseen" : ""}`.replace(/\s+/g, " ").trim(),
     dataset: { unitRef: item.uid, needsKind: kind },
   },
     check,
+    dot,
     h("span", { class: `needs-chip kind-${kind}` }, t(`needs.kind.${kind}`)),
     h("div", { class: "needs-main" },
       h("div", { class: "needs-line" },
         h("button", { class: "needs-title", type: "button", onclick: open, title: `${item.uid} · ${item.title}` },
           h("span", { class: "needs-uid" }, item.uid), " ", item.title),
-        assigneeChip(item),
+        lineChips(ctx, lines, { plus }),
         notes ? h("span", { class: "needs-notes", title: t("needs.comments_open", { n: notes }), dataset: { open: notes } },
           icon("message", "sm"), String(notes)) : null,
         kind === "review" && item.review_round ? h("span", { class: "needs-round", dataset: { round: String(item.review_round) } },
           t("review_req.round", { n: item.review_round })) : null,
         h("span", { class: "needs-age", title: fmtDateTime(item.review_since || item.updated_at) },
-          relativeTime(item.review_since || item.updated_at))),
+          relativeTime(item.review_since || item.updated_at)),
+        // The owner last, at the far right of the row.
+        assigneeChip(item)),
       kind === "review" && "review_note" in item ? reviewFocus(ctx, item, open)
         : item.excerpt ? h("div", { class: "needs-excerpt", onclick: open }, item.excerpt_plain || stripMd(item.excerpt)) : null,
       kind === "review" ? previousRoundLine(item.review_prev) : null,
@@ -318,7 +461,7 @@ export function needsRow(ctx, item, { select = null } = {}) {
         media.length || noMedia ? h("div", { class: "needs-media-col" },
           media.length ? needsStrip(ctx, item, media) : null,
           noMedia) : null,
-        h("div", { class: "needs-actions" }, actions))));
+        h("div", { class: "needs-actions" }, actions)))), keys);
 }
 
 export function stripMd(text) {
@@ -748,12 +891,14 @@ export function needsCards(ctx, items, { select = null } = {}) {
 }
 
 /** The card for one groupNeeds() entry. */
-export function needsEntryCard(ctx, entry, { select = null } = {}) {
+export function needsEntryCard(ctx, entry, { select = null, lines = null, plus = false } = {}) {
   if (entry.kind === "group") return deliveryCard(ctx, entry, { select });
   if (entry.item.kind === "review_group") return reviewGroupCard(ctx, entry.item);
+  // `lines`: the line chips to show (default: the item's own lines).
+  const shown = lines || (Array.isArray(entry.item.branches) ? entry.item.branches : []);
   return needsRow(ctx, entry.item, select ? {
-    select: { checked: select.has(entry.item.uid), onChange: (on) => select.onChange([entry.item.uid], on) },
-  } : {});
+    lines: shown, plus, select: { checked: select.has(entry.item.uid), onChange: (on) => select.onChange([entry.item.uid], on) },
+  } : { lines: shown, plus });
 }
 
 // One compact row per member: uid, the claim, its headline number, the
@@ -829,10 +974,13 @@ function deliveryCard(ctx, group, { select = null } = {}) {
   }) : null;
   if (all) all.indeterminate = !all.checked && uids.some((uid) => select.has(uid));
   const newest = members.reduce((max, m) => ((m.review_since || m.updated_at || "") > max ? (m.review_since || m.updated_at) : max), "");
-  return h("article", {
-    class: "needs-row needs-group kind-review", dataset: { unitRef: group.primary.uid, needsKind: "review", group: group.key },
+  const keys = [...new Set(members.flatMap((m) => cardKeys(m)))];
+  const dot = unseenDot(ctx, keys);
+  return attachSeenMenu(ctx, h("article", {
+    class: `needs-row needs-group kind-review ${dot ? "unseen" : ""}`.trim(), dataset: { unitRef: group.primary.uid, needsKind: "review", group: group.key },
   },
   all,
+  dot,
   h("span", { class: "needs-chip kind-review" }, t("review_req.delivery")),
   h("div", { class: "needs-main" },
     h("div", { class: "needs-line" },
@@ -850,7 +998,7 @@ function deliveryCard(ctx, group, { select = null } = {}) {
         h("button", { class: "btn sm ghost", type: "button", onclick: () => groupDecideDialog(ctx, { title: group.title, members, accept: false }) },
           icon("arrowLeft", "sm"), t("needs.send_back")),
         toggle)),
-    expanded));
+    expanded)), keys);
 }
 
 // Accept / send back several members (a fallback group): the checked ones
@@ -889,9 +1037,12 @@ function reviewGroupCard(ctx, group) {
   const members = group.members || [];
   const pending = members.filter((m) => !m.outcome);
   const comments = (group.comments || []).filter((c) => c.kind !== "agent_reply");
-  return h("article", {
-    class: "needs-row needs-group review-group kind-review", dataset: { unitRef: group.id, needsKind: "review", reviewGroup: group.id },
+  const keys = cardKeys(group);
+  const dot = unseenDot(ctx, keys);
+  return attachSeenMenu(ctx, h("article", {
+    class: `needs-row needs-group review-group kind-review ${dot ? "unseen" : ""}`.trim(), dataset: { unitRef: group.id, needsKind: "review", reviewGroup: group.id },
   },
+  dot,
   h("span", { class: "needs-chip kind-review" }, t("review_req.group")),
   h("div", { class: "needs-main" },
     h("div", { class: "needs-line" },
@@ -917,7 +1068,7 @@ function reviewGroupCard(ctx, group) {
         h("button", { class: "btn sm ghost", type: "button", disabled: !pending.length,
           onclick: () => reviewGroupDialog(ctx, group, false) }, icon("arrowLeft", "sm"), t("needs.send_back")),
         h("button", { class: "btn sm ghost", type: "button", onclick: () => reviewGroupComment(ctx, group) },
-          icon("message", "sm"), t("needs.comment"))))));
+          icon("message", "sm"), t("needs.comment")))))), keys);
 }
 
 // Accept: checked members are accepted, unchecked ones sent back (with the
@@ -1073,4 +1224,296 @@ function editNoteDialog(ctx, unit, info) {
       },
     ],
   });
+}
+
+// ------------------------------------------------------------ lines
+// Lines of work ("branch:<name>" tags; server store/branches.go).  Needs you
+// items carry their line names; GET /api/project/branches says how each
+// line is doing.  ctx.S.branches = { project, at, data } (the last answer).
+const BRANCHES_FRESH_MS = 15000;
+let branchesRequest = null;
+
+/** The project's lines (the cached answer, or null while none was read). */
+export function branchesData(ctx) {
+  const cached = ctx.S.branches;
+  return cached && cached.project === needsProjectKey(ctx) ? cached.data : null;
+}
+
+/**
+ * Reads the lines again when the cached answer is older than a few seconds
+ * (or `force`), then redraws Needs you if anything changed.
+ */
+export function refreshBranches(ctx, { force = false } = {}) {
+  const project = needsProjectKey(ctx);
+  const cached = ctx.S.branches;
+  if (!force && cached?.project === project && Date.now() - cached.at < BRANCHES_FRESH_MS) return branchesRequest;
+  if (branchesRequest && !force) return branchesRequest;
+  branchesRequest = api.branches().then((data) => {
+    if (project !== needsProjectKey(ctx)) return;
+    const changed = JSON.stringify(data) !== JSON.stringify(ctx.S.branches?.data);
+    ctx.S.branches = { project, at: Date.now(), data };
+    if (changed) document.dispatchEvent(new CustomEvent(NEEDS_CHANGED, { detail: { ctx } }));
+  }).catch(() => { /* offline or an older server: Needs you stays as it is */ })
+    .finally(() => { branchesRequest = null; });
+  return branchesRequest;
+}
+
+/** Small chips naming lines (Needs you rows; "+name" in grouped lists). */
+export function lineChips(ctx, lines = [], { plus = false } = {}) {
+  if (!lines?.length) return null;
+  return h("span", { class: "needs-lines" }, lines.map((name) => h("button", {
+    // Quiet metadata: the line's last part, the full path in the tooltip.
+    class: "needs-line-chip", type: "button", title: `${lineLabel(name)} · ${t("needs.branch.open", { name })}`,
+    dataset: { branch: name },
+    onclick: (event) => { event.stopPropagation(); openBranch(ctx, name); },
+  }, `${plus ? "+" : ""}${name.split("/").at(-1)}`)));
+}
+
+/** Opens a line's topic page: its stored topic, else the automatic one. */
+export function openBranch(ctx, name) {
+  const info = (branchesData(ctx)?.items || []).find((b) => b.name === name);
+  const prefix = branchesData(ctx)?.prefix || "branch";
+  const ref = info?.ref || `${prefix}:${name}`;
+  ctx.openTopic?.(ref);
+}
+
+/** The status badge of a line ("已停滞" ...); null for a plain active line. */
+export function branchBadge(info) {
+  const status = branchStatus(info || {});
+  if (!info || status === "active") return null;
+  return h("span", { class: `branch-badge status-${status}`, title: t(`branch.status.${status}_hint`, { days: info.stalled_days || 3 }) },
+    t(`branch.status.${status}`));
+}
+
+/** The head of one line's section in Needs you: name, status, last activity, count, topic link. */
+// A tree node (needs-model.js groupNeedsTree) shows its own name part, the
+// rolled-up status / count / last activity and a fold switch.
+export function branchSectionHead(ctx, section, count, { fold = null } = {}) {
+  const info = section.info;
+  const loose = !section.key;
+  const status = section.status || info?.status || "";
+  const last = section.last || info?.last_activity || "";
+  return h("div", {
+    class: `needs-branch-head ${loose ? "loose" : ""} ${status === "stalled" ? "stalled" : ""}`.replace(/\s+/g, " ").trim(),
+    dataset: { branch: section.key },
+  },
+  fold ? h("button", {
+    class: "needs-branch-fold", type: "button", "aria-expanded": String(fold.open), onclick: fold.toggle,
+    title: lineLabel(section.key),
+  }, icon(fold.open ? "chevron" : "chevronRight", "sm")) : null,
+  h("span", { class: "needs-branch-name", title: loose ? t("needs.branch.none_hint") : info?.tag || lineLabel(section.key) },
+    loose ? t("needs.branch.none") : section.label || lineLabel(section.name)),
+  // The rolled-up status (a parent with an active sub-line is not "done").
+  loose ? null : branchBadge(status ? { ...(info || {}), status } : info),
+  countBubbleEl(ctx, count, section.children ? treeItems(section) : section.items || []),
+  last ? h("span", { class: "needs-branch-last", title: fmtDateTime(last) }, t("needs.branch.last", { age: relativeTime(last) })) : null,
+  loose ? h("button", {
+    class: "link needs-branch-topic", type: "button", title: t("needs.branch.sort_hint"), dataset: { settingsLines: "1" },
+    onclick: () => ctx.openSettingsAt?.("lines"),
+  }, t("needs.branch.sort")) : h("button", {
+    class: "link needs-branch-topic", type: "button", title: t("needs.branch.topic_hint"),
+    onclick: () => openBranch(ctx, section.name),
+  }, info?.topic ? t("needs.branch.topic") : t("needs.branch.auto_topic")));
+}
+
+/**
+ * Needs you by line as a tree (needs-model.js groupNeedsTree): each line
+ * a section with its head, `cards(node)` (its own items) and the lines
+ * below it, folded per person and project.  `headExtra(node, head)` may
+ * add to a head (the Review page's group checkbox).
+ */
+export function lineTreeSections(ctx, tree, { cards, headExtra = null, rerender }) {
+  const folded = loadLineFolds(ctx);
+  const section = (node) => {
+    const open = !folded.has(node.key);
+    const head = branchSectionHead(ctx, node, node.total ?? node.items.length,
+      node.key ? { fold: { open, toggle: () => runLineFold(ctx, tree, { cmd: "toggle", focus: node.key }, rerender) } } : {});
+    head.tabIndex = 0;
+    headExtra?.(node, head);
+    const el = h("section", { class: `needs-branch depth-${Math.min(node.depth || 0, 4)}`, dataset: { branch: node.key } }, head);
+    if (open) {
+      if (node.items.length) el.appendChild(cards(node));
+      for (const child of node.children || []) el.appendChild(section(child));
+    }
+    return el;
+  };
+  const out = tree.nodes.map(section);
+  if (tree.loose) out.push(section({ ...tree.loose, children: [], depth: 0 }));
+  return out;
+}
+
+// ------------------------------------------------- line tree folding
+// Folds like the Editor outline, with its configurable keys (shortcuts.js
+// FOLD_ACTIONS: Ctrl+K Ctrl+0 / Ctrl+K Ctrl+J / Ctrl+K Ctrl+1-7 /
+// Ctrl+Shift+[ ]) while focus is in the list, and ← / → on a group head.
+// Folds are remembered per person and project.
+const foldTrees = new WeakMap(); // .needs-branches element -> { ctx, tree, rerender }
+let foldChordState = null;
+
+function lineFoldKey(ctx) {
+  return `ark.lineFold:${currentUsername() || "-"}:${needsProjectKey(ctx)}`;
+}
+
+export function loadLineFolds(ctx) {
+  try { return new Set(JSON.parse(localStorage.getItem(lineFoldKey(ctx)) || "[]")); } catch { return new Set(); }
+}
+
+/** Runs a fold command (needs-model.js foldTree), saves it, redraws and keeps focus on the line. */
+export function runLineFold(ctx, tree, command, rerender) {
+  const next = foldTree(loadLineFolds(ctx), tree, command);
+  try { localStorage.setItem(lineFoldKey(ctx), JSON.stringify([...next])); } catch { /* storage unavailable */ }
+  rerender();
+  if (command.focus != null) {
+    requestAnimationFrame(() => document.querySelector(`.needs-branch-head[data-branch="${CSS.escape(command.focus)}"]`)?.focus({ preventScroll: true }));
+  }
+}
+
+/** The fold toolbar: Expand all / Collapse all / L1-L3 (as the topic outline). */
+export function lineFoldBar(ctx, tree, rerender) {
+  const depth = Math.min(3, treeDepth(tree));
+  const run = (command) => runLineFold(ctx, tree, command, rerender);
+  return h("div", { class: "needs-fold-bar", role: "group", "aria-label": t("needs.fold.label"), title: t("needs.fold.keys") },
+    h("button", { class: "btn sm ghost", type: "button", "data-fold": "unfold", onclick: () => run({ cmd: "unfoldAll" }) }, icon("arrowDown", "sm"), t("topic.unfold_all")),
+    h("button", { class: "btn sm ghost", type: "button", "data-fold": "fold", onclick: () => run({ cmd: "foldAll" }) }, icon("arrowRight", "sm"), t("topic.fold_all")),
+    ...Array.from({ length: depth > 1 ? depth : 0 }, (_, i) => h("button", {
+      class: "btn sm ghost", type: "button", dataset: { foldLevel: String(i + 1) }, title: t("topic.fold_level_hint", { n: i + 1 }),
+      onclick: () => run({ cmd: "showLevel", level: i + 1 }),
+    }, `L${i + 1}`)));
+}
+
+/** Registers the tree a `.needs-branches` element shows, for the keys and the palette. */
+export function registerLineTree(el, ctx, tree, rerender) {
+  el.tabIndex = -1;
+  foldTrees.set(el, { ctx, tree, rerender });
+}
+
+function focusedLineTree() {
+  const el = document.activeElement?.closest?.(".needs-branches");
+  return el && foldTrees.has(el) ? foldTrees.get(el) : null;
+}
+
+/** The line tree on screen (palette commands), or null. */
+export function visibleLineTree() {
+  const el = [...document.querySelectorAll(".needs-branches")].find((item) => item.isConnected && foldTrees.has(item));
+  return el ? foldTrees.get(el) : null;
+}
+
+function foldSpecs() {
+  return Object.fromEntries(FOLD_ACTIONS.map((action) => [action.id, getShortcut(action.id)]));
+}
+
+function endFoldChord() {
+  if (!foldChordState) return;
+  clearTimeout(foldChordState.timer);
+  foldChordState = null;
+}
+
+document.addEventListener("keydown", (event) => {
+  if (["Control", "Shift", "Alt", "Meta"].includes(event.key)) return; // i18n-ignore: key names
+  if (event.target?.closest?.("input, textarea, select, [contenteditable='true']")) return;
+  const current = foldChordState ? foldChordState.tree : focusedLineTree();
+  if (!current) return;
+  const head = document.activeElement?.closest?.(".needs-branch-head");
+  const focus = document.activeElement?.closest?.(".needs-branch")?.dataset.branch || "";
+  const run = (command) => runLineFold(current.ctx, current.tree, { ...command, focus: command.focus ?? focus }, current.rerender);
+  if (foldChordState) {
+    const { combo } = foldChordState;
+    endFoldChord();
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const found = matchChord(event, foldSpecs(), combo);
+    const command = found.type === "match" ? foldCommandOf(found.id) : null;
+    if (command) run(command); else toast(t("editor.chord_unknown", { keys: shortcutLabel(combo) }));
+    return;
+  }
+  if (head && !event.ctrlKey && !event.metaKey && !event.altKey && (event.key === "ArrowLeft" || event.key === "ArrowRight")) {
+    event.preventDefault();
+    run({ cmd: event.key === "ArrowLeft" ? "fold" : "unfold", focus: head.dataset.branch || "" });
+    return;
+  }
+  const found = matchChord(event, foldSpecs(), "");
+  if (found.type === "match") {
+    const command = foldCommandOf(found.id);
+    if (!command) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    run(command);
+  } else if (found.type === "prefix") {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    const timer = setTimeout(() => {
+      const combo = foldChordState?.combo;
+      endFoldChord();
+      // Alone, Ctrl+K still opens the command palette.
+      if (combo && combo === getShortcut("palette")) window.dispatchEvent(new CustomEvent("ark:open-palette"));
+    }, 1000);
+    foldChordState = { combo: found.combo, timer, tree: current };
+    toast(t("editor.chord_wait", { keys: shortcutLabel(found.combo) }), "", { duration: 1000 });
+  }
+}, true);
+
+/** Palette commands for the line tree on screen (Home or Review). */
+export function needsPaletteCommands() {
+  const current = visibleLineTree();
+  if (!current) return [];
+  const cat = t("needs.title");
+  return FOLD_ACTIONS.filter((action) => foldCommandOf(action.id) && !["editorFold", "editorUnfold"].includes(action.id)).map((action) => ({
+    id: `needs-${action.id}`, label: t(action.labelKey, action.labelParams), cat, keys: shortcutLabel(getShortcut(action.id)),
+    run: () => runLineFold(current.ctx, current.tree, foldCommandOf(action.id), current.rerender),
+  }));
+}
+
+// ------------------------------------------------- layout (shared)
+// Home's Needs you and Research › Review show the same layout: by line
+// (default) or one list, remembered per person and project.
+
+/** "branch" | "flat" for this person and project. */
+export function storedNeedsLayout(ctx) {
+  try { return needsLayout(localStorage.getItem(needsLayoutKey(currentUsername() || "", needsProjectKey(ctx)))); } catch { return "branch"; }
+}
+
+/** The By line / One list switch; `onChange()` redraws. */
+export function needsLayoutToggle(ctx, onChange) {
+  const layout = storedNeedsLayout(ctx);
+  return h("button", {
+    class: "link needs-layout", type: "button", dataset: { layout },
+    title: layout === "branch" ? t("needs.layout.flat_hint") : t("needs.layout.branch_hint"),
+    onclick: () => {
+      try { localStorage.setItem(needsLayoutKey(currentUsername() || "", needsProjectKey(ctx)), layout === "branch" ? "flat" : "branch"); } catch { /* storage unavailable */ }
+      onChange();
+    },
+  }, layout === "branch" ? t("needs.layout.flat") : t("needs.layout.branch"));
+}
+
+// ------------------------------------------------- scheduled tasks
+// Failed scheduled Assistant tasks (GET /api/project/schedules "failing")
+// lead Needs you; ctx.S.scheduleFailing = { project, at, items }.
+let schedulesRequest = null;
+
+export function refreshScheduleFailing(ctx) {
+  const project = needsProjectKey(ctx);
+  const cached = ctx.S.scheduleFailing;
+  if ((cached?.project === project && Date.now() - cached.at < 60000) || schedulesRequest) return schedulesRequest;
+  schedulesRequest = api.schedules().then((data) => {
+    if (project !== needsProjectKey(ctx)) return;
+    const items = data.failing || [];
+    const changed = JSON.stringify(items) !== JSON.stringify(ctx.S.scheduleFailing?.items || []);
+    ctx.S.scheduleFailing = { project, at: Date.now(), items };
+    if (changed) document.dispatchEvent(new CustomEvent(NEEDS_CHANGED, { detail: { ctx } }));
+  }).catch(() => { ctx.S.scheduleFailing = { project, at: Date.now(), items: [] }; })
+    .finally(() => { schedulesRequest = null; });
+  return schedulesRequest;
+}
+
+/** The rows of failed scheduled tasks for Needs you (null when none). */
+export function scheduleFailingRows(ctx) {
+  const cached = ctx.S.scheduleFailing;
+  const items = cached?.project === needsProjectKey(ctx) ? cached.items || [] : [];
+  if (!items.length) return null;
+  return h("div", { class: "needs-schedule-failing", "aria-label": t("schedule.title") }, items.map((item) =>
+    h("article", { class: "needs-schedule-row", dataset: { schedule: item.id } },
+      h("span", { class: "needs-chip kind-failed" }, t("schedule.status.failed")),
+      h("span", { class: "needs-schedule-text" }, t("schedule.failed_line", { name: item.name, error: item.error || "" })),
+      item.at ? h("span", { class: "needs-age", title: fmtDateTime(item.at) }, relativeTime(item.at)) : null,
+      h("button", { class: "link", type: "button", onclick: () => ctx.openSettingsAt?.("schedules") }, t("schedule.open_settings")))));
 }

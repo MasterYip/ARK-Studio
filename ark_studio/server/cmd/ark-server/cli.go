@@ -133,6 +133,9 @@ func run(argv []string) int {
 			if len(argv) > 1 && argv[1] == "host-id" { // this device's id for X-ARK-Host (internal/hostid)
 				return agentHostID(argv[2:], stdout)
 			}
+			if len(argv) > 1 && argv[1] == "folder" { // the folder for one unit's work (cli_relocate.go)
+				return agentFolder(argv[2:], stdout, stderr)
+			}
 			if len(argv) > 1 && argv[1] == "paths" { // this device's task space and paths (cli_relocate.go)
 				return agentPaths(argv[2:], stdout, stderr)
 			}

@@ -43,7 +43,7 @@ public class ArkClientTest {
         String body = exchange.body;
         seen.add(exchange.method + " " + exchange.target + " token=" + token
                 + " origin=" + origin + " ctype=" + exchange.header("Content-Type")
-                + " body=" + body);
+                + " device=" + exchange.header(ArkClient.DEVICE_HEADER) + " body=" + body);
         if (path.equals("/api/mobile/login")) {
             JSONObject in = new JSONObject(body);
             if (in.getString("password").equals("right")) {
@@ -83,6 +83,22 @@ public class ArkClientTest {
         assertTrue(request, request.contains("application/json"));
         assertTrue(request, request.contains("\"username\":\"ark\""));
         assertTrue(request, request.contains("\"device\":\"Pixel\""));
+    }
+
+    @Test
+    public void deviceIdGoesWithSignInAndEveryRequest() throws Exception {
+        String id = com.masteryip.arkstudio.data.DeviceId.hash("abc123");
+        ArkClient.setDeviceId(id);
+        try {
+            ArkClient.login(base, "ark", "right", false, "Pixel");
+            new ArkClient(base, "arkm_x").get("/api/bootstrap");
+            assertTrue(seen.get(0), seen.get(0).contains("\"device_id\":\"" + id + "\""));
+            assertTrue(seen.get(1), seen.get(1).contains("device=" + id));
+        } finally {
+            ArkClient.setDeviceId("");
+        }
+        new ArkClient(base, "arkm_x").get("/api/bootstrap");
+        assertTrue(seen.get(2), seen.get(2).contains("device=null"));
     }
 
     @Test

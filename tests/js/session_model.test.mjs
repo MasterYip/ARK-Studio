@@ -340,3 +340,62 @@ test("model option labels show config origin and effective rank; endpoint models
   ] }));
   assert.deepEqual(picker.groups.map((group) => group.source), ["detected", "available"]);
 });
+
+// ------------------------------------------------- session header / properties
+test("the session header keeps only the live state; Stop only while a turn runs", () => {
+  const busy = { id: "s_h", status: "idle", capabilities: { stream_input: true }, busy: { subagents: 1, background: 2 } };
+  const head = model.sessionHeaderModel(busy, { usage: { total_tokens: 466000, estimated: true } });
+  assert.deepEqual(Object.keys(head).sort(), [...model.HEADER_FIELDS].sort(), "no provider, access, cwd, id or times");
+  assert.equal(head.state, "running");
+  assert.deepEqual(head.busy.map((r) => r.key), ["session.busy.subagents_one", "session.busy.background_n"]);
+  assert.equal(head.tokens, 466000);
+  assert.equal(head.estimated, true);
+  assert.equal(head.stop, false, "between turns: no Stop in the header (the menu has it)");
+  const turn = model.sessionHeaderModel({ id: "s_t", status: "running", capabilities: { stream_input: true } });
+  assert.equal(turn.stop, true);
+  assert.equal(turn.tokens, null);
+  const quiet = model.sessionHeaderModel({ id: "s_q", status: "idle", capabilities: { stream_input: true } });
+  assert.equal(quiet.state, "done", "the turn ended: done, waiting for the person");
+  assert.deepEqual(quiet.busy, []);
+});
+
+test("pending approvals and errors are the header state", () => {
+  const live = { id: "s_a", status: "running", capabilities: { stream_input: true } };
+  const head = model.sessionHeaderModel(live, { pending: 2 });
+  assert.equal(head.state, "approval");
+  assert.equal(head.pending, 2);
+  assert.equal(model.headerStateKey("approval"), "session.state.approval");
+  assert.equal(model.headerStateKey("errored"), "tasks.status.errored");
+  const ended = model.sessionHeaderModel({ id: "s_e", status: "errored" }, { pending: 1 });
+  assert.equal(ended.state, "errored", "an ended session has nothing to approve");
+  assert.equal(ended.pending, 0);
+  assert.equal(ended.stop, false);
+});
+
+test("what left the header is in Session properties", () => {
+  const session = {
+    id: "s_20261122073534e2d3f4", platform: "claude", model: "claude-opus", effort: "high", access_mode: "full_access",
+    permission_label: "full access", turn: 3, agent: "reviewer", project: { name: "Paper revision" }, cwd: ".",
+    capabilities: { supports_approval: false, permission_modes: ["read_only", "full_access"] },
+  };
+  const facts = model.sessionInfoFacts(session, { platform: "Claude Code", cwd: "workspace root" });
+  const byId = Object.fromEntries(facts.map((f) => [f.id, f]));
+  for (const id of ["session_id", "platform", "model", "effort", "access", "turn", "approvals", "agent", "project", "workspace"]) {
+    assert.ok(byId[id], `${id} is listed`);
+  }
+  assert.equal(byId.session_id.value, session.id);
+  assert.equal(byId.session_id.copy, true, "the id has a copy button");
+  assert.equal(byId.session_id.mono, true);
+  assert.equal(byId.workspace.mono, true, "paths in monospace");
+  assert.equal(byId.workspace.value, "workspace root");
+  assert.equal(byId.platform.value, "Claude Code");
+  assert.equal(byId.platform.mono, undefined, "words in the UI font");
+  assert.equal(byId.access.value, "Full access", "localised mode label, sentence case, not the server's raw label");
+  assert.equal(byId.access.tone, "full_access");
+  assert.equal(byId.effort.value, "High");
+  assert.equal(byId.turn.num, true);
+  const zh = model.sessionInfoFacts(session, { t: (key) => ({ "session.perm.full_access": "完全访问" }[key] || key) });
+  assert.equal(zh.find((f) => f.id === "access").value, "完全访问");
+  const bare = model.sessionInfoFacts({ status: "stopped" });
+  assert.equal(bare.some((f) => f.id === "session_id" || f.id === "model" || f.id === "parent"), false, "only what the session has");
+});

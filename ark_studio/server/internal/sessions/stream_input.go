@@ -180,6 +180,7 @@ func (m *Manager) sendUserMessage(s *Session, text string, entries []*pyjson.Obj
 	clearBackgroundPendingLocked(s)
 	m.saveLocked(s)
 	m.mu.Unlock()
+	m.markTurnStart(s)
 	if record {
 		m.appendEvent(s, "stdout", "› "+strings.TrimRight(display, "\r\n"), "input")
 		m.recordMedia(s, entries)
@@ -236,6 +237,7 @@ func (m *Manager) observeStreamLine(s *Session, line string) {
 		m.mu.Unlock()
 		return
 	}
+	interrupted := s.Meta.Value("turn_state") == "interrupting"
 	s.Meta.Set("turn_state", "waiting").Set("last_activity_at", NowISO())
 	var next *pyjson.Object
 	for _, e := range objects(s.Meta.Value("steer_queue")) {
@@ -246,9 +248,15 @@ func (m *Manager) observeStreamLine(s *Session, line string) {
 	}
 	if next != nil {
 		next.Set("status", "delivered").Set("delivered_at", NowISO()).Set("channel", "stdin")
+	} else if interrupted { // the person stopped the turn: nothing to report
+		s.Meta.Delete("turn_end")
+	} else {
+		outcome, reason := resultOutcome(obj) // finish.go
+		setTurnEndLocked(s, outcome, reason)
 	}
 	m.saveLocked(s)
 	m.mu.Unlock()
+	m.guardAfterTurn(s)
 	if next != nil {
 		text := strOr(next.Value("text"))
 		if err := m.sendUserMessage(s, text, nil, text, true); err != nil {

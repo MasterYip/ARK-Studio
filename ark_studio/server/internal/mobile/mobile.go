@@ -282,6 +282,12 @@ type Pairing struct {
 	SessionTTL  int64    `json:"session_ttl"`
 	User        string   `json:"user"`
 	Source      string   `json:"source"`
+	// Go only (deviceid.go): the device this pairing signed in, the earlier
+	// pairings of that device it replaces once its token is used, and the
+	// pairing that replaced this one.
+	DeviceKey  string   `json:"device_key,omitempty"`
+	Supersedes []string `json:"supersedes,omitempty"`
+	ReplacedBy string   `json:"replaced_by,omitempty"`
 }
 
 // Public is PairingRecord.public.
@@ -431,7 +437,15 @@ func (m *Manager) load() {
 			p := &Pairing{ID: str(o, "id"), TokenHash: str(o, "token_hash"), ProjectID: str(o, "project_id"),
 				ProjectName: str(o, "project_name"), Permission: str(o, "permission"), CreatedAt: created,
 				ExpiresAt: expires, ClaimedAt: optNum(o.Value("claimed_at")), RevokedAt: optNum(o.Value("revoked_at")),
-				SessionTTL: int64(ttl), User: str(o, "user"), Source: src}
+				SessionTTL: int64(ttl), User: str(o, "user"), Source: src,
+				DeviceKey: str(o, "device_key"), ReplacedBy: str(o, "replaced_by")}
+			if ids, ok := o.Value("supersedes").([]any); ok {
+				for _, id := range ids {
+					if s, ok := id.(string); ok && s != "" {
+						p.Supersedes = append(p.Supersedes, s)
+					}
+				}
+			}
 			m.addPairing(p)
 			m.byToken[p.TokenHash] = p.ID
 		}
@@ -468,9 +482,24 @@ func floatOrNil(v *float64) any {
 }
 
 func pairingDict(r *Pairing) *pyjson.Object {
-	return pyjson.NewObject("id", r.ID, "token_hash", r.TokenHash, "project_id", r.ProjectID, "project_name", r.ProjectName,
+	out := pyjson.NewObject("id", r.ID, "token_hash", r.TokenHash, "project_id", r.ProjectID, "project_name", r.ProjectName,
 		"permission", r.Permission, "created_at", r.CreatedAt, "expires_at", r.ExpiresAt, "claimed_at", floatOrNil(r.ClaimedAt),
 		"revoked_at", floatOrNil(r.RevokedAt), "session_ttl", r.SessionTTL, "user", r.User, "source", r.Source)
+	// Go only (deviceid.go); absent for pairings without a device id.
+	if r.DeviceKey != "" {
+		out.Set("device_key", r.DeviceKey)
+	}
+	if len(r.Supersedes) > 0 {
+		ids := []any{}
+		for _, id := range r.Supersedes {
+			ids = append(ids, id)
+		}
+		out.Set("supersedes", ids)
+	}
+	if r.ReplacedBy != "" {
+		out.Set("replaced_by", r.ReplacedBy)
+	}
+	return out
 }
 
 func sessionDict(s *Session) *pyjson.Object {
@@ -641,6 +670,12 @@ func (m *Manager) Find(token string) *Pairing {
 
 // Claim is PairingManager.claim.
 func (m *Manager) Claim(token, projectID, client, userAgent string) (*pyjson.Object, error) {
+	return m.ClaimDevice(token, projectID, client, userAgent, "")
+}
+
+// ClaimDevice is Claim with the phone's device id (Go only, deviceid.go):
+// the new pairing takes over the device's earlier pairings of the same user.
+func (m *Manager) ClaimDevice(token, projectID, client, userAgent, deviceID string) (*pyjson.Object, error) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	m.cleanup()
@@ -685,6 +720,8 @@ func (m *Manager) Claim(token, projectID, client, userAgent string) (*pyjson.Obj
 		Permission: r.Permission, CreatedAt: now, ExpiresAt: now + lifetime, LastSeenAt: now,
 		UserAgent: pytext.Prefix(userAgent, 200), User: r.User}
 	m.addSession(s)
+	key := DeviceKey(deviceID)
+	m.bindDeviceLocked(r, key)
 	m.save()
 	var expiresAt, expiresIn any
 	if r.SessionTTL != SessionPermanent {
@@ -692,7 +729,8 @@ func (m *Manager) Claim(token, projectID, client, userAgent string) (*pyjson.Obj
 	}
 	return pyjson.NewObject("mobile_token", sessionToken, "token_type", "X-ARK-Mobile-Token", "permission", s.Permission,
 		"read_only", s.Permission == "read_only", "project", r.ProjectName, "user", r.User, "expires_at", expiresAt,
-		"expires_in", expiresIn, "permanent", r.SessionTTL == SessionPermanent, "pairing_id", r.ID), nil
+		"expires_in", expiresIn, "permanent", r.SessionTTL == SessionPermanent, "pairing_id", r.ID,
+		"device_recognized", key != "", "replaces", int64(len(r.Supersedes))), nil
 }
 
 // Authenticate is PairingManager.authenticate.
@@ -733,6 +771,10 @@ func (m *Manager) Authenticate(token, projectID, method, path string) (*Session,
 			"code on the desktop to allow edits.", "MOBILE_READ_ONLY")
 	}
 	s.LastSeenAt = now
+	// The new token works: the pairings it replaces are revoked now.
+	if m.settleLocked(r) {
+		m.save()
+	}
 	return s, nil
 }
 
@@ -837,15 +879,7 @@ func (m *Manager) Revoke(pairID, projectID string) (*pyjson.Object, error) {
 	if r == nil || r.ProjectID != projectID {
 		return nil, merr(404, "Pairing session not found", "PAIRING_NOT_FOUND")
 	}
-	if r.RevokedAt == nil || *r.RevokedAt == 0 {
-		now := Clock()
-		r.RevokedAt = &now
-	}
-	for _, h := range append([]string(nil), m.sorder...) {
-		if m.sessions[h].PairingID == r.ID {
-			m.dropSession(h)
-		}
-	}
+	m.revokeLocked(r, "")
 	m.save()
 	return r.Public(), nil
 }

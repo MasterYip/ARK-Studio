@@ -169,20 +169,20 @@ func (e *Env) Paths(v *Viewer) (*obj, error) {
 			missing = append(missing, item.Value("key"))
 		}
 	}
-	folder := "<task space>/<YYYYMMDD>_<UID>-<name>/"
+	folder := "<task space>/<YYYYMMDD>_<task ID>-<name>/"
 	if ts := mapOf(taskSpace); ts != nil {
-		folder = JoinTaskPath(str(ts.Value("path")), "<YYYYMMDD>_<UID>-<name>/")
+		folder = JoinTaskPath(str(ts.Value("path")), "<YYYYMMDD>_<task ID>-<name>/")
 	}
 	out := pyjson.NewObject("host", vw.host.Copy(), "user", or(v.User, nil),
 		"task_space", taskSpace, "task_spaces", spaces, "repositories", repos, "storage", storage,
 		"artifacts", artifacts, "missing", missing,
 		"task_folder", pyjson.NewObject("pattern", folder, "subfolders", []any{"artifacts/", "downloads/", "renders/", "logs/"},
-			"logical", LogicalScheme+"<YYYYMMDD>_<UID>-<name>/"),
-		"scratch", "the OS temp dir only; delete scratch files after the step")
+			"logical", LogicalScheme+"<YYYYMMDD>_<task ID>-<name>/"),
+		"scratch", "your own scratch and temporary downloads: your session workspace or the OS temp dir; anything a task needs later goes in its folder")
 	if d := e.openDecision(v.User, host, al); d != nil {
 		out.Set("decision", pyjson.NewObject("uid", d.Value("uid"), "state", d.Value("state")))
 	}
-	next := "write task files only under task_space.path in the task's folder; write their paths in ARK as task: links"
+	next := "write files only in the places listed in writable; task-related files go in the folder of the unit they belong to: ask with ?unit=<UID> (task_folder.path): its task's folder, else the unit's own folder; write absolute paths with this device in ARK"
 	if taskSpace == nil {
 		next = "this device has no task space: do not choose a folder yourself; POST /api/agent/v1/setup/task-space-decision " +
 			"with 2-3 options (path, free space, why) and your recommendation, then wait for the person's answer"

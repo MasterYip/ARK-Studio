@@ -14,6 +14,7 @@ import { t, hasKey } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api, cachedThenFresh, peekCached } from "./api.js";
 import { openContextMenu } from "./context-menu.js";
+import { mergeDevices } from "./device-merge.js";
 import { layeredLayout, routeNodeEdges } from "./node-graph-layout.js";
 import {
   RESOURCE_TYPES, buildResourcesModel, utilisation, ageSeconds, agoKey, rowBox, CARD_METRICS,
@@ -975,6 +976,14 @@ export function resourcesGraphPanel(ctx) {
     if (device.kind === "gpu-server") {
       actions.appendChild(h("button", { class: "btn sm ghost", type: "button",
         onclick: () => ctx.navigateWorkspace?.("execute", "gpu") }, t("resources.open_gpu_board")));
+    }
+    // Several phones of the viewer of one type: likely one phone that signed
+    // in more than once (device-merge.js previews before revoking).
+    if (device.actions?.includes("merge") && device.detail?.pair_id) {
+      actions.appendChild(h("button", { class: "btn sm", type: "button", "data-resources-merge": device.id,
+        onclick: async () => {
+          if (await mergeDevices(device.detail.pair_id, { toast: ctx.toast })) await load();
+        } }, t("resources.merge_phones", { n: (device.detail.same_type || 0) + 1 })));
     }
     if (card.collapsible) {
       actions.appendChild(h("button", { class: "btn sm ghost", type: "button", "data-resources-fold": device.id,

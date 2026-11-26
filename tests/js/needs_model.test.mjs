@@ -84,7 +84,7 @@ test("needs filters exclude values per group and keep new values visible", async
   assert.deepEqual(m.filterNeeds(items, filter).map((i) => i.uid), ["F-1", "D-1", "F-2"]);
   // A type that appears later is shown: only exclusions are stored.
   assert.equal(m.filterNeeds([...items, { uid: "X-1", type: "experiment" }], filter).length, 4);
-  assert.deepEqual(m.normalizeNeedsFilter({ type: ["a", "a", 3], junk: [1] }), { type: ["a", "3"], kind: [], assignee: [] });
+  assert.deepEqual(m.normalizeNeedsFilter({ type: ["a", "a", 3], junk: [1] }), { type: ["a", "3"], kind: [], assignee: [], branch: [] });
 });
 
 test("needsLightboxItems feeds the shared media lightbox in strip order", () => {

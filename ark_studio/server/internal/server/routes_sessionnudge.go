@@ -17,6 +17,7 @@ import (
 	"arkstudio/go/internal/project"
 	"arkstudio/go/internal/sessionnudge"
 	"arkstudio/go/internal/sessions"
+	"arkstudio/go/internal/store"
 )
 
 // nudgeResumeWindow: a finished session is woken only this long after its
@@ -92,7 +93,10 @@ func (a *App) NudgeDeps() sessionnudge.Deps {
 			if err != nil {
 				return sessionnudge.Batch{}, err
 			}
-			v := agentwatch.Viewer{User: s.User, AnyAgent: true, Mine: true, Session: s.ID}
+			// Only what is meant for this session (agentwatch routing): answers on
+			// units it wrote, or project-wide ones when no writer can be woken.
+			v := agentwatch.Viewer{User: s.User, AnyAgent: true, Mine: true, Session: s.ID,
+				Self: store.Writer{Session: s.ID}, SessionAlive: a.sessionWakeable, ForYou: true}
 			items := agentwatch.Items(batch.Rows, v, nil)
 			a.addGPULogTails(items)
 			return sessionnudge.Batch{Items: items, Epoch: batch.Epoch, Top: batch.Top}, nil

@@ -131,7 +131,7 @@ it does not race a background watcher):
 # .claude/hooks/ark-updates.sh: hand new ARK updates to Claude before it stops.
 input=$(cat)
 case "$input" in *'"stop_hook_active":true'*) exit 0 ;; esac
-out=$(ark-server agent watch --once --state .ark-watch-cursor-hook 2>/dev/null)
+out=$(ark-server agent watch --once --for-you --state .ark-watch-cursor-hook 2>/dev/null)
 [ -z "$out" ] && exit 0
 printf 'New updates in ARK; handle them before you stop:\n%s\n' "$out" >&2
 exit 2

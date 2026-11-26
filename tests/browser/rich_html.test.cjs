@@ -9,7 +9,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { /* Optional browser dependency. */ }
 
 test('HTML shares Markdown rendering without executing or leaking document markup', { skip: !chromium }, async () => {
-  const web = path.resolve(__dirname, '../../web');
+  const web = path.resolve(__dirname, '../../ark_studio/web');
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname === '/') { res.end('<!doctype html><html><body></body></html>'); return; }

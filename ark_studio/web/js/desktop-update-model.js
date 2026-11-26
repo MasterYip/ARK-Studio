@@ -128,3 +128,38 @@ export function serverNotice(current, seen) {
   if (!before) return "store";
   return before === now ? "" : "show";
 }
+
+// ------------------------------------------------ older apps on a server page
+
+export const OLD_APP_DISMISS_KEY = "ark.desktopUpdate.oldAppDismissed";
+
+/** Order of two plain x.y.z versions: -1, 0, 1; NaN when one is not x.y.z. */
+export function compareAppVersions(a, b) {
+  const pa = /^(\d+)\.(\d+)\.(\d+)$/.exec(cleanVersion(a));
+  const pb = /^(\d+)\.(\d+)\.(\d+)$/.exec(cleanVersion(b));
+  if (!pa || !pb) return NaN;
+  for (let i = 1; i <= 3; i++) {
+    const d = Number(pa[i]) - Number(pb[i]);
+    if (d) return Math.sign(d);
+  }
+  return 0;
+}
+
+/**
+ * The notice on a server page for an app that is older than the server and
+ * does not show update notices itself (2.1.1 and older: they look for updates
+ * only at start, and their server pages cannot ask them): the server's
+ * release version, the app's and the GitHub release page of that version.
+ * @param {object|null} desktop window.__ARK_DESKTOP__
+ * @param {string} serverVersion the version in the page's <meta name="ark-version">
+ * @param {string|null} dismissed the version the person closed this notice for
+ * @returns {{version: string, current: string, url: string}|null}
+ */
+export function oldAppNotice(desktop, serverVersion, dismissed = null) {
+  if (!desktop || typeof desktop !== "object" || shellShowsUpdates(desktop)) return null;
+  const version = cleanVersion(serverVersion);
+  const current = cleanVersion(desktop.version);
+  if (!(compareAppVersions(version, current) > 0)) return null;
+  if (dismissed && cleanVersion(dismissed) === version) return null;
+  return { version, current, url: releaseUrl(version) };
+}

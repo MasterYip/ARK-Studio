@@ -166,6 +166,9 @@ func Open(path string, readers int) (*Manager, error) {
 		err = db.Exec(reviewSeenSchema) // Go only (reviewseen.go)
 	}
 	if err == nil {
+		err = db.Exec(sessionSeenSchema) // Go only (sessionseen.go)
+	}
+	if err == nil {
 		err = db.Exec(inviteSchema) // Go only (invites.go)
 	}
 	if err == nil {

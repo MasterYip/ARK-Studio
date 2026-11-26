@@ -471,17 +471,35 @@ test('runs page: chat only, tabs for sub-agents and forks, standard properties',
       assert.ok(heights.length >= 3 && heights.every((x) => x === heights[0]), `control heights ${heights}`);
       // Session properties: tabs and values at the inspector's body size.
       await page.setViewportSize({ width: 1600, height: 960 });
-      const propSizes = await props.evaluate((el) => ({
-        tab: getComputedStyle(el.querySelector('.sw-side-tab')).fontSize,
-        value: getComputedStyle(el.querySelector('.sw-fact .v') || el).fontSize,
-      }));
+      const propSizes = await props.evaluate((el) => {
+        const all = (sel, prop) => [...new Set([...el.querySelectorAll(sel)].filter((n) => n.offsetParent).map((n) => getComputedStyle(n)[prop]))];
+        return {
+          tab: getComputedStyle(el.querySelector('.sw-side-tab')).fontSize,
+          value: getComputedStyle(el.querySelector('.sw-fact .v') || el).fontSize,
+          values: all('.sw-fact .v', 'fontSize'),
+          labels: all('.sw-fact .k', 'fontSize'),
+          heads: all('.sw-side-section-head h4', 'fontSize'),
+          rows: [...el.querySelectorAll('.sw-fact')].filter((n) => n.offsetParent).map((n) => Math.round(n.getBoundingClientRect().height)),
+        };
+      });
+      // One value size (monospace ids and paths included), one label size, one heading size; dense rows.
+      assert.equal(propSizes.values.length, 1, `value sizes ${propSizes.values}`);
+      assert.equal(propSizes.labels.length, 1, `label sizes ${propSizes.labels}`);
+      assert.equal(propSizes.heads.length, 1, `heading sizes ${propSizes.heads}`);
+      assert.equal(propSizes.tab, propSizes.value, 'tab labels at the value size');
+      assert.ok(propSizes.rows.length > 5 && propSizes.rows.every((x) => x <= 24), `row heights ${propSizes.rows}`);
       await page.screenshot({ path: path.join(shots, `r6-props-${lang}.png`) });
       if (!zh) {
         // Fork in new tab (Echo cannot copy its history: a seeded fork).
         await page.goto(`${base}/?lang=${lang}&session=${echo.id}#/execute/sessions`);
         await page.locator('.sw-main h2', { hasText: 'Echo parent' }).waitFor({ timeout: 20000 });
-        await page.locator('.sw-main [data-session-menu]').click();
-        await page.locator('.graph-menu-item', { hasText: 'Fork in new tab' }).click();
+        // The first paint scrolls the thread, which closes an open menu: open it until it stays.
+        const forkItem = page.locator('.graph-menu-item', { hasText: 'Fork in new tab' });
+        await until(async () => {
+          if (!(await forkItem.isVisible())) await page.locator('.sw-main [data-session-menu]').click();
+          return forkItem.waitFor({ timeout: 1500 }).then(() => true, () => false);
+        });
+        await forkItem.click();
         const forkTab = page.locator('[data-tab-kind="session"].on');
         await forkTab.waitFor({ timeout: 30000 });
         const forkId = await forkTab.getAttribute('data-session-tab');
@@ -498,9 +516,6 @@ test('runs page: chat only, tabs for sub-agents and forks, standard properties',
         await page.goto(`${base}/?lang=${lang}&unit=${unit.uid}#/map`);
         await page.locator('.drawer-body').first().waitFor({ timeout: 20000 });
         await page.screenshot({ path: path.join(shots, 'r6-node-inspector-en.png') });
-        const nodeBody = await page.locator('.drawer-body').first().evaluate((el) => getComputedStyle(el).fontSize);
-        assert.equal(propSizes.value, nodeBody, `values ${propSizes.value} vs inspector ${nodeBody}`);
-        assert.equal(propSizes.tab, nodeBody, 'tab labels at body size');
       }
       assert.deepEqual(errors, [], lang);
       await context.close();

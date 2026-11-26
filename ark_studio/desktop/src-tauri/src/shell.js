@@ -21,8 +21,8 @@
   "use strict";
   if (window.__ARK_DESKTOP__) return;
   var CFG = __ARK_SHELL_CONFIG__;
-  function invoke(cmd, args) {
-    return window.__TAURI_INTERNALS__.invoke(cmd, args || {});
+  function invoke(cmd, args, options) {
+    return window.__TAURI_INTERNALS__.invoke(cmd, args || {}, options);
   }
   var win = Object.freeze({
     minimize: function () { return invoke("plugin:window|minimize"); },
@@ -47,11 +47,31 @@
       // The app saves page downloads (<a download>, attachments, blob: URLs)
       // to the Downloads folder and shows them (src/downloads.rs).
       downloads: true,
+      // "Save as" for page downloads (web/js/download-link.js, src/downloads.rs):
+      // the app fetches the file with the page's cookies and streams it to
+      // the chosen path; progress arrives as "ark-download-progress" events.
+      saveDownload: function (url, opts) {
+        opts = opts || {};
+        return invoke("save_download", {
+          url: String(url || ""),
+          name: opts.name ? String(opts.name) : null,
+          ticket: opts.ticket ? String(opts.ticket) : null
+        });
+      },
+      saveBytes: function (bytes, name) {
+        return invoke("save_bytes", bytes, { headers: { "x-ark-name": encodeURIComponent(String(name || "")) } });
+      },
+      cancelDownload: function (ticket) { return invoke("cancel_download", { ticket: String(ticket || "") }); },
+      revealDownload: function (id) { return invoke("show_download", { id: String(id || "") }); },
       window: win,
       openLocal: function (path) { return invoke("open_local_path", { path: String(path || "") }); },
       // PNG bytes (Uint8Array) to the system clipboard, for pages whose
       // WebView refuses navigator.clipboard.write (web/js/image-copy.js).
       copyImage: function (bytes) { return invoke("copy_image_png", bytes); },
+      // A system notification ("WM-HOI finished a turn", web/js/session-notices.js).
+      notify: function (title, body) {
+        return invoke("show_notification", { title: String(title || ""), body: String(body || "") });
+      },
       // Resource location sizes (web/js/location-size.js): this computer's
       // device id and the sizes of its registered paths.
       deviceId: function () { return invoke("device_id"); },
@@ -343,7 +363,13 @@
     document.head.appendChild(style);
   }
   function downloadEvent(ev) {
-    if (!ev || typeof ev !== "object" || !document.body) return;
+    if (!ev || typeof ev !== "object") return;
+    // A page's own "Save as" download: the page shows its progress.
+    if (ev.ticket) {
+      window.dispatchEvent(new CustomEvent("ark-download-progress", { detail: ev }));
+      return;
+    }
+    if (!document.body) return;
     var zh = NOTICE_ZH();
     var view = downloadNotice(ev, zh);
     var labels = DL_TEXT[zh ? "zh" : "en"];

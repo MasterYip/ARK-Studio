@@ -80,6 +80,8 @@ public final class Notifications {
                 c.getString(R.string.notify_ch_decision_desc), NotificationManager.IMPORTANCE_HIGH);
         channel(manager, NotifyFeed.CH_SESSION, c.getString(R.string.notify_ch_session),
                 c.getString(R.string.notify_ch_session_desc), NotificationManager.IMPORTANCE_HIGH);
+        channel(manager, NotifyFeed.CH_SESSION_DONE, c.getString(R.string.notify_ch_session_done),
+                c.getString(R.string.notify_ch_session_done_desc), NotificationManager.IMPORTANCE_DEFAULT);
         channel(manager, NotifyFeed.CH_ASSIGNED, c.getString(R.string.notify_ch_assigned),
                 c.getString(R.string.notify_ch_assigned_desc), NotificationManager.IMPORTANCE_DEFAULT);
         channel(manager, NotifyFeed.CH_OTHER, c.getString(R.string.notify_ch_other),
@@ -356,6 +358,11 @@ public final class Notifications {
 
     /** The notification's line: the title (with a count), or who assigned what. */
     static String itemText(Context c, NotifyFeed.Item item) {
+        if (NotifyFeed.KIND_SESSION_DONE.equals(item.kind)) return c.getString(R.string.notify_session_done, item.title);
+        if (NotifyFeed.KIND_SESSION_ERROR.equals(item.kind)) {
+            return item.body.isEmpty() ? c.getString(R.string.notify_session_error, item.title)
+                    : c.getString(R.string.notify_session_error_reason, item.title, item.body);
+        }
         if (NotifyFeed.KIND_ASSIGNED.equals(item.kind) && !item.byName.isEmpty()) {
             return item.count > 1 ? c.getString(R.string.notify_assigned_many, item.byName, item.count)
                     : c.getString(R.string.notify_assigned_one, item.byName, item.title);

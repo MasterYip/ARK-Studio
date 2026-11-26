@@ -42,15 +42,155 @@ export function applyExactRepulsion(nodes, strength) {
   }
 }
 
-export function stepForce(nodes, edges, byId, cfg, visibleRelations, dragged = null, repel = applyExactRepulsion) {
+// Optional "cluster by type" forces (graph setting `cluster`).  Off by
+// default; when on, two terms are added on top of the usual forces, O(n + k²)
+// per tick for k groups (no pairwise node term):
+//   same group:   F_i = a · w(n_g) · (C_g − x_i)       a = attract · ATTRACT
+//   other groups: every member of g gets the same push
+//                 P_g = Σ_h b · n_h · (C_g − C_h) / |C_g − C_h| / (|C_g − C_h|² + s_g² + s_h²)
+//                                                      b = repel · REPEL · repulsion
+// C_g is the centroid and n_g the size of a group, w(n) = min(1, (n − 1) / 3)
+// so tiny groups pull gently, s_g ≈ the radius of group g (softening).  The
+// push moves whole groups apart instead of scattering their members.  Each
+// group's push is capped, the net force and torque are removed (no drift,
+// no spin), and `ramp` (0..1) fades the terms in when the mode turns on.
+// Links within a group get a little stronger, across groups weaker.
+export const CLUSTER_TUNING = Object.freeze({
+  attract: 0.06, repel: 1.5, soft: 40, softPerNode: 8, cap: 3, linkSame: 0.2, linkCross: 0.5,
+});
+export const CLUSTER_GROUPINGS = ["type", "status", "tag"];
+
+/** The group a node belongs to for `by` ("type", "status", "tag"); null: none. */
+export function clusterKey(node, by = "type") {
+  if (by === "tag") {
+    const tags = Array.isArray(node.tags) ? node.tags : [];
+    const first = tags.find((tag) => typeof tag === "string" && tag);
+    return first || null;
+  }
+  const value = by === "status" ? node.status : node.type;
+  return value === undefined || value === null || value === "" ? null : String(value);
+}
+
+/**
+ * Centroids of the node groups: `{ gid, cx, cy, count, k }`, where gid[i]
+ * is node i's group index (−1: no group) and k the number of groups.
+ */
+export function clusterCentroids(nodes, by = "type") {
+  const n = nodes.length;
+  const gid = new Int32Array(n);
+  const index = new Map();
+  const sx = [], sy = [], count = [];
+  for (let i = 0; i < n; i++) {
+    const node = nodes[i];
+    const key = clusterKey(node, by);
+    if (key === null) { gid[i] = -1; continue; }
+    let g = index.get(key);
+    if (g === undefined) { g = sx.length; index.set(key, g); sx.push(0); sy.push(0); count.push(0); }
+    gid[i] = g; sx[g] += node.x; sy[g] += node.y; count[g]++;
+  }
+  const k = count.length;
+  const cx = new Float64Array(k), cy = new Float64Array(k);
+  for (let g = 0; g < k; g++) { cx[g] = sx[g] / count[g]; cy[g] = sy[g] / count[g]; }
+  return { gid, cx, cy, count, k, keys: [...index.keys()] };
+}
+
+const unit01 = (value, fallback) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, Math.min(1, n)) : fallback;
+};
+
+/** Add the clustering terms to node velocities; returns the centroids (or null). */
+export function applyClusterForces(nodes, cfg, ramp = 1, tuning = CLUSTER_TUNING) {
+  const n = nodes.length;
+  if (n < 2 || !(ramp > 0)) return null;
+  const groups = clusterCentroids(nodes, cfg.cluster_by || "type");
+  const { gid, cx, cy, count, k } = groups;
+  if (!k) return groups;
+  const a = unit01(cfg.cluster_attract, 0.5) * tuning.attract * ramp;
+  const b = k > 1 ? unit01(cfg.cluster_repel, 0.5) * tuning.repel * (Number(cfg.repulsion) || 0) * ramp : 0;
+  const soft2 = new Float64Array(k);
+  for (let g = 0; g < k; g++) {
+    const s = tuning.soft + tuning.softPerNode * Math.sqrt(count[g]);
+    soft2[g] = s * s;
+  }
+  // Group-to-group push, applied to every member alike: groups move apart
+  // as units instead of each node being shoved off on its own.
+  const cap = tuning.cap * ramp, cap2 = cap * cap;
+  const gx = new Float64Array(k), gy = new Float64Array(k);
+  if (b) for (let g = 0; g < k; g++) for (let h = g + 1; h < k; h++) {
+    let dx = cx[g] - cx[h], dy = cy[g] - cy[h];
+    let d2 = dx * dx + dy * dy;
+    if (d2 < 1e-6) {
+      // Coincident centres: a fixed direction per pair keeps it deterministic.
+      const angle = (g * 31 + h) * 2.399963;
+      dx = Math.cos(angle); dy = Math.sin(angle); d2 = 1;
+    }
+    const f = b / ((d2 + soft2[g] + soft2[h]) * Math.sqrt(d2));
+    gx[g] += dx * f * count[h]; gy[g] += dy * f * count[h];
+    gx[h] -= dx * f * count[g]; gy[h] -= dy * f * count[g];
+  }
+  for (let g = 0; g < k; g++) {
+    const m2 = gx[g] * gx[g] + gy[g] * gy[g];
+    if (m2 > cap2) { const c = cap / Math.sqrt(m2); gx[g] *= c; gy[g] *= c; }
+  }
+  const fx = new Float64Array(n), fy = new Float64Array(n);
+  let sumX = 0, sumY = 0, grouped = 0;
+  for (let i = 0; i < n; i++) {
+    const g = gid[i];
+    if (g < 0) continue;
+    const node = nodes[i];
+    const w = Math.min(1, (count[g] - 1) / 3);
+    const x = a * w * (cx[g] - node.x) + gx[g], y = a * w * (cy[g] - node.y) + gy[g];
+    fx[i] = x; fy[i] = y; sumX += x; sumY += y; grouped++;
+  }
+  if (!grouped) return groups;
+  // Capped pushes are no longer equal and opposite: remove the net force
+  // and net torque so the layout neither drifts nor spins.
+  const meanX = sumX / grouped, meanY = sumY / grouped;
+  let ox = 0, oy = 0;
+  for (let i = 0; i < n; i++) if (gid[i] >= 0) { ox += nodes[i].x; oy += nodes[i].y; }
+  ox /= grouped; oy /= grouped;
+  let torque = 0, inertia = 0;
+  for (let i = 0; i < n; i++) {
+    if (gid[i] < 0) continue;
+    const rx = nodes[i].x - ox, ry = nodes[i].y - oy;
+    fx[i] -= meanX; fy[i] -= meanY;
+    torque += rx * fy[i] - ry * fx[i];
+    inertia += rx * rx + ry * ry;
+  }
+  const spin = inertia > 1e-9 ? torque / inertia : 0;
+  for (let i = 0; i < n; i++) {
+    if (gid[i] < 0) continue;
+    const rx = nodes[i].x - ox, ry = nodes[i].y - oy;
+    nodes[i].vx += fx[i] + spin * ry; nodes[i].vy += fy[i] - spin * rx;
+  }
+  return groups;
+}
+
+export function stepForce(nodes, edges, byId, cfg, visibleRelations, dragged = null, repel = applyExactRepulsion, clusterRamp = 1) {
   repel(nodes, cfg.repulsion);
   for (const a of nodes) { a.vx -= a.x * cfg.gravity; a.vy -= a.y * cfg.gravity; }
+  // Link strength per group pair (only with clustering on).
+  let same = 1, cross = 1, grouped = false;
+  if (cfg.cluster && clusterRamp > 0) {
+    const groups = applyClusterForces(nodes, cfg, clusterRamp);
+    if (groups && groups.k > 1) {
+      same = 1 + CLUSTER_TUNING.linkSame * unit01(cfg.cluster_attract, 0.5) * clusterRamp;
+      cross = 1 - CLUSTER_TUNING.linkCross * unit01(cfg.cluster_repel, 0.5) * clusterRamp;
+      grouped = true;
+      for (let i = 0; i < nodes.length; i++) nodes[i]._cluster = groups.gid[i];
+    }
+  }
   for (const edge of edges) {
     if (visibleRelations && !visibleRelations.has(edge.relation)) continue;
     const a = byId.get(edge.source), b = byId.get(edge.target);
     if (!a || !b) continue;
     const dx = b.x - a.x, dy = b.y - a.y, d = Math.hypot(dx, dy) || 1;
-    const f = (d - cfg.distance) * 0.02;
+    let f = (d - cfg.distance) * 0.02;
+    if (grouped) {
+      const ga = a._cluster, gb = b._cluster;
+      if (ga >= 0 && gb >= 0) f *= ga === gb ? same : cross;
+    }
     a.vx += dx / d * f; a.vy += dy / d * f;
     b.vx -= dx / d * f; b.vy -= dy / d * f;
   }

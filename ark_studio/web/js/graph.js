@@ -26,6 +26,11 @@ import { assignNodeData, classifyGraphUpdate, classifyNodeChange, DRAWN_NODE_FIE
 import { attachPresenceOverlay, createPresenceChip } from "./presence-ui.js";
 import { siblingGroup, groupDefaults } from "./selection-model.js";
 import { rememberMode, savedMode } from "./read-edit-mode.js";
+import { currentUsername } from "./users.js";
+import { toast } from "./components.js";
+import {
+  loadViewChoice, saveViewChoice, loadGraph3DSettings, saveGraph3DSettings, graph3DAvailable,
+} from "./graph3d-model.js";
 
 const POS_CACHE = new Map(); // graphId -> Map(nodeId -> {x,y})
 const GRAPH_INSTANCES = new Set();
@@ -473,6 +478,64 @@ export class GraphView {
     if (this.modeReadBtn) this.setMode(this.mode, { persist: false });
     if (!this.opts.compact) { this._syncEdgeFilter(); this._syncNodeTools(); }
     this._resize();
+    if (this.view3dBtn && loadViewChoice(globalThis.localStorage, currentUsername(), this._view3dPage()) === "3d") {
+      // After the caller's first setData (same task), so 3D starts with data.
+      queueMicrotask(() => { if (!this._destroyed) this.set3D(true, { persist: false }); });
+    }
+  }
+
+  // ---- 3D view (graph3d.js) ----------------------------------------------------
+  // The 2D/3D choice is remembered per user and per page (camera key).
+  _view3dPage() { return this.cameraKey || this.nodeGraphKey || ""; }
+
+  /** Show (true) or leave (false) the 3D view of this graph. */
+  async set3D(on, { persist = true } = {}) {
+    const user = currentUsername();
+    if (persist) saveViewChoice(globalThis.localStorage, user, this._view3dPage(), on ? "3d" : "2d");
+    if (!on) {
+      if (!this._view3d) return;
+      this._view3d.destroy();
+      this._view3d = null;
+      this.host.classList.remove("graph-is-3d");
+      if (this.helpEl && !this.helpEl.classList.contains("hidden")) this._renderHelp();
+      this.view3dBtn?.setAttribute("aria-pressed", "false");
+      this.view3dBtn?.classList.remove("on");
+      this._resize({ preserveCamera: true });
+      this.alpha = Math.max(this.alpha, 0.05);
+      this._start();
+      this._draw();
+      return;
+    }
+    if (this._view3d || this._view3dLoading) return;
+    if (this.layout !== "force") this.setLayout("force");
+    this._view3dLoading = true;
+    try {
+      const { Graph3DView, webglSupported } = await import("./graph3d.js");
+      if (this._destroyed) return;
+      // No WebGL (or the context could not be created): back to 2D, and
+      // remember 2D so the page does not try again on every visit.
+      const fail = () => {
+        this.set3D(false);
+        toast(t("graph3d.no_webgl"), "warn");
+      };
+      if (!webglSupported()) { fail(); return; }
+      this._userInteracted = true;
+      this.running = false;
+      if (this.frame) cancelAnimationFrame(this.frame);
+      const view = new Graph3DView(this, {
+        settings: loadGraph3DSettings(globalThis.localStorage, user),
+        onSettings: (settings) => saveGraph3DSettings(globalThis.localStorage, user, settings),
+        onFail: () => fail(),
+      });
+      this._view3d = view;
+      this.host.classList.add("graph-is-3d");
+      if (this.helpEl && !this.helpEl.classList.contains("hidden")) this._renderHelp();
+      this.view3dBtn?.setAttribute("aria-pressed", "true");
+      this.view3dBtn?.classList.add("on");
+      await view.start();
+    } finally {
+      this._view3dLoading = false;
+    }
   }
 
   _build() {
@@ -513,12 +576,18 @@ export class GraphView {
       h("span", { class: "sep" }),
       h("select", {
         class: "graph-sel", title: t("graph.layout"), "aria-label": t("graph.layout"),
-        onchange: (e) => this.setLayout(e.target.value),
+        // onLayoutChange: the layout picked here (pages that keep their own choice).
+        onchange: (e) => { this.setLayout(e.target.value); this.opts.onLayoutChange?.(this.layout); },
       },
         h("option", { value: "force" }, t("graph.force")),
         h("option", { value: "tree" }, t("graph.tree")),
         h("option", { value: "mind" }, t("graph.mind")),
         h("option", { value: "node" }, t("graph.layout_node"))),
+      this.view3dBtn = graph3DAvailable({ webgl: typeof WebGLRenderingContext !== "undefined", backdrop: this.opts.backdrop })
+        ? h("button", {
+          class: "graph-3d-btn", type: "button", "aria-pressed": "false", title: t("graph3d.toggle"), "aria-label": t("graph3d.toggle"),
+          onclick: () => this.set3D(!this._view3d),
+        }, "3D") : null,
       h("button", {
         class: "graph-node-auto hidden", title: t("graph.auto_layout_node"),
         "aria-label": t("graph.auto_layout_node"), onclick: () => this.autoLayout(),
@@ -921,13 +990,25 @@ export class GraphView {
         this._locatesInMap() ? row(locateShortcut(), t("graph.help.locate_map")) : null,
         row("?", t("graph.help.this_help")),
         row("Esc", t("graph.help.clear_selection"))),
-      h("div", { class: "graph-help-group" }, h("h5", null, t("graph.help.mouse")),
-        row(t("graph.help.left_drag"), t("graph.help.box_select")),
-        row(t("graph.help.right_drag"), t("graph.help.pan")),
-        row(t("graph.help.wheel"), t("graph.help.zoom")),
-        row(t("graph.help.ctrl_wheel"), t("graph.help.pan_vertical")),
-        row(t("graph.help.shift_wheel"), t("graph.help.pan_horizontal")),
-        row(t("graph.help.right_click"), t("graph.help.context_menu"))),
+      // The 3D view has its own mouse bindings (graph3d.js).
+      this._view3d
+        ? h("div", { class: "graph-help-group", "data-help-3d": "1" }, h("h5", null, t("graph3d.help_mouse")),
+          row(t("graph.help.left_click"), t("graph3d.help_select")),
+          this.readOnly ? null : row(t("graph3d.help_drag_node"), t("graph3d.help_move_node")),
+          row(t("graph.help.right_drag"), t("graph3d.help_rotate")),
+          row(t("graph3d.help_ctrl_right_drag"), t("graph.help.pan")),
+          row(t("graph.help.wheel"), t("graph.help.zoom")),
+          row(t("graph3d.help_dblclick"), t("graph3d.help_fly")),
+          row(t("graph.help.right_click"), t("graph3d.help_node_menu")),
+          row(t("graph3d.help_touch"), t("graph3d.help_touch_text")),
+          h("div", { class: "graph-help-note" }, t("graph3d.help_note")))
+        : h("div", { class: "graph-help-group" }, h("h5", null, t("graph.help.mouse")),
+          row(t("graph.help.left_drag"), t("graph.help.box_select")),
+          row(t("graph.help.right_drag"), t("graph.help.pan")),
+          row(t("graph.help.wheel"), t("graph.help.zoom")),
+          row(t("graph.help.ctrl_wheel"), t("graph.help.pan_vertical")),
+          row(t("graph.help.shift_wheel"), t("graph.help.pan_horizontal")),
+          row(t("graph.help.right_click"), t("graph.help.context_menu"))),
       h("div", { class: "graph-help-group" }, h("h5", null, t("graph.help.mind_collapse")),
         row("+ / -", t("graph.help.expand_one")),
         row("* / /", t("graph.help.expand_all")),
@@ -953,7 +1034,8 @@ export class GraphView {
       h("div", { class: "graph-help-note" },
         t("graph.help.note_backspace"),
         t("graph.help.note_labels"),
-        t("graph.help.note_gesture")));
+        t("graph.help.note_gesture"),
+        this.view3dBtn && !this._view3d ? ` ${t("graph.help.note_3d")}` : null));
   }
 
   _toggleEdgeFilter(force = null) {
@@ -2487,6 +2569,7 @@ export class GraphView {
 
   setLayout(layout) {
     if (!["force", "tree", "mind", "node"].includes(layout)) return;
+    if (layout !== "force" && this._view3d) this.set3D(false);
     this.layout = layout;
     this.primaryRelation = this._loadPrimaryRelation(layout);
     this.visibleRelations = this._initialRelations(layout);
@@ -2560,7 +2643,7 @@ export class GraphView {
     // moves the whole graph again.
     this._settle = { ticks: 0, quiet: 0 };
     if (!this._remoteStart) this._held = null;
-    if (this.running) return;
+    if (this.running || this._view3d) return;
     this.running = true;
     const step = () => {
       if (!this.running) return;
@@ -2601,7 +2684,10 @@ export class GraphView {
     if (!nodes.length) return { mean: 0, max: 0 };
     // Held nodes (a remote update settling only its new nodes) keep their place.
     const held = this._held ? nodes.filter((node) => this._held.has(node.id)).map((node) => [node, node.x, node.y]) : null;
-    stepForce(nodes, this.edges, this.byId, this.physics, this.visibleRelations, this.drag?.node, applyRepulsion);
+    // Clustering by type fades in over ~40 ticks when turned on, so the
+    // groups drift together instead of jumping.
+    this._clusterRamp = this.physics.cluster ? Math.min(1, (this._clusterRamp || 0) + 1 / 40) : 0;
+    stepForce(nodes, this.edges, this.byId, this.physics, this.visibleRelations, this.drag?.node, applyRepulsion, this._clusterRamp);
     if (held) for (const [node, x, y] of held) { node.x = x; node.y = y; node.vx = 0; node.vy = 0; }
     // Past the classic stopping point, cool the motion with alpha so the
     // graph settles instead of drifting on.
@@ -2663,6 +2749,8 @@ export class GraphView {
   _draw() {
     this._noteSelection();
     this._syncDegrees();
+    // The 3D view draws instead (the 2D canvas is hidden under it).
+    if (this._view3d) { this._view3d.sync(); return; }
     const ctx = this.ctx;
     if (!ctx) return;
     if (this.layout === "mind") { this._drawMind(); return; }
@@ -5308,6 +5396,7 @@ export class GraphView {
   }
 
   zoomBy(factor) {
+    if (this._view3d) { this._view3d.zoomBy(factor); return; }
     this._userInteracted = true;
     const cx = this.width / 2, cy = this.height / 2;
     const before = this._world(cx, cy);
@@ -5396,6 +5485,7 @@ export class GraphView {
 
   fit({ animate = false } = {}) {
     if (!this.nodes.length) return;
+    if (this._view3d) { this._view3d.resetView(animate); return; }
     this._tally("fit");
     if (this.opts.backdrop) {
       this._fitBackdrop();
@@ -5461,6 +5551,11 @@ export class GraphView {
         if (this.collapsed.delete(parent)) changed = true;
       }
       if (changed) this._applyLayout(false);
+    }
+    if (this._view3d) {
+      this._setSelection([node], false);
+      this._draw();
+      return this._view3d.locate(node);
     }
     if (!Number.isFinite(node.x) || !Number.isFinite(node.y)) return false;
     this._setSelection([node], false);
@@ -6229,6 +6324,9 @@ export class GraphView {
   }
 
   destroy() {
+    this._destroyed = true;
+    this._view3d?.destroy();
+    this._view3d = null;
     if (this._resumeCanvas) {
       document.removeEventListener("visibilitychange", this._resumeCanvas);
       this.canvas.removeEventListener("contextrestored", this._resumeCanvas);

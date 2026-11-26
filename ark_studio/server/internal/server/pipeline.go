@@ -132,6 +132,10 @@ func (c *reqCtx) guardProjectScope() error {
 	}
 	// Marking Needs you items seen only writes the person's own marks, so
 	// read-only members may do it for their assignments (project_reviews.go).
+	if path == sessionNoticesPath && c.r.Method == "POST" { // the person's own seen marks (session_notices.go)
+		_, err := c.require("read")
+		return err
+	}
 	if path == needsSeenPath && c.r.Method == "POST" {
 		_, err := c.require("read")
 		return err

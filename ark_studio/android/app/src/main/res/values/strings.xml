@@ -223,6 +223,11 @@
     <string name="notify_ch_decision_desc">Open decisions and approval requests from agent sessions</string>
     <string name="notify_ch_session">Session errors</string>
     <string name="notify_ch_session_desc">Your agent sessions that stopped with an error</string>
+    <string name="notify_ch_session_done">Finished sessions</string>
+    <string name="notify_ch_session_done_desc">Your agent sessions that finished a turn and wait for your reply</string>
+    <string name="notify_session_done">%1$s finished a turn and is waiting for you</string>
+    <string name="notify_session_error">%1$s stopped with an error</string>
+    <string name="notify_session_error_reason">%1$s stopped with an error: %2$s</string>
     <string name="notify_ch_other">Other</string>
     <string name="notify_ch_other_desc">Sessions that finished</string>
     <string name="notify_kind_review">New for review</string>

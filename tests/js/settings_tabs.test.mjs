@@ -22,9 +22,9 @@ const LEGACY = {
 test("settings are grouped into a few tabs per scope", () => {
   const count = (scope) => SETTINGS_TABS.filter((tab) => tab.scope === scope).length;
   assert.deepEqual(SETTINGS_TABS.map((tab) => tab.id),
-    ["overview", "app", "about", "appearance", "agents", "data", "trash", "members", "resources", "access", "profile", "display", "personalAI", "plugins", "browser", "storage", "admin"]);
+    ["overview", "app", "about", "appearance", "lines", "schedules", "agents", "data", "trash", "members", "resources", "access", "profile", "display", "personalAI", "plugins", "browser", "storage", "admin"]);
   assert.equal(count("overview"), 3);
-  assert.equal(count("project"), 7);
+  assert.equal(count("project"), 9);
   assert.equal(count("personal"), 5);
   assert.equal(count("admin"), 2);
   // Settings opens on the overview; Resources and Access are listed as Advanced.
@@ -35,7 +35,10 @@ test("settings are grouped into a few tabs per scope", () => {
   // Sections added after the regrouping (no legacy tab id).
   assert.deepEqual([...sections].sort(), [...Object.keys(LEGACY), "appearanceOverride", "sessionUploads",
     "overview", "advanced", "infohubSource", "graphOverride", "plugins", "trash",
-    "agentRules", "personalAgentRules", "members", "projectStorage", "app", "markers"].sort());
+    "agentRules", "personalAgentRules", "members", "projectStorage", "app", "markers", "lines", "schedules",
+    "notifications"].sort());
+  // Session alerts (session-notices-panel.js) sit with the profile and account.
+  assert.deepEqual(resolveSettingsTab("notifications"), { tab: "profile", section: "notifications" });
   // Browser-local settings no longer sit under the Project scope.
   assert.equal(settingsTabScope(resolveSettingsTab("infohubSource").tab), "personal");
   assert.equal(resolveSettingsTab("sessionUploads").tab, "access");

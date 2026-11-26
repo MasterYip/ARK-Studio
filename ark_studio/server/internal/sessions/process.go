@@ -262,6 +262,9 @@ func (m *Manager) appendEvent(s *Session, stream, line, kind string) {
 	if strings.HasPrefix(line, "{") {
 		max = maxJSONLogLine
 	}
+	if kind == "input" { // a message to the agent is kept whole (it is at most maxPrompt)
+		max = maxPrompt + maxLogLine
+	}
 	if utf8.RuneCountInString(line) > max {
 		line = limit(line, max) + " …[truncated]"
 	}
@@ -369,6 +372,7 @@ func (m *Manager) finish(s *Session, code *int) {
 		return
 	}
 	m.expirePendingLocked(s, "the process ended before a decision")
+	turnWas := strOr(s.Meta.Value("turn_state"))
 	stopped := s.stopRequested || (code != nil && *code == 0)
 	if stopped {
 		s.Meta.Set("status", "stopped")
@@ -397,8 +401,21 @@ func (m *Manager) finish(s *Session, code *int) {
 		m.disableStream()
 		s.Meta.Set("error", "This Claude Code version does not take stream input; send the message again to run it as a one-shot turn.")
 	}
+	// How the turn ended (finish.go): a stream process that waited keeps the
+	// turn_end of its last result; the person stopping a turn clears it.
+	switch {
+	case !stopped:
+		setTurnEndLocked(s, "error", strOr(s.Meta.Value("error")))
+	case s.stopRequested:
+		if !isStream(s) || turnWas != "waiting" {
+			s.Meta.Delete("turn_end")
+		}
+	case !isStream(s) || turnWas != "waiting":
+		setTurnEndLocked(s, "done", "")
+	}
 	m.saveLocked(s)
 	m.mu.Unlock()
+	m.guardAfterTurn(s)
 	m.notify(s, "finish")
 }
 

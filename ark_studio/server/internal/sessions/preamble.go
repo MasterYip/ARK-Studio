@@ -96,7 +96,9 @@ func (m *Manager) sessionPreamble(h *Hooks, s *Session, preset, projectRef *pyjs
 // do and that was launched without one.
 const KickoffMessage = "Begin with the Start section of the ARK session block."
 
-const maxStartText = 12000
+// maxStartText is no working limit either: Start refuses a longer chosen
+// prompt with 413 (checkPrompt) instead of cutting it.
+const maxStartText = maxPrompt + 1
 
 // startChoice is the "start" of a launch request: the prompt chosen in the
 // Run dialog ({id, title, text}); nil when none.
@@ -128,6 +130,7 @@ func (m *Manager) resumeStart(h *Hooks, s *Session, actor string) *sessionstart.
 	m.mu.Lock()
 	turn := intOr(s.Meta.Value("turn"), 1)
 	taskRef := strOr(s.Meta.Value("task_ref"))
+	folder := folderFromMeta(s.Meta.Value("task_folder"))
 	notice := strOr(s.Meta.Value("error"))
 	if notice == "" {
 		notice = strOr(s.Meta.Value("notice"))
@@ -140,7 +143,7 @@ func (m *Manager) resumeStart(h *Hooks, s *Session, actor string) *sessionstart.
 		}
 	}
 	m.mu.Unlock()
-	st := h.StartPoint(StartInput{Actor: actor, TaskRef: taskRef, Resume: &sessionstart.Resume{Turn: turn, Status: status, Notice: notice}})
+	st := h.StartPoint(StartInput{Actor: actor, TaskRef: taskRef, Folder: folder, Resume: &sessionstart.Resume{Turn: turn, Status: status, Notice: notice}})
 	if st != nil {
 		m.mu.Lock()
 		s.Meta.Set("start", startObject(st))

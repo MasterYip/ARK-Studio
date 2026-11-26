@@ -525,3 +525,19 @@ test("layout persistence: moves survive storage and the account preset store", (
   // A broken account layout is dropped, not fatal.
   assert.equal(m.normalizePresetStore({ presets: [], layout: { v: 2 } }).layout, undefined);
 });
+
+test("layouts that still list the former Outline and Timeline views drop them quietly", () => {
+  const raw = { v: 1, containers: {
+    left: { visible: true, active: "outline", sections: [
+      { views: ["filters", "explorer", "search", "changes"], active: "explorer" },
+      { views: ["outline"], active: "outline" }, { views: ["timeline"], active: "timeline", collapsed: true }] },
+    right: { visible: true, sections: [{ views: ["details", "localgraph", "timeline"] }] },
+    bottom: { visible: false, sections: [{ views: ["assistant", "terminal"] }] },
+  } };
+  const layout = m.normalizeWorkbench(raw);
+  const all = Object.values(layout.containers).flatMap((box) => box.views);
+  assert.ok(!all.includes("outline") && !all.includes("timeline"), all.join(" "));
+  assert.equal(layout.containers.left.sections.length, 1, "their empty sections are gone");
+  assert.equal(layout.containers.left.active, "explorer");
+  assert.deepEqual(layout.containers.right.views, ["details", "localgraph"]);
+});

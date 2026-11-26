@@ -140,6 +140,13 @@ func init() {
 		exact(presencePath, (*reqCtx).presenceGet),
 		// Go only (routes_support.go: the Board and Home support panel).
 		exact(supportPath, (*reqCtx).projectSupportGet),
+		// Go only (routes_branches.go: lines of work, Q-0003).
+		exact(branchesPath, (*reqCtx).branchesGet),
+		exact(branchSuggestPath, (*reqCtx).branchSuggestGet),
+		exact(branchTopicPath, (*reqCtx).branchTopicGet),
+		// Go only (routes_schedules.go: scheduled Assistant tasks).
+		exact(schedulesPath, (*reqCtx).schedulesGet),
+		exact(scheduleTranscript, (*reqCtx).scheduleTranscriptGet),
 		// Go only (routes_sessionstart.go: the Run dialog's start preview).
 		exact(sessionStartPath, (*reqCtx).sessionStartGet),
 		// Go only (media_thumb.go: list thumbnails of images and videos).
@@ -183,6 +190,7 @@ func init() {
 		exact(notificationsPath, (*reqCtx).getNotifications),
 		// Go only (project_reviews.go; ids in GoOnlyRoutes).
 		exact(needsAssignedPath, (*reqCtx).getNeedsAssigned),
+		exact(needsNewPath, (*reqCtx).getNeedsNew),
 		// Go only (routes_importark.go, T-0070: import from another ARK project).
 		when(isImportArkPath, (*reqCtx).importArkGet),
 		// Go only (routes_reviews.go; ids in GoOnlyRoutes).
@@ -210,6 +218,8 @@ func init() {
 		sub((*reqCtx).providersGet,
 			PortedRoute{"exact:/api/providers", "GET,HEAD"},
 			PortedRoute{"exact:/api/worktrees", "GET,HEAD"}),
+		// Go only (session_notices.go; ids in GoOnlyRoutes).
+		exact(sessionNoticesPath, (*reqCtx).getSessionNotices),
 		prefix("/api/agent-sessions", (*reqCtx).sessionsGet, sessionsPorted...),
 		sub((*reqCtx).sessionContextsGet, sessionContextsPorted...),
 		when(isWorkspacePath, (*reqCtx).workspaceGet, workspacePorted...),
@@ -252,6 +262,9 @@ func init() {
 		exact(inviteSettingsPath, func(c *reqCtx) error { return c.inviteSettingsPost() }),
 		// Go only (routes_storage.go).
 		exact(projectStoragePath, (*reqCtx).projectStoragePost),
+		// Go only (routes_schedules.go).
+		exact(schedulesPath, func(c *reqCtx) error { return c.schedulesPost(c.body) }),
+		exact(branchRenamePath, func(c *reqCtx) error { return c.branchRenamePost(c.body) }),
 		exact(projectRevealPath, (*reqCtx).projectReveal),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.orgPost(path, c.body) }, orgPorted...),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.personalSettingsPost(path, c.body) }),
@@ -268,6 +281,8 @@ func init() {
 			PortedRoute{"exact:/api/providers/refresh", "POST"},
 			PortedRoute{"exact:/api/worktrees/create", "POST"},
 			PortedRoute{"exact:/api/worktrees/remove", "POST"}),
+		// Go only (session_notices.go; ids in GoOnlyRoutes).
+		exact(sessionNoticesPath, (*reqCtx).postSessionNotices),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.sessionsPost(path, c.body, c.writer) }),
 		sub(func(c *reqCtx, path string) (bool, error) { return c.sessionContextsPost(path, c.body) }),
 		prefix("/api/agent/v1/", func(c *reqCtx, path string) error {

@@ -41,6 +41,50 @@ New clients can independently patch `light` and `dark` on
 `dark` palettes. A patch merges named entries; a `null` entry deletes that
 name. Changes to active colors leave saved themes intact.
 
+## Cluster by type
+
+The graph physics panel has an optional **Cluster by type** switch (off by
+default). When it is on, nodes of the same type pull together and nodes of
+different types push apart, so each type forms its own group in the Force
+graph. **Same-type pull** and **Cross-type push** (0 to 1) set the strength;
+**Group by** chooses type (default), status or a node's first tag.
+
+Stored with the physics as `cluster` (true/false), `cluster_attract`,
+`cluster_repel` (0 to 1, default 0.5) and `cluster_by` (`type`, `status` or
+`tag`). Projects that never set them lay out exactly as before.
+
+## 3D graph
+
+The **3D** button in a graph's toolbar (Map, a topic's Graph view, Ideas)
+shows the same nodes and links in a 3D force layout, drawn in perspective:
+nearer nodes are larger, farther ones smaller and fade into the background.
+Nodes are flat discs that always face you, with the same colours and status
+icons as in 2D; labels show for the nearest nodes and for the hovered and
+selected ones.
+
+- Left click selects a node (the inspector follows, as in 2D); dragging a
+  node moves it in the plane facing you while the layout reacts, and on
+  release it rejoins the simulation (nothing is pinned), as in 2D. A left
+  drag on empty space does nothing.
+- Right drag rotates, Ctrl+right drag (or middle drag) pans, the wheel
+  zooms, double-click flies to a node. A right click on a node (without
+  dragging) opens the same node menu as in 2D. On a phone: one finger
+  rotates, two fingers zoom and pan, a tap selects. The graph's **?** help
+  lists these while 3D is on.
+- Hovering highlights a node's neighbours.
+- Filters (including Min links), the visible-relations choice, search and
+  selection are shared with the 2D graph. The forces are the graph physics settings above
+  (including Cluster by type), plus a collision force so nodes do not overlap.
+- The toolbar adds Reset view, Auto-rotate and 3D settings: label distance
+  (0 shows only hovered and selected labels), node size and Low power
+  (1x pixel ratio, no antialiasing). Labels never overlap on screen: where
+  two would, the nearer node keeps its label.
+
+The 2D/3D choice is remembered per account and page; the 3D settings per
+account. three.js (MIT) loads the first time 3D opens. Without WebGL the
+graph stays in 2D and says so. 3D is for viewing: adding nodes, links and
+editing stay in 2D.
+
 ## Arrowheads (graph line ends)
 
 **Settings > Project > Appearance > Graphs > General > Arrowheads** sets
@@ -225,7 +269,7 @@ Resolution is project, then person, per group:
 | Group | Project value | Personal override |
 | --- | --- | --- |
 | Palette | enabled flag, light and dark palettes | the same three values; saved themes can be picked from the project library but are not copied into your profile |
-| Graph physics | repulsion, distance, gravity, damping | all four values |
+| Graph physics | repulsion, distance, gravity, damping; optional cluster by type | the four force values; the cluster fields are optional |
 | Arrowheads | default style, per-relation table, Mind-map branches | a complete default style; the table and branch toggle default to ARK's defaults when omitted |
 
 If you have saved an override for a group, it wins for you and the project

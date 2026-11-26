@@ -133,6 +133,36 @@ function loginText(key, vars) {
   return text;
 }
 
+// This browser's device id (same rules as ensureDeviceId in mobile-core.js):
+// the Android app's ark_device cookie wins, else a random id kept in
+// localStorage and mirrored into the cookie.
+function loginDeviceId() {
+  var valid = /^[A-Za-z0-9_-]{16,128}$/;
+  var cookie = "";
+  document.cookie.split(";").forEach(function (part) {
+    var kv = part.trim().split("=");
+    if (kv[0] === "ark_device") cookie = decodeURIComponent(kv.slice(1).join("="));
+  });
+  var id = valid.test(cookie) ? cookie : "";
+  var stored = "";
+  try { stored = localStorage.getItem("ark.device.id") || ""; } catch (err) { /* storage disabled */ }
+  if (!id && valid.test(stored)) id = stored;
+  if (!id && window.crypto && window.crypto.getRandomValues) {
+    var bytes = new Uint8Array(24);
+    window.crypto.getRandomValues(bytes);
+    id = btoa(String.fromCharCode.apply(null, bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  }
+  if (!id) return "";
+  if (id !== stored) {
+    try { localStorage.setItem("ark.device.id", id); } catch (err) { /* storage disabled */ }
+  }
+  if (id !== cookie) {
+    document.cookie = "ark_device=" + id + "; Path=/; Max-Age=315360000; SameSite=Lax"
+      + (location.protocol === "https:" ? "; Secure" : "");
+  }
+  return id;
+}
+
 (function () {
   if (LOGIN_LANG !== "zh") return;
   var zh = LOGIN_TEXT.zh;
@@ -242,7 +272,7 @@ function loginText(key, vars) {
     return poll(first);
   }
 
-  post("api/mobile/pair/claim", { token: code }).then(confirmed).then(function (data) {
+  post("api/mobile/pair/claim", { token: code, device_id: loginDeviceId() || undefined }).then(confirmed).then(function (data) {
     window.ARKEntryGraph?.progress(1);
     try {
       localStorage.setItem("ark.mobile.token", String(data.mobile_token || ""));

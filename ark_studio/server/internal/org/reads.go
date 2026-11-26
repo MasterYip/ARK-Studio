@@ -178,6 +178,10 @@ func Prefs(r sqlitedb.Row) *pyjson.Object {
 	if v, ok := data.Value("seen_version").(string); ok && seenVersionRe.MatchString(v) {
 		out.Set("seen_version", v)
 	}
+	// Go-only: others' review items count as new too.
+	if data.Value("highlight_others_reviews") == true {
+		out.Set("highlight_others_reviews", true)
+	}
 	return out
 }
 

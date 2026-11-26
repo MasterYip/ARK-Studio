@@ -129,6 +129,10 @@ func migrate(ctx context.Context, q sqlitedb.Querier) error {
 	if _, err := q.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS chat_user ON chat_messages(user, id)"); err != nil {
 		return err
 	}
+	// Go only: the update feed reads a unit's agent writes (unitWriters).
+	if _, err := q.ExecContext(ctx, "CREATE INDEX IF NOT EXISTS activity_unit ON activity(unit_id, id)"); err != nil {
+		return err
+	}
 	if cols, err = columns(ctx, q, "topic_members"); err != nil {
 		return err
 	}

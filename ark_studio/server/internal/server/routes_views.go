@@ -583,6 +583,10 @@ func (c *reqCtx) agentGet() (bool, error) {
 		return okObj(st.ListUnits(c.ctx, f, false))
 	case agentMarkersPath: // Go only (routes_agentmarkers.go)
 		return okObj(agentMarkers(p), nil)
+	case agentBranchesPath: // Go only (routes_branches.go)
+		return okObj(st.Branches(c.ctx))
+	case agentSchedulesPath: // Go only (routes_schedules.go)
+		return true, c.schedulesGet()
 	case "/api/agent/v1/insights":
 		items, err := st.Insights(c.ctx)
 		return okObj(pyjson.NewObject("insights", items), err)

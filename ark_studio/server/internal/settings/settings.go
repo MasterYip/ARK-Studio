@@ -26,6 +26,37 @@ var graphKeys = []string{"repulsion", "distance", "gravity", "damping"}
 var graphRanges = map[string][2]float64{"repulsion": {0, 16000}, "distance": {0, 320}, "gravity": {0, 0.02}, "damping": {0, 1}}
 var graphDefaults = map[string]float64{"repulsion": 3286.0639999999985, "distance": 0.0, "gravity": 0.011506123058542407, "damping": 0.3}
 
+// Go-only: optional "cluster by type" physics (web/js/graph-core.js
+// applyClusterForces).  Stored and returned only once set, so projects that
+// never touch them answer exactly as before; the client treats a missing
+// key as its default (cluster off, strengths 0.5, grouping by type).
+var graphClusterKeys = []string{"cluster", "cluster_attract", "cluster_repel", "cluster_by"}
+var graphClusterGroupings = []string{"type", "status", "tag"}
+
+// graphClusterValue validates one clustering field.
+func graphClusterValue(key string, value any) (any, error) {
+	switch key {
+	case "cluster":
+		if b, ok := value.(bool); ok {
+			return b, nil
+		}
+		return nil, &Error{"cluster must be true or false"}
+	case "cluster_by":
+		if s, ok := value.(string); ok && contains(graphClusterGroupings, s) {
+			return s, nil
+		}
+		return nil, &Error{"cluster_by must be one of " + strings.Join(graphClusterGroupings, ", ")}
+	}
+	n, ok := gdNumberValue(value)
+	if !ok {
+		return nil, &Error{key + " must be a number"}
+	}
+	if n < 0 || n > 1 {
+		return nil, &Error{key + " must be between 0 and 1"}
+	}
+	return n, nil
+}
+
 // PaletteKeys is PALETTE_KEYS.
 var PaletteKeys = []string{"accent", "accent2", "accent_soft", "background", "surface", "text", "muted", "line", "success", "warning", "danger"}
 
@@ -59,6 +90,13 @@ func NormalizeGraph(value any) *pyjson.Object {
 		}
 		r := graphRanges[key]
 		out.Set(key, math.Max(r[0], math.Min(r[1], n)))
+	}
+	for _, key := range graphClusterKeys {
+		if item, has := source.Get(key); has && item != nil {
+			if clean, err := graphClusterValue(key, item); err == nil {
+				out.Set(key, clean)
+			}
+		}
 	}
 	return out
 }
@@ -394,6 +432,11 @@ func ProjectSettings(manifest *pyjson.Object) (*pyjson.Object, error) {
 	if groups, err := markers.Parse(s.Value("markers")); err == nil && groups != nil {
 		out.Set("markers", markers.ToJSON(groups))
 	}
+	// Go-only: the tag namespace of lines of work (store/branches.go),
+	// present only once set.
+	if b, err := Branches(s.Value("branches")); err == nil && b != nil {
+		out.Set("branches", b)
+	}
 	return out, nil
 }
 
@@ -405,6 +448,14 @@ func UpdateGraph(base any, patch any) (*pyjson.Object, error) {
 		return nil, &Error{"graph settings must be an object"}
 	}
 	for _, key := range p.Keys() {
+		if contains(graphClusterKeys, key) {
+			clean, err := graphClusterValue(key, p.Value(key))
+			if err != nil {
+				return nil, err
+			}
+			merged.Set(key, clean)
+			continue
+		}
 		r, known := graphRanges[key]
 		if !known {
 			return nil, &Error{"unknown graph setting: " + key}

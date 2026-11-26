@@ -25,6 +25,19 @@ import java.nio.charset.StandardCharsets;
 public final class ArkClient {
     public static final String TOKEN_HEADER = "X-ARK-Mobile-Token";
     public static final String USER_AGENT = "ARKStudioAndroid/3.0";
+    /** The phone's hashed device id ({@code data.DeviceId}), sent with every request. */
+    public static final String DEVICE_HEADER = "X-ARK-Device";
+
+    private static volatile String deviceId = "";
+
+    /** Set once at start-up ({@code Accounts}); empty until then. */
+    public static void setDeviceId(String id) {
+        deviceId = id == null ? "" : id;
+    }
+
+    public static String deviceId() {
+        return deviceId;
+    }
 
     private final String base;
     private final String token;
@@ -103,6 +116,7 @@ public final class ArkClient {
             body.put("password", password == null ? "" : password);
             body.put("permission", readOnly ? "read_only" : "full");
             if (device != null && !device.isEmpty()) body.put("device", device);
+            if (!deviceId.isEmpty()) body.put("device_id", deviceId);
         } catch (JSONException impossible) {
             throw new IllegalStateException(impossible);
         }
@@ -124,6 +138,7 @@ public final class ArkClient {
         try {
             body.put("token", code == null ? "" : code);
             if (device != null && !device.isEmpty()) body.put("device", device);
+            if (!deviceId.isEmpty()) body.put("device_id", deviceId);
         } catch (JSONException impossible) {
             throw new IllegalStateException(impossible);
         }
@@ -193,6 +208,7 @@ public final class ArkClient {
             connection.setRequestProperty("Accept", "application/json");
             connection.setRequestProperty("User-Agent", USER_AGENT);
             if (!token.isEmpty()) connection.setRequestProperty(TOKEN_HEADER, token);
+            if (!deviceId.isEmpty()) connection.setRequestProperty(DEVICE_HEADER, deviceId);
             if (body != null) {
                 byte[] bytes = body.toString().getBytes(StandardCharsets.UTF_8);
                 connection.setDoOutput(true);

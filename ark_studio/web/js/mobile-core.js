@@ -8,6 +8,54 @@ export const MOBILE_TOKEN_STORAGE_KEY = "ark.mobile.token";
 export const MOBILE_PERMISSION_STORAGE_KEY = "ark.mobile.permission";
 export const MOBILE_EXPIRES_STORAGE_KEY = "ark.mobile.expires";
 
+// This browser's device id: the server counts every sign-in that sends the
+// same id as one device.  The Android app's WebView gets the app's own id
+// (a hash of the phone's ANDROID_ID) as the ark_device cookie; a browser
+// keeps a random id in localStorage and mirrors it into the cookie, which
+// reaches the server with every request.
+export const DEVICE_ID_STORAGE_KEY = "ark.device.id";
+export const DEVICE_COOKIE = "ark_device";
+const DEVICE_ID_RE = /^[A-Za-z0-9_-]{16,128}$/;
+
+export function validDeviceId(value) {
+  return DEVICE_ID_RE.test(String(value || ""));
+}
+
+export function newDeviceId(cryptoImpl = globalThis.crypto) {
+  const bytes = new Uint8Array(24);
+  cryptoImpl.getRandomValues(bytes);
+  let text = "";
+  for (const b of bytes) text += String.fromCharCode(b);
+  return btoa(text).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+function cookieValue(cookies, name) {
+  for (const part of String(cookies || "").split(";")) {
+    const [key, ...rest] = part.trim().split("=");
+    if (key === name) return decodeURIComponent(rest.join("="));
+  }
+  return "";
+}
+
+// ensureDeviceId returns the device id, creating it once.  The app's cookie
+// wins over a stored id, so the WebView and the native screens of the
+// Android app are one device.
+export function ensureDeviceId({ storage = globalThis.localStorage, doc = globalThis.document,
+  cryptoImpl = globalThis.crypto, secure = globalThis.location?.protocol === "https:" } = {}) {
+  const fromCookie = doc ? cookieValue(doc.cookie, DEVICE_COOKIE) : "";
+  let id = validDeviceId(fromCookie) ? fromCookie : "";
+  let stored = "";
+  try { stored = storage?.getItem(DEVICE_ID_STORAGE_KEY) || ""; } catch { /* storage disabled */ }
+  if (!id) id = validDeviceId(stored) ? stored : newDeviceId(cryptoImpl);
+  if (id !== stored) {
+    try { storage?.setItem(DEVICE_ID_STORAGE_KEY, id); } catch { /* storage disabled */ }
+  }
+  if (doc && id !== fromCookie) {
+    doc.cookie = `${DEVICE_COOKIE}=${id}; Path=/; Max-Age=315360000; SameSite=Lax${secure ? "; Secure" : ""}`;
+  }
+  return id;
+}
+
 // Six destinations fit a 360 px phone at 60 px each and cover the mobile-first
 // screens.  Topics/Assets/Distribution stay in the "More" sheet so the
 // desktop information architecture is preserved.

@@ -21,7 +21,10 @@ test("query options and request parameters", () => {
     files: { q: "zebra", case: 1, include: "*.md", exclude: "drafts" },
   });
   assert.deepEqual(m.normalizeQuery({ q: 5, word: 1, junk: true }),
-    { q: "5", case: false, word: true, regex: false, include: "", exclude: "", details: false });
+    { q: "5", case: false, word: true, regex: false, include: "", exclude: "", details: false, replace: "", replaceOpen: false });
+  // Search › Replace sends the same query with the replacement.
+  assert.deepEqual(m.replaceBody(m.normalizeQuery({ q: "a(b)", regex: true, include: "*.md", replace: "$1", replaceOpen: true }), { apply: true, files: [] }),
+    { q: "a(b)", case: false, word: false, regex: true, include: "*.md", exclude: "", replace: "$1", apply: true, files: [] });
   assert.equal(m.queryError({ q: "(", regex: true }) !== "", true);
   assert.equal(m.queryError({ q: "(", regex: false }), "");
 });

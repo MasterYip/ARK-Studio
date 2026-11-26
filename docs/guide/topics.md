@@ -14,18 +14,20 @@ member of another topic.
 project gets them once (the first time someone with write access opens the
 topic list): ordinary topic nodes whose rule selects one type
 (`meta.default` = `story`, `related`, `method`, `experiment`). They lead the
-topic bar and keep the old addresses `#/research/story` etc. Archiving one
+topic list and keep the old addresses `#/research/story` etc. Archiving one
 does not bring it back.
 
 ## What a topic stores
 
 The Filters rail and keyword search in a topic workspace filter **the nodes
-inside the open topic**, across Canvas, Graph, Outline and Timeline. Counts and
+inside the open topic**, across Graph, Document, Timeline and the Outline. Counts and
 filter options describe those members, not the topic node or the whole project.
 Filtering does not change the saved membership, rule, outline or positions, and
 does not hide the topic tabs. Clearing the filters restores the complete topic.
 
-Graph starts in Force layout; Canvas starts in the curated Node layout.
+A topic's Graph opens in the Force layout. A layout picked in the graph
+toolbar (Node: the topic's saved positions, Tree, Mind) is remembered for that
+topic in this browser.
 Filter changes reuse the current graph and retain its layout, pan and zoom,
 including when all members are temporarily filtered out. Node transitions use
 the same animation setting as the Map, without a synchronous force warm-up.
@@ -42,12 +44,12 @@ members = (nodes matching the rule + nodes added by hand) - excluded nodes
 | Manual members | Nodes added by hand; they stay regardless of the rule. |
 | Excluded | Rule matches the topic must not show. Removing a rule match from a topic excludes it. |
 | Outline | Reading order and levels of the members (`1`, `1.2`, ...). A member's parent is the one set in the topic, otherwise its `part_of` target when that is a member too. |
-| Layout | Canvas position of each member, saved on the server. |
+| Layout | Position of each member in the Node layout, saved on the server. |
 | Caption | Optional short note per member, kept for agents and exports. The UI does not show or edit it. |
 | Links shown | Links are the real links between members. The topic chooses which to show: a relation whitelist (`relations`, null for all) and individually hidden links (`hidden_links`). |
 
-Nothing in a topic changes the member nodes. Drawing a link on a topic canvas
-creates a real link. On a topic canvas, Del and **Remove from topic** only take
+Nothing in a topic changes the member nodes. Drawing a link on a topic graph
+creates a real link. On a topic graph, Del and **Remove from topic** only take
 the node out of the topic; **Delete node** in the right-click menu moves it to
 the project's recycle bin (Settings > Project > Recycle bin). Members in the
 recycle bin are hidden and come back when restored.
@@ -58,22 +60,36 @@ choices are in the topic unit's `meta.subgraph`.
 
 ## Using topics
 
-- **Research → Topics** shows the topic bar (built-in topics first) and the
-  open topic. `#/research/topic/<uid>` links to a topic. Switching topics or
-  views replaces only the topic area. Every topic has four views:
-  - **Canvas**: the node graph (outline numbers, relation labels) beside the
-    Outline panel. Drag an item onto the top or bottom edge of another to put
-    it before or after it, or onto its middle to nest it. Tab / Shift+Tab
-    change the level, Alt+↑/↓ move an item with its children.
-  - **Graph**: the node graph alone, full width.
-  - **Outline**: the topic as one document. Each member is a section with its
+- **Research → Topics** shows the open topic and, on the right, the
+  **Explorer** (like the Editor's): stacked sections that fold, resize and
+  maximize, with a filter box on top. `#/research/topic/<uid>` links to a
+  topic. Switching topics or views replaces only the topic area.
+  - **Topics**: every topic, built-in ones first; a topic that is `part_of`
+    another sits under it. **+** creates a topic.
+  - **Lines**: the lines of work (`branch:a/b/c` tags) as a tree with node
+    counts; a line opens as its topic. The gear opens the line settings.
+  - **Outline**: the open topic's reading order and levels. A click selects
+    the node in the graph (or the section in Document) and opens its details.
+    Drag an item onto the top or bottom edge of another to put it before or
+    after it, or onto its middle to nest it. Tab / Shift+Tab change the level,
+    Alt+↑/↓ move an item with its children, ← / → and Space fold. While the
+    Graph or Timeline is shown, Ctrl+K Ctrl+0 / J / 1–7 / [ / ] / L and
+    Ctrl+Shift+[ / ] fold the outline.
+  The toolbar button **Explorer** hides or shows the panel; drag its left edge
+  to resize (double-click resets). Its state is kept in this browser. On a
+  phone it opens as a drawer.
+- Every topic has three views:
+  - **Graph** (default): the topic's graph, Force layout until another one is
+    picked for the topic. The Node layout keeps the saved positions; **Auto
+    layout** re-arranges them.
+  - **Document**: the topic as one document. Each member is a section with its
     body (Markdown and HTML embeds), attachments (images, video, audio, PDF,
     HTML) and children; a nested topic links to its own document. Folded
     sections show only the title. VS Code keys: Ctrl+K Ctrl+0 fold all,
     Ctrl+K Ctrl+J unfold all, Ctrl+K Ctrl+1–7 fold level N, Ctrl+K Ctrl+[ / ]
     fold / unfold the focused section recursively, Ctrl+K Ctrl+L toggle,
     Ctrl+Shift+[ / ] fold / unfold. The second key works with or without
-    Ctrl; Ctrl+K alone still opens the command palette after a second.
+    Ctrl.
   - **Timeline**: members with dates on a Gantt chart.
 - **Add nodes** searches the project. On any graph, right-click nodes →
   **Add to topic…**, or create a new topic from the selection.
@@ -240,9 +256,9 @@ itself fails as a whole (HTTP 400 with the reason) and changes nothing.
 - Membership, order and rule changes are logged as `topic.update` with the
   agent as actor.
 
-### 6. The canvas layout (topic map)
+### 6. The node layout (topic map)
 
-The Canvas shows members at their saved positions. Members without one are
+The Graph's Node layout shows members at their saved positions. Members without one are
 placed automatically, left to right along the links (columns 280 px apart,
 rows 100 px apart, starting at x 90, y 80). Usually leave the layout to the
 automatic placement or to the user. Set positions only when the arrangement
@@ -264,7 +280,7 @@ stacked:
 vertically. The user can drag cards or use **Auto layout**, which replaces the
 saved positions.
 
-Node graph behaviour (Topic canvas and the Map's *Node graph* layout):
+Node graph behaviour (topic Graph and the Map's *Node graph* layout):
 
 - Without saved positions the graph is laid out in layers, left to right
   along the links (sources left, targets right), with crossings minimised and

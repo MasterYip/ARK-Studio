@@ -233,3 +233,35 @@ test("a stale ark-<hostname> alias never reaches VS Code", () => {
   assert.deepEqual([...map], [["ark-deskhost7k2pq", "ark-gpu-lab"], ["ark-709270ec09fc", "ark-gpu-lab"]]);
   assert.ok(!map.has("ark-gpu-lab"));
 });
+
+// Regression (2026-11-26 12:30): VS Code opened the direct form
+// ssh-remote+{"hostName": <address>, "user": "user", "port": <port>} and got
+// "Permission denied (publickey)": the person's key is not a default key name
+// and ssh matches Host patterns against the typed name, so the Host
+// ark-<machine> entry never applied to the bare address.  Some opens worked
+// (with the alias), some did not (the direct form).
+test("key login never opens the bare address without a confirmed entry", async () => {
+  const { openPlan, isDefaultKey, sshConfigEntry } = await import("../../ark_studio/web/js/resource-open-model.js");
+  const conn = { host: "198.51.100.23", port: 2022, user: "user" };
+  // The entry names the address too, so the direct form picks up the key.
+  const entry = sshConfigEntry({ alias: "ark-gpu-lab", ...conn, identityFile: "C:/Users/me/.ssh/id_rsa_gpu_lab", auth: "key" });
+  assert.equal(entry.split("\n")[0], "Host ark-gpu-lab 198.51.100.23");
+  assert.ok(entry.includes("IdentityFile C:/Users/me/.ssh/id_rsa_gpu_lab"));
+  // The 12:30 case: browser, alias not confirmed, key login with a non-default key.
+  const unconfirmed = resolveAlias({ name: "gpu-lab", conn, added: {} });
+  assert.deepEqual(unconfirmed, { alias: "ark-gpu-lab", known: false });
+  assert.equal(openPlan({ resolved: unconfirmed, auth: "key", keyFile: "C:/Users/me/.ssh/id_rsa_gpu_lab" }), "confirm");
+  // Unknown login mode: treated as key login.
+  assert.equal(openPlan({ resolved: unconfirmed }), "confirm");
+  // Once the person confirmed the entry ("Added, open"): the alias, every time.
+  const confirmed = resolveAlias({ name: "gpu-lab", conn, added: { "ark-gpu-lab": "user@198.51.100.23:2022#key" } });
+  assert.equal(openPlan({ resolved: confirmed, auth: "key", keyFile: "C:/Users/me/.ssh/id_rsa_gpu_lab" }), "alias");
+  // The bare address only for password login or a key ssh tries by itself.
+  assert.equal(openPlan({ resolved: unconfirmed, auth: "password" }), "direct");
+  assert.equal(openPlan({ resolved: unconfirmed, auth: "key", keyFile: "C:\\Users\\me\\.ssh\\id_ed25519" }), "direct");
+  assert.ok(isDefaultKey("~/.ssh/id_rsa") && !isDefaultKey("~/.ssh/id_rsa_gpu_lab") && !isDefaultKey("id_rsa"));
+  // Desktop app: write the entry (it asks the first time), then the alias.
+  assert.equal(openPlan({ resolved: unconfirmed, desktop: true, auth: "key" }), "write");
+  // No machine name: no alias to use.
+  assert.equal(openPlan({ resolved: { alias: null, known: false }, auth: "key" }), "direct");
+});

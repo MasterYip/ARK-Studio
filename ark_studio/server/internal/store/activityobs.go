@@ -43,20 +43,52 @@ func WithActivitySession(ctx context.Context, fn func() (id, via string)) contex
 	return context.WithValue(ctx, activitySessionKey{}, fn)
 }
 
+// ActivityAgent is who an agent write comes from besides its ARK session:
+// the personal token's id, the device (X-ARK-Host) and the agent's own
+// session id (X-ARK-Agent-Session), each "" when unknown.  They are kept in
+// the detail as "agent_token", "agent_host" and "agent_session", and the
+// update feed routes people's answers on a unit back to that writer
+// (UnitWriters, agentwatch).
+type ActivityAgent struct {
+	Token, Host, AgentSession string
+}
+
+type activityAgentKey struct{}
+
+// WithActivityAgent returns ctx with fn naming the token, device and agent
+// session of the agent writes under ctx.
+func WithActivityAgent(ctx context.Context, fn func() ActivityAgent) context.Context {
+	return context.WithValue(ctx, activityAgentKey{}, fn)
+}
+
 func withActivitySession(ctx context.Context, actor string, detail *pyjson.Object) *pyjson.Object {
-	fn, _ := ctx.Value(activitySessionKey{}).(func() (string, string))
-	if fn == nil || !isAgent(actor) {
+	if !isAgent(actor) {
 		return detail
 	}
-	id, via := fn()
-	if id == "" {
+	var id, via string
+	if fn, _ := ctx.Value(activitySessionKey{}).(func() (string, string)); fn != nil {
+		id, via = fn()
+	}
+	var who ActivityAgent
+	if fn, _ := ctx.Value(activityAgentKey{}).(func() ActivityAgent); fn != nil {
+		who = fn()
+	}
+	if id == "" && who == (ActivityAgent{}) {
 		return detail
 	}
 	out := pyjson.NewObject()
 	if detail != nil {
 		out = detail.Copy()
 	}
-	return out.Set("session", id).Set("session_via", via)
+	if id != "" {
+		out.Set("session", id).Set("session_via", via)
+	}
+	for _, kv := range [][2]string{{"agent_token", who.Token}, {"agent_host", who.Host}, {"agent_session", who.AgentSession}} {
+		if kv[1] != "" {
+			out.Set(kv[0], kv[1])
+		}
+	}
+	return out
 }
 
 func observeActivity(ctx context.Context, actor, action string, unitID any, detail *pyjson.Object) {

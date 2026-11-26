@@ -137,7 +137,10 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 		return nil, serr(label+" is not installed or configured", 400, "")
 	}
 	title := limit(pytext.Strip(bodyStr(body, "title")), maxTitle)
-	prompt := limit(WithoutPastedTokens(pytext.Strip(bodyStr(body, "prompt"))), maxPrompt)
+	prompt := WithoutPastedTokens(pytext.Strip(bodyStr(body, "prompt")))
+	if err := checkPrompt("the prompt", prompt); err != nil {
+		return nil, err
+	}
 	if title == "" && prompt != "" {
 		title = label + " session"
 	}
@@ -149,12 +152,20 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 		return nil, err
 	}
 	if len(startCtx) > 0 {
-		prompt = limit(composeMessage(prompt, startCtx), maxPrompt)
+		prompt = composeMessage(prompt, startCtx)
+		if err := checkPrompt("the prompt with its start context", prompt); err != nil {
+			return nil, err
+		}
 	}
 	// A session may start without a first message: a long-lived process
 	// waits for it; a one-shot agent starts with it (awaiting_first).
 	awaitFirst := prompt == "" && len(startImages) == 0 && promptRequired[presetID]
 	chosen := startChoice(body.Value("start"))
+	if chosen != nil {
+		if err := checkPrompt("the start prompt", chosen.Text); err != nil {
+			return nil, err
+		}
+	}
 	model := limit(pytext.Strip(bodyStr(body, "model")), 80)
 	agent := limit(pytext.Strip(bodyStr(body, "agent")), 120)
 	effort := limit(pytext.Strip(bodyStr(body, "effort")), 40)
@@ -168,9 +179,17 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 	taskRef := limit(pytext.Strip(strOr(or(body.Value("task"), body.Value("task_ref")))), 40)
 	// What the agent does first (preamble.go).  A start that has work to
 	// do runs without a typed first message.
+	// Where the work goes (taskfolder.go): resolved before the start, which
+	// names it, and created now so the agent has it from its first file.
+	sessionID := m.newID()
+	var folder *sessionstart.Folder
+	if h != nil && h.TaskFolder != nil && !pyjson.Truthy(preset.Value("demo")) {
+		folder = h.TaskFolder(FolderInput{Actor: actor, TaskRef: taskRef, SessionID: sessionID, Title: title, Created: NowISO()})
+		prepareFolder(folder)
+	}
 	var start *sessionstart.Start
 	if h != nil && h.StartPoint != nil && !pyjson.Truthy(preset.Value("demo")) {
-		start = h.StartPoint(StartInput{Actor: actor, TaskRef: taskRef, Prompt: prompt, Chosen: chosen})
+		start = h.StartPoint(StartInput{Actor: actor, TaskRef: taskRef, Prompt: prompt, Chosen: chosen, Folder: folder})
 		if start != nil && prompt == "" && len(startImages) == 0 && start.Mode != sessionstart.ModeWait {
 			prompt = KickoffMessage
 			awaitFirst = false
@@ -230,9 +249,8 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 		}
 	}
 
-	sessionID := m.newID()
-	folder := filepath.Join(m.Root, sessionID)
-	workspace := filepath.Join(folder, "workspace")
+	sessionFolder := filepath.Join(m.Root, sessionID)
+	workspace := filepath.Join(sessionFolder, "workspace")
 	artifacts := filepath.Join(workspace, "artifacts")
 	if err := os.MkdirAll(artifacts, 0o755); err != nil {
 		return nil, err
@@ -305,7 +323,7 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 	if err := writeJSON(filepath.Join(workspace, "ark-context.json"), context); err != nil {
 		return nil, err
 	}
-	contract := m.contract(sessionID, preset, projectRef, taskRef, cwdLabel, apiBase, access, worktree, workspace)
+	contract := m.contract(sessionID, preset, projectRef, taskRef, cwdLabel, apiBase, access, worktree, workspace, folder)
 	if err := os.WriteFile(filepath.Join(workspace, "ARK-TASK.md"), textfile.Encode(contract), 0o644); err != nil {
 		return nil, err
 	}
@@ -337,7 +355,10 @@ func (m *Manager) Start(h *Hooks, body *pyjson.Object, baseURL, actor string) (*
 			"ARK_TASK_CONTEXT", "workspace/ark-context.json", "ARK_READ_TOKEN", "read-only session token",
 			"ARK_TASK_API_BASE", apiBase),
 		"counts", pyjson.NewObject("stdout", int64(0), "stderr", int64(0), "bytes", int64(0)), "actor", actor)
-	s := &Session{ID: sessionID, Folder: folder, Meta: meta, m: m, start: start}
+	if folder != nil {
+		meta.Set("task_folder", folderObject(folder))
+	}
+	s := &Session{ID: sessionID, Folder: sessionFolder, Meta: meta, m: m, start: start}
 	if start != nil {
 		meta.Set("start", startObject(start))
 	}
@@ -434,6 +455,7 @@ func resumeArgv(argv []string, platform, nativeID, prompt string) []string {
 func (m *Manager) failSpawn(s *Session, message string) {
 	m.mu.Lock()
 	s.Meta.Set("status", "errored").Set("error", message).Set("ended_at", NowISO())
+	setTurnEndLocked(s, "error", message)
 	m.saveLocked(s)
 	m.mu.Unlock()
 }
@@ -453,6 +475,23 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	forkID := strOr(meta.Delete("fork_native_id"))
 	pending := s.pendingEntries
 	s.pendingEntries = nil
+	taskRefNow := strOr(meta.Value("task_ref"))
+	kept := folderFromMeta(meta.Value("task_folder"))
+	titleNow, createdNow := strOr(meta.Value("title")), strOr(meta.Value("created_at"))
+	m.mu.Unlock()
+	// Where the work goes.  A folder the session already has stays its
+	// folder (a task created later records it; files are never moved);
+	// otherwise it is resolved again, e.g. after a task-space decision.
+	if h != nil && h.TaskFolder != nil && !pyjson.Truthy(preset.Value("demo")) && (kept == nil || kept.Path == "") {
+		if f := h.TaskFolder(FolderInput{Actor: actor, TaskRef: taskRefNow, SessionID: s.ID, Title: titleNow, Created: createdNow}); f != nil {
+			prepareFolder(f)
+			m.mu.Lock()
+			meta.Set("task_folder", folderObject(f))
+			m.mu.Unlock()
+		}
+	}
+	m.mu.Lock()
+	taskFolder := folderFromMeta(meta.Value("task_folder"))
 	m.mu.Unlock()
 	env := m.buildEnv(h, s, projectRef, apiBase, readToken, workspace, artifacts, actor)
 	presetID := pyjson.Str(preset.Value("id"))
@@ -514,6 +553,9 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		access := pyjson.Str(or(meta.Value("access_mode"), "read_only"))
 		m.mu.Unlock()
 		argv = withCodexSandbox(argv, access)
+		if access == "full_access" || access == "accept_edits" || access == "ask" {
+			argv = withCodexDirs(argv, codexWritableDirs(taskFolder)) // the registered places, writable too
+		}
 		argv = codexJSONArgv(argv)
 	}
 	agentFlag := m.agentFlag(h, presetID, agent)
@@ -534,8 +576,8 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		}
 		extra = append(extra, agentFlag...)
 		argv = insertAt(argv, 1, extra...)
-		if preamble != "" && !contains(argv, "--append-system-prompt") {
-			argv = append(argv, "--append-system-prompt", preamble)
+		if preamble != "" && !contains(argv, "--append-system-prompt") && !contains(argv, "--append-system-prompt-file") {
+			argv = append(argv, systemPromptArgs(preamble, workspace)...)
 		}
 	}
 	// A long-lived Claude Code process takes every message on stdin.
@@ -552,12 +594,22 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	}
 	if !stream && len(pending) > 0 {
 		// One-shot turns cannot take image blocks: the agent gets the paths.
-		prompt = limit(composeMessage(prompt, pending), maxPrompt)
+		prompt = composeMessage(prompt, pending)
 		for i, part := range argv {
 			if part != "" && (part == strOr(meta.Value("prompt")) || part == userPrompt) {
 				argv[i] = prompt
 			}
 		}
+	}
+	// A long prompt never travels as an argument (longargs.go).
+	stdinPrompt := ""
+	if !stream {
+		next, viaStdin, err := longPromptArgv(presetID, preset, argv, prompt, workspace)
+		if err != nil {
+			m.failSpawn(s, err.Error())
+			return err
+		}
+		argv, stdinPrompt = next, viaStdin
 	}
 	m.mu.Lock()
 	previous := strOr(meta.Value("linux_account"))
@@ -591,6 +643,7 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 	m.mu.Lock()
 	meta.Set("command_preview", preview(argv, prompt))
 	m.mu.Unlock()
+	m.markTurnStart(s)
 	proc, err := m.startProcess(s, argv, cwdDir, env)
 	if err != nil {
 		text := osErrorText(err, argv[0])
@@ -624,6 +677,15 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 			m.saveLocked(s)
 			m.mu.Unlock()
 		}
+		return nil
+	}
+	if stdinPrompt != "" {
+		// The agent reads the prompt to EOF; a goroutine, so a slow reader
+		// never holds up the request.
+		go func() {
+			_ = proc.writeStdin([]byte(stdinPrompt))
+			proc.closeStdin()
+		}()
 		return nil
 	}
 	if prompt != "" && preset.Value("prompt_mode") == "stdin" {
@@ -753,6 +815,12 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 	worktree, _ := meta.Value("worktree").(*pyjson.Object)
 	m.mu.Unlock()
 	projectPath := strOr(projectRef.Value("path"))
+	m.mu.Lock()
+	taskFolder := folderFromMeta(meta.Value("task_folder"))
+	m.mu.Unlock()
+	if a := folderArtifacts(taskFolder); a != "" && !isReadOnlyMode(access) {
+		artifacts = a // the task folder, not the session workspace
+	}
 	for _, kv := range [][2]string{{"ARK_TASK_SESSION", s.ID}, {"ARK_TASK_PROJECT", projectPath},
 		{"ARK_PROJECT_PATH", projectPath}, {"ARK_TASK_CONTEXT", filepath.Join(workspace, "ark-context.json")},
 		{"ARK_TASK_ARTIFACTS", artifacts}, {"ARK_TASK_API_BASE", apiBase}, {"ARK_READ_TOKEN", readToken},
@@ -760,6 +828,9 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 		{"ARK_TASK_APPROVAL_PROTOCOL", ApprovalProtocol}, {"ARK_TASK_MODEL", model}, {"ARK_TASK_EFFORT", effort},
 		{"PYTHONUNBUFFERED", "1"}, {"PYTHONIOENCODING", "utf-8"}, {"PYTHONUTF8", "1"}} {
 		env.set(kv[0], kv[1])
+	}
+	if taskFolder != nil && taskFolder.Path != "" {
+		env.set("ARK_TASK_FOLDER", taskFolder.Path)
 	}
 	if platform == "codex" {
 		// The transcript reads Codex's JSON events on stdout; its tracing
@@ -901,7 +972,7 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 
 // contract is SessionManager._contract (ARK-TASK.md).
 func (m *Manager) contract(sessionID string, preset, project *pyjson.Object, taskRef, cwd, apiBase, access string,
-	worktree *pyjson.Object, workspace string) string {
+	worktree *pyjson.Object, workspace string, folder *sessionstart.Folder) string {
 	label := permissionLabels[access]
 	artifactsHint := "`./artifacts/`"
 	if workspace != "" {
@@ -1014,9 +1085,13 @@ func (m *Manager) contract(sessionID string, preset, project *pyjson.Object, tas
 		"- Fresh API: `GET /context`, `GET /project`, `GET /units`, `GET /links`, `GET /snapshot`.",
 		"- Read token: `ARK_READ_TOKEN`; header `X-ARK-Read-Token: <token>`; API base `"+apiBase+"`.\n",
 		"## Workspace\n",
-		"- cwd: `"+cwd+"`"+where,
-		"- Session workspace artifacts: "+artifactsHint,
-		"- Task reference: "+task+"\n")
+		"- cwd: `"+cwd+"`"+where)
+	if fl := contractFolderLines(folder); fl != nil && !isReadOnlyMode(access) {
+		lines = append(lines, fl...)
+	} else {
+		lines = append(lines, "- Session workspace artifacts: "+artifactsHint)
+	}
+	lines = append(lines, "- Task reference: "+task+"\n")
 	return strings.Join(lines, "\n")
 }
 
@@ -1027,6 +1102,7 @@ func (m *Manager) refreshWorkspacePermission(s *Session, preset *pyjson.Object, 
 	meta := s.Meta
 	access := pyjson.Str(or(meta.Value("access_mode"), "read_only"))
 	taskRef := strOr(meta.Value("task_ref"))
+	taskFolder := folderFromMeta(meta.Value("task_folder"))
 	info := pyjson.NewObject("id", s.ID, "platform", preset.Value("id"), "task_ref", taskRef,
 		"model", or(meta.Value("model"), ""), "agent", or(meta.Value("agent"), ""), "effort", or(meta.Value("effort"), ""),
 		"access_mode", access, "permission_mode", access, "supports_approval", pyjson.Truthy(preset.Value("supports_approval")))
@@ -1061,7 +1137,7 @@ func (m *Manager) refreshWorkspacePermission(s *Session, preset *pyjson.Object, 
 	}
 	_ = writeJSON(filepath.Join(workspace, "ark-context.json"), context)
 	_ = os.WriteFile(filepath.Join(workspace, "ARK-TASK.md"),
-		textfile.Encode(m.contract(s.ID, preset, projectRef, taskRef, cwd, apiBase, access, worktree, workspace)), 0o644)
+		textfile.Encode(m.contract(s.ID, preset, projectRef, taskRef, cwd, apiBase, access, worktree, workspace, taskFolder)), 0o644)
 }
 
 // startContextEntries renders the context attached to a new session's first

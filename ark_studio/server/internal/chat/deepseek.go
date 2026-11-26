@@ -184,53 +184,69 @@ func jsonError(text string) string {
 
 // deepseekChat is _deepseek_chat: the assistant message of one completion.
 func deepseekChat(ctx context.Context, messages, tools []any, config *pyjson.Object) (any, error) {
-	resp, err := request(ctx, requestBody(messages, tools, config, false), config, "application/json")
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	raw, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, deepseekErr(urlError(err))
-	}
-	text := pyurl.DecodeStrict(raw)
-	if text == nil {
-		return nil, deepseekErr("'utf-8' codec can't decode the response")
-	}
-	data, err := pyjson.Loads(*text)
-	if err != nil {
-		return nil, deepseekErr(jsonError(*text))
-	}
-	unexpected := deepseekErr("DeepSeek returned an unexpected response")
-	o, ok := data.(*pyjson.Object)
-	if !ok {
-		return nil, unexpected
-	}
-	choices, present := o.Get("choices")
-	if !present {
-		return nil, unexpected
-	}
-	var first any
-	switch c := choices.(type) {
-	case []any:
-		if len(c) == 0 {
+	msg, _, err := deepseekChatUsage(ctx, messages, tools, config)
+	return msg, err
+}
+
+// deepseekChatUsage is deepseekChat plus the completion's usage.total_tokens
+// (0 when the provider sends none; Go only, scheduled tasks' cost cap).
+func deepseekChatUsage(ctx context.Context, messages, tools []any, config *pyjson.Object) (any, int64, error) {
+	var tokens int64
+	msg, err := func() (any, error) {
+		resp, err := request(ctx, requestBody(messages, tools, config, false), config, "application/json")
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+		raw, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, deepseekErr(urlError(err))
+		}
+		text := pyurl.DecodeStrict(raw)
+		if text == nil {
+			return nil, deepseekErr("'utf-8' codec can't decode the response")
+		}
+		data, err := pyjson.Loads(*text)
+		if err != nil {
+			return nil, deepseekErr(jsonError(*text))
+		}
+		unexpected := deepseekErr("DeepSeek returned an unexpected response")
+		o, ok := data.(*pyjson.Object)
+		if !ok {
 			return nil, unexpected
 		}
-		first = c[0]
-	case string:
-		return nil, unexpected // "x"[0]["message"] is a TypeError
-	default:
-		return nil, unexpected
-	}
-	fo, ok := first.(*pyjson.Object)
-	if !ok {
-		return nil, unexpected
-	}
-	msg, present := fo.Get("message")
-	if !present {
-		return nil, unexpected
-	}
-	return msg, nil
+		choices, present := o.Get("choices")
+		if !present {
+			return nil, unexpected
+		}
+		var first any
+		switch c := choices.(type) {
+		case []any:
+			if len(c) == 0 {
+				return nil, unexpected
+			}
+			first = c[0]
+		case string:
+			return nil, unexpected // "x"[0]["message"] is a TypeError
+		default:
+			return nil, unexpected
+		}
+		fo, ok := first.(*pyjson.Object)
+		if !ok {
+			return nil, unexpected
+		}
+		msg, present := fo.Get("message")
+		if !present {
+			return nil, unexpected
+		}
+		if usage, ok := o.Value("usage").(*pyjson.Object); ok {
+			if n, ok := usage.Value("total_tokens").(int64); ok {
+				tokens = n
+			}
+		}
+		return msg, nil
+	}()
+	return msg, tokens, err
 }
 
 // isZero is `value != 0` being false in Python (0, 0.0, False).

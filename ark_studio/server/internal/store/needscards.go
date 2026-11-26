@@ -157,6 +157,20 @@ func markTime(v any) string {
 type NeedsSeen struct {
 	Watermark string
 	Items     map[string]string
+	// Viewer (Go only): who looks, and whether items assigned to someone
+	// else count for them (prefs.highlight_others_reviews).  With a User
+	// and Others false, another person's items count as seen.
+	User   string
+	Others bool
+}
+
+// Pending: the item counts as new for the viewer (not opened, and theirs
+// unless they asked to see everyone's).
+func (s NeedsSeen) Pending(m NeedsMark) bool {
+	if !s.Others && s.User != "" && m.Assignee != "" && !strings.EqualFold(m.Assignee, s.User) {
+		return false
+	}
+	return !s.Opened(m)
 }
 
 // itemNew: the item entered its current state after the person last saw it.
@@ -187,12 +201,47 @@ func (s NeedsSeen) ItemNew(m NeedsMark) bool { return s.itemNew(m) }
 // ParseTime reads a stored timestamp (zero time when unknown).
 func ParseTime(v any) time.Time { return parseNeedsTime(v) }
 
+// OpenedPrefix marks an item the person opened in the node details
+// (inspector): "o:u:T-12" -> the item's since when opened.  Only opening
+// counts as having seen it (the user, 2026-11-26: "看过：在属性栏点开过");
+// showing the list does not.  A new review round (a later since) makes the
+// item unseen again.
+const OpenedPrefix = "o:"
+
+// Opened reports whether the person opened the item in its current state.
+func (s NeedsSeen) Opened(m NeedsMark) bool {
+	v, ok := s.Items[OpenedPrefix+m.Key]
+	if !ok {
+		return false
+	}
+	since := parseNeedsTime(m.Since)
+	if since.IsZero() || v == "" {
+		return true
+	}
+	t := parseNeedsTime(v)
+	return !t.IsZero() && !since.After(t)
+}
+
+// NewKeys lists the item keys of the cards the person has not opened yet.
+func NewKeys(cards []NeedsCard, seen NeedsSeen) []string {
+	out := []string{}
+	for _, c := range cards {
+		for _, m := range c.Items {
+			if seen.Pending(m) {
+				out = append(out, m.Key)
+			}
+		}
+	}
+	return out
+}
+
 // NewCards counts the cards with something new for the person, and all cards.
 func NewCards(cards []NeedsCard, seen NeedsSeen) (fresh, total int) {
 	for _, c := range cards {
 		total++
+		// New: an item the person has not opened yet (Opened).
 		for _, m := range c.Items {
-			if seen.itemNew(m) {
+			if seen.Pending(m) {
 				fresh++
 				break
 			}

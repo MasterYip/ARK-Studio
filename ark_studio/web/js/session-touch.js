@@ -9,7 +9,7 @@ const SWIPE_CLOSE_PX = 80;
 export function longPressMenu(el) {
   let timer = null;
   let start = null;
-  let fired = 0;
+  let fired = 0;   // 0: no long press yet (not "at page load": clicks then must work)
   const cancel = () => { clearTimeout(timer); timer = null; };
   el.addEventListener("pointerdown", (event) => {
     if (event.pointerType === "mouse") return;
@@ -26,10 +26,10 @@ export function longPressMenu(el) {
   for (const type of ["pointerup", "pointercancel", "pointerleave"]) el.addEventListener(type, cancel);
   // The browser's own long-press menu, and the tap that ends the press, are not doubled.
   el.addEventListener("contextmenu", (event) => {
-    if (event.isTrusted && performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
+    if (event.isTrusted && fired && performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   el.addEventListener("click", (event) => {
-    if (performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
+    if (fired && performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
 }
 

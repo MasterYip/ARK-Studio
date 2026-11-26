@@ -57,7 +57,8 @@ public class NotifyFeedTest {
         assertEquals("PredActor_Rebuttal", r.projects.get("p1"));
         assertEquals(NotifyFeed.CH_DECISION, NotifyFeed.channelOf("approval"));
         assertEquals(NotifyFeed.CH_SESSION, NotifyFeed.channelOf("session_error"));
-        assertEquals(NotifyFeed.CH_OTHER, NotifyFeed.channelOf("session_done"));
+        assertEquals(NotifyFeed.CH_SESSION_DONE, NotifyFeed.channelOf("session_done"));
+        assertEquals(NotifyFeed.CH_OTHER, NotifyFeed.channelOf("something_new"));
     }
 
     @Test
@@ -120,7 +121,8 @@ public class NotifyFeedTest {
     @Test
     public void settingsFilterKindsAndMutedProjects() throws Exception {
         NotifyFeed.Settings s = new NotifyFeed.Settings();
-        assertFalse("finished sessions are off by default", s.sessionsDone);
+        assertTrue("finished sessions are on by default", s.sessionsDone);
+        s.sessionsDone = false;
         s.reviews = false;
         s.mutedProjects.add(NotifyFeed.Settings.muteKey(SERVER, "p2"));
         NotifyFeed.State start = new NotifyFeed.State();
@@ -136,6 +138,9 @@ public class NotifyFeedTest {
         // Settings survive a round trip.
         NotifyFeed.Settings back = NotifyFeed.Settings.fromJson(s.toJson());
         assertFalse(back.reviews);
+        assertFalse("a saved off stays off", back.sessionsDone);
+        // Settings saved before version 2 had finished sessions off by default: they turn on once.
+        assertTrue(NotifyFeed.Settings.fromJson("{\"sessions_done\":false,\"reviews\":true}").sessionsDone);
         assertTrue(back.mutedProjects.contains(NotifyFeed.Settings.muteKey(SERVER, "p2")));
         // Muting later withdraws what was shown.
         s.mutedProjects.add(NotifyFeed.Settings.muteKey(SERVER, "p1"));

@@ -213,29 +213,31 @@ test('graph menu of a remote repository opens it in VS Code directly', { skip: !
       }
       await page.screenshot({ path: path.join(process.env.ARK_TEST_SHOTS || dir, `graph-menu-${linked ? 'linked' : 'unlinked'}-${lang}.png`) });
       if (linked && lang === 'zh') {
-        // VS Code opens at once (user@host:port, no dialog); the toast offers the
-        // machine's entry (ark-gpu-lab), never one named after the device's hostname.
+        // Key login in a browser (2026-11-26): never the bare address without a
+        // confirmed entry.  The dialog shows Host ark-gpu-lab <address> to copy;
+        // "Added, open" opens with the alias and is remembered for the machine.
         await page.evaluate(() => {
           window.__opened = [];
           const click = HTMLAnchorElement.prototype.click;
           HTMLAnchorElement.prototype.click = function () { if (this.href.startsWith('vscode:')) window.__opened.push(this.href); else click.call(this); };
         });
         await menu.getByText(M.vscode, { exact: true }).click();
-        const opened = await until(() => page.evaluate(() => window.__opened[0] || null), 5000, 'VS Code link');
-        assert.match(opened, /^vscode:\/\/vscode-remote\/ssh-remote\+[0-9a-f]+\/data\/RoboKit$/);
-        assert.equal(await page.locator('.modal').count(), 0, 'no dialog');
-        const offer = page.locator('#toast-root .toast', { hasText: 'ark-gpu-lab' });
-        await offer.waitFor({ timeout: 5000 });
-        assert.ok(!(await page.locator('#toast-root').textContent()).includes('ark-deskhost7k2pq'));
+        const modal = page.locator('.modal');
+        await modal.waitFor({ timeout: 5000 });
+        assert.equal(await page.evaluate(() => window.__opened.length), 0, 'nothing opened before the entry is confirmed');
+        const snippet = (await modal.locator('pre').allTextContents()).find((x) => x.includes('Host ')) || '';
+        assert.ok(snippet.includes('Host ark-gpu-lab 198.51.100.23\n') && snippet.includes('Port 2022'), snippet);
+        assert.ok(!(await modal.textContent()).includes('ark-deskhost7k2pq'));
         await page.screenshot({ path: path.join(process.env.ARK_TEST_SHOTS || dir, 'graph-menu-vscode-entry-zh.png') });
-        await offer.locator('.toast-action').click();
-        const entry = await until(() => page.evaluate(() => navigator.clipboard.readText()).then((v) => (v.includes('Host ') ? v : null)), 5000, 'entry');
-        assert.ok(entry.includes('Host ark-gpu-lab') && entry.includes('HostName 198.51.100.23') && entry.includes('Port 2022'), entry);
-        // Pasted: the next open uses the alias.
+        await modal.locator('.modal-foot button.primary').click();
+        await until(() => page.evaluate(() => window.__opened.length === 1), 5000, 'first open');
+        assert.equal(await page.evaluate(() => window.__opened[0]), 'vscode://vscode-remote/ssh-remote+ark-gpu-lab/data/RoboKit');
+        // Remembered: the next open uses the alias without asking.
         await page.mouse.click(spot.x, spot.y, { button: 'right' });
         await menu.waitFor({ timeout: 5000 });
         await menu.getByText(M.vscode, { exact: true }).click();
         await until(() => page.evaluate(() => window.__opened.length === 2), 5000, 'second open');
+        assert.equal(await page.locator('.modal').count(), 0, 'no dialog the second time');
         assert.equal(await page.evaluate(() => window.__opened[1]), 'vscode://vscode-remote/ssh-remote+ark-gpu-lab/data/RoboKit');
         // Terminal: a browser copies the ssh command for the clicked folder.
         await page.mouse.click(spot.x, spot.y, { button: 'right' });

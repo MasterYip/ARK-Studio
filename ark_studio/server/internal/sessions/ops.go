@@ -130,7 +130,7 @@ func (m *Manager) contextEntries(h *Hooks, s *Session, attachments any) ([]*pyjs
 			shownUID := pyjson.Str(or(unit.Value("uid"), uid))
 			label = limit(shownUID+" · "+title, 160)
 			body := pytext.Strip(strOr(or(unit.Value("body"), unit.Value("excerpt"))))
-			content = limit(body, maxContextText)
+			content = body
 			lines := []string{"### Project unit `" + shownUID + "`", "- title: " + title,
 				"- type: " + pyjson.Str(or(unit.Value("type"), "note")), "- status: " + pyjson.Str(or(unit.Value("status"), "—"))}
 			if content != "" {
@@ -163,7 +163,7 @@ func (m *Manager) contextEntries(h *Hooks, s *Session, attachments any) ([]*pyjs
 			if bytes.IndexByte(blob, 0) >= 0 {
 				return nil, serr("binary file; attach it as media instead", 400, "")
 			}
-			content = limit(pyurl.DecodeReplace(blob), maxContextText)
+			content = pyurl.DecodeReplace(blob)
 			label = relPath
 			text = "### File `" + relPath + "`\n\n```" + LanguageFor(filepath.Base(target)) + "\n" + content + "\n```"
 			key = "file:" + relPath
@@ -209,7 +209,6 @@ func (m *Manager) contextEntries(h *Hooks, s *Session, attachments any) ([]*pyjs
 			if content == "" {
 				return nil, serr("a text snippet cannot be empty", 400, "")
 			}
-			content = limit(content, maxContextText)
 			first := ""
 			if lines := pytext.SplitLines(content, false); len(lines) > 0 {
 				first = limit(pytext.Strip(lines[0]), 60)
@@ -232,7 +231,7 @@ func (m *Manager) contextEntries(h *Hooks, s *Session, attachments any) ([]*pyjs
 		seen[key] = true
 		total += utf8.RuneCountInString(text)
 		if total > maxContextTotal {
-			return nil, serr("attached context is too large", 400, "")
+			return nil, tooLong("the attached context", total)
 		}
 		entries = append(entries, pyjson.NewObject("id", "ctx-"+strconv.Itoa(len(entries)+1), "kind", kind,
 			"label", label, "uid", uid, "path", relPath, "chars", int64(utf8.RuneCountInString(content)), "text", text))
@@ -674,15 +673,15 @@ func (m *Manager) Steer(h *Hooks, id, text string, context any) (*pyjson.Object,
 	if text == "" && len(entries) == 0 {
 		return nil, serr("steer text or attached context is required", 400, "")
 	}
-	if utf8.RuneCountInString(text) > maxSteerText {
-		return nil, serr("steer text is too long", 400, "")
+	if n := utf8.RuneCountInString(text); n > maxSteerText {
+		return nil, tooLong("the steer text", n)
 	}
 	if !m.IsActive(s) {
 		return nil, serr("session is not running; send a continue message", 409, "")
 	}
 	payload := composeMessage(text, entries)
-	if utf8.RuneCountInString(payload) > maxPrompt {
-		return nil, serr("steer text plus attached context is too long", 400, "")
+	if n := utf8.RuneCountInString(payload); n > maxPrompt {
+		return nil, tooLong("the steer text plus attached context", n)
 	}
 	m.mu.Lock()
 	followup := pyjson.Truthy(s.Meta.Value("followup"))
@@ -777,8 +776,8 @@ func (m *Manager) UpdateSteer(id, steerID, text string) (*pyjson.Object, error) 
 	if text == "" {
 		return nil, serr("steer text is required", 400, "")
 	}
-	if utf8.RuneCountInString(text) > maxSteerText {
-		return nil, serr("steer text is too long", 400, "")
+	if n := utf8.RuneCountInString(text); n > maxSteerText {
+		return nil, tooLong("the steer text", n)
 	}
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -902,8 +901,8 @@ func (m *Manager) SendInput(h *Hooks, id, text string, context any) (*pyjson.Obj
 	if text == "" && len(entries) == 0 {
 		return nil, serr("input is required", 400, "")
 	}
-	if utf8.RuneCountInString(text) > maxInput {
-		return nil, serr("input is too long", 400, "")
+	if n := utf8.RuneCountInString(text); n > maxInput {
+		return nil, tooLong("the input", n)
 	}
 	if !m.IsActive(s) {
 		return nil, serr("session is not running", 409, "")
@@ -915,8 +914,8 @@ func (m *Manager) SendInput(h *Hooks, id, text string, context any) (*pyjson.Obj
 		return nil, serr("this platform does not accept follow-up input", 409, "")
 	}
 	payload := composeMessage(text, entries)
-	if utf8.RuneCountInString(payload) > maxPrompt {
-		return nil, serr("input plus attached context is too long", 400, "")
+	if n := utf8.RuneCountInString(payload); n > maxPrompt {
+		return nil, tooLong("the input plus attached context", n)
 	}
 	shown := text
 	if shown == "" {
@@ -1349,7 +1348,10 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 			return nil, serr("a provider-native resume keeps the original platform", 400, "SESSION_RESUME_PLATFORM")
 		}
 	}
-	text = limit(pytext.Strip(text), maxPrompt)
+	text = pytext.Strip(text)
+	if err := checkPrompt("the message", text); err != nil {
+		return nil, err
+	}
 	overrides := !isNoneOrEmpty(o.Platform) || !isNoneOrEmpty(o.Model) || !isNoneOrEmpty(o.Effort) || !isNoneOrEmpty(o.AccessMode)
 	if m.IsActive(s) {
 		if overrides {
@@ -1420,13 +1422,13 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		if len(entries) > 0 {
 			prompt += renderContext(entries)
 		}
-		prompt = limit(pytext.Strip(prompt), maxPrompt)
+		prompt = pytext.Strip(prompt)
 	} else if pyjson.Truthy(s.Meta.Value("awaiting_first")) {
 		prompt = text
 		if len(entries) > 0 {
 			prompt += renderContext(entries)
 		}
-		prompt = limit(pytext.Strip(prompt), maxPrompt)
+		prompt = pytext.Strip(prompt)
 	} else {
 		prompt = original
 		if tail != "" {
@@ -1441,7 +1443,9 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		if text != "" {
 			prompt += "\n\n## User correction\n" + text
 		}
-		prompt = limit(prompt, maxPrompt)
+	}
+	if err := checkPrompt("the message with its context", prompt); err != nil {
+		return nil, err
 	}
 	if text != "" {
 		m.appendEvent(s, "stdout", "› "+text, "input")
@@ -1572,7 +1576,7 @@ func (m *Manager) forkContext(parent *Session) (string, error) {
 			}
 			for _, item := range messages {
 				text := pytext.Strip(strOr(item.Value("text")))
-				lines = append(lines, "**"+pyjson.Str(or(item.Value("role"), "assistant"))+":** "+limit(text, 900))
+				lines = append(lines, "**"+pyjson.Str(or(item.Value("role"), "assistant"))+":** "+cutMarked(text, 900))
 			}
 		}
 	}
@@ -1583,7 +1587,7 @@ func (m *Manager) forkContext(parent *Session) (string, error) {
 	if tail != "" {
 		lines = append(lines, "### Latest parent output\n```\n"+tail+"\n```")
 	}
-	return "\n\n" + limit(strings.Join(lines, "\n\n"), maxForkContext), nil
+	return "\n\n" + cutMarked(strings.Join(lines, "\n\n"), maxForkContext), nil
 }
 
 // ForkSession is SessionManager.fork_session.
@@ -1601,7 +1605,10 @@ func (m *Manager) ForkSession(h *Hooks, id string, body *pyjson.Object, baseURL,
 	if pm.Value("status") == "archived" {
 		return nil, serr("the parent session is archived", 400, "")
 	}
-	prompt := limit(pytext.Strip(strOr(or(body.Value("prompt"), body.Value("text")))), maxPrompt)
+	prompt := pytext.Strip(strOr(or(body.Value("prompt"), body.Value("text"))))
+	if err := checkPrompt("the prompt", prompt); err != nil {
+		return nil, err
+	}
 	relation := strings.ReplaceAll(pytext.Lower(pytext.Strip(pyjson.Str(or(body.Value("mode"), "side_chat")))), "-", "_")
 	if relation != "side_chat" && relation != "fork" {
 		return nil, serr("mode must be side_chat or fork", 400, "")
@@ -1661,7 +1668,7 @@ func (m *Manager) ForkSession(h *Hooks, id string, body *pyjson.Object, baseURL,
 		if err != nil {
 			return nil, err
 		}
-		composed = limit(prompt+forkCtx, maxPrompt)
+		composed = prompt + forkCtx // Start checks the length
 	}
 	var cwd any = ""
 	if c := pm.Value("cwd"); c != nil && c != "" && c != "." {

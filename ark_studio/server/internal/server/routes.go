@@ -107,6 +107,10 @@ func (c *reqCtx) doGet() error {
 	if err := c.checkHost(); err != nil {
 		return err
 	}
+	// HTML preview files: the URL's token is the only authorisation (routes_preview.go).
+	if isPreviewPath(c.path) {
+		return c.workspacePreview()
+	}
 	if handled, err := c.handleAuthGet(); handled || err != nil {
 		return err
 	}

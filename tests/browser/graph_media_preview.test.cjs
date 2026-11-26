@@ -29,7 +29,7 @@ function findThumb(want) {
 }
 
 test('card thumbnails open the media preview', { skip: !chromium, timeout: 240000 }, async () => {
-  const web = path.resolve(__dirname, '../../web');
+  const web = path.resolve(__dirname, '../../ark_studio/web');
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname === '/') {

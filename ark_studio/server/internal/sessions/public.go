@@ -265,6 +265,7 @@ func (m *Manager) publicLocked(s *Session, detail bool) *pyjson.Object {
 		"last_activity_at", meta.Value("last_activity_at"), "ended_at", meta.Value("ended_at"),
 		"exit_code", meta.Value("exit_code"), "pid", meta.Value("pid"), "error", or(meta.Value("error"), ""),
 		"notice", or(meta.Value("notice"), ""), "project", objOr(meta.Value("project")), "steer_queue", steer,
+		"turn_end", meta.Value("turn_end"), // Go only (finish.go)
 		"capabilities", pyjson.NewObject("followup", followup, "stdin", followup, "steer", true,
 			"steer_channel", channel, "context", true, "access_modes", strList(allowed),
 			"permission_modes", strList(allowed), "supports_approval", supports,

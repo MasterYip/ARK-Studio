@@ -64,7 +64,11 @@ const PATHS = {
   edit: ["M12 20h9", "M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5Z"],
   more: ["M12 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z", "M19 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z", "M5 13a1 1 0 1 0 0-2 1 1 0 0 0 0 2Z"],
   maximize: ["M8 3H3v5", "M16 3h5v5", "M21 16v5h-5", "M3 16v5h5"],
-  minimize: ["M8 8H3V3", "M16 8h5V3", "M21 16h-5v5", "M3 16h5v5"],
+  // Corners pointing inward (restore); maximize points outward.
+  minimize: ["M8 3v5H3", "M16 3v5h5", "M21 16h-5v5", "M3 16h5v5"],
+  // Tree views: fold / unfold every item (stacked boxes with minus / plus).
+  collapseAll: ["M9 9h11v11H9z", "M5 15V5h10", "M12 14.5h5"],
+  expandAll: ["M9 9h11v11H9z", "M5 15V5h10", "M12 14.5h5", "M14.5 12v5"],
   zoomIn: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z", "m21 21-4.3-4.3", "M11 8v6", "M8 11h6"],
   zoomOut: ["M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16Z", "m21 21-4.3-4.3", "M8 11h6"],
   fit: ["M8 3H5a2 2 0 0 0-2 2v3", "M21 8V5a2 2 0 0 0-2-2h-3", "M3 16v3a2 2 0 0 0 2 2h3", "M16 21h3a2 2 0 0 0 2-2v-3"],

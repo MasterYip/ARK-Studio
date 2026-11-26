@@ -17,6 +17,7 @@ import { t, getLang } from "./i18n.js";
 import { h, clear, copyText, fmtDate, relativeTime, typeColor, typeBadge, slug } from "./dom.js";
 import { fileUrlToPath, isLoopbackHost, isLikelyLocalPath, localOpenRoute, taskPathsFor } from "./rich-model.js";
 import { desktopDeviceId } from "./location-size.js";
+import { exportFileName, installDownloadLinks, saveDownload, setDownloadText } from "./download-link.js";
 import { icon } from "./icons.js";
 import {
   MOBILE_PRIMARY_TABS, MOBILE_SECONDARY_TABS, parsePairHash,
@@ -35,9 +36,11 @@ import { saveFiltersAsTopic } from "./topic-actions.js";
 import { ruleFromFilters } from "./topic-model.js";
 // Research, Map and the Editor load on demand (first visit elsewhere does not
 // download them; idle prefetch fetches them after the first screen).
-import { renderEditor, editorExplorerVisible, setExplorerVisible, EXPLORER_CHANGED, editorKeyDown, openInEditor, editorHasDirty, focusQuickOpen, loadEditor } from "./editor-entry.js";
+import { renderEditor, editorExplorerVisible, setExplorerVisible, EXPLORER_CHANGED, editorKeyDown, openInEditor, editorHasDirty, focusQuickOpen, loadEditor,
+  revealActiveFile, editorAutoReveal, setEditorAutoReveal, editorPaletteCommands,
+  workspaceFilesChanged, focusEditorSearch } from "./editor-entry.js";
 import { keyFromRoute } from "./editor-model.js";
-import { assignedCount, assignedEntries, needsCount } from "./needs-model.js";
+import { assignedCount, assignedEntries, needsCount, unseenCount } from "./needs-model.js";
 import { installUnitContextMenu, openUnitInEditor } from "./unit-menu.js";
 import { projectMoveCommands } from "./project-move.js";
 import { focusLocated, isLocateShortcut, setLocateContext, syncRevealNotice } from "./locate-map.js";
@@ -49,7 +52,9 @@ import {
 } from "./project-state-model.js";
 import { desktopHub } from "./desktop-hub-model.js";
 import { otherProjectsNew, withReviewBadge } from "./project-picker-model.js";
-import { REVIEW_SEEN, refreshAssigned } from "./needs-ui.js";
+import { REVIEW_SEEN, refreshAssigned, needsPaletteCommands, needsNewKeys } from "./needs-ui.js";
+import { refreshSessionNotices, sessionNotices, startSessionNotices } from "./session-notices.js";
+import { noticeBubble } from "./session-notices-model.js";
 import { getMindSettings, setActiveGraphDisplay } from "./mind-settings.js";
 import { setMarkerGroups } from "./markers.js";
 import { createMindNodeStore } from "./mind-node-state.js";
@@ -536,6 +541,7 @@ const ctx = {
   renderTopbar,
   updateTopbar: () => syncTopbar(),
   syncNeedsBadge: () => syncNeedsBadge(),
+  syncSessionBubbles: () => syncSessionBubbles(),
   trackGraph: (g) => {
     graphs.push(g);
     // Project graphs feed their selection to the multi-selection inspector.
@@ -722,6 +728,9 @@ async function syncNow() {
 }
 installSyncNow(syncNow);
 installPullToSync(appRoot, requestSync, () => Boolean(S.project) && !showingPairGate);
+// Downloads in the desktop app: the save dialog and a progress card (download-link.js).
+setDownloadText(t);
+installDownloadLinks();
 
 // Data changed through this tab (a reassignment, a removed link, an archived
 // node): bring the visible view up to date.  A Map/Ideas graph is never
@@ -1334,6 +1343,11 @@ async function bootWorkbench() {
   // Advanced features shown/hidden: sub-tabs and page panels change.
   window.addEventListener(ADVANCED_CHANGED, () => { renderTopbar(); if (S.tab !== "settings") renderRoute({ keepScroll: true }); });
   window.addEventListener("keydown", onKeyDown);
+  // The palette key (Ctrl+P by default) is also the browser's Print: claim it
+  // before any other handler can stop the event, so Print never opens.
+  window.addEventListener("keydown", (event) => {
+    if (shortcutMatches(event, getShortcut("palette"))) event.preventDefault();
+  }, true);
   window.addEventListener("beforeunload", (event) => {
     if (!editorHasDirty()) return;
     event.preventDefault();
@@ -1544,6 +1558,7 @@ function refreshProjectList({ force = false } = {}) {
 }
 
 document.addEventListener("visibilitychange", () => { if (!document.hidden) refreshProjectList(); });
+startSessionNotices(ctx);
 setInterval(() => refreshProjectList({ force: true }), PROJECTS_REFRESH_MS);
 // POST /api/needs/seen answered with this project's new counts (needs-ui.js).
 window.addEventListener(PROJECTS_LISTED, () => syncReviewDot());
@@ -2556,7 +2571,8 @@ function renderMobileNav() {
       class: "mobile-tab", type: "button", "data-tab": item.id,
       "aria-label": t(item.labelKey),
       onclick: () => item.workspace ? navigateWorkspace(item.workspace) : navigate(item.id, item.id === "plan" ? S.sub : null),
-    }, icon(item.icon, "sm"), h("span", { class: "mobile-tab-label" }, t(item.labelKey))));
+    }, icon(item.icon, "sm"), h("span", { class: "mobile-tab-label" }, t(item.labelKey)),
+      item.id === "execute" ? sessionBubble() : null));
   }
   syncMobileNav();
 }
@@ -2802,6 +2818,8 @@ function workspaceSubtabs(workspace) {
       add(label, active === (EXECUTE_VIEW_ALIASES[id] || id),
         () => navigateWorkspace("execute", id), { "data-workspace-view": id });
     }
+    // Finished sessions not opened yet (session-notices.js).
+    items.find((item) => item.data["data-workspace-view"] === "runs").badge = true;
   } else if (workspace === "output") {
     const active = S.tab === "distribution" ? "distribution" : "assets";
     add(t("production.assets"), active === "assets", () => navigateWorkspace("output", "assets"), { "data-workspace-view": "assets" });
@@ -2818,7 +2836,7 @@ function subtabButton(item, extraClass = "") {
     type: "button", ...item.data,
     "aria-current": item.active ? "page" : undefined,
     onclick: item.onclick,
-  }, item.label);
+  }, item.label, item.badge ? sessionBubble() : null);
 }
 
 // Keep a sub-tab visible inside its horizontal scroller (desktop sub-nav or
@@ -2985,7 +3003,7 @@ function renderTopbar() {
       title: t(label),
     },
       h("span", { class: "tab-label" }, t(label)),
-      id === "home" ? needsBadge() : null));
+      id === "home" ? needsBadge() : id === "execute" ? sessionBubble() : null));
   }
   const subnav = topbarWorkspaceSubnav(workspaceForTab(S.tab));
   if (subnav) tabs.appendChild(subnav);
@@ -3110,8 +3128,11 @@ function syncWorkspaceButtons() {
 // Count of items waiting on the user, shown on the Home tab.
 function needsBadge() {
   const n = needsCount(S.needsYou) + assignedCount(assignedEntries(S.needsAssigned || [], S.needsYou));
+  // Orange while something waits that was not opened yet, grey otherwise.
+  const unseen = unseenCount(S.needsYou || [], needsNewKeys(ctx))
+    + assignedEntries(S.needsAssigned || [], S.needsYou).reduce((k, e) => k + (e.units || []).filter((u) => u.new).length, 0);
   return h("span", {
-    class: "tab-badge needs-badge", hidden: n ? undefined : true,
+    class: `tab-badge needs-badge ${unseen ? "" : "seen"}`.trim(), hidden: n ? undefined : true,
     title: `${t("needs.title")}: ${n}`, "aria-label": `${t("needs.title")}: ${n}`,
   }, String(n));
 }
@@ -3123,9 +3144,35 @@ function syncNeedsBadge() {
   if (!badge) return;
   const fresh = needsBadge();
   badge.textContent = fresh.textContent;
+  badge.className = fresh.className;
   badge.hidden = fresh.hidden;
   badge.title = fresh.title;
   badge.setAttribute("aria-label", fresh.getAttribute("aria-label"));
+}
+
+// Sessions that stopped and wait for the person (not opened since), on
+// Execute, its Runs sub-tab and the phone tab bar: red while one failed,
+// orange otherwise (session-notices.js).
+function sessionBubble() {
+  const b = noticeBubble(sessionNotices(ctx).items);
+  const label = b.n ? t("session.notice.bubble", { n: b.n }) : "";
+  return h("span", {
+    class: `tab-badge session-badge ${b.state}`, hidden: b.n ? undefined : true, "data-session-badge": "",
+    title: label, "aria-label": label,
+  }, b.text);
+}
+
+// In place, like syncNeedsBadge.
+function syncSessionBubbles() {
+  if (S.project && sessionNotices(ctx).project !== String(S.project.id || "")) refreshSessionNotices(ctx);
+  const fresh = sessionBubble();
+  for (const badge of document.querySelectorAll("[data-session-badge]")) {
+    badge.textContent = fresh.textContent;
+    badge.className = fresh.className;
+    badge.hidden = fresh.hidden;
+    badge.title = fresh.title;
+    badge.setAttribute("aria-label", fresh.getAttribute("aria-label"));
+  }
 }
 
 // The top-bar left layout toggle controls whichever left sidebar the current
@@ -3201,7 +3248,14 @@ const panelPlugin = (panel) => ({
 function setupWorkbench() {
   initPluginHost(ctx);
   registerBuiltinView("filters", {}, { applies: (state) => FILTER_TABS.includes(state.tab) });
-  registerBuiltinView("explorer", {}, { applies: (state) => state.tab === "editor" });
+  registerBuiltinView("explorer", {}, {
+    applies: (state) => state.tab === "editor",
+    actions: () => [{ icon: "target", title: t("editor.reveal"), onClick: () => revealActiveFile() }],
+    menu: () => [
+      { label: t("editor.reveal"), icon: "target", onClick: () => revealActiveFile() },
+      { label: t("editor.auto_reveal"), checked: editorAutoReveal(), onClick: () => setEditorAutoReveal(!editorAutoReveal()) },
+    ],
+  });
   registerBuiltinView("details", {}, { applies: (state) => Boolean(state.drawerOpen) || !["tasks", "editor"].includes(state.tab) });
   registerBuiltinView("assistant", {}, {
     applies: (state) => state.tab !== "chat",
@@ -3223,8 +3277,19 @@ function setupWorkbench() {
       || (state.tab === "editor" ? String(state.editorKey || "").startsWith("unit:") : !["tasks", "settings", "chat"].includes(state.tab)),
   });
   window.addEventListener("ark:selection", () => renderWorkbench());
-  searchPanel = createSearchPanel(ctx);
-  registerBuiltinView("search", panelPlugin(searchPanel));
+  searchPanel = createSearchPanel(ctx, { onReplaced: (paths) => workspaceFilesChanged(paths) });
+  // In the Editor, Search is a section of the Explorer (with the Outline and
+  // Timeline, views/editor.js); its element moves there and comes back here.
+  ctx.searchPanel = searchPanel;
+  let searchHost = null;
+  registerBuiltinView("search", {
+    mount: (container) => { searchHost = container; container.appendChild(searchPanel.el); },
+    update: (state) => {
+      if (state.reason !== "show") return;
+      if (searchHost && searchPanel.el.parentElement !== searchHost) searchHost.appendChild(searchPanel.el);
+      searchPanel.shown?.();
+    },
+  }, { applies: (state) => state.tab !== "editor" });
   const terminal = createTerminalPanel();
   registerBuiltinView("terminal", panelPlugin(terminal), { applies: (state) => ["editor", "tasks"].includes(state.tab) });
   // Agent sessions as a chat beside the work; shares one stream with Execute › Sessions.
@@ -3288,6 +3353,10 @@ function searchKeyDown(event) {
   if (mod && event.shiftKey && !event.altKey && (event.code === "KeyF" || event.key === "F" || event.key === "f")) {
     event.preventDefault();
     const selected = String(window.getSelection?.() || "").trim();
+    if (S.tab === "editor") {
+      focusEditorSearch(selected.includes("\n") ? "" : selected.slice(0, 200));
+      return true;
+    }
     if (shellActive()) showView("search", true);
     else if (!document.querySelector(".wb-search")?.offsetParent) return true;
     requestAnimationFrame(() => searchPanel.focus(selected.includes("\n") ? "" : selected.slice(0, 200)));
@@ -3352,6 +3421,7 @@ function syncTopbar() {
     return;
   }
   syncNeedsBadge();
+  syncSessionBubbles();
   const activeWorkspace = workspaceForTab(S.tab);
   syncWorkspaceButtons();
   for (const button of topbar.querySelectorAll(".tab[data-workspace]")) {
@@ -3480,6 +3550,9 @@ function focusChat() {
 }
 
 let paletteEl = null;
+// The Editor's Ctrl+K chord prefix opens the palette when no second key follows.
+window.addEventListener("ark:open-palette", () => openPalette());
+
 function openPalette() {
   if (paletteEl) return;
   const commands = [
@@ -3505,6 +3578,8 @@ function openPalette() {
     { id: "export", label: t("palette.cmd.export"), cat: t("palette.commands"), run: () => openExport() },
     ...presetCommands(t("workbench.preset.menu")),
     ...projectMoveCommands(ctx),
+    ...editorPaletteCommands(),
+    ...needsPaletteCommands(),
   ];
   let items = commands.map((c) => ({ type: "command", ...c }));
   let active = 0;
@@ -3543,6 +3618,7 @@ function openPalette() {
       },
         item.type === "unit" ? typeBadge(item.unit.type) : icon("command", "sm"),
         h("span", { class: "t" }, item.type === "unit" ? `${item.unit.uid} · ${item.unit.title}` : item.label),
+        item.keys ? h("span", { class: "kbd palette-keys" }, item.keys) : null,
         h("span", { class: "cat" }, item.type === "unit" ? t(`type.${item.unit.type}`) : item.cat)));
     });
   };
@@ -3595,7 +3671,7 @@ function openExport() {
     ["svg", "SVG", t("app.export.svg_desc")],
   ];
   const body = h("div", { class: "stack", style: { gap: "7px" } }, options.map(([format, label, desc]) => h("button", {
-    class: "project-row", style: { textAlign: "left" }, onclick: () => { window.location.href = exportUrl(format, S.project?.id || ""); modal.close(); },
+    class: "project-row", style: { textAlign: "left" }, onclick: () => { saveDownload(exportUrl(format, S.project?.id || ""), { filename: exportFileName(S.project?.name, format) }); modal.close(); },
   }, h("div", { class: "main" }, h("div", { class: "t" }, label), h("div", { class: "d" }, desc)), icon("download", "sm"))));
   const modal = openModal({
     title: t("action.export"),

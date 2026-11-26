@@ -188,16 +188,40 @@ curl -s -H "Authorization: Bearer $ARK_TOKEN" -H "X-ARK-Project: $PRJ"   -H "X-A
 ```
 
 The reply has `task_space` (`{id, key, path}` or null), `task_spaces`,
-`repositories`, `storage`, `artifacts`, `missing` (for example
-`["task_space"]`), `task_folder` (the folder pattern) and `next`.
+`repositories`, `storage`, `artifacts`, `writable` (every place registered
+for this device: `[{kind, key, name, path}]`), `missing` (for example
+`["task_space"]`), `task_folder` and `next`. With `?unit=<uid>`, or from a
+session ARK launched (`X-ARK-Session`), `task_folder` also names the exact
+folder of that unit's work: `{path, kind, owner, task, unit, unit_type,
+exists, note}`. For a task it is the task's own folder; for any other unit
+(an idea, a question, an experiment, a result) it is the folder of the
+nearest task the unit belongs to (`part_of` / `derived_from` upwards), and
+when no task is above it, the unit's own folder
+(`<YYYYMMDD>_<its ID>-<name>/`, `kind: "unit"`). Asking for a unit on the
+device the server runs on creates the folder. Folders follow the unit of
+work, not the session: a session that moves on to another node or task asks
+again (`?unit=<UID>`, or `ark-server agent folder <UID>`, which prints the
+path). A task created for the same work as a node without a task above it
+keeps that node's folder. Sessions ARK launches get the starting unit's
+folder, created at launch, in their Start section, in `ARK-TASK.md` and as
+`ARK_TASK_FOLDER`; a session started without a node has no folder until
+the agent picks or creates one.
 
-- Task files go in `<task space>/<YYYYMMDD>_<UID>-<name>/`, with
-  `artifacts/`, `downloads/`, `renders/`, `logs/` as needed. No other
-  top-level folders: not `C:/Temp/...`, `C:/scratch/...` or a new `*-tasks`
-  folder.
-- Scratch files go only in the OS temp directory and are deleted after the
-  step.
-- When `missing` has `task_space`, do not pick a folder. Look at the
+- Write or change files only in the places in `writable`; anything else
+  needs the user's decision first.
+- Task-related intermediate files and results go in the folder of the
+  unit they belong to (`task_folder.path` for `?unit=<UID>`), with
+  `artifacts/`, `downloads/`, `renders/`, `logs/` as needed: the task's
+  folder `<task space>/<YYYYMMDD>_<task ID>-<name>/`, or, for a node with
+  no task above it, the node's own folder. No other top-level folders: not
+  `C:/Temp/...`, `C:/scratch/...` or a new `*-tasks` folder.
+- Your own scratch and temporary downloads (API request bodies, probes,
+  copies) may stay in your session workspace or the OS temp directory;
+  anything a task needs later is moved into its folder. The session
+  workspace is not kept.
+- When `missing` has `task_space`, do not pick a folder and do not start
+  the work: ask before your first download or file. Options in the OS temp
+  directory or in a session workspace are refused. Look at the
   device (drives, free space, where the repository is, how the project's
   other devices lay it out) and ask:
 
@@ -454,7 +478,7 @@ ark-server agent watch --until-update --url "$URL" --project prj_... --name <you
 ```
 
 It reads the token file (or `ARK_TOKEN`; `--token` would put it on the
-command line), long-polls `GET /api/agent/v1/updates?mine=1&wait=50` with a
+command line), long-polls `GET /api/agent/v1/updates?mine=1&for_you=1&wait=50` with a
 saved cursor (`.ark-watch-cursor`), so it costs one quiet request a minute,
 and gives up after `--max` seconds (default 6900, under two hours) with the
 line "no updates"; then start it again.  A refused token (HTTP 401 or 403)
@@ -606,6 +630,7 @@ ark-server agent watch --once --json --kinds comment,reply,sent_back,decided
 | `--json` | print each update as one JSON line (the item format below) |
 | `--kinds a,b` | only these kinds |
 | `--mine` | only units you or your user created, or that are assigned to you |
+| `--for-you` | only updates meant for you (`for_you`); always on with `--until-update` |
 | `--state FILE` | cursor file (default `.ark-watch-cursor`) |
 
 Exit status: 0 normal, 1 a network or server error with `--once` (without
@@ -641,9 +666,11 @@ curl -s -H "Authorization: Bearer $ARK_TOKEN" -H "X-ARK-Project: $ARK_PROJECT" \
 | `wait` | seconds (0–60) to hold the request until something arrives; 0 returns at once |
 | `kinds` | comma-separated kinds to return |
 | `mine=1` | only units you or your user created or that are assigned to you |
+| `for_you=1` | only the items meant for you (`for_you: true`, below) |
 | `limit` | activity rows read per call (1–500, default 100) |
 
-The reply is `{cursor, items, count, more, reset, mine, kinds, waited_ms}`.
+The reply is `{cursor, items, count, more, reset, mine, kinds, waited_ms,
+for_you_count}`; `for_you_count` counts the items meant for you.
 Save `cursor` and send it as `since` next time. `more: true` means more
 updates are waiting: call again at once. `reset: true` means the cursor is
 not valid for this project any more (a foreign or malformed cursor, or a
@@ -661,8 +688,36 @@ Each item:
  "summary": "alice sent back T-0042 \"Ablation\": add the seed-2 baseline",
  "comment": {"id": 318, "body": "add the seed-2 baseline", "kind": "sent_back", "reply_to": null, "resolved": false},
  "change": {"field": "status", "from": "review", "to": "active"},
- "link": "/api/agent/v1/units/T-0042/comments"}
+ "link": "/api/agent/v1/units/T-0042/comments",
+ "for_you": true, "reason": "you submitted T-0042", "audience": "session", "target_sessions": ["s_20261117abcd1234"]}
 ```
+
+**Act on the items with `for_you: true`; the others are context only.**
+Every agent of the project sees every update, so it can follow what happens
+around it, but an update is meant for the agent that wrote the unit:
+
+- A person's comment, Send back, Accept, decision, status or importance
+  change, delete or move on a unit goes to the agents that last handed it to
+  review, created it, or last wrote it (`audience: "session"`, with their
+  ARK session or agent session ids in `target_sessions`). `reason` says why:
+  `you submitted T-0042`, `you created T-0042`, `you last edited T-0042`.
+- A reply goes to the agent that wrote the comment it answers
+  (`reply to your comment #142`).
+- When no writer of the unit is known, or the ARK sessions that wrote it
+  have ended, the update goes to the project as before (`audience:
+  "project"`, `reason: "fallback: no owner"`): it is for you when it
+  concerns units of your account.
+- Messages, finished GPU jobs, mentions, tasks assigned to you and setup
+  confirmations are for you as before.
+
+ARK tells agents apart by what their writes carry: the ARK session
+(`X-ARK-Session`, or a session's own token), else your own session id in
+`X-ARK-Agent-Session` (any stable id of your Claude Code or Codex session;
+the watchers send `ARK_AGENT_SESSION`), else the token and device
+(`X-ARK-Host`). Send the same headers on your writes and on the watcher,
+or two agents that share a token on one device both get each other's
+updates. The watchers and the wake-ups of sessions ARK launched wake you
+only for items meant for you.
 
 Items come in the order things happened. `comment`, `change`, `layer` and
 `message` appear only for the kinds that have them; `status` is the unit's

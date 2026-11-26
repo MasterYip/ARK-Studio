@@ -7,7 +7,7 @@ let chromium;
 try { ({ chromium } = require('playwright')); } catch { /* Optional browser dependency. */ }
 
 test('history wraps aligned rows, scrolls both sides and highlights inline changes safely', { skip: !chromium }, async () => {
-  const web = path.resolve(__dirname, '../../web');
+  const web = path.resolve(__dirname, '../../ark_studio/web');
   const server = createServer(async (req, res) => {
     const pathname = new URL(req.url, 'http://localhost').pathname;
     if (pathname === '/') { res.end('<!doctype html><html><head><link rel="stylesheet" href="/css/app.css"></head><body></body></html>'); return; }

@@ -1,11 +1,12 @@
 import {
   MOBILE_TOKEN_STORAGE_KEY, MOBILE_PERMISSION_STORAGE_KEY,
-  MOBILE_EXPIRES_STORAGE_KEY,
+  MOBILE_EXPIRES_STORAGE_KEY, ensureDeviceId,
 } from "./mobile-core.js";
 import { t, serverErrorText } from "./i18n.js";
 import { clientCache } from "./client-cache.js";
 import { clearStarterTokens } from "./starter-token-store.js";
 import { awaitConfirmedClaim } from "./mobile-tunnel-model.js";
+import { phoneMayCall } from "./mobile-scope-model.js";
 import { createConnectivity, isProxyFailure } from "./connectivity.js";
 import {
   cacheRoute, mergeBodiesDelta, mergeSnapshotDelta, servePolicy, staleAfterDelta,
@@ -14,6 +15,9 @@ import {
 // Relative app base so a path-prefixed tunnel (https://host/ark/) works without
 // hard-coded localhost or root-absolute URLs.  The HTML entry point is the base.
 const APP_BASE = new URL("./", document.baseURI);
+
+// One device id per browser (mobile-core.js); the server reads the cookie.
+export const deviceId = (() => { try { return ensureDeviceId(); } catch { return ""; } })();
 
 export function getMobileToken() {
   try {
@@ -175,8 +179,24 @@ function emit(name, detail) {
   try { window.dispatchEvent(new CustomEvent(name, { detail })); } catch { /* non-browser */ }
 }
 
+// A call a paired phone may not make (mobile-scope-model.js): the section
+// shows "manage this on a computer" and no error toast appears.
+export function desktopOnlyError() {
+  const error = new Error(t("mobile.desktop_only"));
+  error.status = 403;
+  error.code = "MOBILE_SCOPE";
+  error.desktopOnly = true;
+  return error;
+}
+
 function apiError(response, data) {
   const code = data?.error?.code || "";
+  if (response.status === 403 && code === "MOBILE_SCOPE") {
+    const error = desktopOnlyError();
+    error.serverMessage = data?.error?.message || "";
+    error.data = data;
+    return error;
+  }
   const english = data?.error?.message || (typeof data?.error === "string" ? data.error : "") || `HTTP ${response.status}`;
   // Show the server's message in the UI language when i18n_server.js knows
   // it; keep the English original on serverMessage.
@@ -239,6 +259,7 @@ async function exchange(path, opts) {
 
 async function request(path, options = {}) {
   const method = String(options.method || "GET").toUpperCase();
+  if (isPairedDevice() && !phoneMayCall(path, method)) throw desktopOnlyError();
   if (method === "GET" && !options.noCache && clientCache.cacheable(path)) {
     return cachedGet(path, options);
   }
@@ -401,7 +422,7 @@ const SWITCH_PREFETCH_MS = 20_000;
 export function prefetchProject(project, paths) {
   if (!project) return;
   for (const path of paths) {
-    if (!clientCache.cacheable(path)) continue;
+    if (!clientCache.cacheable(path) || (isPairedDevice() && !phoneMayCall(path))) continue;
     const pending = (async () => {
       const etag = await clientCache.anyEtag(path, project).catch(() => "");
       const extra = { "X-ARK-Project": project };
@@ -425,7 +446,7 @@ export function dropProjectPrefetch(project = null) {
  * prefetch must not re-download what the view just loaded).
  */
 export async function prefetchRoute(path) {
-  if (!clientCache.cacheable(path)) return false;
+  if (!clientCache.cacheable(path) || (isPairedDevice() && !phoneMayCall(path))) return false;
   if (await clientCache.get(path, tabProject)) return false;
   await revalidate(path, null, tabProject);
   return true;
@@ -659,7 +680,7 @@ export const api = {
   // reply is 202 {pending, confirm_code}; onPending shows the code while this
   // waits for the token (mobile-tunnel-model.js).
   claimPairing: async (token, { onPending, isCancelled } = {}) => {
-    const first = await request("/api/mobile/pair/claim", { method: "POST", body: { token } });
+    const first = await request("/api/mobile/pair/claim", { method: "POST", body: { token, device_id: deviceId || undefined } });
     if (!first?.pending) return first;
     return awaitConfirmedClaim(first, token, {
       post: (path, body) => request(`/${path}`, { method: "POST", body }), onPending, isCancelled,
@@ -675,6 +696,10 @@ export const api = {
   confirmClaim: (id, approve) => request(`/api/mobile/pairs/pending/${encodeURIComponent(id)}/confirm`, { method: "POST", body: { approve }, write: false }),
   pairings: () => request("/api/mobile/pairs"),
   revokePairing: (id) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/revoke`, { method: "POST", body: {} }),
+  // Merge the person's devices into one ({ids} or {like}; dry_run previews)
+  // and list or revoke devices unseen for 30 days.
+  mergeDevices: (body) => request("/api/mobile/pairs/merge", { method: "POST", body }),
+  staleDevices: (body) => request("/api/mobile/pairs/stale", { method: "POST", body }),
   setPairPermission: (id, permission) => request(`/api/mobile/pairs/${encodeURIComponent(id)}/permission`, { method: "POST", body: { permission } }),
   // ARK Studio desktop link code (Go-only route; desktop-hub.js).
   linkDesktop: ({ signal, ...body } = {}) => request("/api/desktop/link", { method: "POST", body, signal }),
@@ -686,11 +711,21 @@ export const api = {
   overview: (options = {}, query = {}) => request(`/api/project/overview${qs(query)}`, options),
   // Board and Home support panel (support-panel.js); kept 10 s by the server.
   projectSupport: () => request("/api/project/support", { noCache: true }),
+  // Lines of work (branch:<name> tags; store/branches.go); kept per project revision by the server.
+  branches: () => request("/api/project/branches", { noCache: true }),
+  // Scheduled Assistant tasks (routes_schedules.go).
+  schedules: () => request("/api/project/schedules", { noCache: true }),
+  schedulesPost: (body) => request("/api/project/schedules", { method: "POST", body }),
+  scheduleTranscript: (run) => request(`/api/project/schedules/transcript${qs({ run })}`, { noCache: true }),
+  branchSuggest: (query = {}) => request(`/api/project/branches/suggest${qs(query)}`, { noCache: true }),
+  branchTopic: (name, { full = false, exact = false } = {}) => request(`/api/project/branch-topic${qs({ name, ...(full ? { full: 1 } : {}), ...(exact ? { exact: 1 } : {}) })}`),
+  renameLine: (body) => request("/api/project/branches/rename", { method: "POST", body }),
   projects: () => request("/api/projects"),
   createProject: (body) => request("/api/projects", { method: "POST", body }),
   openProject: (body) => request("/api/projects/open", { method: "POST", body, write: false }),
   // The person looked at the Needs you list (all) or some of its items (project picker badges).
   markNeedsSeen: (body) => request("/api/needs/seen", { method: "POST", body, write: false }),
+  needsNew: () => request("/api/needs/new", { noCache: true }),
   // Units others assigned to the person in this project (Needs you › Assigned to me).
   needsAssigned: () => request("/api/needs/assigned"),
   updateProject: (body) => request("/api/project", { method: "PATCH", body }),
@@ -833,7 +868,11 @@ export const api = {
 
   createLink: (body) => request("/api/links", { method: "POST", body }),
   topics: () => request("/api/topics"),
-  topic: (id, { full = false } = {}) => request(`/api/units/${encodeURIComponent(id)}/members${full ? "?full=1" : ""}`),
+  // A ref "branch:<name>" (unit ids never hold ":") is a line without a stored topic.
+  // exact: a line's own units only (default: with the lines below it).
+  topic: (id, { full = false, exact = false } = {}) => (/^[^:\s]+:\S/.test(String(id))
+    ? api.branchTopic(String(id).slice(String(id).indexOf(":") + 1), { full, exact })
+    : request(`/api/units/${encodeURIComponent(id)}/members${full ? "?full=1" : ""}`)),
   addTopicMembers: (id, members) => request(`/api/units/${encodeURIComponent(id)}/members`, { method: "POST", body: { add: members } }),
   designTopic: (id, body) => request(`/api/units/${encodeURIComponent(id)}/members`, { method: "PATCH", body }),
   updateLink: (id, body) => request(`/api/links/${encodeURIComponent(id)}`, { method: "PATCH", body }),
@@ -960,6 +999,11 @@ export const api = {
   sessionPresets: (options = {}) => request("/api/agent-sessions/presets", options),
   sessionGroups: (options = {}) => request("/api/agent-sessions/groups", options),
   agentSessions: (options = {}) => request("/api/agent-sessions", options),
+  // Finished sessions the person has not opened yet, seen marks and the
+  // notification switches (session-notices.js; Go only: session_notices.go).
+  sessionNotices: () => request("/api/agent-sessions/notices", { noCache: true }),
+  markSessionsSeen: (ids) => request("/api/agent-sessions/notices", { method: "POST", body: { seen: ids }, write: false }),
+  setSessionNoticePrefs: (prefs) => request("/api/agent-sessions/notices", { method: "POST", body: { prefs }, write: false }),
   providers: () => request("/api/providers"),
   refreshProviders: () => request("/api/providers/refresh", { method: "POST", body: {} }),
   worktrees: (options = {}) => request("/api/worktrees", options),
@@ -1081,6 +1125,14 @@ export const api = {
   workspaceDelete: (body) => request("/api/workspace/delete", { method: "POST", body }),
   workspaceChanges: (base = "HEAD", options = {}) => request(`/api/workspace/changes${qs({ base })}`, options),
   workspaceDiff: (path, base = "HEAD") => request(`/api/workspace/diff${qs({ path, base })}`),
+  // Timeline: a file's git history and its text at one commit (read-only).
+  workspaceTimeline: (path, limit = 100) => request(`/api/workspace/timeline${qs({ path, limit })}`),
+  workspaceShow: (path, rev) => request(`/api/workspace/show${qs({ path, rev })}`),
+  // Interactive HTML preview: a folder-scoped, expiring token (renewed while open).
+  workspacePreviewToken: (path) => request(`/api/workspace/preview-token${qs({ path })}`),
+  workspacePreviewRenew: (token) => request(`/api/workspace/preview-token${qs({ renew: token })}`),
+  // Search › Replace: preview (apply false) or apply the previewed files.
+  workspaceReplace: (body) => request("/api/workspace/replace", { method: "POST", body }),
   workspaceTerminals: () => request("/api/workspace/terminals"),
   workspaceTerminal: (id, offset = 0, limit = 300) => request(
     `/api/workspace/terminals/${encodeURIComponent(id)}${qs({ offset, limit })}`),

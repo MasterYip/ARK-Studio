@@ -669,3 +669,43 @@ Semantics a reimplementation must keep:
   every write to units, tags and comments changes it (change_counter
   triggers). File texts are cached in memory by path, size and mtime
   (`ARK_SEARCH_CACHE_MB`, default 192).
+
+## 18. Editor Timeline and Search › Replace routes
+
+Go server only (`internal/workspace/history.go`, `internal/search/replace.go`).
+All paths are project-relative and go through the Editor's path rules
+(no `..`, absolute paths, links or ignored/protected folders).
+
+| Route | Access | What it does |
+|---|---|---|
+| `GET /api/workspace/timeline?path=&limit=` | read | `git log --follow` of one file, newest first (`limit` 1–300, default 50): `entries[]` with `rev`, `short`, `author`, `time` (ISO 8601), `subject`, `path` (the file's path at that commit) and `inside` (false when it was outside the project folder then); `truncated` when there are more. A project outside git answers `is_repo: false` with a `reason`, not an error. |
+| `GET /api/workspace/show?path=&rev=` | read | The file's text at commit `rev` (a 4–40 digit hash only, never a ref name or option): `content`, `rev` (full hash), `short`, `hash`, `size`, `language`, `author`, `time`, `subject`, `read_only: true`. 404 when the file did not exist then, 413 over 1 MiB, 415 for binary or non-UTF-8 text. |
+| `POST /api/workspace/replace` | write | Body: the search fields (`q`, `case`, `word`, `regex`, `include`, `exclude`) and `replace`. Without `apply` it is a preview: `files[]` with `path`, `count`, `hash` and up to five changed lines (`samples[]`: `line`, `before`, `after`), `total`, `file_count`, `skipped[]`, `truncated`. With `"apply": true` and the previewed `files: [{path, hash}]` the files are rewritten atomically; a file whose hash changed since the preview is not touched and is listed in `conflicts[]` with a reason. |
+
+git runs on the shared bounded process pool with the 15 s per-call timeout,
+always with `-C <project folder>` and only when the project folder is the
+repository root or inside it. Replace uses the search's matcher and file
+walk (ignores, `.gitignore`, limits; at most 500 files and 20 s), matches
+line by line like the search, keeps line ends and a UTF-8 BOM, and expands
+`$1`…`$99`, `$&`, `$$`, `\n`, `\t` in regular-expression mode.
+
+### Interactive HTML preview
+
+`GET /api/workspace/preview-token?path=<file.html>` (read access) issues a
+random 256-bit token for the file's folder (30 minutes; `?renew=<token>`
+extends it for the same person and project); the reply's `url` is
+`/api/workspace/preview/<token>/<file>`. That route is answered before the
+session checks and ignores cookies, session and agent tokens: the token
+alone authorises reading files below its folder (workspace path rules, no
+`..`, links or ignored folders; a folder serves its `index.html`). Tokens
+live in memory (at most 2,000) and end with the server process.
+
+Every preview reply carries `Content-Security-Policy: sandbox allow-scripts
+allow-popups allow-forms allow-modals allow-pointer-lock allow-downloads`
+(no `allow-same-origin`: an opaque origin even when the page is opened in its
+own tab) with `default-src 'none'`; scripts, styles, images, media and fonts
+from the token's folder or `https:`, and `connect-src`, `worker-src`,
+`frame-src`, `form-action` and `base-uri` only to the token's folder, so the
+page cannot call `/api/*`. `Access-Control-Allow-Origin: *` (no
+credentials) lets the page's own `fetch()` read files next to it.
+The Editor frames it with the same sandbox and `referrerpolicy="no-referrer"`.

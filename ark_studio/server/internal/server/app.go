@@ -86,7 +86,6 @@ type App struct {
 	Blackbox        *blackbox.BlackBox
 	Mobile          *mobile.Manager
 	appRelease      releaseResolver // Go-only: latest GitHub release of the APKs
-	apks            apkCache        // Go-only: hash and version of the dist/ APKs (app_manifest.go)
 	restoreMu       sync.Mutex      // App.lock around blackbox restore
 
 	Heavy      *procx.Pool

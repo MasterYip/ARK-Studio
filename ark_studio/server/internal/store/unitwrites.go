@@ -406,6 +406,9 @@ func (s *Store) createUnitIn(ctx context.Context, outer *wtx, data *pyjson.Objec
 	if err != nil {
 		return 0, err
 	}
+	if err := s.checkLineTags(tags); err != nil { // Go only (branches.go)
+		return 0, err
+	}
 	typeName, status, importance := pick(tags, "type"), pick(tags, "status"), pick(tags, "importance")
 	if typeName == "topic" {
 		if err := s.checkTopicDesign(ctx, data); err != nil {
@@ -695,6 +698,9 @@ func (s *Store) updateUnitTx(w *wtx, ref any, patch *pyjson.Object, actor string
 		oldNeeds := needsOf(oldTags)
 		tags, err := normalizeTags(source, getOrRow("type"), getOrRow("status"), getOrRow("importance"))
 		if err != nil {
+			return err
+		}
+		if err := s.checkLineTags(tags); err != nil { // Go only (branches.go)
 			return err
 		}
 		typeName, status, importance := pick(tags, "type"), pick(tags, "status"), pick(tags, "importance")

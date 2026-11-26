@@ -76,7 +76,10 @@ export function installUnitContextMenu(ctx) {
     const uid = row?.dataset.unitRef;
     if (!uid) return;
     event.preventDefault();
-    openContextMenu({ x: event.clientX, y: event.clientY, items: unitMenuItems(ctx, rowUnit(row), event) });
+    // A row may add its own items first (Needs you: Mark as read / unread).
+    const extras = typeof row.menuExtras === "function" ? row.menuExtras() : [];
+    openContextMenu({ x: event.clientX, y: event.clientY,
+      items: [...extras, ...(extras.length ? [{ separator: true }] : []), ...unitMenuItems(ctx, rowUnit(row), event)] });
   });
   // Phones: a long press on a row or card raises the same menu.
   installLongPress();
@@ -122,7 +125,7 @@ function rowUnit(row) {
 // doubled (as session-touch.js does for one element).
 function installLongPress() {
   const LONG_PRESS_MS = 500;
-  let timer = 0, start = null, fired = 0;
+  let timer = 0, start = null, fired = 0;   // fired 0: no long press yet, clicks are not swallowed
   const cancel = () => { clearTimeout(timer); timer = 0; start = null; };
   document.addEventListener("pointerdown", (event) => {
     cancel();
@@ -142,11 +145,11 @@ function installLongPress() {
   }, true);
   for (const type of ["pointerup", "pointercancel"]) document.addEventListener(type, () => { clearTimeout(timer); timer = 0; }, true);
   document.addEventListener("contextmenu", (event) => {
-    if (event.isTrusted && performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
+    if (event.isTrusted && fired && performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
   document.addEventListener("click", (event) => {
     // Only the tap that ends the press: the menu it opened stays usable.
     if (event.target instanceof Element && event.target.closest(".graph-menu")) return;
-    if (performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
+    if (fired && performance.now() - fired < 800) { event.preventDefault(); event.stopImmediatePropagation(); }
   }, true);
 }

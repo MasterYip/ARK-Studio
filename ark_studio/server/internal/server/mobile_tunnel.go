@@ -613,6 +613,7 @@ func (c *reqCtx) mobileTunnelPost(body *pyjson.Object) error {
 type pendingClaim struct {
 	ID, secretHash, codeHash, pairID, confirm string
 	client, userAgent, device, project, user  string
+	deviceID                                  string // the phone's device id (mobile/deviceid.go)
 	created, expires                          time.Time
 	state                                     string // pending, approved, rejected
 }
@@ -695,7 +696,8 @@ func (c *reqCtx) tunnelClaim(path string) (bool, error) {
 	pc := &pendingClaim{ID: "claim_" + rnd.Hex("mobile", 8), secretHash: hashHex(secret), codeHash: hashHex(pytext.Strip(code)),
 		pairID: record.ID, confirm: sixDigits(), client: c.clientIP(), userAgent: pytext.Prefix(c.header("User-Agent"), 200),
 		device: pytext.Prefix(pytext.Strip(strOrEmptyAny(c.body.Value("device"))), 80), project: record.ProjectName,
-		user: record.User, created: time.Now(), expires: time.Now().Add(pendingClaimTTL), state: "pending"}
+		deviceID: c.clientDeviceID(c.body),
+		user:     record.User, created: time.Now(), expires: time.Now().Add(pendingClaimTTL), state: "pending"}
 	p.items[pc.ID] = pc
 	p.mu.Unlock()
 	c.sendJSON(202, pyjson.NewObject("ok", true, "pending", true, "claim_id", pc.ID, "claim_secret", secret,
@@ -733,6 +735,7 @@ func (c *reqCtx) mobileClaimStatus() error {
 		delete(p.items, id)
 	}
 	confirm, codeHash, left := pc.confirm, pc.codeHash, time.Until(pc.expires)
+	deviceID, device := pc.deviceID, pc.device
 	p.mu.Unlock()
 	switch state {
 	case "rejected":
@@ -746,6 +749,12 @@ func (c *reqCtx) mobileClaimStatus() error {
 			return apiErr(401, "This pairing request has expired. Scan the QR code again.", "PAIRING_CONFIRM_EXPIRED")
 		}
 		c.body = pyjson.NewObject("code", code)
+		if deviceID != "" {
+			c.body.Set("device_id", deviceID)
+		}
+		if device != "" {
+			c.body.Set("device", device)
+		}
 		_, err := c.mobilePost("/api/mobile/pair/claim", c.body)
 		return err
 	}

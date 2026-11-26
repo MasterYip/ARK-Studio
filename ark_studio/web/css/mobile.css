@@ -893,6 +893,7 @@
     bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px) + 8px);
     left: 10px;
     right: 10px;
+    transform: none;
   }
 
   /* ------------------------------------------------------- pairing gate */
@@ -1440,6 +1441,15 @@
     overflow: visible;
   }
 
+  .tag-tree {
+    max-height: none;
+    overflow: visible;
+  }
+
+  .tag-tree-row {
+    min-height: 34px;
+  }
+
   /* Details are a bottom sheet, so the graph/list stays visible behind it. */
   .drawer {
     top: auto;
@@ -1488,10 +1498,22 @@
     filter: drop-shadow(0 0 8px color-mix(in srgb, var(--accent) 42%, transparent));
   }
 
+  /* Full width between side margins: the desktop centring (left:50% with
+     translateX(-50%)) would move this box half its width off the left edge. */
   .toast-wrap {
     bottom: calc(var(--mobile-tabbar) + env(safe-area-inset-bottom, 0px) + 10px);
     left: 12px;
     right: 12px;
+    transform: none;
+  }
+
+  .toast-wrap .toast {
+    max-width: 100%;
+  }
+
+  .toast-wrap .toast > span {
+    min-width: 0;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -2621,8 +2643,10 @@ html[data-theme="dark"] .btn.primary {
   .mobile-session-page .sw-rail-head .icon-btn{min-width:44px;min-height:44px}
   .mobile-session-page .sw-side-tabs{overflow-x:auto;scrollbar-width:none;flex-wrap:nowrap}
   .mobile-session-page .sw-side-tab{min-height:44px;white-space:nowrap}
-  .mobile-session-page .sw-fact{grid-template-columns:minmax(96px,36%) minmax(0,1fr)}
   .mobile-session-page,.mobile-session-page *{max-width:100vw}
+  /* Thread items keep their own caps (100vw would let them pass the thread's padding). */
+  .mobile-session-page .sw-column > *{max-width:100%}
+  .mobile-session-page .sw-column > .sw-turn-user{max-width:88%}
   .mobile-session-page{overflow-x:hidden}
 }
 @media (min-width: 761px) { .sw-sheet-handle{display:none} }

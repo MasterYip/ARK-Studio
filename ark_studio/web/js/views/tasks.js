@@ -11,7 +11,7 @@ import { sessionStream } from "../session-stream.js";
 import { rememberSessionChoice } from "../session-sidebar-model.js";
 import { sessionLibraryPanel } from "../session-library.js";
 import { api, cachedThenFresh } from "../api.js";
-import { gpuOwnership } from "../gpu-model.js";
+import { gpuOwnership, occupiedView, loadOccupiedOnly, saveOccupiedOnly } from "../gpu-model.js";
 import { resourcesGraphPanel } from "../resources-view.js";
 import { openServer, connectionStore } from "../resource-open.js";
 import { advancedEnabled } from "../advanced.js";
@@ -114,10 +114,35 @@ function gpuResourcesPanel(ctx, S, tasks) {
   const body = h("div", { class: "task-gpu-body" },
     h("div", { class: "empty sm" }, t("tasks.gpu.loading")));
   const stamp = h("span", { class: "physics-hint" }, t("tasks.gpu.probe"));
+  // Occupied only: servers where this project's running jobs hold a GPU (the
+  // blue-highlighted cards), remembered per account and project.
+  const store = (() => { try { return localStorage; } catch { return null; } })();
+  const prefUser = S.session?.user || "";
+  const prefProject = S.project?.id || "";
+  let occupiedOnly = loadOccupiedOnly(store, prefUser, prefProject);
+  let occupiedCount = null;
+  const occupiedBtn = h("button", {
+    class: "ghost-btn sm task-gpu-occupied", type: "button", "data-gpu-occupied": "",
+    onclick: () => setOccupiedOnly(!occupiedOnly),
+  });
+  function paintOccupiedBtn() {
+    occupiedBtn.classList.toggle("on", occupiedOnly);
+    occupiedBtn.setAttribute("aria-pressed", String(occupiedOnly));
+    occupiedBtn.textContent = occupiedCount == null
+      ? t("tasks.gpu.occupied_only")
+      : t("tasks.gpu.occupied_only_n", { n: occupiedCount });
+  }
+  function setOccupiedOnly(on) {
+    occupiedOnly = Boolean(on);
+    saveOccupiedOnly(store, prefUser, prefProject, occupiedOnly);
+    paintOccupiedBtn();
+    if (lastData) render(lastData);
+  }
+  paintOccupiedBtn();
   const panel = h("section", { class: "panel task-gpu-panel" },
     h("div", { class: "panel-head" },
       h("h3", null, icon("cpu", "sm"), ` ${t("tasks.gpu.title")}`),
-      h("div", { class: "row tight" }, stamp,
+      h("div", { class: "row tight" }, stamp, occupiedBtn,
         h("button", {
           class: "ghost-btn sm", type: "button",
           onclick: () => refresh(true),
@@ -184,8 +209,17 @@ function gpuResourcesPanel(ctx, S, tasks) {
         || h("div", { class: "settings-note" }, icon("alert", "sm"), h("div", null, t("tasks.gpu.no_server"))));
       return;
     }
+    const view = occupiedView(servers, active, occupiedOnly);
+    occupiedCount = view.count;
+    paintOccupiedBtn();
+    if (view.empty) {
+      body.appendChild(h("div", { class: "empty sm task-gpu-occupied-empty" },
+        h("span", null, t("tasks.gpu.occupied_none")), " ",
+        h("button", { type: "button", class: "task-gpu-link", onclick: () => setOccupiedOnly(false) },
+          t("tasks.gpu.show_all"))));
+    }
     const grid = h("div", { class: "task-gpu-grid" });
-    for (const server of servers) {
+    for (const { server } of view.shown) {
       const system = server.system || {};
       const cpu = system.cpu_percent ?? system.cpu_load_pct;
       const memTotal = system.memory_total_mb;
@@ -269,7 +303,7 @@ function gpuResourcesPanel(ctx, S, tasks) {
           })));
       grid.appendChild(card);
     }
-    body.appendChild(grid);
+    if (view.shown.length) body.appendChild(grid);
     if (data.queue_enabled) {
       const activeAll = [...active, ...queued];
       body.appendChild(h("div", { class: "task-gpu-queue-head" },

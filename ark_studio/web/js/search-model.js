@@ -15,6 +15,17 @@ export function normalizeQuery(value = {}) {
     include: text("include", 400),
     exclude: text("exclude", 400),
     details: Boolean(src.details),
+    replace: text("replace", 1000),
+    replaceOpen: Boolean(src.replaceOpen),
+  };
+}
+
+// Body of POST /api/workspace/replace (files only; nodes are not replaced).
+export function replaceBody(query, extra = {}) {
+  return {
+    q: query.q, case: query.case, word: query.word, regex: query.regex,
+    include: query.include, exclude: query.exclude,
+    replace: query.replace, ...extra,
   };
 }
 

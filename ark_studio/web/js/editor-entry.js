@@ -44,3 +44,34 @@ export function editorExplorerVisible() {
 export function setExplorerVisible(visible) {
   loadEditor().then((module) => module.setExplorerVisible(visible));
 }
+
+// Ctrl+Shift+F in the Editor: the Search section of the Explorer.
+export function focusEditorSearch(text = "") {
+  loadEditor().then((module) => module.focusSearchSection(text));
+}
+
+export function editorFold(id) {
+  return loadEditor().then((module) => module.editorFold(id));
+}
+
+export function revealActiveFile() {
+  loadEditor().then((module) => module.revealActive());
+}
+
+export function editorAutoReveal() {
+  if (editor) return editor.autoReveal();
+  try { return localStorage.getItem("ark.editor.autoReveal") !== "0"; } catch { return true; }
+}
+
+export function setEditorAutoReveal(on) {
+  loadEditor().then((module) => module.setAutoReveal(on));
+}
+
+/** Palette commands of the Editor (none until it has loaded). */
+export function editorPaletteCommands() {
+  return editor ? editor.editorPaletteCommands() : [];
+}
+
+export function workspaceFilesChanged(paths) {
+  if (editor) editor.workspaceFilesChanged(paths);
+}

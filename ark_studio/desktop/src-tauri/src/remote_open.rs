@@ -504,12 +504,27 @@ pub fn identity_for_config(raw: &str) -> Result<String, String> {
 
 /// The checked entry's lines (no trailing newline).
 pub fn managed_entry(h: &ManagedHost) -> Result<String, String> {
+    managed_entry_with(h, &[])
+}
+
+/// managed_entry with more names on the Host line (kept from the existing
+/// entry). The address itself is always a name too: ssh matches Host
+/// patterns against what is typed, so `ssh -p 22 user@<address>` (VS Code's
+/// direct form) only uses this entry's key when the address is listed.
+pub fn managed_entry_with(h: &ManagedHost, extra: &[String]) -> Result<String, String> {
     check_alias(&h.alias)?;
     if !h.alias.starts_with(MANAGED_PREFIX) {
         return Err("ARK only manages ark-... aliases.".into());
     }
-    check_host(h.host.trim())?;
-    let mut lines = vec![format!("Host {}", h.alias), format!("  HostName {}", h.host.trim())];
+    let host = h.host.trim();
+    check_host(host)?;
+    let mut names: Vec<String> = vec![h.alias.clone()];
+    for n in std::iter::once(host).chain(extra.iter().map(String::as_str)) {
+        if check_alias(n).is_ok() && !names.iter().any(|x| x.eq_ignore_ascii_case(n)) {
+            names.push(n.to_string());
+        }
+    }
+    let mut lines = vec![format!("Host {}", names.join(" ")), format!("  HostName {host}")];
     if let Some(p) = h.port {
         if !(1..=65535).contains(&p) {
             return Err("Invalid port.".into());
@@ -529,12 +544,14 @@ pub fn managed_entry(h: &ManagedHost) -> Result<String, String> {
 }
 
 /// The managed block's entries: (alias, entry text).
-fn managed_entries(block: &str) -> Vec<(String, String)> {
-    let mut out: Vec<(String, String)> = Vec::new();
+/// The block's entries: (Host line names, entry text). The first name is
+/// the alias; others may have been added by hand and are kept.
+fn managed_entries(block: &str) -> Vec<(Vec<String>, String)> {
+    let mut out: Vec<(Vec<String>, String)> = Vec::new();
     for line in block.lines() {
         let t = line.trim_end();
-        if let Some(alias) = t.strip_prefix("Host ") {
-            out.push((alias.trim().to_string(), t.to_string()));
+        if let Some(names) = t.strip_prefix("Host ") {
+            out.push((names.split_whitespace().map(str::to_string).collect(), t.to_string()));
         } else if let Some(last) = out.last_mut() {
             if !t.trim().is_empty() {
                 last.1.push('\n');
@@ -548,7 +565,7 @@ fn managed_entries(block: &str) -> Vec<(String, String)> {
 /// `text` with `h` added to (or replaced in) the managed block. None when
 /// the file already has exactly that entry.
 pub fn upsert_managed(text: &str, h: &ManagedHost) -> Result<Option<String>, String> {
-    let entry = managed_entry(h)?;
+    managed_entry(h)?;
     let crlf = text.contains("\r\n");
     let norm = text.replace("\r\n", "\n");
     let (before, block, after) = match (norm.find(MANAGED_BEGIN), norm.find(MANAGED_END)) {
@@ -560,10 +577,15 @@ pub fn upsert_managed(text: &str, h: &ManagedHost) -> Result<Option<String>, Str
         _ => return Err("The ARK Studio block in ~/.ssh/config is damaged; fix or remove its marker lines.".into()),
     };
     let mut entries = managed_entries(&block);
-    match entries.iter_mut().find(|(a, _)| a.eq_ignore_ascii_case(&h.alias)) {
-        Some(existing) if existing.1 == entry => return Ok(None),
-        Some(existing) => existing.1 = entry,
-        None => entries.push((h.alias.clone(), entry)),
+    match entries.iter_mut().find(|(names, _)| names.first().is_some_and(|a| a.eq_ignore_ascii_case(&h.alias))) {
+        Some(existing) => {
+            let entry = managed_entry_with(h, &existing.0[1..])?;
+            if existing.1 == entry {
+                return Ok(None);
+            }
+            existing.1 = entry;
+        }
+        None => entries.push((vec![h.alias.clone()], managed_entry(h)?)),
     }
     let mut out = before;
     if !out.is_empty() && !out.ends_with('\n') {
@@ -832,7 +854,7 @@ mod tests {
         assert_eq!(
             once,
             format!(
-                "Host gpu-a\n  HostName 10.0.0.5\n\n{MANAGED_BEGIN}\nHost ark-lab-1\n  HostName 203.0.113.7\n  Port 2222\n  User user\n  \
+                "Host gpu-a\n  HostName 10.0.0.5\n\n{MANAGED_BEGIN}\nHost ark-lab-1 203.0.113.7\n  HostName 203.0.113.7\n  Port 2222\n  User user\n  \
                  IdentityFile C:/Users/me/.ssh/id_rsa_lab_1\n  IdentitiesOnly yes\n{MANAGED_END}\n"
             )
         );
@@ -841,7 +863,7 @@ mod tests {
         // A second host joins the block; a changed one is replaced in place.
         let two = upsert_managed(&once, &managed("ark-b", None)).unwrap().unwrap();
         assert_eq!(two.matches(MANAGED_BEGIN).count(), 1);
-        assert!(two.contains(&format!("Host ark-b\n  HostName 203.0.113.7\n  Port 2222\n  User user\n{MANAGED_END}")));
+        assert!(two.contains(&format!("Host ark-b 203.0.113.7\n  HostName 203.0.113.7\n  Port 2222\n  User user\n{MANAGED_END}")));
         let moved = upsert_managed(&two, &managed("ark-lab-1", Some("/home/me/.ssh/k2"))).unwrap().unwrap();
         assert!(moved.contains("IdentityFile /home/me/.ssh/k2") && !moved.contains("id_rsa_lab_1"));
         assert!(moved.find("Host ark-lab-1").unwrap() < moved.find("Host ark-b").unwrap());
@@ -857,6 +879,25 @@ mod tests {
         assert!(upsert_managed("", &k).unwrap().unwrap().starts_with(MANAGED_BEGIN));
         // A half-removed block is not guessed at.
         assert!(upsert_managed(&format!("{MANAGED_BEGIN}\nHost ark-x\n"), &k).is_err());
+    }
+
+    #[test]
+    fn managed_entry_names_the_address() {
+        // 2026-11-26: VS Code's direct form (ssh -p <port> user@<address>)
+        // got "Permission denied (publickey)": ssh matches Host patterns
+        // against the typed name, so the key only applies when the address
+        // is a Host name of the entry.
+        let h = ManagedHost { alias: "ark-gpu-c".into(), host: "203.0.113.35".into(), user: Some("user".into()), port: Some(2022),
+            identity_file: Some("C:/Users/me/.ssh/id_rsa_gpu_c".into()), auth: Some("key".into()) };
+        let e = managed_entry(&h).unwrap();
+        assert!(e.starts_with("Host ark-gpu-c 203.0.113.35\n  HostName 203.0.113.35\n  Port 2022\n  User user\n"), "{e}");
+        assert!(e.contains("IdentityFile C:/Users/me/.ssh/id_rsa_gpu_c"));
+        // Names added by hand to the entry stay; the existing entry is found by its first name.
+        let text = format!("{MANAGED_BEGIN}\nHost ark-gpu-c ark-hostabc123 203.0.113.35\n  HostName 203.0.113.35\n{MANAGED_END}\n");
+        let out = upsert_managed(&text, &h).unwrap().unwrap();
+        assert!(out.contains("Host ark-gpu-c 203.0.113.35 ark-hostabc123\n"), "{out}");
+        assert_eq!(out.matches("Host ark-gpu-c").count(), 1, "{out}");
+        assert_eq!(upsert_managed(&out, &h).unwrap(), None, "unchanged the second time");
     }
 
     #[test]
@@ -926,7 +967,7 @@ mod tests {
         // Password login: neither line, even when a key path is remembered;
         // ssh / VS Code show their own prompt.
         let pwd = managed_entry(&ManagedHost { auth: Some("password".into()), ..managed("ark-a", Some(key)) }).unwrap();
-        assert_eq!(pwd, "Host ark-a\n  HostName 203.0.113.7\n  Port 2222\n  User user");
+        assert_eq!(pwd, "Host ark-a 203.0.113.7\n  HostName 203.0.113.7\n  Port 2222\n  User user");
         assert_eq!(managed_entry(&managed("ark-a", None)).unwrap(), pwd);
         // Switching key -> password replaces the entry in place.
         let text = upsert_managed("", &ManagedHost { auth: Some("key".into()), ..managed("ark-a", Some(key)) }).unwrap().unwrap();

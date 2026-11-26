@@ -10,7 +10,9 @@
 #        ~/.ark/tokens/<ARK_PROJECT>, readable only by you) or ARK_TOKEN and
 #        handed to curl on stdin, never on a command line.
 #   optional: ARK_AGENT_LABEL (your name in messages), ARK_HOST (this
-#        device's id), ARK_WATCH_STATE (cursor file, default .ark-watch-state),
+#        device's id), ARK_AGENT_SESSION (your own session id: tells you
+#        from other agents with the same token on this device),
+#        ARK_WATCH_STATE (cursor file, default .ark-watch-state),
 #        ARK_WATCH_MAX (seconds to wait, default 6900; 0 = check once),
 #        ARK_OWNER_PID (the agent process this watcher belongs to; default:
 #        the nearest Codex or Claude Code process above the watcher).
@@ -51,7 +53,7 @@ fi
 ark_get() { # path, max seconds; prints body, newline, HTTP status
   printf 'header = "Authorization: Bearer %s"\nheader = "X-ARK-Project: %s"\n' "$tok" "$ARK_PROJECT" |
     curl -sS -K - -m "$2" -w '\n%{http_code}' ${ARK_HOST:+-H "X-ARK-Host: $ARK_HOST"} \
-      ${ARK_SESSION_ID:+-H "X-ARK-Session: $ARK_SESSION_ID"} "$ARK_URL$1" ||
+      ${ARK_SESSION_ID:+-H "X-ARK-Session: $ARK_SESSION_ID"} ${ARK_AGENT_SESSION:+-H "X-ARK-Agent-Session: $ARK_AGENT_SESSION"} "$ARK_URL$1" ||
     printf '\n000'
 }
 
@@ -187,7 +189,7 @@ while :; do
   wait=50
   [ "$left" -lt "$wait" ] && wait=$left
   [ "$wait" -lt 0 ] && wait=0
-  q="mine=1&wait=$wait"
+  q="mine=1&for_you=1&wait=$wait"
   [ -n "$cursor" ] && q="$q&since=$cursor"
   resp=$(ark_get "/api/agent/v1/updates?$q" $((wait + 20)))
   code=$(printf '%s' "$resp" | tail -n 1)
@@ -214,9 +216,12 @@ while :; do
     if [ -n "$codex_thread" ]; then
       # escaped quotes become ' so that a plain pattern finds whole summaries
       items=$(printf '%s' "$body" | sed 's/\\"/'"'"'/g' | grep -o '"summary": "[^"]*"' | sed 's/^"summary": "/- /; s/"$//' | head -10)
+      # every update routed to this agent (it wrote the unit): no "ignore" line
+      act="If you are not working on ARK project $project_name, ignore it. Otherwise act"
+      case "$body" in *'"audience": "project"'*) ;; *'"audience": "session"'*) act="Act" ;; esac
       "$codex_bin" queue --thread "$codex_thread" --message "$head
 $items
-This message comes from the ARK watcher you started for this project. If you are not working on ARK project $project_name, ignore it. Otherwise act on the updates under the core rules (GET /api/agent/v1/units/<ID>/comments for the full comments, reply with reply_to, resolve), then start the ARK watcher again." >/dev/null 2>&1 ||
+This message comes from the ARK watcher you started for this project. $act on the updates under the core rules (GET /api/agent/v1/units/<ID>/comments for the full comments, reply with reply_to, resolve), then start the ARK watcher again." >/dev/null 2>&1 ||
         echo "ARK: codex queue failed; read GET /api/agent/v1/updates yourself."
     fi
     exit 0

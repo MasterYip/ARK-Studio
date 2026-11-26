@@ -62,6 +62,21 @@ const EN_TEXT = {
   "tasks.models.rank.alias_target": "alias mapping",
   "tasks.models.origin_env": "{key} (environment)",
   "tasks.models.origin_file": "{key} in {file}",
+  "session.fact.session_id": "Session ID",
+  "session.fact.platform": "Platform",
+  "session.fact.model": "Model",
+  "session.fact.effort": "Effort",
+  "session.fact.permission": "Access",
+  "session.fact.turn": "Turn",
+  "session.fact.approvals": "Approvals",
+  "session.fact.agent": "Agent",
+  "session.fact.project": "Project",
+  "session.fact.workspace": "Workspace",
+  "session.fact.parent": "Parent",
+  "session.fact.relation": "Relation",
+  "session.approval.via_stdin": "via stdin",
+  "session.approval.unsupported": "not supported",
+  "session.state.approval": "Needs approval",
 };
 /* i18n-ignore-end */
 
@@ -642,17 +657,30 @@ export function busyWork(session, activity = null) {
 }
 
 /**
+ * How the session's last main turn ended (the server's turn_end,
+ * sessions/finish.go): "done", "error" or "" (none, or the person stopped it).
+ */
+export function finishOutcome(session) {
+  const outcome = session?.turn_end?.outcome;
+  return outcome === "done" || outcome === "error" ? outcome : "";
+}
+
+/**
  * The status a badge shows: running while a turn runs or, between turns,
- * while sub-agents or background tasks run; idle only when all is quiet; a
- * session that has ended shows how it ended (stopped, errored, closed).
+ * while sub-agents or background tasks run; done (green) when the main
+ * turn ended cleanly and the agent waits for the person; errored when it
+ * failed; a session that has ended otherwise shows how (stopped, closed).
  */
 export function shownStatus(session, activity = null) {
   const phase = sessionPhase(session);
   if (phase === "turn") return "running";
+  const outcome = finishOutcome(session);
   if (phase === "waiting") {
     const busy = busyWork(session, activity);
-    return busy.subagents + busy.background ? "running" : "idle";
+    if (busy.subagents + busy.background) return "running";
+    return outcome === "error" ? "errored" : "done";
   }
+  if (session?.status === "stopped" && !session.closed && outcome) return outcome === "error" ? "errored" : "done";
   return session?.status || "stopped";
 }
 
@@ -665,6 +693,58 @@ export function busyReason(session, activity = null) {
   const busy = busyWork(session, activity);
   return [busy.subagents ? { key: `session.busy.subagents_${busy.subagents === 1 ? "one" : "n"}`, n: busy.subagents } : null,
     busy.background ? { key: `session.busy.background_${busy.background === 1 ? "one" : "n"}`, n: busy.background } : null].filter(Boolean);
+}
+
+/**
+ * What the session view's header shows: one line with the live state
+ * (running, idle, needs approval, errored, ...), why it still runs, the token
+ * total and Stop while a turn runs.  Provider, access, workspace, times, the
+ * session id and full usage are in Session properties (sessionInfoFacts).
+ */
+export const HEADER_FIELDS = Object.freeze(["state", "busy", "pending", "tokens", "estimated", "stop"]);
+
+export function sessionHeaderModel(session, { activity = null, pending = 0, usage = null } = {}) {
+  const status = shownStatus(session, activity);
+  const live = isActiveSession(session);
+  return {
+    state: pending && live ? "approval" : status,
+    busy: busyReason(session, activity),
+    pending: live ? Number(pending) || 0 : 0,
+    tokens: usage && Number.isFinite(Number(usage.total_tokens)) ? Number(usage.total_tokens) : null,
+    estimated: Boolean(usage?.estimated),
+    stop: turnRunning(session),
+  };
+}
+
+/** The label of a header state: "Needs approval" or the session status. */
+export function headerStateKey(state) {
+  return state === "approval" ? "session.state.approval" : `tasks.status.${state}`;
+}
+
+const capFirstText = (text) => (text ? String(text).charAt(0).toLocaleUpperCase() + String(text).slice(1) : text);
+
+/**
+ * Session properties › Agent: the session's identity and setup, moved out of
+ * the header.  `platform`, `cwd` and `relation` are the caller's localised
+ * labels.  mono: ids and paths; copy: a copy button.
+ */
+export function sessionInfoFacts(session = {}, { t = enText, platform = "", cwd = "", relation = "" } = {}) {
+  const mode = sessionAccessMode(session);
+  return [
+    session.id ? { id: "session_id", label: t("session.fact.session_id"), value: session.id, mono: true, copy: true } : null,
+    { id: "platform", label: t("session.fact.platform"), value: platform || session.platform_label || session.platform || "—" },
+    session.model ? { id: "model", label: t("session.fact.model"), value: session.model, mono: true } : null,
+    session.effort ? { id: "effort", label: t("session.fact.effort"), value: capFirstText(session.effort) } : null,
+    { id: "access", label: t("session.fact.permission"), value: capFirstText(permissionModeLabel(mode, { t })), tone: mode },
+    { id: "turn", label: t("session.fact.turn"), value: `#${session.turn || 1}`, num: true },
+    { id: "approvals", label: t("session.fact.approvals"),
+      value: capFirstText(t(session.capabilities?.supports_approval ? "session.approval.via_stdin" : "session.approval.unsupported")) },
+    session.agent ? { id: "agent", label: t("session.fact.agent"), value: session.agent } : null,
+    { id: "project", label: t("session.fact.project"), value: session.project?.name || "—" },
+    { id: "workspace", label: t("session.fact.workspace"), value: cwd || session.cwd || "—", mono: true },
+    session.parent_id ? { id: "parent", label: t("session.fact.parent"), value: session.parent_id, mono: true } : null,
+    session.relation ? { id: "relation", label: t("session.fact.relation"), value: relation || session.relation } : null,
+  ].filter(Boolean);
 }
 
 export function liveActivity(items = [], session = {}) {

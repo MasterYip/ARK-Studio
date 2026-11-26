@@ -21,11 +21,15 @@ type Filters struct {
 	Q                                                     any
 	Types, Origins, Statuses, Importance, Tags, TagsUnset []any
 	Assignees, IDs                                        []any
-	TypesNone, Roots, Slim, Overdue, HasDates             bool
-	StartFrom, StartTo, UpdatedSince, CreatedSince        any
-	Sort                                                  string
-	Me                                                    string
-	Limit, Offset                                         int64
+	// TagTrees (Go only, lines of work): a unit matches when it carries
+	// one of these tags or a tag below it ("line:hoi" matches "line:hoi"
+	// and "line:hoi/pilot").
+	TagTrees                                       []any
+	TypesNone, Roots, Slim, Overdue, HasDates      bool
+	StartFrom, StartTo, UpdatedSince, CreatedSince any
+	Sort                                           string
+	Me                                             string
+	Limit, Offset                                  int64
 }
 
 // Iter is Python iteration over a decoded JSON value used as `f.get(k) or []`.
@@ -72,7 +76,8 @@ func FiltersFromObject(o *pyjson.Object) (Filters, error) {
 		key string
 		dst *[]any
 	}{{"types", &f.Types}, {"origins", &f.Origins}, {"statuses", &f.Statuses}, {"importance", &f.Importance},
-		{"tags", &f.Tags}, {"tags_unset", &f.TagsUnset}, {"assignees", &f.Assignees}, {"ids", &f.IDs}}
+		{"tags", &f.Tags}, {"tags_unset", &f.TagsUnset}, {"assignees", &f.Assignees}, {"ids", &f.IDs},
+		{"tag_trees", &f.TagTrees}}
 	for _, l := range lists {
 		if *l.dst, err = Iter(o.Value(l.key)); err != nil {
 			return f, err
@@ -147,6 +152,15 @@ func (s *Store) where(ctx context.Context, q sqlitedb.Querier, f Filters) (strin
 	if im := truthyItems(f.Importance); len(im) > 0 {
 		clauses = append(clauses, "u.importance IN ("+repeatMarks(len(im))+")")
 		args = append(args, im...)
+	}
+	if trees := truthyItems(f.TagTrees); len(trees) > 0 {
+		var parts []string
+		for _, t := range trees {
+			tag := pyjson.Str(t)
+			parts = append(parts, "tag=? OR substr(tag,1,?)=?")
+			args = append(args, tag, int64(len([]rune(tag))+1), tag+"/")
+		}
+		clauses = append(clauses, "u.id IN (SELECT unit_id FROM unit_tags WHERE "+strings.Join(parts, " OR ")+")")
 	}
 	tags := truthyItems(f.Tags)
 	var unset []string

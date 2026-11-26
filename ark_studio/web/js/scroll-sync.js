@@ -126,7 +126,8 @@ export function caretLine(doc, line) {
 // Preview: the blocks with data-source-line, relative to the scroller.
 export function previewAnchors(scrollEl, root, totalLines) {
   const base = scrollEl.getBoundingClientRect().top - scrollEl.scrollTop;
-  const list = [...root.querySelectorAll("[data-source-line]")].map((el) => ({
+  // Folded sections (display: none) have no position.
+  const list = [...root.querySelectorAll("[data-source-line]")].filter((el) => el.getClientRects().length).map((el) => ({
     line: Number(el.dataset.sourceLine), top: el.getBoundingClientRect().top - base,
   }));
   const rect = root.getBoundingClientRect();

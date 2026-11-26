@@ -121,6 +121,8 @@ func (c *reqCtx) watchViewer() agentwatch.Viewer {
 	} else {
 		v.AnyAgent = true // the legacy server token is shared by every local agent
 	}
+	// Who asks, as its writes record it: updates on its units are for_you.
+	v.Self, v.SessionAlive = c.agentSelf(), c.app.sessionWakeable
 	return v
 }
 
@@ -258,6 +260,7 @@ func (c *reqCtx) agentUpdates(p *project.Project) error {
 	v := c.watchViewer()
 	v.Kinds = kinds
 	v.Mine = c.qTrue("mine")
+	v.ForYou = c.qTrue("for_you")
 	st := p.Store
 	epoch, top, err := st.ActivityHead(c.ctx)
 	if err != nil {
@@ -278,7 +281,8 @@ func (c *reqCtx) agentUpdates(p *project.Project) error {
 		}
 		out := pyjson.NewObject("cursor", cursor, "items", list, "count", int64(len(items)), "more", more,
 			"reset", reset != "", "mine", v.Mine, "kinds", agentwatch.SortedKinds(kinds),
-			"waited_ms", waited.Milliseconds(), "rules_version", rulesVersion)
+			"waited_ms", waited.Milliseconds(), "rules_version", rulesVersion,
+			"for_you_count", agentwatch.ForYouCount(items), "for_you", v.ForYou)
 		if reset != "" {
 			out.Set("reason", reset)
 		}

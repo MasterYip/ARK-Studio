@@ -12,8 +12,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
+	"time"
 )
 
 type manifestApp struct {
@@ -58,19 +61,24 @@ func fakeAPK(t *testing.T) []byte {
 }
 
 func TestAppManifest(t *testing.T) {
-	app, dist := apkApp(t)
-	webSum := strings.Repeat("c", 64)
+	app, _ := apkApp(t)
+	apk := fakeAPK(t)
+	sum := sha256.Sum256(apk)
 	var gh *httptest.Server
+	var ranges atomic.Int32
 	gh = httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case "/repos/fork/ark/releases/latest":
 			w.Write([]byte(`{"tag_name":"v2.2.0","assets":[` + //nolint:errcheck
-				`{"name":"ARK-Studio-2.2.0-android.apk","size":4000,"browser_download_url":"` + gh.URL + `/a.apk",` +
-				`"digest":"sha256:` + strings.Repeat("D", 64) + `"},` +
-				`{"name":"ARK-Studio-2.2.0-android-web.apk","size":3000,"browser_download_url":"` + gh.URL + `/w.apk"},` +
-				`{"name":"SHA256SUMS.txt","size":200,"browser_download_url":"` + gh.URL + `/sums"}]}`))
-		case "/sums":
-			w.Write([]byte(webSum + "  ARK-Studio-2.2.0-android-web.apk\n")) //nolint:errcheck
+				`{"name":"ARK-Studio-2.2.0-android.apk","size":` + strconv.Itoa(len(apk)) + `,"browser_download_url":"` + gh.URL + `/a.apk",` +
+				`"digest":"sha256:` + strings.ToUpper(hex.EncodeToString(sum[:])) + `"},` +
+				`{"name":"ARK-Studio-2.2.0-android-web.apk","size":3000,"browser_download_url":"` + gh.URL + `/w.apk"}]}`))
+		case "/a.apk":
+			if r.Header.Get("Range") == "" {
+				t.Errorf("whole APK downloaded")
+			}
+			ranges.Add(1)
+			http.ServeContent(w, r, "a.apk", time.Time{}, bytes.NewReader(apk))
 		default:
 			http.NotFound(w, r)
 		}
@@ -81,39 +89,37 @@ func TestAppManifest(t *testing.T) {
 	t.Setenv("ARK_APP_RELEASE_REPO", "fork/ark")
 	app.appRelease.client = gh.Client()
 
-	// No local build: the app comes from the release (size; SHA-256 from the
-	// asset digest, else from SHA256SUMS.txt).  The WebView app is not listed,
-	// even when an older release still has its APK.
+	// The APK of the latest release: URL, size and SHA-256 from the release,
+	// version code and name read from the asset with range requests.  The
+	// WebView app is not listed, even when an older release still has its APK.
 	apps := readAppManifest(t, app, nil)
 	native := apps["native"]
-	if native.Source != "release" || native.VersionCode != nil || *native.Size != 4000 || native.SHA256 == nil ||
-		*native.SHA256 != strings.Repeat("d", 64) ||
-		*native.Release != "v2.2.0" || native.URL != "/download/ARK-Studio-android.apk" {
+	// The version is read in the background: null at first, then known.
+	for i := 0; i < 100 && native.VersionCode == nil; i++ {
+		time.Sleep(50 * time.Millisecond)
+		apps = readAppManifest(t, app, nil)
+		native = apps["native"]
+	}
+	if native.Source != "github" || native.URL != gh.URL+"/a.apk" || native.VersionCode == nil || *native.VersionCode != 16 ||
+		native.VersionName == nil || *native.VersionName != "3.0" || *native.Size != int64(len(apk)) ||
+		native.SHA256 == nil || *native.SHA256 != hex.EncodeToString(sum[:]) || *native.Release != "v2.2.0" {
 		t.Errorf("native from the release: %+v", native)
 	}
 	if _, ok := apps["webapp"]; ok || len(apps) != 1 {
 		t.Errorf("apps: %+v", apps)
 	}
-
-	// A build in dist/: version and checksum read from the file.
-	apk := fakeAPK(t)
-	if err := os.MkdirAll(dist, 0o755); err != nil {
-		t.Fatal(err)
+	// Read once: a stale lookup of the same release reuses the version.
+	n := ranges.Load()
+	app.appRelease.mu.Lock()
+	app.appRelease.goodAt = time.Now().Add(-2 * releaseTTL)
+	app.appRelease.mu.Unlock()
+	if native = readAppManifest(t, app, nil)["native"]; native.VersionCode == nil || ranges.Load() != n {
+		t.Errorf("version read again: %+v (%d range requests, was %d)", native, ranges.Load(), n)
 	}
-	if err := os.WriteFile(filepath.Join(dist, "ARK-Studio-android.apk"), apk, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	sum := sha256.Sum256(apk)
-	apps = readAppManifest(t, app, nil)
-	native = apps["native"]
-	if native.Source != "server" || native.VersionCode == nil || *native.VersionCode != 16 || *native.VersionName != "3.0" ||
-		*native.Size != int64(len(apk)) || *native.SHA256 != hex.EncodeToString(sum[:]) {
-		t.Errorf("native from dist: %+v", native)
-	}
-	// The served file is the one described; the WebView app's old path serves it too.
+	// The old download paths redirect to the asset; the server never serves an APK.
 	for _, path := range []string{"/download/ARK-Studio-android.apk", "/download/ARK-Studio-webapp.apk"} {
-		if r := gpuCall(t, app, "GET", path, nil, nil); r.code != 200 || len(r.raw) != len(apk) {
-			t.Errorf("download %s: %d %d bytes", path, r.code, len(r.raw))
+		if r := gpuCall(t, app, "GET", path, nil, nil); r.code != 302 {
+			t.Errorf("download %s: %d", path, r.code)
 		}
 	}
 }
@@ -129,30 +135,5 @@ func TestAppManifestIsPublic(t *testing.T) {
 	apps := readAppManifest(t, app, nil)
 	if apps["native"].Package != "com.masteryip.arkstudio" || len(apps) != 1 {
 		t.Fatalf("signed-out manifest: %+v", apps)
-	}
-}
-
-// ARK_DOWNLOAD_DIR names the APK folder of a server whose web UI is embedded
-// (no web root on disk, so no dist/ beside it).
-func TestAppManifestDownloadDir(t *testing.T) {
-	app, _ := apkApp(t)
-	app.Assets = nil
-	t.Setenv("ARK_REPLAY_CLOCK", "1")
-	t.Setenv("ARK_APP_RELEASE_API", "")
-	if dir := app.apkDir(); dir != "" {
-		t.Fatalf("embedded without ARK_DOWNLOAD_DIR: %q", dir)
-	}
-	dir := t.TempDir()
-	t.Setenv("ARK_DOWNLOAD_DIR", dir)
-	apk := fakeAPK(t)
-	if err := os.WriteFile(filepath.Join(dir, "ARK-Studio-android.apk"), apk, 0o644); err != nil {
-		t.Fatal(err)
-	}
-	native := readAppManifest(t, app, nil)["native"]
-	if native.Source != "server" || native.VersionCode == nil || *native.VersionCode != 16 {
-		t.Errorf("native from ARK_DOWNLOAD_DIR: %+v", native)
-	}
-	if r := gpuCall(t, app, "GET", "/download/ARK-Studio-android.apk", nil, nil); r.code != 200 || len(r.raw) != len(apk) {
-		t.Errorf("download: %d %d bytes", r.code, len(r.raw))
 	}
 }

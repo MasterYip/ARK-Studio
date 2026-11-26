@@ -19,17 +19,32 @@ var GoOnlyRoutes = append([]PortedRoute{
 	{"goonly:exact:/api/agent/v1/docs", "GET,HEAD"},
 	{"goonly:prefix:/api/agent/v1/docs/", "GET,HEAD"},
 	{"goonly:exact:" + chatapi.PluginChatPath, "POST"}, // routes_chat.go (view plugins' ai:chat)
-	needsSeenGoOnly[0],     // project_reviews.go
-	needsSeenGoOnly[1],     // project_reviews.go
-	notificationsGoOnly[0], // notifications.go
-	mobileGoOnly[0],        // routes_mobile.go
-	mobileTunnelGoOnly[0],  // mobile_tunnel.go
+	needsSeenGoOnly[0],      // project_reviews.go
+	needsSeenGoOnly[1],      // project_reviews.go
+	needsSeenGoOnly[2],      // project_reviews.go
+	notificationsGoOnly[0],  // notifications.go
+	sessionNoticesGoOnly[0], // session_notices.go
+	sessionNoticesGoOnly[1],
+	mobileGoOnly[0],       // routes_mobile.go
+	mobileTunnelGoOnly[0], // mobile_tunnel.go
 	mobileTunnelGoOnly[1],
 	mobileTunnelGoOnly[2],
 	mobileTunnelGoOnly[3],
 	mobileTunnelGoOnly[4],
 	appManifestGoOnly[0],                             // app_manifest.go
 	{"goonly:exact:" + agentMarkersPath, "GET,HEAD"}, // routes_agentmarkers.go
+	previewGoOnly[0],                                 // routes_preview.go
+	branchRoutesGoOnly[0],                            // routes_branches.go
+	branchRoutesGoOnly[1],
+	branchRoutesGoOnly[2],
+	branchRoutesGoOnly[3],
+	branchRoutesGoOnly[4],
+	branchRoutesGoOnly[5],
+	scheduleRoutesGoOnly[0], // routes_schedules.go
+	scheduleRoutesGoOnly[1],
+	scheduleRoutesGoOnly[2],
+	mobileGoOnly[1], // routes_mobile.go (device merge and stale devices)
+	mobileGoOnly[2],
 }, append(append(append(append(desktopRoutesGoOnly, presenceRoutesGoOnly...), append(supportRoutesGoOnly, sessionStartGoOnly...)...), // routes_desktop.go, routes_presence.go, routes_support.go
 	agentWatchGoOnly...), append(append(append(append(trashRoutesGoOnly, agentRulesGoOnly...), inviteRoutesGoOnly...), mediaThumbGoOnly...), append(append(append(append(append(reviewRoutesGoOnly, importArkGoOnly...), projectMoveGoOnly...), agentLinksGoOnly...), batchRoutesGoOnly...), append(append(append(storageRoutesGoOnly, resourcesRoutesGoOnly...), promptsGoOnly...), taskSpaceGoOnly...)...)...)...)...) // routes_agentwatch.go, routes_trash.go, routes_agentrules.go, routes_invites.go, media_thumb.go, routes_reviews.go, routes_importark.go, routes_agentlinks.go, routes_batch.go, routes_storage.go, routes_resources.go, routes_projectmove.go, routes_taskspace.go
 

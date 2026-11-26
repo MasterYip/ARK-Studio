@@ -72,3 +72,15 @@ export function moveSelection(rows, index, delta) {
   if (at < 0) return delta < 0 ? selectable[selectable.length - 1] : selectable[0];
   return selectable[Math.max(0, Math.min(selectable.length - 1, at + delta))];
 }
+
+/**
+ * Reveal in the Explorer: the folders to expand (outermost first) so `path`
+ * shows, and the row to highlight.  A folder path reveals the folder itself.
+ */
+export function revealPlan(path, { folder = false } = {}) {
+  const parts = String(path || "").replace(/\\/g, "/").split("/").filter((part) => part && part !== ".");
+  const dirs = [];
+  const upto = folder ? parts.length : parts.length - 1;
+  for (let i = 1; i <= upto; i += 1) dirs.push(parts.slice(0, i).join("/"));
+  return { dirs, target: parts.join("/") };
+}

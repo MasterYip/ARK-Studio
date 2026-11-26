@@ -12,7 +12,9 @@
 #   optional: ARK_OWNER_PID (your agent's process id: the watcher stops when
 #        it is gone; default: the nearest Codex or Claude Code process above
 #        the watcher), ARK_AGENT_LABEL (your name in messages), ARK_HOST (this
-#        device's id), ARK_WATCH_STATE (cursor file, default .ark-watch-state),
+#        device's id), ARK_AGENT_SESSION (your own session id: tells you from
+#        other agents with the same token on this device), ARK_WATCH_STATE
+#        (cursor file, default .ark-watch-state),
 #        ARK_WATCH_MAX (seconds to wait, default 6900; 0 = check once).
 #   Codex only: ARK_WAKE=codex and ARK_CODEX_THREAD=$env:CODEX_THREAD_ID.
 #        The watcher then runs in the background and wakes the session with
@@ -43,6 +45,7 @@ if (-not $tok) { Write-Output "ARK: no token: write it to $tf (only you may read
 $cfg = @("header = `"Authorization: Bearer $tok`"", "header = `"X-ARK-Project: $($env:ARK_PROJECT)`"")
 if ($env:ARK_HOST) { $cfg += "header = `"X-ARK-Host: $($env:ARK_HOST)`"" }
 if ($env:ARK_SESSION_ID) { $cfg += "header = `"X-ARK-Session: $($env:ARK_SESSION_ID)`"" }
+if ($env:ARK_AGENT_SESSION) { $cfg += "header = `"X-ARK-Agent-Session: $($env:ARK_AGENT_SESSION)`"" }
 $cfg = $cfg -join "`n"
 # One request: curl.exe reads the headers from stdin (-K -).  Returns the
 # HTTP status and sets $script:body.
@@ -157,7 +160,7 @@ while ($true) {
     if ($owner -and $null -eq (Get-OwnerName)) { Write-Output "ARK: the agent that started this watcher (pid $owner) is gone; the watcher stops."; exit 0 }
     $left = $max - [int]((Get-Date) - $start).TotalSeconds
     $wait = [Math]::Max(0, [Math]::Min(50, $left))
-    $q = "mine=1&wait=$wait"
+    $q = "mine=1&for_you=1&wait=$wait"
     if ($cursor) { $q += "&since=$cursor" }
     $code = Invoke-Ark "/api/agent/v1/updates?$q" ($wait + 20)
     if ($code -eq '401' -or $code -eq '403') { Write-Output "ARK: the token was refused (HTTP $code); the watcher stops."; exit 3 }
@@ -176,10 +179,13 @@ while ($true) {
         $note = if ($changed) { "; the agent rules changed to $rules (GET /api/agent/v1/rules)" } else { '' }
         $head = "ARK UPDATE for $label, ARK project ${projectName}: $($r.count) new update(s)$note."
         Write-Output "$head Act on them (the items below, or GET /api/agent/v1/updates), then start this watcher again."
-        $lines = @(foreach ($it in @($r.items)) { if ($it) { "- $($it.summary)  [$($it.link)]" } })
+        $whyOf = { param($it) if ($it.for_you -and $it.audience -eq 'session' -and $it.reason) { " ($($it.reason))" } else { '' } }
+        $lines = @(foreach ($it in @($r.items)) { if ($it) { "- $($it.summary)$(& $whyOf $it)  [$($it.link)]" } })
+        # every update routed to this agent (it wrote the unit): no "ignore" line
+        $exact = @($r.items | Where-Object { $_ -and $_.audience -ne 'session' }).Count -eq 0
         $lines | ForEach-Object { Write-Output $_ }
         if ($codex) {
-            $msg = "$head`n$($lines -join "`n")`nThis message comes from the ARK watcher you started for this project. If you are not working on ARK project $projectName, ignore it. Otherwise act on the updates under the core rules (reply with reply_to, resolve), then start the ARK watcher again."
+            $msg = "$head`n$($lines -join "`n")`nThis message comes from the ARK watcher you started for this project. $(if ($exact) { 'Act' } else { "If you are not working on ARK project $projectName, ignore it. Otherwise act" }) on the updates under the core rules (reply with reply_to, resolve), then start the ARK watcher again."
             & $codex.Source queue --thread $codexThread --message $msg | Out-Null
             if ($LASTEXITCODE -ne 0) { Write-Output "ARK: codex queue failed; read GET /api/agent/v1/updates yourself." }
         }

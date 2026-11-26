@@ -32,6 +32,8 @@ public final class NotifyFeed {
     public static final String CH_REVIEW = "ark_review";
     public static final String CH_DECISION = "ark_decision";
     public static final String CH_SESSION = "ark_session_error";
+    /** A session's main conversation finished a turn and waits for the person. */
+    public static final String CH_SESSION_DONE = "ark_session_done";
     public static final String CH_ASSIGNED = "ark_assigned";
     public static final String CH_OTHER = "ark_other";
 
@@ -51,6 +53,8 @@ public final class NotifyFeed {
                 return CH_DECISION;
             case KIND_SESSION_ERROR:
                 return CH_SESSION;
+            case KIND_SESSION_DONE:
+                return CH_SESSION_DONE;
             case KIND_ASSIGNED:
                 return CH_ASSIGNED;
             default:
@@ -132,12 +136,16 @@ public final class NotifyFeed {
 
     // ------------------------------------------------------------ settings
 
+    /** Settings format: 2 turned finished sessions on by default. */
+    static final int SETTINGS_VERSION = 2;
+
     /** What the person chose in Notification settings. */
     public static final class Settings {
         public boolean reviews = true;
         public boolean decisions = true;
         public boolean sessionErrors = true;
-        public boolean sessionsDone = false;
+        /** On by default since settings version 2 (finished turns, server/session_notices.go). */
+        public boolean sessionsDone = true;
         public boolean assigned = true;
         public final Set<String> mutedProjects = new HashSet<>();
         public boolean quiet = false;
@@ -171,7 +179,7 @@ public final class NotifyFeed {
         public String toJson() {
             JSONObject o = new JSONObject();
             try {
-                o.put("reviews", reviews).put("decisions", decisions).put("session_errors", sessionErrors)
+                o.put("v", SETTINGS_VERSION).put("reviews", reviews).put("decisions", decisions).put("session_errors", sessionErrors)
                         .put("sessions_done", sessionsDone).put("assigned", assigned).put("quiet", quiet).put("quiet_start", quietStart)
                         .put("quiet_end", quietEnd).put("muted", new JSONArray(new ArrayList<>(mutedProjects)));
             } catch (JSONException impossible) {
@@ -188,7 +196,8 @@ public final class NotifyFeed {
                 s.reviews = o.optBoolean("reviews", true);
                 s.decisions = o.optBoolean("decisions", true);
                 s.sessionErrors = o.optBoolean("session_errors", true);
-                s.sessionsDone = o.optBoolean("sessions_done", false);
+                // Version 1 saved "off" as the old default: finished sessions turn on once.
+                s.sessionsDone = o.optInt("v", 1) < SETTINGS_VERSION || o.optBoolean("sessions_done", true);
                 s.assigned = o.optBoolean("assigned", true);
                 s.quiet = o.optBoolean("quiet", false);
                 s.quietStart = clampMinute(o.optInt("quiet_start", s.quietStart));

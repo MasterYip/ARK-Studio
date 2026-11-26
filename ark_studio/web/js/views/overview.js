@@ -5,10 +5,14 @@ import { actorLabel, openModal, toast } from "../components.js";
 import { api } from "../api.js";
 import {
   bulkAcceptable, filterNeeds, groupNeeds, needsFacets, needsFilterActive, needsKind, normalizeNeedsFilter, sortMineFirst,
+  groupNeedsTree, itemBranches, cardKeys,
 } from "../needs-model.js";
 import {
   NEEDS_CHANGED, bulkAcceptDialog, closeNeedsFilters, needsEntryCard, needsFilterBar, needsFilterFor, needsProjectKey, saveNeedsFilter,
-  watchNeedsSeen, assignedSection,
+  watchNeedsSeen, assignedSection, branchesData, refreshBranches,
+  refreshScheduleFailing, scheduleFailingRows, storedNeedsLayout, needsLayoutToggle, lineTreeSections,
+  countBubbleEl, needsNewKeys, refreshNeedsNew,
+  lineFoldBar, registerLineTree,
 } from "../needs-ui.js";
 import { currentUsername, displayName, userAvatar } from "../users.js";
 import { startPanel, setupNeedsRow } from "./onboarding.js";
@@ -671,6 +675,7 @@ function editProject(ctx) {
 // The row, filters and dialogs are shared with Research › Review (needs-ui.js).
 function needsYouPanel(ctx, all) {
   const projectKey = needsProjectKey(ctx);
+  needsRowFresh = needsNewKeys(ctx);
   const expandedByProject = ctx.S.homeNeedsExpanded ||= {};
   if (!(projectKey in expandedByProject)) {
     try { expandedByProject[projectKey] = localStorage.getItem(`ark.needsExpanded:${projectKey}`) === "1"; }
@@ -697,15 +702,20 @@ function needsYouPanel(ctx, all) {
     oldest ? h("span", { class: "needs-sum age", title: fmtDateTime(oldest) },
       t("home.needs_oldest", { age: relativeTime(oldest) })) : null) : null;
   const acceptable = bulkAcceptable(items);
+  // By line (default) or one list, remembered per person and project
+  // (shared with Research › Review).
+  const hasLines = sorted.some((item) => itemBranches(item).length);
+  const layout = storedNeedsLayout(ctx);
+  if (hasLines) refreshBranches(ctx);
+  const layoutToggle = hasLines ? needsLayoutToggle(ctx, () => panel.replaceWith(needsYouPanel(ctx, all))) : null;
   // Header actions are plain links, like every other Home panel.
   const panel = h("section", { class: "panel needs-panel", "aria-label": t("needs.title") },
     h("div", { class: "panel-head" },
       h("h3", { title: t("needs.hint") }, t("needs.title"),
-        h("span", { class: `needs-count ${items.length ? "" : "zero"}`.trim(),
-          title: filtered ? t("needs.filter.shown", { n: items.length, total: sorted.length }) : undefined },
-        filtered ? `${items.length}/${sorted.length}` : String(items.length))),
+        items.length ? headCount(ctx, items, sorted, filtered) : h("span", { class: "needs-count zero" }, "0")),
       summary,
       h("span", { class: "needs-head-actions" },
+        layoutToggle,
         acceptable.length > 1 ? h("button", {
           class: "link needs-bulk", type: "button", dataset: { n: String(acceptable.length) },
           onclick: () => bulkAcceptDialog(ctx, acceptable),
@@ -724,6 +734,10 @@ function needsYouPanel(ctx, all) {
     },
     onChange: () => ctx.refresh?.(),
   }));
+  // Scheduled Assistant tasks whose last run failed.
+  refreshScheduleFailing(ctx);
+  const failing = scheduleFailingRows(ctx);
+  if (failing) panel.appendChild(failing);
   // Units others assigned to the person, before what waits for review.
   const assigned = assignedSection(ctx);
   if (assigned) panel.appendChild(assigned);
@@ -731,13 +745,17 @@ function needsYouPanel(ctx, all) {
     saveNeedsFilter(ctx, projectKey, next);
     panel.replaceWith(needsYouPanel(ctx, all));
   };
-  if (sorted.length) panel.appendChild(needsFilterBar(facets, filter, setFilter));
+  if (sorted.length) panel.appendChild(needsFilterBar(facets, filter, setFilter, { foldKey: `needs:${projectKey}` }));
   if (!items.length) {
     if (!sorted.length) watchNeedsSeen(ctx, panel, null, [], { filtered: false });
     if (assigned && !sorted.length) return panel;
     panel.appendChild(h("div", { class: "empty sm" }, sorted.length ? t("needs.filter.empty") : t("needs.empty"),
       sorted.length ? h("button", { class: "link needs-filter-clear", type: "button",
         onclick: () => { closeNeedsFilters(); setFilter(normalizeNeedsFilter({})); } }, t("filters.clear")) : null));
+    return panel;
+  }
+  if (layout === "branch" && items.some((item) => itemBranches(item).length)) {
+    panel.appendChild(branchNeedsList(ctx, panel, projectKey, items, filtered));
     return panel;
   }
   const list = h("div", { class: "needs-list" });
@@ -787,6 +805,58 @@ function needsYouPanel(ctx, all) {
   return panel;
 }
 
+// Needs you by line: a tree of lines (needs-model.js groupNeedsTree),
+// each with its head (status, last activity, count, topic) and its first
+// BRANCH_LIMIT cards; "Show all" opens one section.  Review groups and the
+// automatic delivery cards stay as they are inside a section.
+const BRANCH_LIMIT = 3;
+
+function branchNeedsList(ctx, panel, projectKey, items, filtered) {
+  const tree = groupNeedsTree(items, branchesData(ctx)?.items || []);
+  const open = ((ctx.S.homeNeedsBranchOpen ||= {})[projectKey] ||= {});
+  const shown = [];
+  const hidden = [];
+  const sections = [];
+  const rerender = () => panel.replaceWith(needsYouPanel(ctx, ctx.S.needsYou || []));
+  const cards = (section) => {
+    sections.push(section);
+    const entries = groupNeeds(section.items);
+    const expanded = Boolean(open[section.key]);
+    const visible = expanded ? entries : entries.slice(0, BRANCH_LIMIT);
+    shown.push(...visible);
+    hidden.push(...entries.slice(visible.length));
+    const list = h("div", { class: "needs-list" }, visible.map((entry) => {
+      const extra = entry.kind === "item" ? section.extra[entry.item.uid] || [] : [];
+      return homeNeedsRow(ctx, projectKey, entry, extra);
+    }));
+    if (entries.length <= BRANCH_LIMIT) return list;
+    return h("div", null, list, h("button", {
+      class: "link needs-toggle", type: "button", "aria-expanded": String(expanded),
+      onclick: () => { open[section.key] = !expanded; rerender(); },
+    }, expanded ? t("needs.show_less") : t("needs.show_all", { n: entries.length })));
+  };
+  const wrap = h("div", { class: "needs-branches" }, lineFoldBar(ctx, tree, rerender), lineTreeSections(ctx, tree, { cards, rerender }));
+  registerLineTree(wrap, ctx, tree, rerender);
+  const all = [...shown, ...hidden];
+  const extraOf = new Map();
+  for (const section of sections) for (const item of section.items) extraOf.set(item, section.extra[item.uid] || []);
+  pruneNeedsRows(projectKey, all, (entry) => (entry.kind === "item" ? extraOf.get(entry.item) || [] : []));
+  watchNeedsSeen(ctx, panel, null, all, { filtered, shownCount: () => shown.length });
+  return wrap;
+}
+
+// The panel's count: orange while an item is not opened yet, grey once all
+// were opened in the node details; "12/32" when a filter hides some.
+function headCount(ctx, items, sorted, filtered) {
+  if (!needsNewKeys(ctx)) refreshNeedsNew(ctx);
+  const el = countBubbleEl(ctx, items.length, items);
+  if (filtered) {
+    el.textContent = `${items.length}/${sorted.length}`;
+    el.title = `${t("needs.filter.shown", { n: items.length, total: sorted.length })} · ${el.title}`;
+  }
+  return el;
+}
+
 // Rows shown before "Show all"; rows built at a time after it.
 const NEEDS_LIMIT = 4;
 const NEEDS_CHUNK = 20;
@@ -800,24 +870,30 @@ function itemKey(item) {
     item.review_prev, item.review_focus, item.round, (item.members || []).map(itemKey)];
 }
 
-// An entry of needs-model.js groupNeeds: one item or a delivery group.
-function needsRowKey(projectKey, entry) {
-  return JSON.stringify([projectKey, entry.kind === "group" ? entry.members.map(itemKey) : itemKey(entry.item)]);
+// An entry of needs-model.js groupNeeds: one item or a delivery group;
+// `extra`: the other lines shown as "+name" in a list by line (null: flat).
+function needsRowKey(projectKey, entry, extra = null) {
+  // The unseen dot is part of the row: a row is rebuilt when it changes.
+  const fresh = needsRowFresh;
+  const unseen = (entry.kind === "group" ? entry.members : [entry.item]).flatMap((item) => cardKeys(item)).map((k) => Boolean(fresh?.has(k)));
+  return JSON.stringify([projectKey, entry.kind === "group" ? entry.members.map(itemKey) : itemKey(entry.item),
+    entry.kind === "item" ? entry.item.branches || [] : [], extra, unseen]);
 }
+let needsRowFresh = null;
 
-function homeNeedsRow(ctx, projectKey, entry) {
-  const key = needsRowKey(projectKey, entry);
+function homeNeedsRow(ctx, projectKey, entry, extra = null) {
+  const key = needsRowKey(projectKey, entry, extra);
   let row = needsRowCache.get(key);
   if (!row) {
-    row = needsEntryCard(ctx, entry);
+    row = needsEntryCard(ctx, entry, extra ? { lines: extra, plus: true } : {});
     needsRowCache.set(key, row);
   }
   return row;
 }
 
 // Forget rows of entries that left the list (or changed).
-function pruneNeedsRows(projectKey, entries) {
-  const live = new Set(entries.map((entry) => needsRowKey(projectKey, entry)));
+function pruneNeedsRows(projectKey, entries, extraOf = () => null) {
+  const live = new Set(entries.map((entry) => needsRowKey(projectKey, entry, extraOf(entry))));
   for (const key of needsRowCache.keys()) if (!live.has(key)) needsRowCache.delete(key);
 }
 

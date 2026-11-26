@@ -75,6 +75,12 @@ func (c *reqCtx) agentWrite(path string, body *pyjson.Object, actor string) erro
 	if handled, err := c.agentPromptsPost(path, body); handled { // Go only (routes_prompts.go)
 		return err
 	}
+	if path == agentBranchPrefix { // Go only (routes_branches.go)
+		return c.agentBranchPrefixPost(body, actor)
+	}
+	if path == agentSchedulesPath { // Go only (routes_schedules.go)
+		return c.schedulesPost(body)
+	}
 	if m := reAgentHistoryRaw.FindStringSubmatch(path); m != nil {
 		return c.nodeHistoryWrite(m[1], m[2], body, actor)
 	}

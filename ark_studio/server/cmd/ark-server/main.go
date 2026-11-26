@@ -197,6 +197,7 @@ func serve(o *options) (int, error) {
 		app.StartGPUQueue()                                         // serve(): app.gpu.start_configured_queue()
 		app.StartMobileTunnel()                                     // Go only: Settings › Mobile › Cloudflare Tunnel
 		app.StartSessionNudge(context.Background(), 30*time.Second) // Go only: wake idle ARK-launched agents (T-0053)
+		app.StartSchedules(context.Background(), time.Minute)       // Go only: scheduled Assistant tasks
 	}
 	var handler http.Handler = app
 	if desktopSecret != "" {

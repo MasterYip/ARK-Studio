@@ -43,3 +43,30 @@ test("one later look while the start-up check may still be running", () => {
   assert.equal(shouldRecheck(info(), 0), false);
   assert.equal(shouldRecheck(null, 0), false);
 });
+
+import { compareAppVersions, oldAppNotice } from "../../ark_studio/web/js/desktop-update-model.js";
+
+test("server page in an older app without its own notices: steps and the GitHub release page", () => {
+  const app = { version: "2.1.1", platform: "windows", hub: {} };
+  assert.deepEqual(oldAppNotice(app, "2.1.6"), {
+    version: "2.1.6", current: "2.1.1", url: "https://github.com/MasterYip/ARK-Studio/releases/tag/v2.1.6" });
+  // closed for that version
+  assert.equal(oldAppNotice(app, "2.1.6", "2.1.6"), null);
+  assert.notEqual(oldAppNotice(app, "2.1.6", "2.1.5"), null);
+});
+
+test("no old-app notice for current apps, apps with their own notice, or no server version", () => {
+  assert.equal(oldAppNotice({ version: "2.1.6" }, "2.1.6"), null);
+  assert.equal(oldAppNotice({ version: "2.2.0" }, "2.1.6"), null);
+  assert.equal(oldAppNotice({ version: "2.1.1", updateNotice: true }, "2.1.6"), null);
+  assert.equal(oldAppNotice({ version: "2.1.1" }, ""), null);
+  assert.equal(oldAppNotice(null, "2.1.6"), null);
+  assert.equal(oldAppNotice({ version: "dev" }, "2.1.6"), null);
+});
+
+test("app versions compare numerically", () => {
+  assert.equal(compareAppVersions("2.1.10", "2.1.9"), 1);
+  assert.equal(compareAppVersions("v2.1.1", "2.1.1"), 0);
+  assert.equal(compareAppVersions("2.0.9", "2.1.0"), -1);
+  assert.ok(Number.isNaN(compareAppVersions("2.1", "2.1.0")));
+});

@@ -257,7 +257,11 @@ export function sshConfigEntry({ alias, host, user = "", port = null, identityFi
   const a = text(alias);
   const c = cleanConnection({ host, user, port });
   if (!validAlias(a) || !a.startsWith("ark-") || !c?.host) return null;
-  const lines = [`Host ${a}`, `  HostName ${c.host}`]; // i18n-ignore: ssh_config keywords
+  // The address is a Host name too: ssh matches Host patterns against what
+  // is typed, so VS Code's direct form (user@<address>) only gets this key
+  // when the address is listed (2026-11-26: "Permission denied (publickey)").
+  const names = c.host.toLowerCase() === a.toLowerCase() ? a : `${a} ${c.host}`;
+  const lines = [`Host ${names}`, `  HostName ${c.host}`]; // i18n-ignore: ssh_config keywords
   if (c.port) lines.push(`  Port ${c.port}`); // i18n-ignore: ssh_config keyword
   if (c.user) lines.push(`  User ${c.user}`); // i18n-ignore: ssh_config keyword
   // Password login: no IdentityFile, so ssh / VS Code show their own prompt.
@@ -547,4 +551,37 @@ export function staleAliases(devices, data = {}) {
     }
   }
   return out;
+}
+
+/** ssh's default key file names: used without any ~/.ssh/config entry. */
+const DEFAULT_KEYS = new Set(["id_rsa", "id_ecdsa", "id_ecdsa_sk", "id_ed25519", "id_ed25519_sk", "id_dsa"]);
+
+/** Whether ssh tries this key file on its own (a default name in ~/.ssh). */
+export function isDefaultKey(path) {
+  const p = text(path).replace(/\\/g, "/");
+  const parts = p.split("/");
+  return parts.length >= 2 && parts[parts.length - 2] === ".ssh" && DEFAULT_KEYS.has(parts[parts.length - 1]);
+}
+
+/**
+ * How to open a connection (VS Code, Cursor, terminal):
+ *   "alias"   the alias is known to exist (resolveAlias known)
+ *   "write"   desktop app: write Host ark-<machine> first (it asks), then the alias
+ *   "confirm" browser: show the entry to add to ~/.ssh/config, open with the
+ *             alias once the person says it is added
+ *   "direct"  user@host:port: no machine alias, password login, or a key
+ *             ssh uses by itself (a default key name)
+ * A browser never opens the direct form for key login with another key:
+ * ssh would not use that key for the bare address ("Permission denied
+ * (publickey)", 2026-11-26).  An unknown login mode counts as key login.
+ * @param {{resolved: {alias: string|null, known: boolean}, desktop?: boolean,
+ *   auth?: string, keyFile?: string}} input
+ */
+export function openPlan({ resolved, desktop = false, auth = "", keyFile = "" } = {}) {
+  if (resolved?.known && resolved.alias) return "alias";
+  if (!resolved?.alias) return "direct";
+  if (desktop) return "write";
+  if (text(auth) === "password") return "direct";
+  if (text(keyFile) && isDefaultKey(keyFile) && text(auth) !== "") return "direct";
+  return "confirm";
 }

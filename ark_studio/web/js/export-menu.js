@@ -11,6 +11,7 @@ import { t } from "./i18n.js";
 import { bundleExportUrl, checkBundleExport } from "./api.js";
 import { toast } from "./components.js";
 import { S } from "./state.js";
+import { saveDownload } from "./download-link.js";
 
 function formatBytes(bytes) {
   const n = Number(bytes) || 0;
@@ -30,13 +31,7 @@ export async function downloadBundle(uids, depth) {
     toast(t("export_bundle.failed", { error: error.message }), "err");
     return;
   }
-  const link = document.createElement("a");
-  link.href = bundleExportUrl(list, options);
-  link.rel = "noopener";
-  link.download = "";
-  document.body.append(link);
-  link.click();
-  link.remove();
+  saveDownload(bundleExportUrl(list, options), { filename: "ark-bundle.zip" });
   toast(t("export_bundle.started", { n: info.nodes, files: info.files, size: formatBytes(info.bytes) }));
 }
 

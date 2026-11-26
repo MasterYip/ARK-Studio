@@ -19,8 +19,15 @@ export const GRAPH_RANGES = {
   damping: [0, 1],
 };
 
-import { GRAPH_DEFAULTS as FORCE_DEFAULTS } from "./graph-core.js";
-export const GRAPH_DEFAULTS = FORCE_DEFAULTS;
+import { GRAPH_DEFAULTS as FORCE_DEFAULTS, CLUSTER_GROUPINGS } from "./graph-core.js";
+
+// Optional clustering by node type (graph-core.js applyClusterForces): off
+// by default, so a project that never turns it on lays out exactly as before.
+export const CLUSTER_DEFAULTS = Object.freeze({
+  cluster: false, cluster_attract: 0.5, cluster_repel: 0.5, cluster_by: "type",
+});
+export { CLUSTER_GROUPINGS };
+export const GRAPH_DEFAULTS = Object.freeze({ ...FORCE_DEFAULTS, ...CLUSTER_DEFAULTS });
 
 const clamp = (n, min, max) => Math.max(min, Math.min(max, n));
 
@@ -72,7 +79,22 @@ export function normalizeGraphPhysics(value) {
     const [min, max] = GRAPH_RANGES[key];
     out[key] = Number.isFinite(raw) ? clamp(raw, min, max) : fallback;
   }
-  return out;
+  return Object.assign(out, normalizeClusterSettings(source));
+}
+
+/** The clustering fields of a graph settings object, defaults filled in. */
+export function normalizeClusterSettings(source) {
+  const value = source && typeof source === "object" ? source : {};
+  const unit = (raw, fallback) => {
+    const n = typeof raw === "number" ? raw : Number.NaN;
+    return Number.isFinite(n) ? clamp(n, 0, 1) : fallback;
+  };
+  return {
+    cluster: value.cluster === true,
+    cluster_attract: unit(value.cluster_attract, CLUSTER_DEFAULTS.cluster_attract),
+    cluster_repel: unit(value.cluster_repel, CLUSTER_DEFAULTS.cluster_repel),
+    cluster_by: CLUSTER_GROUPINGS.includes(value.cluster_by) ? value.cluster_by : CLUSTER_DEFAULTS.cluster_by,
+  };
 }
 
 export function formatPhysicsValue(key, value) {

@@ -1,6 +1,6 @@
 [package]
 name = "ark-studio"
-version = "2.1.6"
+version = "2.1.7"
 description = "ARK Studio desktop shell: tray, settings, saved servers and the bundled ark-server sidecar"
 authors = ["Raymon Yip"]
 license = "AGPL-3.0-only"
@@ -57,3 +57,7 @@ lto = true
 opt-level = "s"
 panic = "abort"
 strip = true
+
+[dev-dependencies]
+# downloads.rs tests: fetch_to against a local HTTP server.
+tokio = { version = "1", features = ["rt"] }

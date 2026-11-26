@@ -46,6 +46,38 @@ type UpdateRow struct {
 	// Creator is the actor of the unit's unit.create row ("" when unknown).
 	Creator string
 	Comment *UpdateComment
+	// Writers are the agent writers of the unit (nil when it has none).
+	Writers *UnitWriters
+}
+
+// Writer is who made an agent write, as its activity detail records it
+// (WithActivitySession, WithActivityAgent).  The zero value is unknown.
+type Writer struct {
+	Session      string // the ARK session
+	AgentSession string // the agent's own session id (X-ARK-Agent-Session)
+	Token        string // the personal token's id
+	Host         string // the device (X-ARK-Host)
+}
+
+// Known reports a writer that can be told apart from other agents.
+func (w Writer) Known() bool { return w.Session != "" || w.AgentSession != "" || w.Token != "" }
+
+// WriterOf reads the writer from an activity detail.
+func WriterOf(d *pyjson.Object) Writer {
+	if d == nil {
+		return Writer{}
+	}
+	str := func(k string) string { s, _ := d.Value(k).(string); return s }
+	return Writer{Session: str("session"), AgentSession: str("agent_session"), Token: str("agent_token"), Host: str("agent_host")}
+}
+
+// UnitWriters are the agents that wrote a unit: who created it, who last
+// handed it to review (status review, needs review, review_note), who last
+// wrote it at all (edits and comments), and who wrote each agent comment.
+type UnitWriters struct {
+	Created, Review, Edited Writer
+	Comments                map[int64]Writer
+	created                 bool
 }
 
 // UpdatesBatch is what UpdatesSince read.
@@ -104,6 +136,10 @@ func (s *Store) UpdatesSince(ctx context.Context, after int64, limit int) (*Upda
 		if err != nil {
 			return err
 		}
+		writers, err := unitWriters(ctx, q, creators)
+		if err != nil {
+			return err
+		}
 		var index map[int64]assigneeEntry
 		for _, r := range rows {
 			row := UpdateRow{ID: r.Int("id"), At: r.Str("at"), Actor: r.Str("actor"), Action: r.Str("action"),
@@ -111,7 +147,7 @@ func (s *Store) UpdatesSince(ctx context.Context, after int64, limit int) (*Upda
 				Title: strOrEmpty(r.Get("title")), Type: strOrEmpty(r.Get("type")), Status: strOrEmpty(r.Get("status")),
 				Priority: strOrEmpty(r.Get("importance"))}
 			if id, ok := r.Get("unit_id").(int64); ok {
-				row.UnitID, row.Creator = id, creators[id]
+				row.UnitID, row.Creator, row.Writers = id, creators[id], writers[id]
 			}
 			if row.UnitID != 0 && row.UID != "" {
 				if index == nil {
@@ -162,6 +198,79 @@ func unitCreators(ctx context.Context, q sqlitedb.Querier, rows []sqlitedb.Row) 
 		}
 	}
 	return out, nil
+}
+
+// unitWriters reads the agent writes of the units (the keys of units) and
+// sums them up per unit.
+func unitWriters(ctx context.Context, q sqlitedb.Querier, units map[int64]string) (map[int64]*UnitWriters, error) {
+	out := map[int64]*UnitWriters{}
+	ids := make([]any, 0, len(units))
+	for id := range units {
+		ids = append(ids, id)
+	}
+	for _, chunk := range chunks(ids, 400) {
+		found, err := sqlitedb.Query(ctx, q, `SELECT unit_id, action, detail_json FROM activity
+             WHERE unit_id IN (`+sqlitedb.Marks(len(chunk))+`) AND actor LIKE 'agent:%' ORDER BY id`, chunk...)
+		if err != nil {
+			return nil, err
+		}
+		for _, r := range found {
+			action := r.Str("action")
+			if !strings.HasPrefix(action, "unit.") && action != "comment.create" {
+				continue
+			}
+			id := r.Int("unit_id")
+			uw := out[id]
+			if uw == nil {
+				uw = &UnitWriters{}
+				out[id] = uw
+			}
+			d := parseDetail(r.Get("detail_json"))
+			w := WriterOf(d)
+			uw.Edited = w
+			switch {
+			case action == "comment.create":
+				if cid, ok := d.Value("comment_id").(int64); ok {
+					if uw.Comments == nil {
+						uw.Comments = map[int64]Writer{}
+					}
+					uw.Comments[cid] = w
+				}
+			case action == "unit.create" && !uw.created:
+				uw.Created = w
+				uw.created = true
+			}
+			if handsToReview(action, d) {
+				uw.Review = w
+			}
+		}
+	}
+	return out, nil
+}
+
+// handsToReview reports an agent write that hands the unit to review.
+func handsToReview(action string, d *pyjson.Object) bool {
+	if d == nil {
+		return false
+	}
+	switch action {
+	case "unit.create":
+		return d.Value("status") == "review"
+	case "unit.needs":
+		return d.Value("to") == "review"
+	case "unit.update":
+		if st, ok := d.Value("status").(*pyjson.Object); ok && st.Value("to") == "review" {
+			return true
+		}
+		if list, ok := d.Value("fields").([]any); ok {
+			for _, f := range list {
+				if f == "review_note" {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }
 
 func updateComment(ctx context.Context, q sqlitedb.Querier, id int64) (*UpdateComment, error) {

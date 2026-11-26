@@ -32,19 +32,23 @@ import (
 )
 
 const (
-	maxLogLine         = 8000
-	maxJSONLogLine     = 64000
-	maxLogLimit        = 500
-	maxPrompt          = 12000
-	maxInput           = 8000
+	maxLogLine     = 8000
+	maxJSONLogLine = 64000
+	maxLogLimit    = 500
+	// maxPrompt is a sanity guard, not a working limit: a message to a
+	// session (prompt, Start context, attachments, steer, input) longer
+	// than this is refused with 413, never cut.  Prompts longer than
+	// argPromptMax never travel as a command-line argument (longargs.go).
+	maxPrompt          = 1_000_000
+	maxInput           = maxPrompt
 	maxTitle           = 120
 	maxTextArtifact    = 256 * 1024
 	maxDownload        = 8 * 1024 * 1024
 	maxArtifactEntries = 400
 	maxContextItems    = 12
-	maxContextText     = 4000
-	maxContextTotal    = 24000
-	maxSteerText       = 4000
+	maxContextText     = maxPrompt
+	maxContextTotal    = maxPrompt
+	maxSteerText       = maxPrompt
 	maxSteerQueue      = 20
 	maxApprovals       = 200
 	maxApprovalItems   = 60
@@ -103,6 +107,9 @@ type Session struct {
 	start *sessionstart.Start
 	// Background work between turns, as last counted by Manager.Busy (busy.go).
 	busy Busy
+	// The file guard's baseline of the running turn (fileguard.go).
+	guardSince  time.Time
+	guardBefore map[string]map[string]bool
 }
 
 // Workspace is ManagedSession.workspace.
@@ -135,6 +142,16 @@ type Hooks struct {
 	// server adds the setup readiness of the session's device and the
 	// task's state to the input.  nil = no start section.
 	StartPoint func(in StartInput) *sessionstart.Start
+	// TaskFolder is where a session's files go on this device: the exact
+	// task folder of taskRef (or of the task it belongs to), the task space
+	// and every registered place (taskfolder.go).  nil = not known.
+	TaskFolder func(in FolderInput) *sessionstart.Folder
+}
+
+// FolderInput is what the folder of a session is resolved from.
+type FolderInput struct {
+	Actor, TaskRef            string
+	SessionID, Title, Created string // for a session without a unit: its own folder
 }
 
 // StartInput is what the session knows about its start.
@@ -142,6 +159,7 @@ type StartInput struct {
 	Actor, TaskRef, Prompt string
 	Chosen                 *sessionstart.Chosen
 	Resume                 *sessionstart.Resume
+	Folder                 *sessionstart.Folder // where the work goes (nil = not known)
 }
 
 // Manager is SessionManager.
@@ -156,7 +174,10 @@ type Manager struct {
 	WriteToken     string
 	Catalog        *providers.Catalog
 	OnChange       func(s *Session, event string)
-	GuessType      func(name string) string
+	// ReferencedFiles is the subset of paths (session-workspace files) that
+	// units of the project updated since name (fileguard.go); nil = none.
+	ReferencedFiles func(projectID string, since time.Time, paths []string) []string
+	GuessType       func(name string) string
 	// Relay starts processes under `ark-server session-relay` so they
 	// outlive the server (relay.go); on by default on Linux.
 	Relay     bool
@@ -229,6 +250,10 @@ func Open(root string) (*Manager, error) {
 			now := NowISO()
 			meta.Set("status", "stopped").Set("ended_at", now).Set("last_activity_at", now).
 				Set("notice", "ARK restarted; the previous process is no longer attached.")
+			if !pyjson.Truthy(meta.Value("stream_input")) || meta.Value("turn_state") != "waiting" {
+				// a turn was cut off (finish.go)
+				meta.Set("turn_end", pyjson.NewObject("at", now, "outcome", "error", "reason", restartNotice))
+			}
 			if err := writeJSON(filepath.Join(folder, "meta.json"), meta); err != nil {
 				return nil, err
 			}
