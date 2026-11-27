@@ -18,7 +18,9 @@ import {
   stepForce, forceSettleStep, FORCE_SETTLE, forceNodeRadius, drawForceNode, focusNeighborhood, arrowSize, addArrowhead, arrowInset,
   paintArrowheads, arrowResolver, normalizeArrowSettings, ARROW_HEADS, graphDeleteTarget,
 } from "./graph-core.js";
-import { layeredLayout, placeNewNodes, routeNodeEdges, cubicAt, NODE_W, NODE_H } from "./node-graph-layout.js";
+import {
+  layeredLayout, placeNewNodes, routeNodeEdges, cubicAt, timelineLayout, NODE_W, NODE_H, TIMELINE_COL_GAP,
+} from "./node-graph-layout.js";
 import { cardMetrics, applyCardMetrics, cleanCardWidth, CARD_KINDS, THUMB } from "./node-card.js";
 import { SpriteCache, spriteBucket } from "./graph-sprites.js";
 import { mindHierarchy, mindLayout, TREE_GAP } from "./mind-layout.js";
@@ -26,6 +28,7 @@ import { assignNodeData, classifyGraphUpdate, classifyNodeChange, DRAWN_NODE_FIE
 import { attachPresenceOverlay, createPresenceChip } from "./presence-ui.js";
 import { siblingGroup, groupDefaults } from "./selection-model.js";
 import { rememberMode, savedMode } from "./read-edit-mode.js";
+import { pointsOnScreen, viewportAction, anchorShift } from "./graph-viewport-model.js";
 import { currentUsername } from "./users.js";
 import { toast } from "./components.js";
 import {
@@ -269,72 +272,16 @@ function circlePositions(nodes, radius = 240) {
   });
 }
 
-function treeLayout(nodes, edges, radial = false) {
-  const byId = new Map(nodes.map((n) => [n.id, n]));
-  const outgoing = new Map(nodes.map((n) => [n.id, []]));
-  const incoming = new Map(nodes.map((n) => [n.id, []]));
-  const neighbours = new Map(nodes.map((n) => [n.id, []]));
-  for (const edge of edges) {
-    if (byId.has(edge.source) && byId.has(edge.target)) {
-      outgoing.get(edge.source).push(edge.target);
-      incoming.get(edge.target).push(edge.source);
-      neighbours.get(edge.source).push(edge.target);
-      neighbours.get(edge.target).push(edge.source);
-    }
-  }
-  // Prefer the paper's spine node, then a root, then the highest-degree node.
-  const spine = nodes.find((n) => n.type === "story" && /spine|paper|narrative|story/i.test(n.title))
-    || nodes.find((n) => n.type === "story" && incoming.get(n.id).length === 0)
-    || nodes.slice().sort((a, b) => (b.degree || 0) - (a.degree || 0))[0];
-  const root = spine || nodes[0];
-  const depth = new Map();
-  const queue = [root.id];
-  depth.set(root.id, 0);
-  while (queue.length) {
-    const id = queue.shift();
-    for (const next of neighbours.get(id) || []) {
-      if (!depth.has(next)) { depth.set(next, depth.get(id) + 1); queue.push(next); }
-    }
-  }
-  // Disconnected context goes to the right, grouped by type.
-  let maxDepth = Math.max(0, ...depth.values());
-  for (const node of nodes) {
-    if (!depth.has(node.id)) { depth.set(node.id, maxDepth + 1); }
-  }
-  const levels = new Map();
-  for (const node of nodes) {
-    const d = depth.get(node.id) || 0;
-    if (!levels.has(d)) levels.set(d, []);
-    levels.get(d).push(node);
-  }
-  const seqOf = (n) => {
-    const tag = (n.tags || []).find((x) => x.startsWith("seq:"));
-    const value = tag ? parseInt(tag.split(":")[1], 10) : NaN;
-    return Number.isFinite(value) ? value : 999;
-  };
-  for (const [d, group] of levels) {
-    group.sort((a, b) => seqOf(a) - seqOf(b) || (a.type === "story" ? -1 : 1) - (b.type === "story" ? -1 : 1) || a.title.localeCompare(b.title));
-  }
-  if (!radial) {
-    // Put the root at the left, then spread each depth around the vertical centre.
-    const span = Math.max(1, ...Array.from(levels.values(), (g) => g.length));
-    for (const [d, group] of levels) {
-      group.forEach((node, i) => {
-        node.x = d * 265;
-        node.y = (i - (group.length - 1) / 2) * Math.min(104, 720 / Math.max(1, group.length));
-      });
-    }
-  } else {
-    for (const [d, group] of levels) {
-      const radius = d * 155;
-      group.forEach((node, i) => {
-        const a = (Math.PI * 2 * i) / Math.max(1, group.length) - Math.PI / 2;
-        node.x = Math.cos(a) * radius;
-        node.y = Math.sin(a) * radius;
-      });
-    }
-  }
-  return { levels: maxDepth + 1, roots: 1 };
+// The graph layouts, in picker order.  A layout name that is no longer
+// offered (the former "tree") falls back to `fallback`.
+export const GRAPH_LAYOUTS = ["force", "mind", "node", "timeline"];
+// What the timeline shows first: how one piece of work led to the next.
+// Others (assignees, hosts, citations, uses, ...) are one click away in the
+// edge filter.
+const TIMELINE_FLOW_RELATIONS = new Set(["derived_from", "depends_on", "part_of", "produces", "validates", "inspires", "supports", "supersedes"]);
+const TIMELINE_CARD_W = 210;
+export function graphLayoutOf(value, fallback = "force") {
+  return GRAPH_LAYOUTS.includes(value) ? value : fallback;
 }
 
 // World-space bounds of a node-graph route and of each of its bezier
@@ -408,7 +355,7 @@ export class GraphView {
     this.readOnly = Boolean(opts.readOnly);
     this.clipboardSource = opts.clipboardSource || "ark";
     this.nodeGraphKey = opts.nodeGraphKey || `ark.nodeGraph.${opts.cameraKey || this.id || "default"}`;
-    this.layout = ["force", "tree", "mind", "node"].includes(this.opts.layout) ? this.opts.layout : "force";
+    this.layout = graphLayoutOf(this.opts.layout);
     this.edgeRouteDrag = null;
     this.mindResizeDrag = null;
     this.history = [];
@@ -478,7 +425,7 @@ export class GraphView {
     if (this.modeReadBtn) this.setMode(this.mode, { persist: false });
     if (!this.opts.compact) { this._syncEdgeFilter(); this._syncNodeTools(); }
     this._resize();
-    if (this.view3dBtn && loadViewChoice(globalThis.localStorage, currentUsername(), this._view3dPage()) === "3d") {
+    if (this.layout === "force" && this._saved3D()) {
       // After the caller's first setData (same task), so 3D starts with data.
       queueMicrotask(() => { if (!this._destroyed) this.set3D(true, { persist: false }); });
     }
@@ -487,6 +434,11 @@ export class GraphView {
   // ---- 3D view (graph3d.js) ----------------------------------------------------
   // The 2D/3D choice is remembered per user and per page (camera key).
   _view3dPage() { return this.cameraKey || this.nodeGraphKey || ""; }
+
+  // Whether 3D was the last choice on this page (only offered with Force).
+  _saved3D() {
+    return Boolean(this.view3dBtn) && loadViewChoice(globalThis.localStorage, currentUsername(), this._view3dPage()) === "3d";
+  }
 
   /** Show (true) or leave (false) the 3D view of this graph. */
   async set3D(on, { persist = true } = {}) {
@@ -580,9 +532,9 @@ export class GraphView {
         onchange: (e) => { this.setLayout(e.target.value); this.opts.onLayoutChange?.(this.layout); },
       },
         h("option", { value: "force" }, t("graph.force")),
-        h("option", { value: "tree" }, t("graph.tree")),
         h("option", { value: "mind" }, t("graph.mind")),
-        h("option", { value: "node" }, t("graph.layout_node"))),
+        h("option", { value: "node" }, t("graph.layout_node")),
+        h("option", { value: "timeline" }, t("graph.layout_timeline"))),
       this.view3dBtn = graph3DAvailable({ webgl: typeof WebGLRenderingContext !== "undefined", backdrop: this.opts.backdrop })
         ? h("button", {
           class: "graph-3d-btn", type: "button", "aria-pressed": "false", title: t("graph3d.toggle"), "aria-label": t("graph3d.toggle"),
@@ -623,7 +575,7 @@ export class GraphView {
 
   _buildSidebarTools() {
     const spec = this.opts.sidebarToolbar || {};
-    const labels = { force: "graph.force", tree: "graph.tree", mind: "graph.mind", node: "graph.layout_node" };
+    const labels = { force: "graph.force", mind: "graph.mind", node: "graph.layout_node", timeline: "graph.layout_timeline" };
     const layouts = (spec.layouts || ["force", "mind"]).filter((id) => labels[id]);
     const tool = (title, content, onClick, extra = "") => h("button", {
       class: `graph-tool-opt ${extra}`.trim(), type: "button", title, "aria-label": title, onclick: onClick,
@@ -747,7 +699,7 @@ export class GraphView {
       if (gripNode) {
         // Double-clicking the resize grip restores the automatic width.
         e.preventDefault();
-        const stored = this.layout === "node" ? (gripNode.nodeW ?? null) : (gripNode.customW ?? null);
+        const stored = this._isNode() ? (gripNode.nodeW ?? null) : (gripNode.customW ?? null);
         if (stored === null) return;
         const layout = this.layout;
         this._setCardWidth(gripNode, null);
@@ -790,6 +742,7 @@ export class GraphView {
       if (this.mode === "edit" && this.opts.onAddOrphan) this._addOrphanNode(e);
     });
     this.host.addEventListener("keydown", (e) => this._onKeyDown(e));
+    this._watchFullscreen();
     if (!this.opts.sandbox) {
       this.host.addEventListener("keydown", (e) => this._flashKeys((m) => m.eventKeyTokens(e)), true);
       this.canvas.addEventListener("pointerdown", (e) => this._flashKeys((m) => m.eventPointerTokens(e)), true);
@@ -912,7 +865,7 @@ export class GraphView {
   _edgesChanged() {
     this._dataGen = (this._dataGen || 0) + 1;
     this.countEl && (this.countEl.textContent = `${this.nodes.length} ${t("overview.stats.total")} · ${this.edges.length} ${t("common.links")}`);
-    if (this.layout === "node") this._layoutNodeGraph(false);
+    if (this._isNode()) this._layoutNodeGraph(false);
     else if (this.layout === "mind") this._applyLayout(false);
     this._draw();
   }
@@ -1035,11 +988,11 @@ export class GraphView {
         t("graph.help.note_backspace"),
         t("graph.help.note_labels"),
         t("graph.help.note_gesture"),
-        this.view3dBtn && !this._view3d ? ` ${t("graph.help.note_3d")}` : null));
+        this.view3dBtn && !this._view3d && this.layout === "force" ? ` ${t("graph.help.note_3d")}` : null));
   }
 
   _toggleEdgeFilter(force = null) {
-    if (!this.edgeFilterEl || !["mind", "node", "force"].includes(this.layout)) return;
+    if (!this.edgeFilterEl || !["mind", "node", "timeline", "force"].includes(this.layout)) return;
     const show = force === null ? this.edgeFilterEl.classList.contains("hidden") : Boolean(force);
     if (show) this._renderEdgeFilter();
     this.edgeFilterEl.classList.toggle("hidden", !show);
@@ -1061,7 +1014,9 @@ export class GraphView {
   _initialRelations(layout = this.layout) {
     if (this.opts.allRelations) return new Set([...this.relationTypes, ...(this.edges || []).map((edge) => edge.relation)]);
     return this._loadRelationFilter(layout)
-      || new Set(layout === "mind" ? [this.primaryRelation || "part_of"] : this.relationTypes);
+      || new Set(layout === "mind" ? [this.primaryRelation || "part_of"]
+        : layout === "timeline" ? this.relationTypes.filter((relation) => TIMELINE_FLOW_RELATIONS.has(relation))
+          : this.relationTypes);
   }
 
   _loadPrimaryRelation(layout = this.layout) {
@@ -1097,7 +1052,7 @@ export class GraphView {
   }
 
   _syncEdgeFilter() {
-    const supported = ["mind", "node", "force"].includes(this.layout);
+    const supported = ["mind", "node", "timeline", "force"].includes(this.layout);
     this.tools?.querySelector(".graph-edge-filter-btn")?.classList.toggle("hidden", !supported);
     if (!supported && this.edgeFilterEl) {
       this.edgeFilterEl.classList.add("hidden");
@@ -1141,6 +1096,8 @@ export class GraphView {
   _syncNodeTools() {
     const select = this.tools?.querySelector("select.graph-sel");
     if (select) select.value = this.layout;
+    // 3D is offered with the force layout only.
+    if (this.view3dBtn) this.view3dBtn.hidden = this.layout !== "force";
     const auto = this.tools?.querySelector(".graph-node-auto");
     if (auto) {
       auto.classList.toggle("hidden", this.layout !== "node" && this.layout !== "mind");
@@ -1166,6 +1123,7 @@ export class GraphView {
   }
 
   _saveNodeGraphState() {
+    // The timeline graph is laid out automatically; it never stores positions.
     if (this.layout !== "node") return;
     try {
       const state = { positions: {}, bends: {}, widths: {} };
@@ -1207,8 +1165,71 @@ export class GraphView {
     return positions;
   }
 
-  _layoutNodeGraph(fit = true, ignoreSaved = false, { animate = false, onSettled = null } = {}) {
+  // Node cards and curves: the node graph and the timeline graph.
+  _isNode() {
+    return this.layout === "node" || this.layout === "timeline";
+  }
+
+  // The tag namespace of research lines ("branch" unless the project sets one).
+  _linePrefix() {
+    return this.opts.linePrefix?.() || "branch";
+  }
+
+  /**
+   * The timeline graph (node-graph-layout.js timelineLayout): cards by time
+   * order, one lane per research line.  Always automatic: dragged cards and
+   * bends are not stored (the node graph keeps its own arrangement); card
+   * widths are shared with the node graph.
+   */
+  _layoutTimeline(fit, { animate = false, onSettled = null, anchor = null } = {}) {
+    const state = this._loadNodeGraphState();
+    const before = animate ? new Map(this.nodes.map((node) => [node.id, { x: node.x, y: node.y }])) : null;
+    for (const node of this.nodes) {
+      node.nodeW = cleanCardWidth(state.widths[node.uid || String(node.id)]);
+      node.vx = 0;
+      node.vy = 0;
+    }
+    this._applyNodeCardMetrics();
+    this._timelineFlip = null;
+    const result = timelineLayout(
+      this.nodes.map((node) => ({ id: node.id, w: node.w || NODE_W, h: node.h || NODE_H, tags: node.tags,
+        start_at: node.start_at, created_at: node.created_at, updated_at: node.updated_at })),
+      this._shownEdges(), { linePrefix: this._linePrefix() });
+    // Centred on the Force gravity centre, like the other layouts.
+    const box = layoutBox(this.nodes.map((node) => ({ ...result.positions.get(node.id), w: node.w || NODE_W, h: node.h || NODE_H })));
+    let dx = box ? -box.cx : 0, dy = box ? -box.cy : 0;
+    // A new node set under a kept camera: the node the person was looking
+    // at stays where it was (setData's anchor), not the box centre.
+    if (anchor) {
+      const after = new Map();
+      for (const [id, p] of result.positions) after.set(id, { x: p.x + dx, y: p.y + dy });
+      const shift = anchorShift(anchor.before, after, anchor.centre);
+      if (shift) { dx += shift.dx; dy += shift.dy; }
+    }
+    for (const node of this.nodes) {
+      const p = result.positions.get(node.id);
+      if (p) { node.x = p.x + dx; node.y = p.y + dy; }
+    }
+    for (const edge of this.edges) delete edge.routeBend;
+    this._timelineFlip = new Set(this._shownEdges().filter((edge) => edge.relation === "part_of"
+      && result.positions.get(edge.source)?.x > result.positions.get(edge.target)?.x).map((edge) => edge.id));
+    this._timeline = {
+      lanes: result.lanes.map((lane) => ({ ...lane, y0: lane.y0 + dy, y1: lane.y1 + dy })),
+      columns: result.columns.map((column) => ({ ...column, x0: column.x0 + dx, x1: column.x1 + dx })),
+    };
+    this._nodeWaypoints = null;
+    this._nodeRouteCache = null;
+    if (fit) this.fit();
+    const animating = Boolean(before) && this._animateNodePositions(before, 320, onSettled);
+    if (!animating) {
+      this._draw();
+      onSettled?.();
+    }
+  }
+
+  _layoutNodeGraph(fit = true, ignoreSaved = false, { animate = false, onSettled = null, anchor = null } = {}) {
     if (!this.nodes.length) return;
+    if (this.layout === "timeline") { this._layoutTimeline(fit, { animate, onSettled, anchor }); return; }
     const state = this._loadNodeGraphState();
     const before = animate ? new Map(this.nodes.map((node) => [node.id, { x: node.x, y: node.y }])) : null;
     // Card widths survive Auto layout; only positions are replaced.
@@ -1259,8 +1280,10 @@ export class GraphView {
   // image strip or pinned main image; width from the resize handle.
   _applyNodeCardMetrics() {
     const showImages = getMindSettings().showMindImages !== false;
+    // Timeline cards wrap at a narrower width unless the user set one.
+    const auto = this.layout === "timeline" ? TIMELINE_CARD_W : null;
     for (const node of this.nodes) {
-      applyCardMetrics(node, cardMetrics(node, { kind: "node", showImages, customW: node.nodeW }));
+      applyCardMetrics(node, cardMetrics(node, { kind: "node", showImages, customW: node.nodeW ?? auto }));
     }
     this._nodeRouteCache = null;
   }
@@ -1272,7 +1295,7 @@ export class GraphView {
    * released.  Animated and one undo step.
    */
   autoLayout() {
-    if (this.layout === "node") { this._autoLayoutNodeGraph(); return; }
+    if (this._isNode()) { this._autoLayoutNodeGraph(); return; }
     if (this.layout !== "mind" || !this.nodes.length) return;
     const snapshot = this._mindSnapshot();
     // Every tree and the orphan area from scratch: compact for the current
@@ -1315,7 +1338,7 @@ export class GraphView {
 
   _autoLayoutNodeGraph() {
     if (this.layout === "mind") { this.autoLayout(); return; }
-    if (this.layout !== "node") return;
+    if (!this._isNode()) return;
     const oldPositions = new Map(this.nodes.map((node) => [node.id, { x: node.x, y: node.y }]));
     const oldBends = new Map(this.edges.filter((edge) => edge.routeBend).map((edge) => [edge.id, { ...edge.routeBend }]));
     this._layoutNodeGraph(false, true, { animate: true, onSettled: () => this.fit({ animate: true }) });
@@ -1376,7 +1399,7 @@ export class GraphView {
   _nodeRoutes() {
     const edges = this._shownEdges().filter((edge) => this.visibleRelations.has(edge.relation));
     let hash = edges.length * 7919 + this.nodes.length;
-    for (const edge of edges) if (edge.shownReversed) hash = (hash * 13 + String(edge.id).length + 7) % 1e12;
+    for (const edge of edges) if (edge.shownReversed || edge.timelineFlip) hash = (hash * 13 + String(edge.id).length + (edge.timelineFlip ? 3 : 7)) % 1e12;
     for (const node of this.nodes) hash = (hash * 31 + node.x * 7 + node.y * 13 + (node.w || 0) + (node.h || 0) * 3) % 1e12;
     for (const edge of edges) if (edge.routeBend) hash = (hash * 17 + edge.routeBend.x * 3 + edge.routeBend.y) % 1e12;
     const fast = Boolean(this._nodeAnimation) || (this.nodes.length > 400 && Boolean(this.drag?.moved));
@@ -1491,7 +1514,7 @@ export class GraphView {
         reverseBtn, h("em", null, String(counts.get(relation) || 0))));
     }
     this.edgeFilterEl.append(h("div", { class: "graph-edge-filter-note" }, t("graph.edge_filter.reverse_note")));
-    if (this.layout === "node" && !this.readOnly) {
+    if (this._isNode() && !this.readOnly) {
       this.edgeFilterEl.append(h("button", {
         class: "graph-edge-filter-reset", type: "button", "data-reverse-relayout": "",
         onclick: () => this.autoLayout(),
@@ -1511,6 +1534,8 @@ export class GraphView {
 
   _onKeyDown(event) {
     if (this.editor) return;
+    // Keys typed in the fullscreen node popover are the popover's.
+    if (this._popoverLayer?.contains(event.target)) return;
     const tag = event.target?.tagName;
     if (["INPUT", "TEXTAREA", "SELECT"].includes(tag) || event.target?.isContentEditable) return;
     if ((event.ctrlKey || event.metaKey) && !event.shiftKey && event.key.toLowerCase() === "z") {
@@ -1604,7 +1629,11 @@ export class GraphView {
     if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
       if (!this.nodes.length) return;
       event.preventDefault();
+      const before = this.selected;
       this._navigateMind(event.key);
+      // The fullscreen popover follows the keyboard selection.
+      const node = this._selectedNodeObjects();
+      if (this._popoverOpen() && node.length === 1 && this.selected !== before) this.opts.onSelect?.(node[0], false, event);
       return;
     }
     if (event.key === " ") {
@@ -1670,6 +1699,8 @@ export class GraphView {
         this._finishLineDrag(null, { cancel: true });
         return;
       }
+      // Esc closes the fullscreen popover first; the selection stays.
+      if (this._closePopover()) { event.preventDefault(); return; }
       this._setSelection([], false);
       this._draw();
     }
@@ -2078,6 +2109,14 @@ export class GraphView {
       if (this._transitionFrame) cancelAnimationFrame(this._transitionFrame);
       this._transitionFrame = null;
     }
+    // Mind and the timeline graph are laid out afresh for a new node set;
+    // the node nearest the view centre keeps its place (graph-viewport-
+    // model.js anchorShift), so the kept camera still shows it.
+    const shownBefore = preserveCamera && this.layout === "mind" && this.nodes.length ? this._visibleMindNodes() : this.nodes;
+    const anchor = preserveCamera && this.width && this.height
+      ? { before: new Map(shownBefore.filter((n) => Number.isFinite(n.x) && Number.isFinite(n.y)).map((n) => [n.id, { x: n.x, y: n.y }])),
+        centre: this._world(this.width / 2, this.height / 2) }
+      : null;
     let entered = 0;
     this.nodes = nodes.map((raw) => {
       const node = { ...raw };
@@ -2115,12 +2154,12 @@ export class GraphView {
     }
     if (layout) {
       const previousLayout = this.layout;
-      this.layout = ["force", "tree", "mind", "node"].includes(layout) ? layout : "force";
+      this.layout = graphLayoutOf(layout);
       if (previousLayout !== this.layout) {
         this.primaryRelation = this._loadPrimaryRelation(this.layout);
         this.visibleRelations = this._initialRelations(this.layout);
       }
-      if (!this.opts.compact && this.opts.persistLayout !== false) localStorage.setItem("ark.graphLayout", layout);
+      if (!this.opts.compact && this.opts.persistLayout !== false) localStorage.setItem("ark.graphLayout", this.layout);
       this._syncNodeTools();
     }
     const missing = this.nodes.filter((n) => !Number.isFinite(n.x));
@@ -2150,10 +2189,10 @@ export class GraphView {
     this._rebuildLegend();
     this.emptyEl?.classList.toggle("hidden", this.nodes.length > 0);
     if (this.opts.allRelations) this.visibleRelations = this._initialRelations(this.layout);
-    if (this.layout === "tree" || this.layout === "mind") {
-      this._applyLayout(!preserveCamera);
-    } else if (this.layout === "node") {
-      this._layoutNodeGraph(false);
+    if (this.layout === "mind") {
+      this._applyLayout(!preserveCamera, { anchor });
+    } else if (this._isNode()) {
+      this._layoutNodeGraph(false, false, { anchor });
     } else if (remote) {
       // Only new nodes move: existing ones are held while they settle.  (A
       // simulation still running just takes the new nodes along.)
@@ -2176,16 +2215,28 @@ export class GraphView {
     } else {
       this.fit();
     }
-    const camera = this.cameraKey ? GRAPH_CAMERAS.get(this.cameraKey) : null;
+    // The remembered camera applies to the first data only: later data
+    // (a filter change) keeps the current camera.  It is dropped when it
+    // shows none of the nodes (it was left for another node set).
+    const camera = this.cameraKey && !this._fitted ? GRAPH_CAMERAS.get(this.cameraKey) : null;
     if (camera && camera.layout === this.layout) {
+      const fitted = { zoom: this.zoom, pan: { ...this.pan } };
       this.zoom = camera.zoom;
       this.pan = { ...camera.pan };
-      // The remembered camera is where the person left the view: no later
-      // fit (settling, a panel resizing the canvas) moves it.
-      this._userInteracted = true;
-      this._pendingForceFit = false;
+      if (this._viewportAction() === "fit") {
+        this.zoom = fitted.zoom;
+        this.pan = fitted.pan;
+      } else {
+        // The remembered camera is where the person left the view: no later
+        // fit (settling, a panel resizing the canvas) moves it.
+        this._userInteracted = true;
+        this._pendingForceFit = false;
+      }
       this._draw();
     }
+    // New node set, same camera: when the view now shows none of the
+    // nodes, glide to them (and check again once Force has settled).
+    if (preserveCamera && !remote && this._fitted) this._keepNodesInView({ recheck: this.layout === "force" });
     this._fitted = true;
     if (remote) {
       // Nothing new: nothing moves.  New nodes: settle them, existing held.
@@ -2207,9 +2258,9 @@ export class GraphView {
    * caller then needs setData).
    */
   patchData(nodes, edges, { selected = undefined } = {}) {
-    const treeLike = this.layout === "mind" || this.layout === "tree";
+    const treeLike = this.layout === "mind";
     const change = classifyGraphUpdate({ nodes: this.nodes, edges: this.edges }, { nodes, edges }, {
-      // Mind/tree parents come from link relations: a relation change re-shapes the tree.
+      // Mind parents come from link relations: a relation change re-shapes the tree.
       structuralRelations: treeLike ? () => true : null,
     });
     if (change.kind === "structure") return null;
@@ -2268,11 +2319,11 @@ export class GraphView {
     node._forceLabelLayout = null;
     if (fields.includes("type") || fields.includes("customColor")) node.color = null;
     // Cards (Mind, Node) are re-measured where they stand; the layout is not re-run.
-    if ((this.layout === "mind" || this.layout === "node") && Number.isFinite(node.w)
+    if ((this.layout === "mind" || this._isNode()) && Number.isFinite(node.w)
         && (fields.includes("title") || fields.includes("media"))) {
       const showImages = getMindSettings().showMindImages !== false;
-      const kind = this.layout === "node" ? "node" : "mind";
-      applyCardMetrics(node, cardMetrics(node, { kind, showImages, customW: kind === "node" ? node.nodeW : node.customW }));
+      const kind = this._isNode() ? "node" : "mind";
+      applyCardMetrics(node, cardMetrics(node, { kind, showImages, customW: kind === "node" ? node.nodeW ?? (this.layout === "timeline" ? TIMELINE_CARD_W : null) : node.customW }));
       this._nodeRouteCache = null;
     }
   }
@@ -2400,7 +2451,7 @@ export class GraphView {
     } catch { /* storage can be unavailable */ }
     this._nodeRouteCache = null;
     this._nodeWaypoints = null;
-    if (this.layout === "mind" || this.layout === "tree") this._applyLayout(false);
+    if (this.layout === "mind") this._applyLayout(false);
     this._draw();
   }
 
@@ -2411,18 +2462,25 @@ export class GraphView {
    * alone.  Identity is by `id`; hit tests map back to the stored edge.
    */
   _shownEdges(edges = this.edges) {
-    return edges.map((edge) => (!edge.reversed && !edge.treeEdge && this._isReversed(edge.relation)
+    const shown = edges.map((edge) => (!edge.reversed && !edge.treeEdge && this._isReversed(edge.relation)
       ? { ...edge, source: edge.target, target: edge.source, shownReversed: true } : edge));
+    // Timeline: a part_of link whose whole came first runs from the whole to
+    // its part (left to right); its arrowheads keep their meaning
+    // (`timelineFlip` swaps the ends when drawn).
+    const flip = this.layout === "timeline" ? this._timelineFlip : null;
+    if (!flip?.size) return shown;
+    return shown.map((edge) => (flip.has(edge.id)
+      ? { ...edge, source: edge.target, target: edge.source, timelineFlip: true } : edge));
   }
 
   reheat() {
     if (!this.nodes.length) return;
-    if (this.layout === "mind" || this.layout === "node") {
+    if (this.layout === "mind" || this._isNode()) {
       // Re-layout from scratch (dragged Mind cards included).
       for (const node of this.nodes) delete node.mindManual;
       this._mindOffsets = new Map();
       this._mindShift = null;
-      if (this.layout === "node") this._layoutNodeGraph(true, true);
+      if (this._isNode()) this._layoutNodeGraph(true, true);
       else this._applyLayout(true);
       return;
     }
@@ -2440,9 +2498,9 @@ export class GraphView {
    * keep their positions.  `reflow: { changed, anchor }` is a fold or
    * unfold: see _reflowMindTrees.
    */
-  _applyLayout(fit = true, { reflow = null } = {}) {
+  _applyLayout(fit = true, { reflow = null, anchor = null } = {}) {
     if (!this.nodes.length) return;
-    if (this.layout === "node") {
+    if (this._isNode()) {
       this._layoutNodeGraph(false);
       return;
     }
@@ -2460,6 +2518,17 @@ export class GraphView {
       if (!this._mindShift) {
         const box = layoutBox(this.nodes.filter((node) => !hidden?.has(node.id)));
         this._mindShift = box ? { dx: -box.cx, dy: -box.cy } : { dx: 0, dy: 0 };
+      }
+      // A new node set under a kept camera reshapes the trees: the card the
+      // person was looking at keeps its place (setData's anchor), and the
+      // shift is kept from then on.
+      if (anchor && !reflow) {
+        const after = new Map();
+        for (const node of this.nodes) {
+          if (!hidden?.has(node.id) && !node.mindManual) after.set(node.id, { x: node.x + this._mindShift.dx, y: node.y + this._mindShift.dy });
+        }
+        const shift = anchorShift(anchor.before, after, anchor.centre);
+        if (shift) this._mindShift = { dx: this._mindShift.dx + shift.dx, dy: this._mindShift.dy + shift.dy };
       }
       for (const node of this.nodes) { node.x += this._mindShift.dx; node.y += this._mindShift.dy; }
       const rootOf = (node) => (treeOf?.get(node.id) ?? node.id);
@@ -2481,7 +2550,7 @@ export class GraphView {
         }
         if (this._animateNodePositions(from, 200)) return;
       }
-    } else treeLayout(this.nodes, this._shownEdges(), false);
+    }
     if (fit) this.fit();
     else this._draw();
   }
@@ -2568,8 +2637,10 @@ export class GraphView {
   }
 
   setLayout(layout) {
-    if (!["force", "tree", "mind", "node"].includes(layout)) return;
-    if (layout !== "force" && this._view3d) this.set3D(false);
+    if (!GRAPH_LAYOUTS.includes(layout)) return;
+    // 3D is a view of the force layout: other layouts leave it (the 3D
+    // choice stays saved and returns with Force).
+    if (layout !== "force" && this._view3d) this.set3D(false, { persist: false });
     this.layout = layout;
     this.primaryRelation = this._loadPrimaryRelation(layout);
     this.visibleRelations = this._initialRelations(layout);
@@ -2587,8 +2658,9 @@ export class GraphView {
       this.alpha = 1;
       this._start();
       this.fit({ animate: true });
-    } else if (layout === "node") {
-      if (!this._nodeFilterInitialized) {
+      if (this._saved3D()) this.set3D(true, { persist: false });
+    } else if (layout === "node" || layout === "timeline") {
+      if (layout === "node" && !this._nodeFilterInitialized) {
         this.visibleRelations = new Set(this.relationTypes);
         this._nodeFilterInitialized = true;
       }
@@ -2672,7 +2744,13 @@ export class GraphView {
         this.running = false;
         const shouldFit = this._pendingForceFit && this.layout === "force" && !this._userInteracted;
         this._pendingForceFit = false;
+        const recheck = this._viewRecheck;
+        this._viewRecheck = null;
         if (shouldFit) this.fit({ animate: true });
+        // A filter change kept the camera while Force rebalanced: if the
+        // nodes drifted out of a view nobody moved since, fit now.
+        else if (recheck && this.zoom === recheck.zoom && this.pan.x === recheck.pan.x && this.pan.y === recheck.pan.y
+          && !this._cameraFrame && !this.drag) this._keepNodesInView();
         else this._draw();
       }
     };
@@ -2754,7 +2832,7 @@ export class GraphView {
     const ctx = this.ctx;
     if (!ctx) return;
     if (this.layout === "mind") { this._drawMind(); return; }
-    if (this.layout === "node") { this._drawNode(); return; }
+    if (this._isNode()) { this._drawNode(); return; }
     if (!this._tileRender && this._sceneTilesUsable() && this._drawSceneTiles()) return;
     const directStart = this._tileRender ? 0 : performance.now();
     this.hiddenIds = new Set();
@@ -3102,7 +3180,7 @@ export class GraphView {
   }
 
   _sceneSignature() {
-    if (this.layout === "node") return this._nodeSceneSignature();
+    if (this._isNode()) return this._nodeSceneSignature();
     let sum = this.nodes.length * 31 + this.edges.length * 17;
     for (const node of this.nodes) {
       sum = (sum * 33 + node.x * 7.31 + node.y * 3.17 + (node.title?.length || 0) * 5 + (node.tags?.length || 0) * 11
@@ -3391,6 +3469,7 @@ export class GraphView {
     const ctx = this.ctx, tr = this._transform(), pal = this._palette();
     const w = this.width, hgt = this.height;
     ctx.clearRect(0, 0, w, hgt);
+    if (this.layout === "timeline") this._drawTimelineLanes(ctx, tr, pal);
     this.hiddenIds = new Set();
     const selected = this.selectedNodes;
     const arrowOf = this._arrows();
@@ -3459,7 +3538,8 @@ export class GraphView {
         ctx.globalAlpha = hovered || edgeSelected ? 0.9 : 0.4;
         ctx.setLineDash([5, 4]);
       }
-      const style = arrowOf(edge.relation);
+      const relationStyle = arrowOf(edge.relation);
+      const style = edge.timelineFlip && relationStyle ? { ...relationStyle, start: relationStyle.end, end: relationStyle.start } : relationStyle;
       const size = style ? arrowSize(lineWidth, tr.z, style.size) : 0;
       const port = Math.max(3, 4 * tr.z) + 1;
       ctx.beginPath();
@@ -3589,6 +3669,67 @@ export class GraphView {
     this._lastDirectMs = performance.now() - directStart;
     this._drawSelectionBox(ctx);
     this._positionEditor();
+  }
+
+  // Timeline graph backdrop: one band per lane with its line name (kept on
+  // screen while panning), and a dashed rule with the date where the day
+  // changes between columns.
+  _drawTimelineLanes(ctx, tr, pal) {
+    const timeline = this._timeline;
+    if (!timeline?.lanes.length || !timeline.columns.length) return;
+    const w = this.width, hgt = this.height;
+    const sx = (x) => x * tr.z + tr.x, sy = (y) => y * tr.z + tr.y;
+    const margin = 60;
+    const x0 = sx(timeline.columns[0].x0 - margin), x1 = sx(timeline.columns.at(-1).x1 + margin);
+    const top = sy(timeline.lanes[0].y0), bottom = sy(timeline.lanes.at(-1).y1);
+    if (x1 < 0 || x0 > w || bottom < 0 || top > hgt) return;
+    ctx.save();
+    const font = Math.max(10, Math.min(14, 13 * tr.z));
+    timeline.lanes.forEach((lane, i) => {
+      const y0 = sy(lane.y0), y1 = sy(lane.y1);
+      if (y1 < 0 || y0 > hgt) return;
+      ctx.fillStyle = withAlpha(pal.sub, i % 2 ? 0.035 : 0.075);
+      ctx.fillRect(x0, y0, x1 - x0, y1 - y0);
+      ctx.fillStyle = withAlpha(pal.sub, 0.28);
+      ctx.fillRect(x0, y1 - 1, x1 - x0, 1);
+      const label = lane.kind === "line" ? lane.name.split("/").join(" › ")
+        : lane.kind === "group" ? (this.byId.get(lane.root)?.title || String(lane.root)) : t("graph.timeline.loose");
+      ctx.font = `${lane.kind === "line" ? 650 : 500} ${font}px system-ui, sans-serif`;
+      ctx.textAlign = "left";
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = lane.kind === "loose" ? pal.sub : pal.ink;
+      const lx = Math.max(x0 + 10 + lane.depth * 14, 10);
+      ctx.fillText(`${label}  ·  ${lane.count}`, lx, y0 + Math.min(17 * tr.z, (y1 - y0) / 2));
+    });
+    // Dates where the latest day reached so far changes (links can pull a
+    // node before older ones; labels at least ~80 px apart).
+    ctx.font = `500 ${Math.max(10, Math.min(12, 12 * tr.z))}px system-ui, sans-serif`;
+    ctx.textBaseline = "bottom";
+    ctx.setLineDash([3, 4]);
+    let lastDay = "", lastYear = "", lastX = -Infinity, reached = -Infinity;
+    const gap = TIMELINE_COL_GAP / 2;
+    for (const column of timeline.columns) {
+      if (!(column.time > reached)) continue;
+      reached = column.time;
+      const date = new Date(reached);
+      const year = String(date.getFullYear());
+      const day = `${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      if (`${year}-${day}` === lastDay) continue;
+      const x = sx(column.x0 - gap);
+      lastDay = `${year}-${day}`;
+      if (x - lastX < 80) continue;
+      lastX = x;
+      if (x < -40 || x > w + 40) { lastYear = year; continue; }
+      ctx.strokeStyle = withAlpha(pal.sub, 0.3);
+      ctx.beginPath();
+      ctx.moveTo(x + 0.5, Math.max(top, 0));
+      ctx.lineTo(x + 0.5, Math.min(bottom, hgt));
+      ctx.stroke();
+      ctx.fillStyle = pal.sub;
+      ctx.fillText(year !== lastYear ? `${year}-${day}` : day, x + 4, top - 4);
+      lastYear = year;
+    }
+    ctx.restore();
   }
 
   // ---- Cards: one picture per card, uniformly scaled ------------------
@@ -4199,7 +4340,7 @@ export class GraphView {
     let best = null, bestD = 8;
     // Node layout: a 10-step polyline per bezier segment, only for segments whose control hull (which holds
     // the polyline) comes within reach of the pointer.
-    const routes = this.layout === "node" ? this._nodeRoutes() : null;
+    const routes = this._isNode() ? this._nodeRoutes() : null;
     const wx = (px - tr.x) / tr.z, wy = (py - tr.y) / tr.z, reach = bestD / tr.z;
     for (const edge of this._shownEdges()) {
       if (routes) {
@@ -4235,7 +4376,7 @@ export class GraphView {
       if (d < bestD) { best = edge; bestD = d; }
     }
     // Shown edges may be reversed copies; callers get the stored edge.
-    return best?.shownReversed ? this.edges.find((edge) => edge.id === best.id) || best : best;
+    return best?.shownReversed || best?.timelineFlip ? this.edges.find((edge) => edge.id === best.id) || best : best;
   }
 
   _hitMindCollapse(event) {
@@ -4286,7 +4427,7 @@ export class GraphView {
 
   // Mind and node layouts draw the same cards (resize grip, images).
   _cardLayout() {
-    return this.layout === "mind" || this.layout === "node";
+    return this.layout === "mind" || this._isNode();
   }
 
   _cardHidden() {
@@ -4295,7 +4436,7 @@ export class GraphView {
 
   // Width limits of the card resize handle for this layout.
   _cardWidthRange(node) {
-    const spec = CARD_KINDS[this.layout === "node" ? "node" : "mind"];
+    const spec = CARD_KINDS[this._isNode() ? "node" : "mind"];
     const imageW = node.imageW || 0;
     return [spec.minW + imageW, spec.maxW + imageW];
   }
@@ -4304,7 +4445,7 @@ export class GraphView {
   // project, mind-node-state.js), the node graph in its layout store
   // (topics: on the member).
   _setCardWidth(node, width) {
-    if (this.layout === "node") {
+    if (this._isNode()) {
       node.nodeW = width === null ? null : cleanCardWidth(width);
       this._applyNodeCardMetrics();
       this._saveNodeGraphState();
@@ -4424,7 +4565,7 @@ export class GraphView {
         if (Math.abs(px - sx) <= nw && Math.abs(py - sy) <= nh) return node;
         continue;
       }
-      if (this.layout === "node") {
+      if (this._isNode()) {
         const nw = (node.w || 200) * tr.z / 2 + 4;
         const nh = (node.h || 64) * tr.z / 2 + 4;
         if (Math.abs(px - sx) <= nw && Math.abs(py - sy) <= nh) return node;
@@ -4464,7 +4605,7 @@ export class GraphView {
         hover: this.hover,
       };
     }
-    if (event.button === 0 && this.layout === "node") {
+    if (event.button === 0 && this._isNode()) {
       const routeEdge = this._hitNodeEdgeHandle(event);
       if (routeEdge) {
         this.selectedEdge = routeEdge;
@@ -4487,7 +4628,7 @@ export class GraphView {
           startX: event.clientX,
           startW: (resizeNode.titleW || resizeNode.w || 160) + (resizeNode.imageW || 0),
           // The stored value to restore on undo (null = automatic width).
-          startStored: this.layout === "node" ? (resizeNode.nodeW ?? null) : (resizeNode.customW ?? null),
+          startStored: this._isNode() ? (resizeNode.nodeW ?? null) : (resizeNode.customW ?? null),
           moved: false,
         };
         this.canvas.style.cursor = "ew-resize";
@@ -4656,7 +4797,7 @@ export class GraphView {
     this.selectedNodes = new Set();
     this.selected = null;
     this.countEl && (this.countEl.textContent = `${this.nodes.length} ${t("overview.stats.total")} · ${this.edges.length} ${t("common.links")}`);
-    if (this.layout === "node") this._layoutNodeGraph(false);
+    if (this._isNode()) this._layoutNodeGraph(false);
     else if (getMindSettings().autoLayout && this.layout !== "force") this._applyLayout(false);
     else {
       if (this.layout === "force") {
@@ -4677,7 +4818,7 @@ export class GraphView {
           if (!this.edges.some((item) => item.id === edge.id)) this.edges.push(edge);
         }
         if (this.layout === "mind") this._applyLayout(false);
-        else if (this.layout === "node") this._layoutNodeGraph(false);
+        else if (this._isNode()) this._layoutNodeGraph(false);
         else this._draw();
       },
     });
@@ -4707,7 +4848,7 @@ export class GraphView {
     this._setSelection([node], false);
     // Keep the imported node exactly where it was dropped. Do not wake the
     // force simulation here: that would move the rest of the graph away.
-    if (this.layout === "node") this._saveNodeGraphState();
+    if (this._isNode()) this._saveNodeGraphState();
     this._draw();
     this.countEl && (this.countEl.textContent = `${this.nodes.length} ${t("overview.stats.total")} · ${this.edges.length} ${t("common.links")}`);
     return node;
@@ -4719,7 +4860,7 @@ export class GraphView {
     const created = { id: link?.id || `local-${source.id}-${target.id}`, source: source.id, target: target.id, relation };
     this.edges.push(created);
     this.countEl && (this.countEl.textContent = `${this.nodes.length} ${t("overview.stats.total")} · ${this.edges.length} ${t("common.links")}`);
-    if (this.layout === "node") this._saveNodeGraphState();
+    if (this._isNode()) this._saveNodeGraphState();
     this._pushHistory({
       undo: async () => {
         if (this.opts.onDeleteLink && /^\d+$/.test(String(created.id))) {
@@ -4803,7 +4944,7 @@ export class GraphView {
       drag.moved = true;
       const dx = (event.clientX - drag.startX) / Math.max(0.18, this.zoom);
       const width = clamp(drag.startW + dx, ...this._cardWidthRange(drag.node));
-      if (this.layout === "node") {
+      if (this._isNode()) {
         // Height follows the wrapped title while dragging.
         drag.node.nodeW = width;
         applyCardMetrics(drag.node, cardMetrics(drag.node, {
@@ -4979,7 +5120,7 @@ export class GraphView {
         if (hidden.has(node.id)) return false;
         const sx = node.x * tr.z + tr.x, sy = node.y * tr.z + tr.y;
         if (!Number.isFinite(sx) || !Number.isFinite(sy)) return false;
-        if (this.layout === "mind" || this.layout === "node") {
+        if (this.layout === "mind" || this._isNode()) {
           const mind = this.layout === "mind";
           const hw = Math.max(mind ? 2 : 12, (node.w || (mind ? 160 : 200)) * tr.z) / 2;
           const hh = Math.max(mind ? 2 : 4, (node.h || (mind ? 38 : 64)) * tr.z) / 2;
@@ -4995,7 +5136,10 @@ export class GraphView {
       this._setSelection(hits, box.additive);
       this._suppressContextMenu = true;
     } else if (!box.additive) {
+      // A plain click on empty canvas (edit mode): nothing selected, and
+      // the fullscreen popover closes.
       this._setSelection([], false);
+      this._closePopover();
     }
     this._draw();
   }
@@ -5112,7 +5256,7 @@ export class GraphView {
       this.mindResizeDrag = null;
       this.canvas.style.cursor = "grab";
       if (!drag.moved) return;
-      const width = this.layout === "node" ? node.nodeW : node.customW;
+      const width = this._isNode() ? node.nodeW : node.customW;
       this._setCardWidth(node, width);
       const layout = this.layout;
       this._pushHistory({
@@ -5221,7 +5365,8 @@ export class GraphView {
         // node, so the graph and the inspector show the same selection.
         this._setSelection([drag.node], false);
         this._draw();
-        if (this.mode === "read" || this.opts.isInspectorOpen?.()) {
+        // Fullscreen hides the inspector: a click shows the node popover.
+        if (this.mode === "read" || this.opts.isInspectorOpen?.() || this.isFullscreen()) {
           this.opts.onSelect?.(drag.node, false, event);
         }
       }
@@ -5230,7 +5375,7 @@ export class GraphView {
       else {
         this._setSelection([], false);
         this._draw();
-        if (this.mode === "read") this.opts.onSelect?.(null, false, event);
+        if (!this._closePopover() && this.mode === "read") this.opts.onSelect?.(null, false, event);
       }
     }
     if (drag.pan && drag.moved) this._suppressContextMenu = true;
@@ -5249,12 +5394,12 @@ export class GraphView {
             node.x = start.x;
             node.y = start.y;
             node.vx = 0; node.vy = 0;
-            if (this.layout === "node") this._saveNodeGraphState();
+            if (this._isNode()) this._saveNodeGraphState();
             this._draw();
           },
         });
       }
-      if (this.layout === "node") this._saveNodeGraphState();
+      if (this._isNode()) this._saveNodeGraphState();
     }
   }
 
@@ -5438,6 +5583,7 @@ export class GraphView {
 
   _animateCamera(targetZoom, targetPan, duration = 340) {
     this._cancelCameraAnimation();
+    this._cameraTarget = { zoom: targetZoom, pan: { ...targetPan } };
     if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches) {
       this.zoom = targetZoom;
       this.pan = { ...targetPan };
@@ -5483,6 +5629,37 @@ export class GraphView {
     this.pan = { x: this.width * 0.5, y: 0 };
   }
 
+  /**
+   * "empty" | "keep" | "fit" (graph-viewport-model.js) for the current
+   * camera, or the one a camera animation in flight is heading to.  Mind
+   * counts the cards not folded away; cards count by their centre.
+   */
+  _viewportAction() {
+    const shown = this.layout === "mind" ? this._visibleMindNodes() : this.nodes;
+    if (!shown.length) return "empty";
+    const camera = this._cameraFrame && this._cameraTarget ? this._cameraTarget : { zoom: this.zoom, pan: this.pan };
+    const ox = this.width / 2 + camera.pan.x, oy = this.height / 2 + camera.pan.y;
+    const points = shown.map((node) => ({ x: node.x * camera.zoom + ox, y: node.y * camera.zoom + oy }));
+    return viewportAction({ total: shown.length, onScreen: pointsOnScreen(points, this.width, this.height) });
+  }
+
+  /**
+   * After the shown nodes changed under a kept camera: keep the camera
+   * while it shows nodes, glide to all of them when it shows none (an
+   * empty result keeps the empty state).  `recheck`: look again when the
+   * Force simulation settles.  3D does the same in graph3d.js.
+   */
+  _keepNodesInView({ recheck = false } = {}) {
+    if (this.opts.backdrop || !this.width || !this.height) return "keep";
+    if (this._view3d) { this._view3d.checkView?.(); return "keep"; }
+    const action = this._viewportAction();
+    if (action === "fit") this.fit({ animate: true });
+    else if (recheck && action === "keep") this._viewRecheck = { zoom: this.zoom, pan: { ...this.pan } };
+    if (action !== "keep") this._viewRecheck = null;
+    this.viewChecks = [...(this.viewChecks || []).slice(-19), action];
+    return action;
+  }
+
   fit({ animate = false } = {}) {
     if (!this.nodes.length) return;
     if (this._view3d) { this._view3d.resetView(animate); return; }
@@ -5498,12 +5675,18 @@ export class GraphView {
     const fitNodes = this.layout === "mind" ? this._visibleMindNodes() : this.nodes;
     for (const node of fitNodes) {
       if (!Number.isFinite(node.x)) continue;
-      const hw = this.layout === "mind" ? (node.w || 160) / 2 : this.layout === "node" ? (node.w || 200) / 2 : 0;
-      const hh = this.layout === "mind" ? (node.h || 38) / 2 : this.layout === "node" ? (node.h || 64) / 2 : 0;
+      const hw = this.layout === "mind" ? (node.w || 160) / 2 : this._isNode() ? (node.w || 200) / 2 : 0;
+      const hh = this.layout === "mind" ? (node.h || 38) / 2 : this._isNode() ? (node.h || 64) / 2 : 0;
       minX = Math.min(minX, node.x - hw); maxX = Math.max(maxX, node.x + hw);
       minY = Math.min(minY, node.y - hh); maxY = Math.max(maxY, node.y + hh);
     }
     if (!Number.isFinite(minX)) return;
+    // The timeline's lanes and dates frame the cards.
+    const timeline = this.layout === "timeline" ? this._timeline : null;
+    if (timeline?.lanes.length) {
+      minY = Math.min(minY, timeline.lanes[0].y0 - 18);
+      maxY = Math.max(maxY, timeline.lanes.at(-1).y1);
+    }
     // Fit force graphs symmetrically around their fixed world origin. Changing
     // the visible subset may change zoom, but must not introduce a new centre.
     if (this.layout === "force") {
@@ -5518,6 +5701,8 @@ export class GraphView {
     );
     const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
     const targetPan = { x: -cx * targetZoom, y: -cy * targetZoom };
+    // A timeline wider than the view at the smallest zoom opens at its start.
+    if (timeline && (this.width * fill) / w < targetZoom) targetPan.x = -minX * targetZoom - this.width / 2 + 24;
     if (animate) this._animateCamera(targetZoom, targetPan);
     else {
       this.zoom = targetZoom;
@@ -5580,7 +5765,7 @@ export class GraphView {
   // A ring that follows the node for a moment (CSS .graph-locate-pulse).
   _pulseNode(node) {
     this._pulseEl?.remove();
-    const el = h("div", { class: `graph-locate-pulse ${this.layout === "force" || this.layout === "tree" ? "round" : ""}`.trim(), "aria-hidden": "true" });
+    const el = h("div", { class: `graph-locate-pulse ${this.layout === "force" ? "round" : ""}`.trim(), "aria-hidden": "true" });
     this.host.appendChild(el);
     this._pulseEl = el;
     const started = performance.now();
@@ -5592,9 +5777,9 @@ export class GraphView {
         return;
       }
       const p = this._screen(node);
-      const card = this.layout === "mind" || this.layout === "node";
-      const w = card ? (node.w || (this.layout === "node" ? 200 : 160)) * this.zoom + 14 : this._nodeRadius(node) * 2 + 18;
-      const hgt = card ? (node.h || (this.layout === "node" ? 64 : 38)) * this.zoom + 14 : w;
+      const card = this.layout === "mind" || this._isNode();
+      const w = card ? (node.w || (this._isNode() ? 200 : 160)) * this.zoom + 14 : this._nodeRadius(node) * 2 + 18;
+      const hgt = card ? (node.h || (this._isNode() ? 64 : 38)) * this.zoom + 14 : w;
       el.style.width = `${w}px`;
       el.style.height = `${hgt}px`;
       el.style.transform = `translate(${p.x - w / 2}px, ${p.y - hgt / 2}px)`;
@@ -6039,7 +6224,7 @@ export class GraphView {
           });
       }
       this._setSelection([created], false);
-      if (this.layout === "node") this._layoutNodeGraph(false);
+      if (this._isNode()) this._layoutNodeGraph(false);
       else if (autoLayout && this.layout !== "force") this._applyLayout(false);
       else if (this.layout === "force") {
         this.alpha = Math.max(this.alpha, 0.5);
@@ -6277,7 +6462,7 @@ export class GraphView {
           }
           this._removeNodesLocal(pasted);
           if (this.layout === "mind") this._applyLayout(false);
-          else if (this.layout === "node") this._layoutNodeGraph(false);
+          else if (this._isNode()) this._layoutNodeGraph(false);
         },
       });
       this.opts.onNotice?.(orphanPaste
@@ -6293,21 +6478,61 @@ export class GraphView {
   // Full screen for the whole graph (toolbar, legend and help stay inside).
   toggleFullscreen() {
     if (document.fullscreenElement === this.host) { document.exitFullscreen?.(); return; }
-    if (!this._onFullscreen) {
-      this._onFullscreen = () => {
-        const on = document.fullscreenElement === this.host;
-        this.host.classList.toggle("graph-is-fullscreen", on);
-        if (this.fullscreenBtn) {
-          const label = t(on ? "graph.exit_fullscreen" : "graph.fullscreen");
-          this.fullscreenBtn.title = label;
-          this.fullscreenBtn.setAttribute("aria-label", label);
-          this.fullscreenBtn.replaceChildren(icon(on ? "shrink" : "expand", "sm"));
-        }
-        requestAnimationFrame(() => { this.repairView?.(); this._draw?.(); });
-      };
-      document.addEventListener("fullscreenchange", this._onFullscreen);
-    }
+    this._watchFullscreen();
     this.host.requestFullscreen?.().catch(() => { /* not allowed here */ });
+  }
+
+  /** The graph fills the screen (its own fullscreen, or a fullscreen element holding it). */
+  isFullscreen() {
+    const element = document.fullscreenElement;
+    return Boolean(element && this.host && (element === this.host || element.contains(this.host)));
+  }
+
+  /**
+   * The layer that holds the node popover while the graph is fullscreen
+   * (the docked inspector is outside the fullscreen element and hidden).
+   * The app renders the inspector into it (inspector.js) and hears
+   * "ark:graph-fullscreen" (entered/left) and "ark:graph-popover-close"
+   * (empty canvas click, Esc on the canvas).
+   */
+  popoverLayer() {
+    return this.isFullscreen() ? this._popoverLayer || null : null;
+  }
+
+  _popoverOpen() {
+    return Boolean(this.popoverLayer()?.querySelector(".drawer"));
+  }
+
+  _closePopover() {
+    if (!this._popoverOpen()) return false;
+    this.host.dispatchEvent(new CustomEvent("ark:graph-popover-close", { bubbles: true, detail: { graph: this } }));
+    return true;
+  }
+
+  _watchFullscreen() {
+    if (this._onFullscreen || this.opts.compact || this.opts.backdrop) return;
+    this._onFullscreen = () => {
+      const own = document.fullscreenElement === this.host;
+      const on = this.isFullscreen();
+      this.host.classList.toggle("graph-is-fullscreen", own);
+      if (this.fullscreenBtn) {
+        const label = t(own ? "graph.exit_fullscreen" : "graph.fullscreen");
+        this.fullscreenBtn.title = label;
+        this.fullscreenBtn.setAttribute("aria-label", label);
+        this.fullscreenBtn.replaceChildren(icon(own ? "shrink" : "expand", "sm"));
+      }
+      const was = Boolean(this._popoverLayer);
+      if (on && !was) {
+        this._popoverLayer = h("div", { class: "graph-popover-layer" });
+        this.host.appendChild(this._popoverLayer);
+      } else if (!on && was) {
+        this._popoverLayer.remove();
+        this._popoverLayer = null;
+      }
+      if (on !== was) this.host.dispatchEvent(new CustomEvent("ark:graph-fullscreen", { bubbles: true, detail: { graph: this, on } }));
+      requestAnimationFrame(() => { this.repairView?.(); this._draw?.(); });
+    };
+    document.addEventListener("fullscreenchange", this._onFullscreen);
   }
 
   backdropParked() {

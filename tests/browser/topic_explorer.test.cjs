@@ -104,7 +104,7 @@ test('topics view: sidebar view, trees, outline, document level 0, head body, dr
     const layoutSel = page.locator('.topic-canvas select.graph-sel').first();
     assert.equal(await layoutSel.inputValue(), 'force', 'a topic opens in the Force layout');
     assert.equal(await page.locator('[data-topic-auto-layout]').isVisible(), false, 'no Auto layout for Force');
-    // A layout picked for this topic is remembered for it, not for others.
+    // A picked layout is kept for every topic of the project.
     await layoutSel.selectOption('node');
     assert.equal(await page.locator('[data-topic-auto-layout]').isVisible(), true);
 
@@ -161,7 +161,7 @@ test('topics view: sidebar view, trees, outline, document level 0, head body, dr
     await explorer.locator(`[data-topic-row="${inner}"]`).click();
     await explorer.locator(`[data-outline-row="${leaf}"]`).waitFor({ timeout: 10000 });
     assert.equal(await explorer.locator(`[data-outline-row="${parent}"]`).count(), 0);
-    assert.equal(await page.locator('.topic-canvas select.graph-sel').first().inputValue(), 'force');
+    assert.equal(await page.locator('.topic-canvas select.graph-sel').first().inputValue(), 'node', 'another topic keeps the picked layout');
     assert.equal(await page.locator('.topic-head-body').isVisible(), false, 'a heading keeps the body out of the head');
     // A long plain body and a list stay out of the head too.
     for (const uid of [long, listy]) {
@@ -172,7 +172,7 @@ test('topics view: sidebar view, trees, outline, document level 0, head body, dr
     }
     await explorer.locator(`[data-topic-row="${outer}"]`).click();
     await explorer.locator(`[data-outline-row="${parent}"]`).waitFor({ timeout: 10000 });
-    assert.equal(await page.locator('.topic-canvas select.graph-sel').first().inputValue(), 'node', 'the outer topic keeps Node');
+    assert.equal(await page.locator('.topic-canvas select.graph-sel').first().inputValue(), 'node', 'back on the outer topic: still Node');
 
     // Elsewhere: the outline has its empty state; a topic click opens the page.
     await page.goto(`${base}/?lang=zh#/map`);

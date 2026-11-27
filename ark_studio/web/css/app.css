@@ -4008,6 +4008,16 @@ html[data-theme="dark"] .ed-highlight .tok-lit { color: #569cd6; }
 .rich-media-caption { font-size: 0.6875rem; color: var(--mute); }
 .rich img.rich-img { max-width: 100%; height: auto; border-radius: 6px; }
 .mermaid-block.stale { opacity: .55; transition: opacity .15s; }
+.mermaid-block.pending { min-height: 56px; }
+.mermaid-pending { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 56px; color: var(--mute); font-size: 0.75rem; }
+.mermaid-pending::before { content: ""; width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--mute); animation: mermaid-spin .8s linear infinite; }
+@keyframes mermaid-spin { to { transform: rotate(360deg); } }
+.mermaid-block.rendered { position: relative; cursor: zoom-in; }
+.mermaid-block.rendered::after { content: attr(data-hint); position: absolute; top: 6px; right: 8px; padding: 1px 7px; border-radius: 99px; font-size: 0.65625rem; color: var(--sub); background: var(--card); border: 1px solid var(--line-soft); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.mermaid-block.rendered:hover::after, .mermaid-block.rendered:focus-visible::after { opacity: 1; }
+@media (hover: none) { .mermaid-block.rendered::after { opacity: .8; } }
+.iv-mermaid .iv { background: var(--bg); }
+.iv-mermaid .iv-img { box-shadow: none; }
 .mermaid-block.error { white-space: normal; font: inherit; border-color: color-mix(in srgb, var(--red) 40%, var(--line)); background: color-mix(in srgb, var(--red) 6%, var(--bg2)); }
 .mermaid-error-head { display: flex; align-items: center; gap: 6px; color: var(--red); font-size: 0.71875rem; font-weight: 600; margin-bottom: 6px; }
 .mermaid-error-source { margin: 0; padding: 8px; max-height: 240px; overflow: auto; font: 0.6875rem/1.5 var(--mono); color: var(--sub); background: var(--bg); border: 1px solid var(--line-soft); border-radius: 5px; white-space: pre; }
@@ -4845,6 +4855,8 @@ html[data-text-size="large"] .topbar .top-ctl .icon{width:1rem;height:1rem}
 .topic-auto-badge,.topic-line-badge{display:inline-flex;align-items:center;padding:0 6px;height:17px;border-radius:99px;font-size:0.625rem;font-weight:650;color:var(--violet);background:color-mix(in srgb,var(--violet) 12%,transparent);border:1px solid color-mix(in srgb,var(--violet) 30%,transparent)}
 .topic-line-badge{color:var(--accent);background:color-mix(in srgb,var(--accent) 10%,transparent);border-color:color-mix(in srgb,var(--accent) 28%,transparent)}
 .topic-title.line{cursor:default}
+.topic-line-badge.link{cursor:pointer}
+.topic-line-badge.link:hover{background:color-mix(in srgb,var(--accent) 20%,transparent);border-color:var(--accent)}
 .branch-badge{display:inline-flex;align-items:center;padding:0 6px;height:17px;border-radius:99px;font-size:0.625rem;font-weight:700;color:var(--sub);background:var(--lane);border:1px solid var(--line)}
 .branch-badge.status-stalled{color:var(--red);background:color-mix(in srgb,var(--red) 10%,transparent);border-color:color-mix(in srgb,var(--red) 35%,transparent)}
 .branch-badge.status-done{color:var(--green);background:color-mix(in srgb,var(--green) 10%,transparent);border-color:color-mix(in srgb,var(--green) 30%,transparent)}
@@ -5579,6 +5591,9 @@ body.wb-on.ark-offline .wb-status{background:color-mix(in srgb,var(--warn,#c98a0
 
 /* Map graph in full screen: the graph fills the screen on the page background. */
 .graph-is-fullscreen{background:var(--bg);width:100vw;height:100vh}
+/* Node details while the graph is fullscreen (inspector.js fullscreenPopoverLayer). */
+.graph-popover-layer{position:absolute;inset:0;z-index:90;pointer-events:none}
+.graph-popover-layer>.drawer.graph-popover{pointer-events:auto;z-index:91;max-height:calc(100vh - 24px);height:min(var(--inspector-float-h,60vh),calc(100vh - 24px))}
 .resources-panel.fullscreen{background:var(--bg);padding:14px 16px;overflow:auto}
 .resources-panel.fullscreen .resources-stage{height:auto;flex:1 1 auto;min-height:0}
 

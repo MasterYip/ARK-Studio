@@ -79,7 +79,7 @@ var (
 	activeStatuses = map[string]bool{"starting": true, "running": true, "stopping": true}
 	statusOrder    = map[string]int{"running": 0, "idle": 1, "starting": 2, "stopping": 3, "errored": 4, "stopped": 5}
 	// NativeResumePlatforms is NATIVE_RESUME_PLATFORMS.
-	NativeResumePlatforms = []string{"claude", "codex"}
+	NativeResumePlatforms = []string{"claude", "codex", "gemini"}
 )
 
 func isReadOnlyMode(m string) bool { return m == "read_only" || m == "plan" }
@@ -110,6 +110,8 @@ type Session struct {
 	// The file guard's baseline of the running turn (fileguard.go).
 	guardSince  time.Time
 	guardBefore map[string]map[string]bool
+	// How the running Gemini CLI turn ended, from its stream (gemini.go).
+	gemini geminiTurn
 }
 
 // Workspace is ManagedSession.workspace.

@@ -717,13 +717,18 @@ func (s *Store) reviewGroups(ctx context.Context, q sqlitedb.Querier, status str
 
 func (s *Store) groupObject(ctx context.Context, q sqlitedb.Querier, g sqlitedb.Row, full bool) (*pyjson.Object, error) {
 	id := g.Int("id")
-	anchors, warnings, err := resolveAnchors(ctx, q, g.Str("note"), "", "")
-	if err != nil {
-		return nil, err
-	}
 	members, err := sqlitedb.Query(ctx, q, `SELECT m.*, u.uid, u.title, u.type, u.status, u.body, u.updated_at uupdated
                    FROM review_group_members m JOIN units u ON u.id=m.unit_id
                    WHERE m.group_id=? AND u.archived=0 ORDER BY m.position`, id)
+	if err != nil {
+		return nil, err
+	}
+	// A bare "#slug" in the group's note means a member's heading.
+	bodies := make([]groupBody, len(members))
+	for i, m := range members {
+		bodies[i] = groupBody{m.Str("uid"), m.Str("body")}
+	}
+	anchors, warnings, err := resolveAnchorsIn(ctx, q, g.Str("note"), "", "", bodies)
 	if err != nil {
 		return nil, err
 	}

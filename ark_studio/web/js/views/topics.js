@@ -17,13 +17,13 @@ import { mindGraphOptions } from "../mind.js";
 import { openModal, viewToggle, attachGraphHeight } from "../components.js";
 import { openNewTopic, openMemberPicker } from "../topic-actions.js";
 import {
-  layoutFromMembers, layoutChanges, visibleEdges, ruleParts, filterTopic, plainShortBody,
+  layoutFromMembers, layoutChanges, visibleEdges, ruleParts, filterTopic, topicTimelineItems, plainShortBody,
   foldable, foldChord,
 } from "../topic-model.js";
 import { branchTopicEntries, lineLabel } from "../needs-model.js";
 import { topicsExplorer, topicTitle, DEFAULT_TITLES, TOPICS_VIEW } from "../topic-explorer.js";
 import { shellActive, revealView } from "../workbench.js";
-import { outlineRows, foldCommand, ancestorKeys } from "../topic-explorer-model.js";
+import { outlineRows, foldCommand, ancestorKeys, lineAssociations } from "../topic-explorer-model.js";
 import { openLineRename } from "./settings-lines.js";
 
 const SELECTED_KEY = "ark.topic.selected.v1";
@@ -57,14 +57,15 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   const mainHost = h("section", { class: "topic-main" });
   const search = h("input", { class: "input topic-search", placeholder: t("filters.keyword"), value: S.filters.q || "" });
   let topics = [];
-  // Lines of work (GET /api/project/branches): each line is a topic, a stored
-  // one when a topic's rule is its tag, else an automatic one ("auto").
+  // Lines of work (GET /api/project/branches): a line opens as the line view
+  // (every node with its tag); a topic associated with it opens on its own.
   let lines = [];
-  const state = { graph: null, data: null, full: false, seq: 0, pendingLayout: null, lineOf: new Map() };
-  const lineTopic = (line) => ({ uid: line.ref, title: line.name, virtual: true, branch: line.name, updated_at: line.last,
+  const state = { graph: null, data: null, full: false, seq: 0, pendingLayout: null,
+    lineOf: new Map(), topicOfLine: new Map(), linesOfTopic: new Map() };
+  const lineTopic = (line) => ({ uid: line.tag || line.ref, title: line.name, virtual: true, branch: line.name, updated_at: line.last,
     member_count: line.units, preview: { members: [], edges: [] }, line });
   const known = (ref) => topics.find((topic) => topic.uid === ref || String(topic.id) === String(ref))
-    || lines.filter((line) => line.auto).map(lineTopic).find((topic) => topic.uid === ref);
+    || lines.map(lineTopic).find((topic) => topic.uid === ref);
   const explorer = topicsExplorer(ctx);
   state.explorer = explorer;
   // Without the workbench shell the view is a drawer on this page.
@@ -90,7 +91,11 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
     try {
       const data = await api.branches();
       lines = branchTopicEntries(data.items || []);
-      state.lineOf = new Map(lines.filter((line) => !line.auto && line.via === "rule").map((line) => [line.ref, line.tag]));
+      // A topic whose rule is the line tag: adding a node to it tags the node.
+      state.lineOf = new Map(lines.filter((line) => line.topic && line.via === "rule").map((line) => [line.topic.uid, line.tag]));
+      const { topicOf, linesOf } = lineAssociations(lines);
+      state.topicOfLine = new Map(lines.filter((line) => topicOf.has(line.name)).map((line) => [line.tag, topicOf.get(line.name)]));
+      state.linesOfTopic = linesOf;
     } catch { lines = []; /* an older server has no lines */ }
   };
   const paintList = () => explorer.setTopics(topics, lines);
@@ -108,13 +113,12 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   };
   ctx.topicPage = {
     mounted: () => page.isConnected,
-    // From the Topics view: a topic, or a line (a stored topic when the line
-    // has one; a path that only holds other lines opens as a line too).
+    // From the Topics view: a topic, or a line (always the line view, also
+    // for a path that only holds other lines).
     openPicked: (topic) => { S.topicTrail = []; open(topic); },
     openLine: (row) => {
       S.topicTrail = [];
-      if (row.line && !row.line.auto) open(known(row.line.ref) || { uid: row.line.ref });
-      else if (row.line) open(lineTopic(row.line));
+      if (row.line) open(lineTopic(row.line));
       else open({ uid: row.ref, title: row.key, virtual: true });
     },
     applyFilters: (options) => {
@@ -210,19 +214,21 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   load();
 }
 
-// The graph's layout per topic: Force until another one (Node: the topic's
-// saved arrangement, Tree, Mind) is picked in the graph toolbar.
-const LAYOUT_KEY = "ark.topic.layout.v1";
+// The graph's layout of the topic pages: one choice for every topic and
+// research line of the project, so switching topics keeps it.  Force until
+// another one (Node: the topic's saved arrangement, Mind, Timeline) is
+// picked in the graph toolbar.
+const LAYOUT_KEY = "ark.topic.layout.v2";
 
-function topicLayout(ctx, uid) {
+function topicLayout(ctx) {
   try {
-    const saved = localStorage.getItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}:${uid}`);
-    return ["force", "tree", "mind", "node"].includes(saved) ? saved : "force";
+    const saved = localStorage.getItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}`);
+    return ["force", "mind", "node", "timeline"].includes(saved) ? saved : "force";
   } catch { return "force"; }
 }
 
-function rememberTopicLayout(ctx, uid, layout) {
-  try { localStorage.setItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}:${uid}`, layout); } catch { /* storage unavailable */ }
+function rememberTopicLayout(ctx, layout) {
+  try { localStorage.setItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}`, layout); } catch { /* storage unavailable */ }
 }
 
 // The document view: scroll to a member's section, unfolding the way to it
@@ -290,6 +296,11 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
   // adding and removing nodes edits their line tag; an automatic topic keeps
   // no layout of its own.
   const lineTag = topic.virtual ? topic.uid : state.lineOf?.get(topic.uid) || "";
+  // The other side of a line/topic association: the line view links its
+  // topic, a topic links its lines.
+  const linkedTopic = topic.virtual ? state.topicOfLine?.get(topic.uid) || null : null;
+  const linkedLines = topic.virtual ? [] : state.linesOfTopic?.get(topic.uid) || [];
+  const linkedLine = linkedLines[0] || null;
   const design = async (body, { quiet = false } = {}) => {
     try {
       let next;
@@ -325,7 +336,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
   const counts = h("span", { class: "count" });
 
   // Auto layout arranges the Node and Mind layouts; Force lays itself out.
-  const layout = topicLayout(ctx, topic.uid);
+  const layout = topicLayout(ctx);
   const autoLayoutBtn = hasGraph ? h("button", {
     class: `btn sm ghost ${["node", "mind"].includes(layout) ? "" : "hidden"}`.trim(), title: t("topic.auto_layout_hint"),
     dataset: { topicAutoLayout: "1" }, onclick: () => { state.graph?.autoLayout(); },
@@ -356,13 +367,22 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
             onclick: (event) => ctx.openUnit(topic.uid, { x: event.clientX, y: event.clientY }) }, topicTitle(topic)),
         h("span", { class: "uid" }, topic.uid),
         topic.virtual ? h("span", { class: "topic-auto-badge", title: t("branch.auto_hint") }, t("branch.auto"))
-          : lineTag ? h("span", { class: "topic-line-badge", title: lineTag }, t("branch.line")) : null,
+          : linkedLine ? h("button", {
+            class: "topic-line-badge link", type: "button", dataset: { topicLine: linkedLine.name },
+            title: t("topic.ex.linked_line", { name: linkedLines.map((line) => line.name).join(", ") }),
+            onclick: () => ctx.openTopic(linkedLine.tag),
+          }, t("branch.line")) : null,
         topic.virtual ? null : statusPill(topic.status),
         topic.virtual ? h("label", { class: "row tight topic-line-exact", title: t("branch.exact_hint") },
           h("input", { type: "checkbox", checked: Boolean(S.lineExact),
             onchange: (event) => { S.lineExact = event.target.checked; ctx.topicPage?.openRef(topic.uid, { keepTrail: true }); } }),
           t("branch.exact")) : null,
-        topic.virtual ? h("button", {
+        linkedTopic ? h("button", {
+          class: "btn sm", type: "button", dataset: { lineOpenTopic: linkedTopic.uid },
+          title: t("branch.open_topic_hint", { title: linkedTopic.title || linkedTopic.uid }),
+          onclick: () => ctx.openTopic(linkedTopic.uid),
+        }, icon("layers", "sm"), t("branch.open_topic")) : null,
+        topic.virtual && !linkedTopic ? h("button", {
           class: "btn sm", type: "button", title: t("branch.pin_hint"),
           onclick: () => pinLine(ctx, topic, Boolean(S.lineExact)),
         }, icon("plus", "sm"), t("branch.pin")) : null,
@@ -401,7 +421,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
       ...base,
       layout,
       onLayoutChange: (next) => {
-        rememberTopicLayout(ctx, topic.uid, next);
+        rememberTopicLayout(ctx, next);
         autoLayoutBtn?.classList.toggle("hidden", !["node", "mind"].includes(next));
       },
       persistLayout: false,
@@ -695,7 +715,7 @@ function paintLinkFilter(ctx, host, edges, subgraph, design) {
 // ------------------------------------------------------------------ timeline
 function paintTimeline(ctx, host, data) {
   clear(host);
-  const items = (data.members || []).filter((unit) => unit.start_at || unit.end_at);
+  const items = topicTimelineItems(data.members);
   if (!items.length) {
     host.append(data.filtered && !data.members.length ? emptyState(t("common.no_results"))
       : emptyState(t("topic.timeline_empty"), t("topic.timeline_empty_hint")));

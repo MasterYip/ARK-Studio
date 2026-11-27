@@ -101,7 +101,7 @@ test("stale or hostile values are cleaned", () => {
     v: 1, route: "javascript:alert(1)", view: "<img>", graphLayout: "spiral",
     unit: { ref: "T-1\"><script>", scroll: -5 },
     sessions: { selected: "x".repeat(300), query: 5 },
-    cameras: { "pA:map": { zoom: "nan", pan: { x: 0, y: 0 } }, "pA:ok": { zoom: 1, pan: { x: 1, y: 2 }, layout: "tree" } },
+    cameras: { "pA:map": { zoom: "nan", pan: { x: 0, y: 0 } }, "pA:ok": { zoom: 1, pan: { x: 1, y: 2 }, layout: "tree" }, "pA:t": { zoom: 1, pan: { x: 0, y: 0 }, layout: "timeline" } },
     scrolls: [{ sel: "div[onclick]", index: 0, top: 1 }, { sel: "section.page", index: 2, top: -4 }],
   };
   const out = normalizeSnapshot(raw);
@@ -111,7 +111,9 @@ test("stale or hostile values are cleaned", () => {
   assert.equal(out.unit, null);
   assert.equal(out.sessions.selected, "");
   assert.equal(out.sessions.query, "");
-  assert.deepEqual(Object.keys(out.cameras), ["pA:ok"]);
+  assert.deepEqual(Object.keys(out.cameras), ["pA:ok", "pA:t"]);
+  assert.equal(out.cameras["pA:ok"].layout, "", "the removed tree layout is dropped");
+  assert.equal(out.cameras["pA:t"].layout, "timeline");
   assert.deepEqual(out.scrolls, [{ sel: "section.page", index: 2, top: 0 }]);
   assert.equal(normalizeSnapshot({ v: 2, route: "#/map" }), null, "a newer format is ignored");
   assert.equal(normalizeSnapshot("{"), null);

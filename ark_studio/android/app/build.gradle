@@ -8,8 +8,8 @@ android {
         applicationId 'com.masteryip.arkstudio'
         minSdk 26
         targetSdk 33
-        versionCode 23
-        versionName '2.1.8'
+        versionCode 24
+        versionName '2.1.9'
         // The app ships English and Chinese; keep library strings to the same languages.
         resourceConfigurations += ['en', 'zh']
     }

@@ -82,7 +82,9 @@ test("branchTopicEntries: lines without a topic first, then by last activity", (
     { name: "new", tag: "branch:new", topic: null, units: 2, last_activity: "2026-11-26" },
   ]);
   assert.deepEqual(entries.map((e) => [e.name, e.auto, e.ref]), [
-    ["new", true, "branch:new"], ["robot-use", true, "branch:robot-use"], ["hoi-pilot", false, "TP-0010"]]);
+    ["new", true, "branch:new"], ["robot-use", true, "branch:robot-use"], ["hoi-pilot", false, "branch:hoi-pilot"]]);
+  // The line opens as itself; the associated topic is kept apart.
+  assert.equal(entries[2].topic.uid, "TP-0010");
   assert.equal(entries[1].status, "stalled");
   assert.equal(m.isBranchRef("branch:robot-use"), true);
   assert.equal(m.isBranchRef("TP-0010"), false);

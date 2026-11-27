@@ -877,19 +877,6 @@ function buildFilterRail(host, ctx, { embedded = false } = {}) {
       h("span", null, t("map.context")),
       h("span", { class: "filter-check-hint" }, t("filters.graph_hint"))))));
 
-  // Selected tags (including virtual "unset" values)
-  if (state.filters.tags.length || state.filters.tagsUnset?.length) {
-    const chips = h("div", { class: "chips", style: { marginBottom: "4px" } },
-      state.filters.tags.map((tag) => h("span", {
-        class: "chip on", title: t("action.remove"), onclick: () => ctx.toggleFilterValue("tags", tag),
-      }, tag.startsWith("needs:") ? `${t("needs.group")}: ${t(`needs.value.${tag.slice(6)}`)}` : tag, h("span", { style: { opacity: ".8" } }, "×"))),
-      (state.filters.tagsUnset || []).map((ns) => h("span", {
-        class: "chip on unset-chip", title: t("action.remove"),
-        onclick: () => ctx.toggleFilterValue("tagsUnset", ns),
-      }, ns === "needs" ? `∅ ${t("needs.group")}` : `∅ ${ns}`, h("span", { style: { opacity: ".8" } }, "×"))));
-    host.appendChild(section(t("filters.tags"), chips));
-  }
-
   // Tag namespaces
   host.appendChild(h("div", { class: "tag-filter-hint" }, t("filters.tag_logic_hint")));
   const namespaces = facets.namespaces || {};
@@ -943,6 +930,20 @@ function buildFilterRail(host, ctx, { embedded = false } = {}) {
     h("span", { class: "n" }, unsetCount)));
     details.appendChild(list);
     host.appendChild(details);
+  }
+
+  // Selected tags (including virtual "unset" values), at the bottom: a chip
+  // that appears above the groups would shift what the user is clicking.
+  if (state.filters.tags.length || state.filters.tagsUnset?.length) {
+    const chips = h("div", { class: "chips", style: { marginBottom: "4px" } },
+      state.filters.tags.map((tag) => h("span", {
+        class: "chip on", title: t("action.remove"), onclick: () => ctx.toggleFilterValue("tags", tag),
+      }, tag.startsWith("needs:") ? `${t("needs.group")}: ${t(`needs.value.${tag.slice(6)}`)}` : tag, h("span", { style: { opacity: ".8" } }, "×"))),
+      (state.filters.tagsUnset || []).map((ns) => h("span", {
+        class: "chip on unset-chip", title: t("action.remove"),
+        onclick: () => ctx.toggleFilterValue("tagsUnset", ns),
+      }, ns === "needs" ? `∅ ${t("needs.group")}` : `∅ ${ns}`, h("span", { style: { opacity: ".8" } }, "×"))));
+    host.appendChild(section(t("filters.tags"), chips));
   }
 
 

@@ -318,3 +318,16 @@ export function headingAnchors(headings = []) {
     return n ? `${slug}-${n}` : slug;
   });
 }
+
+/**
+ * Natural size of a rendered Mermaid SVG for the zoom viewer: Mermaid writes
+ * width="100%" plus a viewBox and a max-width style; use the viewBox, else
+ * the max-width with a 5:3 shape.  Whole pixels, at least 1.
+ */
+export function mermaidNaturalSize(viewBox, maxWidth = "") {
+  const box = String(viewBox || "").trim().split(/[\s,]+/).map(Number);
+  const ok = box.length === 4 && box.every(Number.isFinite) && box[2] > 0 && box[3] > 0;
+  const width = ok ? box[2] : parseFloat(maxWidth) > 0 ? parseFloat(maxWidth) : 800;
+  const height = ok ? box[3] : width * 0.6;
+  return { width: Math.max(1, Math.ceil(width)), height: Math.max(1, Math.ceil(height)) };
+}

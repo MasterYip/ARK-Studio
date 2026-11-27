@@ -12,7 +12,7 @@ import { api } from "./api.js";
 import { openModal, toast } from "./components.js";
 import {
   AGENT_MESSAGES_KEY, MESSAGE_MAX, messagesEnabledIn, messageTargets, defaultTarget, sessionOf,
-  messageStatus, messageProblem,
+  messageStatus, messageProblem, rowTarget, withPreset,
 } from "./agent-messages-model.js";
 
 export const AGENT_MESSAGES_CHANGED = "ark:agent-messages-changed";
@@ -32,6 +32,19 @@ export function agentMessageMenuItem(ctx, unit) {
   const uid = String(unit?.uid || unit?.id || "");
   return { label: t("agent_msg.menu"), icon: "message",
     onClick: () => openAgentMessage({ uid, title: unit?.title || "", projectId: ctx?.S?.project?.id || "" }) };
+}
+
+/**
+ * Right-click menu entry for a row of the Agents or Hosts card (support-panel.js):
+ * "Message this agent" / "Message agents on this host", or null while the
+ * switch is off or the row cannot be messaged.
+ */
+export function rowMessageMenuItem(ctx, kind, row) {
+  if (!agentMessagesEnabled()) return null;
+  const preset = rowTarget(kind, row);
+  if (!preset) return null;
+  return { label: t(kind === "host" ? "agent_msg.menu_host" : "agent_msg.menu_agent"), icon: "message",
+    onClick: () => openAgentMessage({ projectId: ctx?.S?.project?.id || "", preset }) };
 }
 
 /** The Home button, or null while the switch is off. */
@@ -54,21 +67,28 @@ function threadView(messages) {
 }
 
 /** The dialog; `uid` ties the message to a node ("Message the agent working on this"). */
-export async function openAgentMessage({ uid = "", title = "", projectId = "" } = {}) {
+export async function openAgentMessage({ uid = "", title = "", projectId = "", preset = null } = {}) {
   const [tokens, sessions, history] = await Promise.all([
     api.agentTokens().then((r) => r.tokens || []).catch(() => []),
     api.agentSessions().then((r) => r.sessions || []).catch(() => []),
     api.agentMessages(uid).then((r) => r.messages || []).catch(() => []),
   ]);
-  const targets = messageTargets({ tokens, sessions, projectId, unitUid: uid });
+  const targets = withPreset(messageTargets({ tokens, sessions, projectId, unitUid: uid }), preset);
+  const byValue = new Map(targets.map((x) => [x.value, x]));
   const label = (x) => {
     if (x.kind === "mine") return t("agent_msg.target_mine");
-    if (x.kind === "session") return t(x.channel === "stdin" ? "agent_msg.target_session_now" : "agent_msg.target_session_next", { name: x.label });
+    if (x.kind === "session") {
+      const key = x.resume ? "agent_msg.target_session_resume"
+        : x.channel === "stdin" ? "agent_msg.target_session_now" : "agent_msg.target_session_next";
+      return t(key, { name: x.label });
+    }
+    if (x.kind === "actor") return t("agent_msg.target_actor", { name: x.label });
+    if (x.kind === "host") return t("agent_msg.target_host", { name: x.label });
     return t("agent_msg.target_token", { name: x.label });
   };
   const select = h("select", { class: "select", "aria-label": t("agent_msg.to") },
     ...targets.map((x) => h("option", { value: x.value }, label(x))));
-  select.value = defaultTarget(targets, uid);
+  select.value = preset?.value || defaultTarget(targets, uid);
   const input = h("textarea", { class: "textarea", style: { minHeight: "96px" }, maxlength: String(MESSAGE_MAX),
     placeholder: t("agent_msg.placeholder"), "aria-label": t("agent_msg.text") });
   const how = h("p", { class: "muted small" });
@@ -98,7 +118,9 @@ export async function openAgentMessage({ uid = "", title = "", projectId = "" } 
           try {
             const session = sessionOf(select.value);
             if (session) {
-              await api.sessionSteer(session, uid ? `${text}\n\n${t("agent_msg.session_node", { uid })}` : text);
+              const message = uid ? `${text}\n\n${t("agent_msg.session_node", { uid })}` : text;
+              if (byValue.get(select.value)?.resume) await api.continueSession(session, message);
+              else await api.sessionSteer(session, message);
               toast(t("agent_msg.sent_session"));
             } else {
               await api.sendAgentMessage({ body: text, unit: uid || undefined, target: select.value });

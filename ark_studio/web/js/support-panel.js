@@ -9,6 +9,8 @@ import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api } from "./api.js";
 import { openSetupResources } from "./gpu-note.js";
+import { openContextMenu } from "./context-menu.js";
+import { rowMessageMenuItem } from "./agent-messages.js";
 import {
   agentRows, hostRows, libraryCounts, deadlineRows, supportSummary, sessionCounts, cardEmpty, sizeParts, daysUntil,
 } from "./support-model.js";
@@ -66,6 +68,18 @@ function openSession(ctx, id) {
 function openRuns(ctx) {
   if (ctx.navigateWorkspace) ctx.navigateWorkspace("execute", "sessions");
   else ctx.setTaskView?.("sessions");
+}
+
+// Right-click on an agent or host row: "Message this agent" / "Message
+// agents on this host" (agent-messages.js; only while Settings › Advanced
+// "Experimental: message agents" is on and the row can be messaged).
+function messageMenu(ctx, kind, row) {
+  return (event) => {
+    const item = rowMessageMenuItem(ctx, kind, row);
+    if (!item) return;
+    event.preventDefault();
+    openContextMenu({ x: event.clientX, y: event.clientY, items: [item] });
+  };
 }
 
 function openResources(ctx) {
@@ -146,6 +160,7 @@ function agentRow(ctx, row, compact = false) {
   return h(click ? "button" : "div", {
     class: `support-row agent ${compact ? "compact" : ""}`.trim(), type: click ? "button" : undefined,
     dataset: { supportAgent: row.key, state: row.state }, onclick: click || undefined,
+    oncontextmenu: messageMenu(ctx, "agent", row),
     title: row.error || undefined,
   },
     h("span", { class: `support-dot ${row.state}` }),
@@ -180,6 +195,7 @@ function hostRow(ctx, row, compact = false) {
   return h("button", {
     class: `support-row host ${compact ? "compact" : ""}`.trim(), type: "button",
     dataset: { supportHost: row.key, state: row.state }, onclick: click,
+    oncontextmenu: messageMenu(ctx, "host", row),
   },
     h("span", { class: `support-dot host ${row.state}` }),
     h("span", { class: "support-main" },

@@ -650,7 +650,9 @@ export function needsLayout(stored) {
  */
 export function branchTopicEntries(infos = []) {
   return (Array.isArray(infos) ? infos : []).filter((b) => b?.name).map((b) => ({
-    name: b.name, tag: b.tag, ref: b.ref || b.tag, auto: !b.topic, topic: b.topic || null,
+    // A line always opens as the line view (its tag); `topic` is the topic
+    // associated with it, which opens on its own.
+    name: b.name, tag: b.tag, ref: b.tag || b.ref, auto: !b.topic, topic: b.topic || null,
     // "rule": the topic's rule is the tag (adding a node tags it); "tag": a
     // topic that carries the tag and keeps its own members.
     via: b.topic ? b.topic.via || "rule" : "",

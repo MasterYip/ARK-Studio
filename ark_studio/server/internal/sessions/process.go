@@ -164,6 +164,10 @@ func decodeLine(raw []byte) string {
 // startProcess starts one turn's process: relayed (it survives a server
 // restart) when the manager runs relays, else with pipes owned by the server.
 func (m *Manager) startProcess(s *Session, argv []string, dir string, env []string) (*process, error) {
+	if runtime.GOOS == "windows" { // an npm-installed CLI (npmshim.go)
+		argv = npmShimArgv(argv, func(name string) (string, error) { return lookProgram(name, env) },
+			func(name string) string { return pathFile(name, env) })
+	}
 	if m.Relay {
 		return startRelay(s.Folder, s.ID, argv, dir, env)
 	}
@@ -217,6 +221,10 @@ func (m *Manager) handleLine(s *Session, name string, raw []byte) {
 	func() {
 		defer func() { _ = recover() }()
 		m.observeNativeID(s, text)
+	}()
+	func() {
+		defer func() { _ = recover() }()
+		m.observeGemini(s, name, text) // gemini.go
 	}()
 	if name == "stdout" {
 		func() {
@@ -393,7 +401,15 @@ func (m *Manager) finish(s *Session, code *int) {
 		s.Meta.Set("turn_state", "")
 	}
 	stderrCount := intOr(objOr(s.Meta.Value("counts")).Value("stderr"), 0)
-	transcript := strings.ToLower(strOr(s.Meta.Value("platform"))) == "codex"
+	platform := strings.ToLower(strOr(s.Meta.Value("platform")))
+	transcript := platform == "codex" || platform == "gemini"
+	// A Gemini turn says why it failed (gemini.go); that beats the exit code.
+	geminiFailed := ""
+	if platform == "gemini" && !s.stopRequested {
+		if geminiFailed = s.gemini.failure(code); geminiFailed != "" && !stopped {
+			s.Meta.Set("error", geminiFailed)
+		}
+	}
 	if !stopped && stderrCount > 0 && !transcript && !pyjson.Truthy(s.Meta.Value("error")) {
 		s.Meta.Set("error", "process exited with errors")
 	}
@@ -410,6 +426,8 @@ func (m *Manager) finish(s *Session, code *int) {
 		if !isStream(s) || turnWas != "waiting" {
 			s.Meta.Delete("turn_end")
 		}
+	case geminiFailed != "": // exit code 0 after a failed result
+		setTurnEndLocked(s, "error", geminiFailed)
 	case !isStream(s) || turnWas != "waiting":
 		setTurnEndLocked(s, "done", "")
 	}

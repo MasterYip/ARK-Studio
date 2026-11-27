@@ -53,9 +53,42 @@ Stored with the physics as `cluster` (true/false), `cluster_attract`,
 `cluster_repel` (0 to 1, default 0.5) and `cluster_by` (`type`, `status` or
 `tag`). Projects that never set them lay out exactly as before.
 
+## Timeline graph
+
+The **Timeline graph** layout (graph toolbar, next to Node graph) shows the
+node cards and links of the node graph, ordered by time from left to right,
+with one horizontal lane per research line, so parallel lines and the
+places where they meet are visible.
+
+- **Order**: a node's time is its start date, else when it was created,
+  else when it was last updated. Columns are ranks, not a time scale: the
+  next node in time takes the same column when it is on another lane, and
+  nodes of one lane from the same day (or within two hours) stack in one
+  column, up to four. *depends on* and *derived from* links, in their shown
+  direction, keep a node right of its inputs even when the dates say
+  otherwise. *part of* only orders nodes whose dates agree; when the whole
+  came first, the link runs from the whole to its parts (arrowheads keep
+  their meaning). Dashed rules with a date mark where the latest day reached
+  so far changes.
+- **Lanes**: one per line tag (`branch:<line>`, or the project's line
+  namespace); sub-lines (`a/b`) follow their parent line. A node tagged with
+  several lines sits in the biggest one, and the links from the other lines
+  run across lanes into it. Untagged nodes join the line of their nearest
+  *part of* parent, else the **Not in a line** lane at the bottom. When most
+  nodes have no line, they get one lane per *part of* tree instead.
+- **Links**: the timeline first shows how work led to the next piece:
+  *derived from*, *depends on*, *part of*, *produces*, *validates*,
+  *inspires*, *supports* and *supersedes*. The edge filter shows the others.
+- **Fit** shows the whole timeline when it fits; a longer one opens at its
+  start, with every lane in view.
+- The layout is always automatic: cards can be moved for a closer look, but
+  positions are not saved and the next refresh lays them out again. The node
+  graph keeps its own arrangement. Card widths set in the node graph apply.
+
 ## 3D graph
 
 The **3D** button in a graph's toolbar (Map, a topic's Graph view, Ideas)
+is shown with the Force layout and
 shows the same nodes and links in a 3D force layout, drawn in perspective:
 nearer nodes are larger, farther ones smaller and fade into the background.
 Nodes are flat discs that always face you, with the same colours and status
@@ -80,7 +113,8 @@ selected ones.
   (1x pixel ratio, no antialiasing). Labels never overlap on screen: where
   two would, the nearer node keeps its label.
 
-The 2D/3D choice is remembered per account and page; the 3D settings per
+Picking another layout leaves 3D; picking Force again returns to 3D when
+it was the last choice. The 2D/3D choice is remembered per account and page; the 3D settings per
 account. three.js (MIT) loads the first time 3D opens. Without WebGL the
 graph stays in 2D and says so. 3D is for viewing: adding nodes, links and
 editing stay in 2D.
@@ -138,7 +172,7 @@ Some relations read backwards to the flow of work: *A derived from B* and
 *A depends on B* both flow from B to A. A relation can be **reversed for
 display**: graphs draw and lay it out from target to source. Arrowheads flip;
 node-graph layers and port sides follow the shown direction (derived work sits
-right of its source material); Mind and tree layouts use it for parent/child;
+right of its source material, also in the timeline graph); Mind uses it for parent/child;
 the local graph's *outgoing*/*incoming* filter follows it. Stored links, the
 inspector's relation labels, APIs and exports keep the stored direction.
 

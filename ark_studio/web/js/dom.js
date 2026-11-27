@@ -2,7 +2,7 @@ import { icon } from "./icons.js";
 import { t, locale, typeLabel } from "./i18n.js";
 import { authenticatedUrl } from "./api.js";
 import { saveDownload } from "./download-link.js";
-import { resolveRichUrl, embedKind, hashText, isVizLang, EXPLICIT_ANCHOR_RE, headingAnchors } from "./rich-model.js";
+import { resolveRichUrl, embedKind, hashText, isVizLang, EXPLICIT_ANCHOR_RE, headingAnchors, mermaidNaturalSize } from "./rich-model.js";
 import { vizBlock } from "./viz.js";
 import { sanitizeRichHtml } from "./rich-html.js";
 import { markdownTokens, markdownInlineTokens } from "./markdown.js";
@@ -542,30 +542,32 @@ export function typesetMath(root) {
   });
 }
 
+// Mermaid (vendor/mermaid, MIT) is the ESM split build: a 26 KB entry that
+// imports only the chunks a diagram type needs (a flowchart: about 610 KB,
+// 180 KB gzip, instead of the 2.7 MB single file).  The literal import path
+// lets the server version it (?v=), so the files are cached as immutable and
+// kept by the service worker's runtime cache.  Nothing loads until a page
+// has a mermaid block.
 let mermaidPromise = null;
 
-function loadMermaid() {
-  if (!mermaidPromise) {
-    mermaidPromise = new Promise((resolve, reject) => {
-      if (window.mermaid) { resolve(window.mermaid); return; }
-      const script = document.createElement("script");
-      script.src = "/vendor/mermaid/mermaid.min.js";
-      script.async = true;
-      script.onload = () => window.mermaid ? resolve(window.mermaid) : reject(new Error("Mermaid unavailable"));
-      script.onerror = () => reject(new Error("Mermaid failed to load"));
-      document.head.appendChild(script);
-    }).catch(() => null);
-  }
+export function loadMermaid() {
+  mermaidPromise ||= import("../vendor/mermaid/mermaid.esm.min.js")
+    .then((mod) => mod.default || null)
+    .catch(() => { mermaidPromise = null; return null; });
   return mermaidPromise;
 }
 
-// Rendered diagrams are cached by theme+source so live previews re-use the
-// SVG synchronously while typing (no flicker), and renders are serialised
-// because Mermaid keeps global state.
+/** True once a page asked for Mermaid (tests: no mermaid block, no load). */
+export function mermaidRequested() { return mermaidPromise !== null; }
+
+// Rendered diagrams are cached by theme+source so live previews and inspector
+// repaints re-use the SVG synchronously (no re-render, no flicker), and
+// renders are serialised because Mermaid keeps global state.
 const mermaidCache = new Map();
 const MERMAID_CACHE_LIMIT = 80;
 let mermaidQueue = Promise.resolve();
 let mermaidSeq = 0;
+let mermaidConfigured = "";
 
 function mermaidTheme() {
   return document.documentElement.dataset.theme === "dark" ? "dark" : "default";
@@ -575,17 +577,36 @@ function mermaidCacheKey(source) {
   return `${mermaidTheme()}|${hashText(source)}|${source.length}`;
 }
 
+function mermaidPlaceholder(node) {
+  node.replaceChildren(h("div", { class: "mermaid-pending" }, t("mermaid.rendering")));
+}
+
 function paintMermaid(node, entry, source) {
+  node.classList.remove("stale", "pending");
   if (entry.svg) {
     // securityLevel "strict": Mermaid sanitises labels (DOMPurify) and
     // disables click handlers/HTML labels before producing this SVG.
     node.innerHTML = entry.svg;
     node.classList.add("rendered");
     node.classList.remove("error");
+    node.dataset.hint = t("mermaid.open");
+    node.setAttribute("role", "button");
+    node.tabIndex = 0;
+    node.title = t("mermaid.open");
+    if (!node.__mermaidOpen) {
+      node.__mermaidOpen = true;
+      node.addEventListener("click", openMermaidPreview);
+      node.addEventListener("keydown", (event) => {
+        if (event.key === "Enter" || event.key === " ") openMermaidPreview(event);
+      });
+    }
     return;
   }
   node.classList.add("error");
   node.classList.remove("rendered");
+  node.removeAttribute("role");
+  node.removeAttribute("title");
+  node.removeAttribute("tabindex");
   node.replaceChildren(
     h("div", { class: "mermaid-error-head" }, icon("alert", "sm"), h("span", null, `Mermaid: ${entry.error}`)),
     h("pre", { class: "mermaid-error-source" }, source));
@@ -596,8 +617,48 @@ function rememberMermaid(key, entry) {
   if (mermaidCache.size > MERMAID_CACHE_LIMIT) mermaidCache.delete(mermaidCache.keys().next().value);
 }
 
+/**
+ * The rendered SVG as a standalone image: explicit width/height from the
+ * viewBox (Mermaid writes width="100%"), so the zoom viewer knows its natural
+ * size, and the vector stays sharp at any zoom.
+ */
+export function standaloneMermaidSvg(svgText) {
+  const doc = new DOMParser().parseFromString(svgText, "image/svg+xml");
+  const svg = doc.documentElement;
+  if (!svg || svg.nodeName.toLowerCase() !== "svg" || doc.querySelector("parsererror")) return null;
+  const size = mermaidNaturalSize(svg.getAttribute("viewBox"), svg.style.maxWidth);
+  svg.setAttribute("width", String(size.width));
+  svg.setAttribute("height", String(size.height));
+  svg.style.removeProperty("max-width");
+  if (!svg.getAttribute("xmlns")) svg.setAttribute("xmlns", "http://www.w3.org/2000/svg");
+  return new XMLSerializer().serializeToString(svg);
+}
+
+async function openMermaidPreview(event) {
+  const node = event.currentTarget;
+  if (!node?.classList.contains("rendered")) return;
+  if (String(window.getSelection?.() || "")) return; // selecting label text
+  event.preventDefault();
+  event.stopPropagation();
+  const svg = node.querySelector("svg");
+  const text = svg && standaloneMermaidSvg(svg.outerHTML);
+  if (!text) return;
+  const { openImageLightbox } = await import("./image-viewer.js");
+  // A data: URL in an <img>: the SVG can never run script there, and data:
+  // images are allowed by the web and desktop CSPs.
+  const src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(text)}`;
+  openImageLightbox({
+    src, alt: t("mermaid.title"), title: t("mermaid.title"), className: "iv-mermaid",
+    actions: [h("button", {
+      class: "btn sm ghost iv-download", type: "button",
+      onclick: () => download("diagram.svg", text, "image/svg+xml;charset=utf-8"),
+    }, icon("download", "sm"), t("mermaid.download_svg"))],
+  });
+}
+
 // Diagrams follow ARK's light/dark theme: when <html data-theme> flips,
-// every rendered diagram is re-rendered (its old SVG stays until then).
+// every diagram is queued again (its old SVG stays until it is re-rendered;
+// off-screen ones wait until they are scrolled into view).
 let mermaidThemeWatch = false;
 function watchMermaidTheme() {
   if (mermaidThemeWatch || typeof MutationObserver !== "function") return;
@@ -607,41 +668,52 @@ function watchMermaidTheme() {
     const roots = new Set();
     for (const block of blocks) {
       block.classList.remove("rendered", "error");
+      if (block.querySelector("svg")) block.classList.add("stale");
       roots.add(block.closest(".rich") || block.parentElement);
     }
     for (const root of roots) if (root) typesetMermaid(root);
   }).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
 }
 
-export function typesetMermaid(root) {
-  const nodes = [...root.querySelectorAll("[data-mermaid]")].filter((node) => !node.classList.contains("rendered") && !node.classList.contains("error"));
-  if (!nodes.length) return;
-  watchMermaidTheme();
-  for (const node of nodes) {
-    const cached = mermaidCache.get(mermaidCacheKey(node.dataset.mermaid || ""));
-    if (cached) paintMermaid(node, cached, node.dataset.mermaid || "");
-  }
-  const pending = nodes.filter((node) => !node.classList.contains("rendered") && !node.classList.contains("error"));
-  if (!pending.length) return;
+// Diagrams render when they come near the viewport, visible ones first; a
+// long document with many diagrams no longer blocks on the ones below.
+let mermaidVisibility = null;
+const mermaidWaiting = new WeakSet();
+function whenVisible(node) {
+  if (mermaidWaiting.has(node)) return;
+  if (typeof IntersectionObserver !== "function") { queueMermaid([node]); return; }
+  mermaidVisibility ||= new IntersectionObserver((entries) => {
+    const visible = entries.filter((entry) => entry.isIntersecting).map((entry) => entry.target);
+    for (const target of visible) { mermaidVisibility.unobserve(target); mermaidWaiting.delete(target); }
+    if (visible.length) queueMermaid(visible);
+  }, { rootMargin: "400px 0px", scrollMargin: "400px 0px" });
+  mermaidWaiting.add(node);
+  mermaidVisibility.observe(node);
+}
+
+function queueMermaid(nodes) {
   loadMermaid().then((mermaid) => {
     if (!mermaid) {
-      for (const node of pending) node.classList.add("mermaid-unavailable");
+      for (const node of nodes) paintMermaid(node, { error: t("mermaid.unavailable") }, node.dataset.mermaid || "");
       return;
     }
     mermaidQueue = mermaidQueue.then(async () => {
-      if (!root.isConnected) return;
-      mermaid.initialize({
-        startOnLoad: false,
-        securityLevel: "strict",
-        theme: mermaidTheme(),
-        fontFamily: "system-ui, 'Segoe UI', 'Microsoft YaHei'",
-      });
-      for (const node of pending) {
-        if (!node.isConnected) continue;
+      for (const node of nodes) {
+        if (!node.isConnected || node.classList.contains("rendered") || node.classList.contains("error")) continue;
         const source = node.dataset.mermaid || "";
         const key = mermaidCacheKey(source);
         let entry = mermaidCache.get(key);
         if (!entry) {
+          const theme = mermaidTheme();
+          if (mermaidConfigured !== theme) {
+            mermaid.initialize({
+              startOnLoad: false,
+              securityLevel: "strict",
+              theme,
+              fontFamily: "system-ui, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', 'Noto Sans CJK SC', sans-serif",
+            });
+            mermaidConfigured = theme;
+          }
           mermaidSeq += 1;
           const id = `ark-mermaid-${mermaidSeq}`;
           try {
@@ -660,6 +732,38 @@ export function typesetMermaid(root) {
       }
     }).catch(() => {});
   });
+}
+
+/**
+ * A ```mermaid block: the cached SVG straight away, else a placeholder while
+ * Mermaid starts loading (before the block is even painted).  typesetMermaid
+ * renders it once it is near the viewport.
+ */
+export function mermaidBlock(source) {
+  const block = h("div", { class: "mermaid-block", "data-mermaid": source });
+  const cached = mermaidCache.get(mermaidCacheKey(source));
+  if (cached) paintMermaid(block, cached, source);
+  else {
+    mermaidPlaceholder(block);
+    block.classList.add("pending");
+    loadMermaid();
+  }
+  return block;
+}
+
+export function typesetMermaid(root) {
+  const nodes = [...root.querySelectorAll("[data-mermaid]")].filter((node) => !node.classList.contains("rendered") && !node.classList.contains("error"));
+  if (!nodes.length) return;
+  watchMermaidTheme();
+  for (const node of nodes) {
+    const source = node.dataset.mermaid || "";
+    const cached = mermaidCache.get(mermaidCacheKey(source));
+    if (cached) { paintMermaid(node, cached, source); continue; }
+    if (!node.querySelector("svg, .mermaid-pending")) mermaidPlaceholder(node);
+    node.classList.add("pending");
+    whenVisible(node);
+  }
+  if (nodes.some((node) => node.classList.contains("pending"))) loadMermaid();
 }
 
 // Marked parses the document; DOMPurify sanitises embedded HTML. ARK's
@@ -753,10 +857,7 @@ function applyAnchors(root) {
 function markdownCodeBlock(source, lang, opts, vizIndex) {
   const langId = String(lang).toLowerCase().split(/\s+/)[0];
   if (langId === "mermaid") {
-    const block = h("div", { class: "mermaid-block", "data-mermaid": source }, source);
-    const cached = mermaidCache.get(mermaidCacheKey(source));
-    if (cached) paintMermaid(block, cached, source);
-    return block;
+    return mermaidBlock(source);
   }
   if (isVizLang(langId)) return vizBlock(source, { key: opts.vizScope ? `${opts.vizScope}#${vizIndex}` : "" });
   return h("div", { class: "code-block" },

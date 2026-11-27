@@ -3,8 +3,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
   parseExplorer, sections, topicTree, lineTree, visibleRows, searchRows,
-  ancestorKeys, outlineRows, foldCommand,
+  ancestorKeys, outlineRows, foldCommand, lineRowRef, lineAssociations, rowActive,
 } from "../../ark_studio/web/js/topic-explorer-model.js";
+import { branchTopicEntries } from "../../ark_studio/web/js/needs-model.js";
 
 const keys = (rows) => rows.map((row) => row.key);
 
@@ -89,4 +90,49 @@ test("fold commands follow the Ctrl+K chords", () => {
   assert.deepEqual(sorted(foldCommand(rows, new Set(), { cmd: "fold" }, { focus: 4 })), [], "nothing to fold");
   // A custom foldable set (the document view folds bodies too).
   assert.deepEqual(sorted(foldCommand(rows, new Set(), { cmd: "foldAll" }, { foldable: new Set([1, 4, 5]) })), [1, 4, 5]);
+});
+
+// The report (2026-11-27): the line wm-hoi carries a hand-curated topic
+// (TP-0009 tags itself branch:wm-hoi, no rule).  Clicking the line opened the
+// topic, and both rows lit up as one thing.
+test("lines and topics: a line opens as itself, only one row lights up", () => {
+  const lines = branchTopicEntries([
+    { name: "wm-hoi", tag: "branch:wm-hoi", ref: "TP-0009", units: 1,
+      topic: { id: 355, uid: "TP-0009", title: "世界模型与人形 HOI（N-0006）", via: "tag" } },
+    { name: "wm-hoi/gcrl", tag: "branch:wm-hoi/gcrl", ref: "branch:wm-hoi/gcrl", units: 16, topic: null },
+    { name: "hoi/pilot", tag: "branch:hoi/pilot", units: 3, topic: { uid: "TP-0011", title: "Pilot", via: "rule" } },
+  ]);
+  const rows = lineTree(lines);
+  const row = (key) => rows.find((item) => item.key === key);
+  // Every line row opens its tag, never the associated topic.
+  assert.equal(lineRowRef(row("wm-hoi"), lines), "branch:wm-hoi");
+  assert.equal(lineRowRef(row("wm-hoi/gcrl"), lines), "branch:wm-hoi/gcrl");
+  assert.equal(lineRowRef(row("hoi/pilot"), lines), "branch:hoi/pilot", "a pinned (rule) topic does not take over either");
+  assert.equal(lineRowRef(row("hoi"), lines), "branch:hoi", "a path-only row opens by its tag");
+  assert.equal(row("wm-hoi").count, 17, "the line's count covers its sub-lines");
+
+  // The line view is open: only the line row is on, not the topic.
+  const topicRow = { key: "TP-0009" };
+  assert.equal(rowActive("lines", row("wm-hoi"), "branch:wm-hoi", lines), true);
+  assert.equal(rowActive("lines", row("wm-hoi/gcrl"), "branch:wm-hoi", lines), false);
+  assert.equal(rowActive("topics", topicRow, "branch:wm-hoi", lines), false);
+  // The topic is open: only the topic row is on.
+  assert.equal(rowActive("topics", topicRow, "TP-0009", lines), true);
+  assert.equal(rows.some((item) => rowActive("lines", item, "TP-0009", lines)), false);
+  assert.equal(rowActive("lines", row("wm-hoi"), "", lines), false);
+
+  // The association is kept both ways for the chip and the badge.
+  const { topicOf, linesOf } = lineAssociations(lines);
+  assert.equal(topicOf.get("wm-hoi").uid, "TP-0009");
+  assert.equal(topicOf.has("wm-hoi/gcrl"), false);
+  assert.deepEqual(linesOf.get("TP-0009").map((line) => line.name), ["wm-hoi"]);
+  assert.deepEqual(linesOf.get("TP-0011").map((line) => line.name), ["hoi/pilot"]);
+  assert.equal(linesOf.has("TP-0001"), false, "a topic without a line gets no badge");
+});
+
+test("lines and topics: junk input", () => {
+  assert.deepEqual([...lineAssociations(null).topicOf], []);
+  assert.equal(rowActive("lines", null, "branch:x"), false);
+  assert.equal(lineRowRef({ key: "a/b" }, []), "branch:a/b");
+  assert.equal(lineRowRef({ key: "a" }, [{ name: "z", tag: "line:z" }]), "line:a", "the project's line prefix");
 });

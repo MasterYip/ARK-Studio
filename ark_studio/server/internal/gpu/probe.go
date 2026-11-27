@@ -368,12 +368,21 @@ func splitStrip(raw string) []string {
 // ProbeServer is probe.probe_server.  Go-only: with a system runner, the
 // server's storage (the df section, storage.go) is added as "storage" when it
 // parses; dataPaths are the remote data folders whose mounts are marked.
+//
+// The system query runs on its own SSH connection at the same time as the
+// GPU query (it takes the longer of the two, ~2.5 s with top and pmon,
+// instead of their sum); its result is used only when the GPU query works.
 func ProbeServer(server *pyjson.Object, runner Runner, timeout int, systemRunner Runner, dataPaths ...string) (*pyjson.Object, error) {
 	limit := timeoutOf(server, timeout)
 	public := PublicServer(server)
 	payload := pyjson.NewObject("server", public.Value("name"), "host", public.Value("host"),
 		"port", public.Value("port"), "user", public.Value("user"), "ok", false, "gpus", []any{},
 		"warnings", []any{}, "error", nil, "duration_ms", int64(0), "command", ProbeCommandText())
+	var sysDone chan CommandResult
+	if systemRunner != nil {
+		sysDone = make(chan CommandResult, 1) // buffered: a failed GPU query does not wait for it
+		go func() { sysDone <- systemRunner(server, limit) }()
+	}
 	result := runner(server, limit)
 	payload.Set("duration_ms", result.DurationMS)
 	if !result.OK() {
@@ -404,8 +413,8 @@ func ProbeServer(server *pyjson.Object, runner Runner, timeout int, systemRunner
 	if len(gpus) == 0 {
 		payload.Set("warnings", append(warnings, "nvidia-smi returned no GPU rows"))
 	}
-	if systemRunner != nil {
-		sys := systemRunner(server, limit)
+	if sysDone != nil {
+		sys := <-sysDone
 		if sys.OK() {
 			system, err := ParseSystem(sys.Stdout)
 			if err != nil {

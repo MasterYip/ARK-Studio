@@ -237,3 +237,53 @@ func anchorIDList(anchors []bodyAnchor) string {
 	}
 	return strings.Join(ids, ", ")
 }
+
+// ---------------------------------------------------- review group notes
+
+// groupBody is a review group member: its uid and body.
+type groupBody struct{ uid, body string }
+
+var unitMentionRe = regexp.MustCompile(`[A-Z]{1,4}-\d{1,9}`)
+
+// groupHeadingUnit is the member a bare "#slug" of a review group's note
+// points to ("" = none): the member named last before the link ("X-0071 的
+// [结论](#conclusion)") when its body resolves the anchor, else the only
+// member whose body has it exactly, else the only one with a close heading.
+func groupHeadingUnit(note string, a Anchor, members []groupBody) string {
+	body := map[string]string{}
+	for _, m := range members {
+		body[m.uid] = m.body
+	}
+	resolves := func(uid string) (string, bool) {
+		_, how, ok := resolveHeading(a.Slug, a.Label, scanBodyAnchors(bodyLines(body[uid])))
+		return how, ok
+	}
+	if at := strings.Index(note, "]("+a.Raw); at >= 0 {
+		named := unitMentionRe.FindAllString(note[:at], -1)
+		for i := len(named) - 1; i >= 0; i-- {
+			if _, member := body[named[i]]; member {
+				if _, ok := resolves(named[i]); ok {
+					return named[i]
+				}
+				break
+			}
+		}
+	}
+	var exact, close []string
+	for _, m := range members {
+		if how, ok := resolves(m.uid); ok {
+			if how == "explicit" || how == "slug" {
+				exact = append(exact, m.uid)
+			} else {
+				close = append(close, m.uid)
+			}
+		}
+	}
+	switch {
+	case len(exact) == 1:
+		return exact[0]
+	case len(exact) == 0 && len(close) == 1:
+		return close[0]
+	}
+	return ""
+}

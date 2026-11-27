@@ -9,7 +9,7 @@ export const LAUNCH_DEFAULTS_KEY = "ark.launchDefaults.v1";
 export const CUSTOM_MODEL = "__custom__";
 export const ACCESS_CHOICES = ["read_only", "full_access"];
 // Real coding agents first, in this order; demo and local presets last.
-const PROVIDER_ORDER = ["claude", "codex", "dsh", "opencode", "cursor", "gemini", "custom", "shell", "echo"];
+const PROVIDER_ORDER = ["claude", "codex", "gemini", "dsh", "opencode", "cursor", "custom", "shell", "echo"];
 const MAX_REMEMBERED = 60;
 
 const str = (value) => (value === null || value === undefined ? "" : String(value)).trim();

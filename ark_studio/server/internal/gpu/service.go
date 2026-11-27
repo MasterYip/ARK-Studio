@@ -70,6 +70,48 @@ type Service struct {
 	AllowedFor func(projectID, owner string) Scope
 	// OnFinished is Queue.OnFinished (wake.go); the server sets it.
 	OnFinished func(job *pyjson.Object, wake Wake) error
+
+	// probing holds the server probes in flight: a probe of the same server
+	// (same settings) that starts meanwhile, from the GPU tab's timer, its
+	// Refresh button or another viewer, waits for that one instead of
+	// opening its own SSH connections.
+	probingMu sync.Mutex
+	probing   map[string]*probeCall
+}
+
+// probeCall is one server probe in flight (Service.probeShared).
+type probeCall struct {
+	done   chan struct{}
+	result *pyjson.Object
+	err    error
+}
+
+// probeShared is ProbeServer, shared with the identical probes that start
+// while it runs.  The result is read-only afterwards (it is also kept as
+// lastProbe), so every caller gets the same object.
+func (s *Service) probeShared(server *pyjson.Object, runner Runner, timeout int, system Runner,
+	dataPaths []string) (*pyjson.Object, error) {
+	key := string(pyjson.Dumps(server)) + "\x00" + strconv.Itoa(timeout) + "\x00" + strings.Join(dataPaths, "\x00")
+	s.probingMu.Lock()
+	if call, ok := s.probing[key]; ok {
+		s.probingMu.Unlock()
+		<-call.done
+		return call.result, call.err
+	}
+	call := &probeCall{done: make(chan struct{})}
+	if s.probing == nil {
+		s.probing = map[string]*probeCall{}
+	}
+	s.probing[key] = call
+	s.probingMu.Unlock()
+	defer func() {
+		s.probingMu.Lock()
+		delete(s.probing, key)
+		s.probingMu.Unlock()
+		close(call.done)
+	}()
+	call.result, call.err = ProbeServer(server, runner, timeout, system, dataPaths...)
+	return call.result, call.err
 }
 
 // ConfigPath is GpuService.config_path().
@@ -422,8 +464,8 @@ func (s *Service) ProbeFor(sc Scope, body *pyjson.Object, projectID string) (*py
 			if override != 0 {
 				cap = override
 			}
-			results[i], errs[i] = ProbeServer(server, runner, int(max(minTimeoutSeconds, min(limit, cap))), system,
-				DataPaths(cfg, pyjson.Str(server.Value("name")))...)
+			results[i], errs[i] = s.probeShared(server, runner, int(max(minTimeoutSeconds, min(limit, cap))), system,
+				DataPaths(cfg, pyjson.Str(server.Value("name"))))
 		}(i, server)
 	}
 	wg.Wait()

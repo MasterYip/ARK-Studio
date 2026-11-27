@@ -34,6 +34,7 @@ async function load() {
     "./presence-ui.js": ["attachPresenceOverlay", "createPresenceChip"],
     "./selection-model.js": ["siblingGroup", "groupDefaults"],
     "./read-edit-mode.js": ["rememberMode", "savedMode"],
+    "./graph-viewport-model.js": ["pointsOnScreen", "viewportAction", "anchorShift"],
     "./users.js": ["currentUsername"],
     "./components.js": ["toast"],
     "./graph3d-model.js": ["loadViewChoice", "saveViewChoice", "loadGraph3DSettings", "saveGraph3DSettings", "graph3DAvailable"],

@@ -9,12 +9,18 @@ async function fixture(nodeTransitions = true) {
   const context = vm.createContext({ performance, localStorage: { setItem() {} } });
   const core = await loadGraphCore(context);
   const graphChange = await loadGraphChange(context);
+  const viewportModel = new vm.SourceTextModule(
+    await readFile(new URL("../../ark_studio/web/js/graph-viewport-model.js", import.meta.url), "utf8"), { context },
+  );
+  await viewportModel.link(() => { throw new Error("graph-viewport-model.js has no imports"); });
+  await viewportModel.evaluate();
   const module = new vm.SourceTextModule(
     await readFile(new URL("../../ark_studio/web/js/graph.js", import.meta.url), "utf8"), { context },
   );
   await module.link(async (specifier, parent) => {
     if (specifier === "./graph-core.js") return core;
     if (specifier === "./graph-change.js") return graphChange;
+    if (specifier === "./graph-viewport-model.js") return viewportModel;
     const source = await readFile(new URL(`../../ark_studio/web/js/${specifier.slice(2)}`, import.meta.url), "utf8");
     const names = [...new Set([...source.matchAll(/export (?:async )?(?:function|class|const|let) (\w+)/g)].map((m) => m[1]))];
     const values = {
@@ -155,4 +161,66 @@ test("node size follows the current links: a parent with new children grows", as
   graph._syncDegrees();
   assert.equal(graph.nodes[0].degree, 4);
   assert.equal(graph.nodes[3].degree, 2);
+});
+
+// Filter changes keep the camera (graph.js _keepNodesInView).
+function instantCamera(graph) {
+  graph._animateCamera = (zoom, pan) => { graph.zoom = zoom; graph.pan = { ...pan }; };
+  return graph;
+}
+
+test("a filter change that leaves the view empty fits the remaining nodes", async () => {
+  const graph = instantCamera(await fixture());
+  const nodes = [{ id: 1, x: -2000, y: 0 }, { id: 2, x: -1900, y: 40 }, { id: 3, x: 2000, y: 0 }, { id: 4, x: 2100, y: 30 }];
+  graph.setData(nodes, [], { warm: false });
+  // Zoomed in on the left cluster.
+  graph.zoom = 1;
+  graph.pan = { x: 1950, y: -20 };
+  graph.setData([nodes[2], nodes[3]], [], { preserveCamera: true, warm: false });
+  assert.equal(graph.viewChecks.at(-1), "fit");
+  assert.equal(graph._viewportAction(), "keep", "the remaining nodes are on screen again");
+});
+
+test("a filter change keeps the camera while the view still shows nodes", async () => {
+  const graph = instantCamera(await fixture());
+  const nodes = [{ id: 1, x: -2000, y: 0 }, { id: 2, x: -1900, y: 40 }, { id: 3, x: 2000, y: 0 }];
+  graph.setData(nodes, [], { warm: false });
+  graph.zoom = 1;
+  graph.pan = { x: 1950, y: -20 };
+  graph.setData([nodes[0], nodes[2]], [], { preserveCamera: true, warm: false });
+  assert.equal(graph.viewChecks.at(-1), "keep");
+  assert.deepEqual([graph.zoom, graph.pan.x, graph.pan.y], [1, 1950, -20]);
+});
+
+test("an empty filter result keeps the camera and the empty state", async () => {
+  const graph = instantCamera(await fixture());
+  graph.setData([{ id: 1, x: 10, y: 10 }], [], { warm: false });
+  graph.zoom = 0.8;
+  graph.pan = { x: 40, y: 30 };
+  graph.setData([], [], { preserveCamera: true, warm: false });
+  assert.deepEqual([graph.zoom, graph.pan.x, graph.pan.y], [0.8, 40, 30]);
+  assert.equal(graph.viewChecks.at(-1), "empty");
+});
+
+test("a remote update never fits, even when the view shows nothing", async () => {
+  const graph = instantCamera(await fixture());
+  graph.setData([{ id: 1, x: 10, y: 10 }, { id: 2, x: 30, y: 10 }], [], { warm: false });
+  graph.zoom = 1;
+  graph.pan = { x: 5000, y: 0 };
+  graph.setData([{ id: 1 }, { id: 3 }], [], { remote: true });
+  assert.equal(graph.pan.x, 5000);
+});
+
+test("Force rechecks the view once it settles after a filter change", async () => {
+  const graph = instantCamera(await fixture());
+  graph.setData([{ id: 1, x: 0, y: 0 }, { id: 2, x: 40, y: 0 }, { id: 3, x: 900, y: 0 }], [], { warm: false });
+  graph.zoom = 1;
+  graph.pan = { x: 0, y: 0 };
+  graph.setData([{ id: 1 }, { id: 2 }], [], { preserveCamera: true, warm: false });
+  assert.equal(graph.viewChecks.at(-1), "keep");
+  assert.ok(graph._viewRecheck, "a recheck waits for the settled layout");
+  // The simulation pushed the nodes off the view; nobody moved the camera.
+  for (const node of graph.nodes) node.x += 4000;
+  graph._keepNodesInView();
+  assert.equal(graph.viewChecks.at(-1), "fit");
 });

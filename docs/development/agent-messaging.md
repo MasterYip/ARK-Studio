@@ -72,14 +72,21 @@ again. Two things fix that:
   to every project member). The feed looks the message up and returns it
   only to a matching agent.
 - **Targets.** `mine` (any agent token of the sender), `token:<id>` or
-  `label:<label>` (one of the sender's tokens). In this version a person can
-  message only their own agents: owner = sender.
+  `label:<label>` (one of the sender's tokens), `actor:agent:<user>[/<name>]`
+  (one agent of the Agents card, by its write actor) or `host:<device id>`
+  (the sender's agents whose `X-ARK-Host` is that device, a row of the Hosts
+  card). In this version a person can message only their own agents: owner =
+  sender.
 - **Routes.** People: `GET`/`POST /api/agent-messages` (signed-in session;
   agent tokens are refused). Agents: `GET /api/agent/v1/messages`,
   `GET /api/agent/v1/messages/{id}`, `POST .../ack`, `POST .../reply`. All
   Go only (`tests/python/contract/go_only.py`).
-- **UI.** With the switch on: "Message agent" on the Home connect card and
-  "Message the agent working on this" in the node menu. The dialog lists the
+- **UI.** With the switch on: "Message agent" on the Home connect card,
+  "Message the agent working on this" in the node menu, and a right-click
+  menu on the rows of the Agents and Hosts cards (Home and Board): "Message
+  this agent" (a running ARK session gets a steer, an idle or ended one is
+  resumed with the message, an agent working through a token gets it on its
+  next check) and "Message agents on this host". The dialog lists the
   targets (any of my agents; running ARK sessions of this project, those
   linked to the node first; each of my tokens), the last messages with their
   status and replies.

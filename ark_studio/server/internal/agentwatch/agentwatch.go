@@ -169,7 +169,9 @@ func (v Viewer) mentions(body string) bool {
 
 // MessageFor reports whether a message (store.Messages object) is meant for
 // this viewer: the owner is the viewer's account and the target is any of
-// its agents, this token, or this token's label.
+// its agents, this token, this token's label, this agent's write actor
+// (agent:<user>[/<name>], the row the Agents card lists) or the device it
+// runs on (its X-ARK-Host, a row of the Hosts card).
 func (v Viewer) MessageFor(m *pyjson.Object) bool {
 	if m == nil || !v.isUser(pyjson.Str(m.Value("owner"))) {
 		return false
@@ -182,6 +184,14 @@ func (v Viewer) MessageFor(m *pyjson.Object) bool {
 		return v.TokenID != "" && target[len("token:"):] == v.TokenID
 	case strings.HasPrefix(target, "label:"):
 		return v.TokenLabel != "" && strings.EqualFold(target[len("label:"):], v.TokenLabel)
+	case strings.HasPrefix(target, "actor:"):
+		actor := target[len("actor:"):]
+		if v.AnyAgent { // the shared server token speaks for every agent:* actor
+			return strings.HasPrefix(actor, "agent:")
+		}
+		return v.AgentActor != "" && strings.EqualFold(actor, v.AgentActor)
+	case strings.HasPrefix(target, "host:"):
+		return v.Self.Host != "" && target[len("host:"):] == v.Self.Host
 	}
 	return false
 }

@@ -17,6 +17,7 @@ import { shellActive, isViewDisplayed } from "./workbench.js";
 import {
   EXPLORER_KEY, parseExplorer, sections as model,
   topicTree, lineTree, visibleRows, searchRows, ancestorKeys, outlineRows, foldCommand,
+  lineRowRef, lineAssociations, rowActive,
 } from "./topic-explorer-model.js";
 
 const OUTLINE_FOLD_KEY = "ark.topic.tree.fold.v1";
@@ -298,13 +299,14 @@ function createExplorer(ctx) {
     const matched = searchRows(all, query, (row) => `${hooks.titleOf(row.topic)} ${row.topic.uid}`);
     const rows = searching ? matched : visibleRows(all, folded.topics);
     if (!rows.length) { host.append(h("div", { class: "ed-tree-note" }, t("common.no_results"))); return; }
-    const lineOf = new Map(lines.filter((line) => !line.auto).map((line) => [line.ref, line]));
+    const { linesOf } = lineAssociations(lines);
     for (const row of rows) {
       const topic = row.topic;
       const open = searching || !folded.topics.has(row.key);
-      const line = lineOf.get(topic.uid);
+      // The lines associated with this topic; the badge opens the first.
+      const linked = linesOf.get(topic.uid) || [];
       host.append(treeRow({
-        depth: row.depth, hasChildren: row.children > 0, open, on: topic.uid === activeRef,
+        depth: row.depth, hasChildren: row.children > 0, open, on: rowActive("topics", row, activeRef),
         onFold: () => toggleFold("topics", row.key),
         onClick: () => hooks.openTopic(topic),
         iconEl: h("i", { class: "topic-ex-glyph", style: { color: typeColor("topic") } }, icon("layers", "sm")),
@@ -312,7 +314,9 @@ function createExplorer(ctx) {
         count: topic.member_count ?? topic.preview?.members?.length ?? null,
         extra: [
           topic.preview?.rule ? h("span", { class: "topic-rule-badge", title: t("topic.rule_badge_hint") }, icon("filter", "sm")) : null,
-          line ? h("span", { class: "topic-line-badge", title: line.tag }, t("branch.line")) : null,
+          linked.length ? linkChip(t("branch.line"), t("topic.ex.linked_line", { name: linked.map((line) => line.name).join(", ") }),
+            () => hooks.openLine({ key: linked[0].name, line: linked[0], ref: lineRowRef({ line: linked[0] }) }),
+            { topicLine: linked[0].name }) : null,
         ],
         data: { key: row.key, topicRow: topic.uid, unitRef: topic.uid, topicDefault: topic.default || "" },
         title: `${hooks.titleOf(topic)} · ${topic.uid}`,
@@ -336,17 +340,20 @@ function createExplorer(ctx) {
     if (!rows.length) { host.append(h("div", { class: "ed-tree-note" }, t("common.no_results"))); return; }
     for (const row of rows) {
       const line = row.line;
-      const ref = lineRef(row);
+      const ref = lineRowRef(row, lines);
       const open = searching || !folded.lines.has(row.key);
+      const topic = line?.topic || null;
       host.append(treeRow({
-        depth: row.depth, hasChildren: row.children > 0, open, on: ref === activeRef,
+        depth: row.depth, hasChildren: row.children > 0, open, on: rowActive("lines", row, activeRef, lines),
         onFold: () => toggleFold("lines", row.key),
         onClick: () => hooks.openLine({ ...row, ref }),
         iconEl: icon("git", "sm"),
         name: row.label,
         count: row.count,
         extra: [
-          line && !line.auto ? h("span", { class: "topic-line-badge", title: line.ref }, t("topic.ex.pinned")) : null,
+          topic ? linkChip(t("topic.ex.pinned"), t("topic.ex.linked_topic", { title: topic.title || topic.uid }),
+            () => hooks.openTopic(topics.find((item) => item.uid === topic.uid) || { uid: topic.uid, title: topic.title }),
+            { lineTopic: topic.uid }) : null,
           line ? branchBadge(line.status === "active" ? null : { status: line.status }) : null,
         ],
         data: { key: row.key, lineRow: row.key, lineRef: ref },
@@ -355,12 +362,13 @@ function createExplorer(ctx) {
     }
   }
 
-  // A line's topic ref; a path that only holds other lines opens by its tag
-  // (the project's line prefix, "branch" by default).
-  function lineRef(row) {
-    if (row.line) return row.line.ref;
-    const prefix = String(lines.find((line) => line.tag?.includes(":"))?.tag || "branch:").split(":")[0];
-    return `${prefix}:${row.key}`;
+  // A badge on a row that opens the other side of a line/topic association
+  // (a span: the row itself is a button).
+  function linkChip(label, title, onOpen, data) {
+    return h("span", {
+      class: "topic-line-badge link", role: "link", title, dataset: data,
+      onclick: (event) => { event.stopPropagation(); onOpen(); },
+    }, label);
   }
 
   // ------------------------------------------------------------ outline
@@ -579,7 +587,7 @@ function createExplorer(ctx) {
   function revealActive() {
     for (const kind of ["topics", "lines"]) {
       const rows = kind === "topics" ? topicTree(topics) : lineTree(lines);
-      const row = rows.find((item) => (kind === "topics" ? item.key : lineRef(item)) === activeRef);
+      const row = rows.find((item) => rowActive(kind, item, activeRef, lines));
       if (!row) continue;
       const up = ancestorKeys(rows, row.key);
       if (up.some((key) => folded[kind].has(key))) {

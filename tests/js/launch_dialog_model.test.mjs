@@ -71,6 +71,28 @@ test("only available providers, real agents first, signed-out and demo last", ()
   assert.deepEqual(m.launchProviders(presets).map((p) => p.id), ["claude", "codex", "dsh", "echo"]);
 });
 
+test("Gemini CLI comes right after Claude Code and Codex, with no reasoning field", () => {
+  const gemini = {
+    id: "gemini", available: true, efforts: [], permission_modes: ["read_only", "plan", "full_access"],
+    provider_capabilities: {
+      default_model: "auto", efforts: [],
+      model_options: [
+        { id: "auto", label: "Let Gemini CLI decide the best model for the task", source: "detected", default: true },
+        { id: "gemini-2.5-pro", label: "gemini-2.5-pro", source: "detected" },
+      ],
+    },
+  };
+  const shell = { id: "shell", available: true, efforts: [] };
+  const opencode = { id: "opencode", available: true, efforts: [] };
+  assert.deepEqual(m.launchProviders([shell, opencode, gemini, dsh, codex, claude]).map((p) => p.id),
+    ["claude", "codex", "gemini", "opencode", "shell", "dsh"]);
+  assert.deepEqual(effortsFor(gemini, ""), []);
+  assert.deepEqual(m.accessChoices(gemini), ["read_only", "full_access"]);
+  const rows = m.modelChoices(modelsFor(gemini), { t });
+  assert.equal(rows[0].label, "默认（auto）");
+  assert.ok(rows.some((row) => row.value === "gemini-2.5-pro"));
+});
+
 test("reasoning effort comes from provider capabilities (was 不支持)", () => {
   assert.deepEqual(effortsFor(claude, ""), ["low", "medium", "high", "xhigh", "max"]);
   assert.deepEqual(effortsFor(codex, "gpt-6"), ["low", "medium", "high", "xhigh"]);

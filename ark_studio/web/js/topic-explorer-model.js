@@ -118,6 +118,47 @@ export function lineTree(lines = []) {
   });
 }
 
+// ------------------------------------------------------- lines and topics
+// A line and a topic are separate things.  A line opens as the line view
+// (its tag: every node carrying it); a topic opens with its own members.  A
+// line may be associated with a topic (needs-model.js branchTopicEntries:
+// `topic`, via its rule or the tag it carries); each side links the other.
+
+/** The ref a line row opens: the line's tag; a path that only holds other lines opens by its tag too. */
+export function lineRowRef(row, lines = []) {
+  if (row?.line) return row.line.tag || row.line.ref;
+  const tagged = (Array.isArray(lines) ? lines : []).find((line) => String(line?.tag || "").includes(":"));
+  const prefix = String(tagged?.tag || "branch:").split(":")[0];
+  return `${prefix}:${row?.key || ""}`;
+}
+
+/**
+ * The associations both ways: `topicOf` maps a line name to its topic
+ * ({ uid, title, via }), `linesOf` a topic uid to its lines (by name).
+ */
+export function lineAssociations(lines = []) {
+  const topicOf = new Map();
+  const linesOf = new Map();
+  for (const line of Array.isArray(lines) ? lines : []) {
+    const uid = line?.topic?.uid;
+    if (!line?.name || !uid) continue;
+    topicOf.set(line.name, line.topic);
+    if (!linesOf.has(uid)) linesOf.set(uid, []);
+    linesOf.get(uid).push(line);
+  }
+  for (const list of linesOf.values()) list.sort((a, b) => a.name.localeCompare(b.name));
+  return { topicOf, linesOf };
+}
+
+/**
+ * Whether a row is the open one.  Topic rows match by uid, line rows by
+ * tag, so a line and its associated topic never light up together.
+ */
+export function rowActive(kind, row, activeRef, lines = []) {
+  if (!activeRef || !row) return false;
+  return kind === "lines" ? lineRowRef(row, lines) === activeRef : row.key === activeRef;
+}
+
 /** Rows shown under the fold state: descendants of a folded row are hidden. */
 export function visibleRows(rows = [], folded = new Set()) {
   const out = [];

@@ -13,6 +13,7 @@ import { h } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { typeColor, drawForceNode, forceSettleStep } from "./graph-core.js";
+import { pointsOnScreen, viewportAction } from "./graph-viewport-model.js";
 import { createSim3D, setSimLinks, stepForce3D, simBounds, nodeRadius3D } from "./graph3d-force.js";
 import {
   nodeStates, pickLabels, pickNode, fitDistance, pixelRatioCap, normalizeGraph3DSettings,
@@ -415,6 +416,7 @@ export class Graph3DView {
     if (this.settings.autoRotate && !this.drag && !this.pointers.size) { this.view.theta += 0.0025; more = true; }
     this._placeCamera();
     if (this._posDirty || this._statesDirty || this._sizesDirty || this._camDirty) this._update();
+    if (this._viewCheck) more = this._runViewCheck(now) || more;
     this.renderer.render(this.scene, this.camera);
     this.stats.frames++;
     const spent = performance.now() - t0;
@@ -638,6 +640,30 @@ export class Graph3DView {
 
   // ---- camera ---------------------------------------------------------------
 
+  /**
+   * The shown nodes changed under the kept camera (a filter change): once
+   * the layout has settled (or after a moment), fly to the nodes when none
+   * of them is on screen.  Moving the view in between cancels the check.
+   */
+  checkView() {
+    this._viewCheck = { at: performance.now() };
+    this._kick();
+  }
+
+  _runViewCheck(now) {
+    const check = this._viewCheck;
+    if (this.pointers.size || this.drag) { this._viewCheck = null; return false; }
+    if (this.flight || (this.running && now - check.at < 900)) return true;
+    this._viewCheck = null;
+    const n = this.sim?.n || 0, p = this.proj;
+    const points = [];
+    for (let i = 0; i < n && p; i++) points.push(p.w[i] > 0 ? { x: p.x[i], y: p.y[i] } : null);
+    const action = viewportAction({ total: n, onScreen: pointsOnScreen(points, this.width, this.height) });
+    this.graph.viewChecks = [...(this.graph.viewChecks || []).slice(-19), `3d:${action}`];
+    if (action === "fit") { this.resetView(true); return true; }
+    return false;
+  }
+
   resetView(animate = true) {
     if (!this.sim) return;
     const b = simBounds(this.sim);
@@ -702,6 +728,7 @@ export class Graph3DView {
     c.addEventListener("wheel", (e) => {
       e.preventDefault();
       this.flight = null;
+      this._viewCheck = null;
       const k = Math.exp(Math.max(-0.5, Math.min(0.5, e.deltaY * (e.deltaMode === 1 ? 0.05 : 0.0015))));
       this.view.radius = Math.max(5, Math.min(1e5, this.view.radius * k));
       this._kick();
@@ -854,11 +881,11 @@ export class Graph3DView {
       const node = this.nodes[i];
       graph._setSelection([node], false);
       graph._draw();
-      if (graph.mode === "read" || graph.opts.isInspectorOpen?.()) graph.opts.onSelect?.(node, false, e);
+      if (graph.mode === "read" || graph.opts.isInspectorOpen?.() || graph.isFullscreen?.()) graph.opts.onSelect?.(node, false, e);
     } else {
       graph._setSelection([], false);
       graph._draw();
-      if (graph.mode === "read") graph.opts.onSelect?.(null, false, e);
+      if (!graph._closePopover?.() && graph.mode === "read") graph.opts.onSelect?.(null, false, e);
     }
   }
 

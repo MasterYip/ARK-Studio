@@ -441,8 +441,8 @@ func (c *reqCtx) humanMessages() error {
 	if target == "" {
 		target = "mine"
 	}
-	if target != "mine" && !strings.HasPrefix(target, "token:") && !strings.HasPrefix(target, "label:") {
-		return apiErr(400, "target must be mine, token:<id> or label:<label>", "BAD_TARGET")
+	if !validMessageTarget(target) {
+		return apiErr(400, "target must be mine, token:<id>, label:<label>, actor:agent:<user>[/<name>] or host:<device id>", "BAD_TARGET")
 	}
 	if pytext.Len(target) > 120 {
 		return apiErr(400, "target is too long", "BAD_TARGET")
@@ -466,4 +466,21 @@ func (c *reqCtx) humanMessages() error {
 	}
 	c.ok(pyjson.NewObject("message", msg))
 	return nil
+}
+
+// validMessageTarget: "mine", "token:<id>", "label:<label>", "actor:agent:..."
+// (one agent of the Agents card) or "host:<device id>" (the agents on one
+// device of the Hosts card).  agentwatch.Viewer.MessageFor matches them.
+func validMessageTarget(target string) bool {
+	switch {
+	case target == "mine":
+		return true
+	case strings.HasPrefix(target, "token:"), strings.HasPrefix(target, "label:"):
+		return true
+	case strings.HasPrefix(target, "actor:agent:"):
+		return len(target) > len("actor:agent:")
+	case strings.HasPrefix(target, "host:"):
+		return reAgentSessionID.MatchString(target[len("host:"):])
+	}
+	return false
 }

@@ -86,8 +86,27 @@ move it, double-click it to maximize, and use the buttons at its right end
 history need it: install Git from <https://git-scm.com> (macOS:
 `xcode-select --install`; Ubuntu: `sudo apt install git`) and restart
 ARK Studio. **Settings** shows a notice when Git is missing.
-`ssh` (GPU servers, tunnels) and agent CLIs (Claude Code, Codex, ...) are also
-used from your system when present.
+`ssh` (GPU servers, tunnels) and agent CLIs (Claude Code, Codex, Gemini CLI,
+...) are also used from your system when present.
+
+### Gemini CLI for sessions
+
+To run Gemini CLI in **Execute › Runs**:
+
+1. Install Node.js 20 or newer, then `npm install -g @google/gemini-cli`
+   (check with `gemini --version`).
+2. Sign in once in a terminal: run `gemini` and choose **Sign in with
+   Google**, or use an API key from Google AI Studio. ARK passes keys only
+   from **Settings › Agents › Gemini CLI**: add `GEMINI_API_KEY` there (or
+   `GOOGLE_API_KEY`; for Vertex AI also `GOOGLE_GENAI_USE_VERTEXAI=true` and
+   `GOOGLE_CLOUD_PROJECT`).
+3. Restart ARK or refresh **Settings › Providers**: Gemini CLI shows as ready,
+   with the models `gemini --list-models` reports.
+
+In the Run dialog, pick **Gemini CLI**. Read-only sessions may only read and
+search files; *full access* lets Gemini run commands and edit files without
+asking. Every later message continues the same Gemini conversation.
+See [Gemini CLI sessions](../agents/providers.md#gemini-cli-sessions).
 
 ### This computer and servers
 

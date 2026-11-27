@@ -23,7 +23,7 @@
 // project terminal is a workbench view (or a drawer in the classic layout),
 // and open tabs can be grouped per task session (the explorer's scope).
 
-import { h, clear, richText, highlightCode, fmtDateTime, typesetMermaid } from "../dom.js";
+import { h, clear, richText, highlightCode, fmtDateTime, typesetMermaid, mermaidBlock } from "../dom.js";
 import { dirOf } from "../rich-model.js";
 import { vizBlock, vizFrame } from "../viz.js";
 import { createImageViewer, openImageLightbox } from "../image-viewer.js";
@@ -1755,7 +1755,7 @@ function paintGroup(groupId, { keepEditor = false } = {}) {
       restoreLine(surface);
     }
     else if (viewer === "mermaid") {
-      const diagram = h("div", { class: "rich ed-mermaid" }, h("div", { class: "mermaid-block", "data-mermaid": buffer.content }, buffer.content));
+      const diagram = h("div", { class: "rich ed-mermaid" }, mermaidBlock(buffer.content));
       body.appendChild(h("div", { class: "ed-markdown" }, diagram));
       typesetMermaid(diagram);
     } else if (viewer === "html") {

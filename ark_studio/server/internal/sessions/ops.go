@@ -357,6 +357,9 @@ func (m *Manager) observeNativeID(s *Session, line string) {
 	if pyjson.Truthy(s.Meta.Value("native_session_id")) {
 		return
 	}
+	if strOr(s.Meta.Value("platform")) == "gemini" {
+		return // kept after a successful turn (gemini.go observeGemini)
+	}
 	if found := NativeSessionIDFromLine(line); found != "" {
 		s.Meta.Set("native_session_id", found)
 		m.saveLocked(s)
@@ -1340,6 +1343,11 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		(isNoneOrEmpty(o.Platform) || pyEq(o.Platform, "claude")) {
 		o.Resume = true
 	}
+	// Gemini CLI continues its own conversation with --resume (gemini.go).
+	if !o.Resume && pyEq(platformNow, "gemini") && m.Resumable(s) && !m.IsActive(s) &&
+		(isNoneOrEmpty(o.Platform) || pyEq(o.Platform, "gemini")) {
+		o.Resume = true
+	}
 	if o.Resume {
 		if !m.Resumable(s) {
 			return nil, serr("this session has no provider session id to resume", 409, "SESSION_NOT_RESUMABLE")
@@ -1516,8 +1524,9 @@ func (m *Manager) ContinueSession(h *Hooks, id, text string, o ContinueOptions) 
 		label = "."
 	}
 	m.refreshWorkspacePermission(s, preset, workspace, projectRef, apiBase, label)
-	if o.Resume {
-		// A resumed Claude Code session gets the pasted images as image blocks.
+	if o.Resume || preset.Value("id") == "gemini" {
+		// A resumed Claude Code session gets the pasted images as image
+		// blocks, Gemini as @ references (gemini.go).
 		m.mu.Lock()
 		for _, e := range entries {
 			if e.Value("kind") == "media" {

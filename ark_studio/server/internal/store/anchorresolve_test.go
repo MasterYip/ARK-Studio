@@ -71,3 +71,39 @@ func TestReviewAnchorAdaptiveAndBroken(t *testing.T) {
 		t.Fatalf("warnings: %v", warnings)
 	}
 }
+
+func TestReviewGroupBareAnchorsResolveInMembers(t *testing.T) {
+	ctx := context.Background()
+	st := reviewStore(t)
+	agent := "agent:local/coder"
+	// RG-11 (HOI-224 C): the note names the member in the text and links
+	// its sections with bare #slug anchors.
+	x := mkUnit(t, st, pyjson.NewObject("type", "experiment", "title", "RoboWild 共享时钟",
+		"body", "## 结论 {#conclusion}\n快 1.4 倍\n## 公平性 {#fairness}\n同样的 CPU\n## 方法\n..."), agent)
+	tk := mkUnit(t, st, pyjson.NewObject("type", "task", "title", "HOI-224 C",
+		"body", "## 进展 {#progress}\n与计划有偏差\n## 结论\n另一个结论"), agent)
+	note := "请看 " + x + " 的 [结论](#conclusion) 和 [公平性](#fairness)；" + tk + " 的 [进展](#progress) 记录了与计划的偏差；" +
+		tk + " 的 [结论](#结论)、[方法](#方法) 和 [不存在](#nowhere)"
+	g, err := st.CreateReviewGroup(ctx, pyjson.NewObject("title", "HOI-224 C • RoboWild 共享时钟", "review_note", note,
+		"members", []any{x, tk}), agent)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]string{"#conclusion": x, "#fairness": x, "#progress": tk, "#结论": tk, "#方法": x}
+	for _, item := range g.Value("anchors").([]any) {
+		a := item.(*pyjson.Object)
+		raw := pyjson.Str(a.Value("raw"))
+		if raw == "#nowhere" {
+			if a.Value("ok") != false || !strings.Contains(pyjson.Str(a.Value("problem")), "no member") {
+				t.Errorf("#nowhere: %v", a)
+			}
+			continue
+		}
+		if a.Value("ok") != true || a.Value("unit") != want[raw] {
+			t.Errorf("%s: %v, want unit %s", raw, a, want[raw])
+		}
+	}
+	if w := g.Value("warnings").([]any); len(w) != 1 {
+		t.Fatalf("warnings: %v", w)
+	}
+}

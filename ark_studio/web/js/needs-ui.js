@@ -1327,7 +1327,7 @@ export function branchSectionHead(ctx, section, count, { fold = null } = {}) {
   }, t("needs.branch.sort")) : h("button", {
     class: "link needs-branch-topic", type: "button", title: t("needs.branch.topic_hint"),
     onclick: () => openBranch(ctx, section.name),
-  }, info?.topic ? t("needs.branch.topic") : t("needs.branch.auto_topic")));
+  }, t("needs.branch.view")));
 }
 
 /**

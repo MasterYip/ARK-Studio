@@ -156,8 +156,11 @@ func TestMessagesTargeting(t *testing.T) {
 	}
 	v := alice
 	v.TokenID, v.TokenLabel = "tok1", "laptop"
+	v.Self.Host = "c59c4a65af13"
 	for target, want := range map[string]bool{"mine": true, "token:tok1": true, "token:tok2": false,
-		"label:Laptop": true, "label:server": false, "other": false} {
+		"label:Laptop": true, "label:server": false, "other": false,
+		"actor:agent:alice/coder": true, "actor:agent:alice/codex": false, "actor:agent:alice": false,
+		"host:c59c4a65af13": true, "host:0123456789ab": false, "host:": false} {
 		got := Items([]store.UpdateRow{row}, v, msg("alice", target))
 		if (len(got) == 1) != want {
 			t.Errorf("target %s: %v", target, kinds(got))

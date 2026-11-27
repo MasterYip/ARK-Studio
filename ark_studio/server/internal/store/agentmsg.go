@@ -54,7 +54,7 @@ func hasMessagesTable(ctx context.Context, q sqlitedb.Querier) (bool, error) {
 type MessageInput struct {
 	Sender string // account name of the person
 	Owner  string // whose agents receive it (the sender in this version)
-	Target string // "mine", "token:<id>" or "label:<label>"
+	Target string // "mine", "token:<id>", "label:<label>", "actor:<agent actor>" or "host:<device id>"
 	Unit   string // optional unit ref
 	Body   string
 	Actor  string // activity actor (human:<name>)

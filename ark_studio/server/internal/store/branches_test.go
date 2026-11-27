@@ -184,7 +184,7 @@ func TestBranchTopicMapping(t *testing.T) {
 		"design", pyjson.NewObject("rule", pyjson.NewObject("tags", []any{"branch:other"}, "types", []any{"task"}))), "user")
 	data := listBranches(t, st)
 	hoi := branchByName(t, data, "hoi-pilot")
-	if tp, _ := hoi.Value("topic").(*pyjson.Object); tp == nil || tp.Value("uid") != pinned || hoi.Value("ref") != pinned {
+	if tp, _ := hoi.Value("topic").(*pyjson.Object); tp == nil || tp.Value("uid") != pinned || hoi.Value("ref") != "branch:hoi-pilot" {
 		t.Fatalf("mapped topic: %v", hoi)
 	}
 	if other := branchByName(t, data, "other"); other.Value("topic") != nil || other.Value("ref") != "branch:other" {
@@ -192,7 +192,8 @@ func TestBranchTopicMapping(t *testing.T) {
 	}
 	// A topic carrying exactly one line tag shows that line when no rule does.
 	carrier := mkUnit(t, st, pyjson.NewObject("type", "topic", "title", "Other line", "tags", []any{"branch:other"}), "user")
-	if other := branchByName(t, listBranches(t, st), "other"); other.Value("ref") != carrier ||
+	if other := branchByName(t, listBranches(t, st), "other"); other.Value("ref") != "branch:other" ||
+		other.Value("topic").(*pyjson.Object).Value("uid") != carrier ||
 		other.Value("topic").(*pyjson.Object).Value("via") != "tag" {
 		t.Fatalf("tag-carrying topic: %v", other)
 	}
@@ -400,7 +401,7 @@ func TestLinePaths(t *testing.T) {
 	// A pinned topic with the subtree rule maps to the line.
 	pinned := mkUnit(t, st, pyjson.NewObject("type", "topic", "title", "HOI",
 		"design", pyjson.NewObject("rule", pyjson.NewObject("tag_trees", []any{"branch:hoi"}))), "user")
-	if hb := branchByName(t, listBranches(t, st), "hoi"); hb.Value("ref") != pinned {
+	if hb := branchByName(t, listBranches(t, st), "hoi"); hb.Value("ref") != "branch:hoi" || lineTopicUID(hb) != pinned {
 		t.Fatalf("subtree topic: %v", hb)
 	}
 	// Rename hoi/pilot -> hoi/g1: preview, apply, undo.
@@ -435,10 +436,18 @@ func TestLinePaths(t *testing.T) {
 	if _, err := st.RenameLine(ctx, "hoi", "humanoid", nil, false, "user", Who{}); err != nil {
 		t.Fatal(err)
 	}
-	if hb := branchByName(t, listBranches(t, st), "humanoid"); hb == nil || hb.Value("ref") != pinned {
+	if hb := branchByName(t, listBranches(t, st), "humanoid"); hb == nil || lineTopicUID(hb) != pinned {
 		t.Fatalf("topic rule after rename: %v", hb)
 	}
 	if _, err := st.RenameLine(ctx, "humanoid", "bad//x", nil, true, "user", Who{}); err == nil {
 		t.Fatal("bad target accepted")
 	}
+}
+
+// lineTopicUID is the uid of a line's associated topic ("" without one).
+func lineTopicUID(line *pyjson.Object) string {
+	if tp, _ := line.Value("topic").(*pyjson.Object); tp != nil {
+		return pyjson.Str(tp.Value("uid"))
+	}
+	return ""
 }

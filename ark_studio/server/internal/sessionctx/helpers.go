@@ -391,6 +391,8 @@ func ResumeCommand(agent, nativeID, cwd string) string {
 		command = "claude --resume " + nativeID
 	case "codex":
 		command = "codex resume " + nativeID
+	case "gemini":
+		command = "gemini --resume " + nativeID
 	default:
 		return ""
 	}

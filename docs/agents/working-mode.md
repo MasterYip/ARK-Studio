@@ -834,6 +834,7 @@ place and highlights it; media open in the viewer, videos at the time.
 | Anchor | Points to |
 | --- | --- |
 | `[label](#slug)` | a heading (or a `{#id}` block) in the reviewed unit's body |
+| `[label](#slug)` in a review group's note | a heading of a member: the member named last before the link (`X-0071 的 [结论](#conclusion)`), else the only member that has it; `X-0071#slug` is unambiguous |
 | `[label](T-0042)` | another unit |
 | `[label](T-0042#slug)` | a heading or block in another unit |
 | `[label](media:421)`, `media:421@0:08`, `media:421@0:08-0:12` | an attachment; a video from 0:08 (to 0:12) |

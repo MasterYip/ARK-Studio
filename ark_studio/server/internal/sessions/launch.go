@@ -442,6 +442,12 @@ func resumeArgv(argv []string, platform, nativeID, prompt string) []string {
 		}
 		return argv
 	}
+	if platform == "gemini" {
+		if !hasFlag(argv, "--resume", "-r") && len(argv) >= 1 {
+			argv = insertAt(argv, 1, "--resume", nativeID)
+		}
+		return argv
+	}
 	if platform == "codex" && contains(argv, "exec") && !contains(argv, "resume") {
 		at := len(argv)
 		if prompt != "" && contains(argv, prompt) {
@@ -508,7 +514,9 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		start = m.resumeStart(h, s, actor)
 	}
 	preamble := m.sessionPreamble(h, s, preset, projectRef, env, actor, start)
-	if preamble != "" && presetID != "claude" && firstTurn && resumeID == "" && forkID == "" && prompt != "" {
+	// A Gemini run without --resume is a new conversation: it needs the
+	// block again (gemini.go keeps no id of a first turn that failed).
+	if preamble != "" && presetID != "claude" && (firstTurn || presetID == "gemini") && resumeID == "" && forkID == "" && prompt != "" {
 		prompt = preamble + "\n\n---\n\n" + prompt
 	}
 	values := [][2]string{{"prompt", prompt}, {"model", model}, {"effort", effort}, {"workspace", cwdDir},
@@ -558,6 +566,13 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		}
 		argv = codexJSONArgv(argv)
 	}
+	if presetID == "gemini" {
+		m.mu.Lock()
+		access := pyjson.Str(or(meta.Value("access_mode"), "read_only"))
+		s.gemini = geminiTurn{}
+		m.mu.Unlock()
+		argv = geminiArgv(argv, model, access, geminiDirs(cwdDir, workspace, taskFolder))
+	}
 	agentFlag := m.agentFlag(h, presetID, agent)
 	if presetID == "codex" && len(agentFlag) > 0 {
 		at := 1
@@ -593,10 +608,16 @@ func (m *Manager) spawn(h *Hooks, s *Session, preset *pyjson.Object, prompt, cwd
 		argv = insertAt(argv, 1, claudeStreamArgs(argv)...)
 	}
 	if !stream && len(pending) > 0 {
-		// One-shot turns cannot take image blocks: the agent gets the paths.
-		prompt = composeMessage(prompt, pending)
+		// One-shot turns cannot take image blocks: the agent gets the paths
+		// (Gemini as @ references it reads the images from, gemini.go).
+		before := prompt
+		if presetID == "gemini" {
+			prompt = m.geminiPrompt(s, prompt, pending)
+		} else {
+			prompt = composeMessage(prompt, pending)
+		}
 		for i, part := range argv {
-			if part != "" && (part == strOr(meta.Value("prompt")) || part == userPrompt) {
+			if part != "" && (part == before || part == strOr(meta.Value("prompt")) || part == userPrompt) {
 				argv[i] = prompt
 			}
 		}
@@ -839,6 +860,11 @@ func (m *Manager) buildEnv(h *Hooks, s *Session, projectRef *pyjson.Object, apiB
 			env.set("RUST_LOG", "error")
 		}
 		env.set("NO_COLOR", "1")
+	}
+	if platform == "gemini" && env.get("GEMINI_CLI_TRUST_WORKSPACE") == "" {
+		// ARK chose the folder; headless Gemini stops in an untrusted one
+		// (gemini.go).
+		env.set("GEMINI_CLI_TRUST_WORKSPACE", "true")
 	}
 	// ark-server's own folder first, so `ark-server agent watch` and
 	// `ark-server agent host-id` work inside every session (T-0053).

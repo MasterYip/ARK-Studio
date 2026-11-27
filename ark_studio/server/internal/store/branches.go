@@ -406,16 +406,14 @@ func (l *branchInfo) object(now time.Time) *pyjson.Object {
 		"topic", topic, "ref", branchRef(l.topic, l.tag))
 }
 
-// branchRef is what the topic page opens for a line: its stored topic, else
-// the tag (a virtual topic, BranchTopic).
-func branchRef(topic *pyjson.Object, tag string) string {
-	if topic != nil {
-		return pyjson.Str(topic.Value("uid"))
-	}
+// branchRef is what the topic page opens for a line: always the line view
+// (the tag, a virtual topic, BranchTopic), so every node with the tag shows.
+// An associated topic ("topic") opens on its own.
+func branchRef(_ *pyjson.Object, tag string) string {
 	return tag
 }
 
-// branchTopics maps line tags to the stored topic that shows them: a topic
+// branchTopics maps line tags to their associated stored topic: a topic
 // whose rule selects exactly that one tag (the oldest when several do).
 func branchTopics(ctx context.Context, q sqlitedb.Querier, prefix string) (map[string]*pyjson.Object, error) {
 	rows, err := sqlitedb.Query(ctx, q, "SELECT id, uid, title, meta_json FROM units WHERE archived=0 AND type='topic' ORDER BY id")

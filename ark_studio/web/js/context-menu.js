@@ -118,7 +118,8 @@ export function openContextMenu({ x, y, items, className = "", returnFocus = nul
   if (className) menu.classList.add(...className.split(/\s+/).filter(Boolean));
   menu.style.left = `${Math.max(4, Math.min(x, window.innerWidth - 250))}px`;
   menu.style.top = `${Math.max(4, y)}px`;
-  document.body.appendChild(menu);
+  // A fullscreen element (a fullscreen graph) is the only thing shown.
+  (document.fullscreenElement || document.body).appendChild(menu);
   const rect = menu.getBoundingClientRect();
   if (rect.bottom > window.innerHeight - 4) menu.style.top = `${Math.max(4, y - rect.height)}px`;
   if (rect.right > window.innerWidth - 4) menu.style.left = `${Math.max(4, x - rect.width)}px`;

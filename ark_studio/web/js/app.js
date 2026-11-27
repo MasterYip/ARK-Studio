@@ -317,7 +317,7 @@ const ctx = {
   clearMapReveal: () => {
     if (!S.mapReveal?.length) return;
     S.mapReveal = [];
-    applyFiltersIncremental({ silent: true, repaintRail: false, fit: false });
+    applyFiltersIncremental({ silent: true, repaintRail: false });
   },
   // A topic opens in Research > Topics; #/research/topic/<uid> deep-links it.
   openTopic: (ref, { keepTrail = false } = {}) => {
@@ -578,6 +578,24 @@ function onGraphSelection(graph, nodes) {
   if (!S.multi || S.multi.graph !== graph) return;
   if (refs.length === 1) ctx.openUnit(nodes.find((node) => node.id === refs[0])?.uid || refs[0]);
   else closeInspector(ctx);
+}
+
+// A fullscreen graph shows node details as a popover inside it
+// (inspector.js fullscreenPopoverLayer).  An empty-canvas click or Esc on
+// the canvas closes it; leaving fullscreen closes it and the docked pane
+// shows the node again.
+if (typeof document !== "undefined") {
+  document.addEventListener("ark:graph-popover-close", () => {
+    if (S.drawerOpen) closeInspector(ctx);
+  });
+  document.addEventListener("ark:graph-fullscreen", (event) => {
+    if (event.detail?.on || !S.drawerOpen || S.multi) return;
+    // The layer (and the popover in it) is gone with fullscreen.
+    if (document.querySelector(".drawer:not(.inspector-empty)")) return;
+    const id = S.detail?.id;
+    closeInspector(ctx);
+    if (id && S.inspectorPane !== false) openInspector(ctx, id, null, { forceFloating: false, quiet: true });
+  });
 }
 
 if (typeof window !== "undefined") {
@@ -1885,7 +1903,7 @@ async function locateInMap(ref) {
   S.mapFocus = uid;
   const graph = graphs.find((item) => item.opts?.mapGraph && item.host?.isConnected);
   if (S.tab === "map" && S.view === "graph" && graph) {
-    await applyFiltersIncremental({ silent: true, repaintRail: false, fit: false });
+    await applyFiltersIncremental({ silent: true, repaintRail: false });
     focusLocated(ctx, graph, uid);
     return;
   }
@@ -2413,8 +2431,10 @@ function locallyFilterGraph(base, filters) {
 }
 
 // `remote`: data from another device/user: keep the camera and positions
-// (GraphView.setData's remote mode); never fit.
-function paintGraphData(data, { preserveCamera = true, animate = false, fit = false, warm = !animate, remote = false } = {}) {
+// (GraphView.setData's remote mode); never fit.  Otherwise the camera stays
+// while it still shows nodes and glides to them when it shows none
+// (GraphView._keepNodesInView).
+function paintGraphData(data, { preserveCamera = true, animate = false, warm = !animate, remote = false } = {}) {
   const targets = graphs.filter((graph) => graph.clipboardSource !== "infohub");
   for (const graph of targets) {
     const selected = [...graph.selectedNodes][0] || null;
@@ -2426,7 +2446,6 @@ function paintGraphData(data, { preserveCamera = true, animate = false, fit = fa
       warm,
       remote,
     });
-    if (fit && !remote && graph.nodes?.length) graph.fit({ animate: true });
   }
   syncRevealNotice(ctx);
   return targets.length;
@@ -2438,9 +2457,9 @@ function graphShapeKey(nodes, edges) {
   return `${nodeIds}|${edgeIds}`;
 }
 
-// A filter change refits the view (`fit`, default with the rail); a remote
-// update (`remote`) keeps the camera and positions.
-async function applyFiltersIncremental({ silent = false, repaintRail = true, remote = false, fit = repaintRail && !remote } = {}) {
+// A filter change keeps the camera unless it would show no node (then it
+// fits); a remote update (`remote`) keeps the camera and positions.
+async function applyFiltersIncremental({ silent = false, repaintRail = true, remote = false } = {}) {
   const seq = ++filterRequestSeq;
   clearTimeout(filterFacetTimer);
   filterFacetController?.abort();
@@ -2483,7 +2502,7 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
     const data = S.graphIndex.filter(withMapReveal(query), S.session?.user || "");
     S.graph = data;
     S.total = data.total;
-    paintGraphData(data, { animate: true, fit, warm: false, remote });
+    paintGraphData(data, { animate: true, warm: false, remote });
     if (repaintRail) {
       // Facets are secondary UI: coalesce rapid changes and never delay nodes.
       filterFacetTimer = setTimeout(async () => {
@@ -2511,7 +2530,7 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
   }
   const base = ensureGraphBase();
   const local = locallyFilterGraph(base, S.filters);
-  paintGraphData(local, { animate: true, fit, remote });
+  paintGraphData(local, { animate: true, remote });
   const localIds = graphShapeKey(local.nodes, local.edges);
   try {
     const query = currentGraphQuery();
@@ -2534,7 +2553,6 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
           animate: true,
           remote,
         });
-        if (fit && graph.nodes?.length) graph.fit({ animate: true });
       }
     }
     if (repaintRail) {
@@ -2542,8 +2560,6 @@ async function applyFiltersIncremental({ silent = false, repaintRail = true, rem
       if (rail) {
         renderFilterRail(rail, ctx);
       }
-      // Fit starts with the data transition above, not after it.  Live
-      // timeline drags skip this (repaintRail=false); the release event fits.
     }
   } catch {
     if (!silent) renderRoute({ keepScroll: true });
@@ -3546,7 +3562,7 @@ function onKeyDown(e) {
     if (palette) { palette.remove(); return; }
     // Let modal dialogs consume Escape themselves.
     if (document.querySelector(".modal-backdrop")) return;
-    const floating = document.querySelector("#overlay-root .drawer.floating, #overlay-root .drawer:not(.docked)");
+    const floating = document.querySelector("#overlay-root .drawer.floating, #overlay-root .drawer:not(.docked), .graph-popover-layer .drawer");
     if (floating) {
       e.preventDefault();
       closeInspector(ctx);

@@ -25,7 +25,7 @@ export function graphPanel(ctx, S) {
     mapGraph: map,
   });
   ctx.trackGraph(graph);
-  graph.setData(S.graph?.nodes || [], S.graph?.edges || [], { selected: null, layout: preferredGraphLayout(S.view === "split" ? "tree" : "force") });
+  graph.setData(S.graph?.nodes || [], S.graph?.edges || [], { selected: null, layout: preferredGraphLayout("force") });
   if (map) {
     syncRevealNotice(ctx, panel);
     // "Locate in research map" / "Show on map": select and centre the node

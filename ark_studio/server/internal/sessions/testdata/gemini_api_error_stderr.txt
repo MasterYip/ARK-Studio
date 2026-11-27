@@ -1,0 +1,17 @@
+Warning: Windows 10 detected. Some UI features like smooth scrolling may be degraded. Windows 11 is recommended for the best experience.
+Warning: Basic terminal detected (TERM=dumb). Visual rendering will be limited. For the best experience, use a terminal emulator with truecolor support.
+Warning: 256-color support not detected. Using a terminal with at least 256-color support is recommended for a better visual experience.
+Ripgrep is not available. Falling back to GrepTool.
+Error when talking to Gemini API Full report available at: C:\Users\user\AppData\Local\Temp\gemini-client-error-Turn.run-sendMessageStream-2026-11-27T04-40-08-455Z.json _ApiError: {"error":{"message":"{\n  \"error\": {\n    \"code\": 400,\n    \"message\": \"API key not valid. Please pass a valid API key.\",\n    \"status\": \"INVALID_ARGUMENT\",\n    \"details\": [\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.ErrorInfo\",\n        \"reason\": \"API_KEY_INVALID\",\n        \"domain\": \"googleapis.com\",\n        \"metadata\": {\n          \"service\": \"generativelanguage.googleapis.com\"\n        }\n      },\n      {\n        \"@type\": \"type.googleapis.com/google.rpc.LocalizedMessage\",\n        \"locale\": \"en-US\",\n        \"message\": \"API key not valid. Please pass a valid API key.\"\n      }\n    ]\n  }\n}\n","code":400,"status":"Bad Request"}}
+    at throwErrorIfNotOK (file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:279458:24)
+    at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at async file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:279221:7
+    at async Models.generateContentStream (file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:280317:16)
+    at async file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:333259:18
+    at async file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:300927:22
+    at async retryWithBackoff (file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:329498:22)
+    at async GeminiChat.makeApiCallAndProcessStream (file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:351780:28)
+    at async GeminiChat.streamWithRetries (file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:351440:28)
+    at async Turn.run (file:///C:/npm/node_modules/@google/gemini-cli/bundle/chunk-4UW3VJTT.js:352591:24) {
+  status: 400
+}

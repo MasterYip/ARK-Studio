@@ -954,6 +954,8 @@ type transcriptBuilder struct {
 	codexSpeaker                                            string
 	codexItems                                              map[string]*pyjson.Object // Codex JSON items by id (transcript_codex.go)
 	codexSeen                                               map[string]bool           // Codex warnings already shown
+	geminiMode                                              bool                      // Gemini CLI stream-json (transcript_gemini.go)
+	geminiOpen                                              *pyjson.Object            // the assistant message Gemini's text pieces join
 }
 
 func (b *transcriptBuilder) nextID(prefix string) string {
@@ -1210,7 +1212,7 @@ func transcriptRows(stdout, stderr []*pyjson.Object, outBase, errBase int) []tra
 
 func newTranscriptBuilder(in TranscriptInput) *transcriptBuilder {
 	b := &transcriptBuilder{tools: map[string]*pyjson.Object{}, permissions: map[string]*pyjson.Object{}, reported: pyjson.NewObject(),
-		codexMode: pytext.Lower(in.Platform) == "codex"}
+		codexMode: pytext.Lower(in.Platform) == "codex", geminiMode: pytext.Lower(in.Platform) == "gemini"}
 	if pytext.Strip(in.Prompt) != "" {
 		b.addMessage("user", in.Prompt, in.PromptAt, "prompt", false)
 	}
@@ -1279,6 +1281,10 @@ func (b *transcriptBuilder) feed(combined []transcriptRow) {
 			}
 			continue
 		}
+		if r.stream == "stderr" && b.geminiMode {
+			b.geminiStderr(line, at)
+			continue
+		}
 		if r.stream == "stderr" {
 			if reMatches(reasoningMarkerRe, line) {
 				reasoningStream = true
@@ -1297,6 +1303,9 @@ func (b *transcriptBuilder) feed(combined []transcriptRow) {
 			continue
 		}
 		reasoningStream = false
+		if b.geminiMode && b.geminiEventLine(line, at) {
+			continue
+		}
 		if b.codexEventLine(line, at) {
 			continue
 		}
@@ -1322,7 +1331,7 @@ func (b *transcriptBuilder) finalize(in TranscriptInput) *pyjson.Object {
 			it.Delete("streaming")
 		}
 	}
-	if in.Error != "" {
+	if in.Error != "" && !b.lastErrorIs(in.Error) {
 		b.addError(in.Error, nil, "meta")
 	}
 	if in.Notice != "" {
@@ -1433,6 +1442,24 @@ func (b *transcriptBuilder) finalize(in TranscriptInput) *pyjson.Object {
 	}
 	return pyjson.NewObject("session", in.SessionID, "status", in.Status, "active", active,
 		"generated_at", NowISO(), "items", list, "stats", stats, "usage", usage, "signature", signature)
+}
+
+// lastErrorIs: the transcript already ends its last turn with this error
+// (a Gemini result error that is also the session's error).
+func (b *transcriptBuilder) lastErrorIs(text string) bool {
+	text = pytext.Strip(text)
+	for i := len(b.items) - 1; i >= 0; i-- {
+		it := b.items[i]
+		switch it.Value("type") {
+		case "error":
+			if pytext.Strip(strOr(it.Value("text"))) == text {
+				return true
+			}
+		case "message", "tool":
+			return false
+		}
+	}
+	return false
 }
 
 func permissionSignature(items []*pyjson.Object) string {

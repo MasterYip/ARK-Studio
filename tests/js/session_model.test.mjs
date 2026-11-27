@@ -256,6 +256,16 @@ test("thread blocks group consecutive tools and separate user turns", () => {
   assert.equal(model.toolCommand(items[1]), "git status");
   assert.equal(model.toolKind({ name: "tool", input: { command: "ls" } }), "command");
   assert.equal(model.toolKind({ name: "Read" }), "read");
+  // Gemini CLI's tool names (stream-json tool_use).
+  assert.equal(model.toolKind({ name: "replace", input: { file_path: "a.txt" } }), "edit");
+  assert.equal(model.toolKind({ name: "write_file" }), "edit");
+  assert.equal(model.toolKind({ name: "run_shell_command", input: { command: "ls" } }), "command");
+  assert.equal(model.toolKind({ name: "read_file" }), "read");
+  assert.equal(model.toolKind({ name: "grep_search" }), "search");
+  assert.equal(model.toolKind({ name: "list_directory" }), "search");
+  assert.equal(model.toolKind({ name: "google_web_search" }), "search");
+  assert.equal(model.toolKind({ name: "web_fetch" }), "read");
+  assert.equal(model.toolKind({ name: "replace_all_users" }), "other");
   // Signatures change only when the block content changes.
   const before = model.blockSignature(blocks[4]);
   blocks[4].items[1].status = "ok";

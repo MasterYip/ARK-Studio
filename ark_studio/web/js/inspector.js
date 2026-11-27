@@ -40,7 +40,32 @@ export function dockRoot() {
 }
 
 export function drawerRoots() {
-  return [overlayRoot(), viewHost("details")].filter(Boolean);
+  return [overlayRoot(), viewHost("details"), ...fullscreenLayers()].filter(Boolean);
+}
+
+// A fullscreen graph hides the docked and floating inspector (they are
+// outside the fullscreen element): node details open as a popover in the
+// graph's popover layer instead (graph.js popoverLayer).
+function fullscreenLayers() {
+  return [...document.querySelectorAll(".graph-popover-layer")];
+}
+
+// While the popover is open, Esc closes it and the next Esc leaves
+// fullscreen (Keyboard Lock; without it the browser leaves fullscreen,
+// which closes the popover too).
+function lockEscape(on) {
+  try {
+    if (on) navigator.keyboard?.lock?.(["Escape"])?.catch?.(() => {}); // i18n-ignore: a KeyboardEvent.code, not UI text
+    else navigator.keyboard?.unlock?.();
+  } catch { /* not supported */ }
+}
+
+export function fullscreenPopoverLayer(graph = null) {
+  const element = document.fullscreenElement;
+  if (!element) return null;
+  const own = graph?.popoverLayer?.();
+  if (own) return own;
+  return element.matches?.(".graph-popover-layer") ? element : element.querySelector?.(".graph-popover-layer") || null;
 }
 
 // Keep an open inspector in step with saves made elsewhere (Editor node
@@ -142,21 +167,30 @@ export async function openInspector(ctx, ref, anchor = null, options = {}) {
     try { localStorage.setItem("ark.inspectorPane", "1"); } catch { /* storage may be disabled */ }
     ctx.renderTopbar?.();
   }
-  const docked = !options.forceFloating && ctx.S.inspectorPane !== false && !isPhone;
   const editableGraphs = (ctx.graphs || []).filter((item) => !item.opts?.backdrop);
   const graph = editableGraphs.find((item) => item.selectedNodes?.has(unit.id))
     || editableGraphs.find((item) => item.byId?.has(unit.id))
     || null;
+  const layer = fullscreenPopoverLayer(graph);
+  const docked = !layer && !options.forceFloating && ctx.S.inspectorPane !== false && !isPhone;
+  // An open popover stays where it is (dragged there, or placed by the
+  // first click) while clicks or arrow keys move to other nodes.
+  const shown = layer?.querySelector(".drawer")?.getBoundingClientRect();
+  if (shown) ctx.S.drawerAnchor = { x: shown.left - 16, y: shown.top + 18 };
   // Read / Edit: the person's one remembered choice (the graphs share it);
   // Read until they switch, also on pages without a graph.
   const readOnly = inspectorReadOnly({
     readOnly: options.readOnly, sessionMode: ctx.S.graphMode, graphMode: graph?.mode, saved: savedMode(),
   });
-  ctx.S.drawerFloating = Boolean(options.forceFloating);
-  document.body.classList.toggle("inspector-pinned", docked);
+  // The popover is not the floating inspector: leaving fullscreen goes
+  // back to the pane (or nothing), and the page layout under it stays.
+  if (!layer) {
+    ctx.S.drawerFloating = Boolean(options.forceFloating);
+    document.body.classList.toggle("inspector-pinned", docked);
+  }
   renderInspector(ctx, unit, {
     docked, anchor: ctx.S.drawerAnchor, readOnly, graph,
-    mobileSheet: isPhone,
+    mobileSheet: isPhone && !layer, layer,
   });
   // A chat in the Sessions view keeps its place: the node waits in the Details tab.
   if (docked && shellActive()) revealView("details", { unless: ["localgraph", "sessions"] });
@@ -171,6 +205,7 @@ export function closeInspector(ctx) {
   ctx.S.detail = null;
   ctx.S.selectedId = null;
   document.body.classList.remove("inspector-pinned");
+  if (fullscreenLayers().some((layer) => layer.querySelector(".drawer"))) lockEscape(false);
   for (const root of drawerRoots()) root.querySelectorAll(".drawer, .drawer-backdrop").forEach((el) => el.remove());
   if (ctx.S.inspectorPane) showInspectorPlaceholder(ctx);
   renderWorkbench();
@@ -236,8 +271,8 @@ export function showInspectorPlaceholder(ctx) {
   root.appendChild(drawer);
 }
 
-export function placeFloating(drawer, anchor) {
-  const topbar = parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar")) || 50;
+export function placeFloating(drawer, anchor, { topbar = null } = {}) {
+  topbar ??= parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--topbar")) || 50;
   const rect = drawer.getBoundingClientRect();
   const width = rect.width || 430;
   const height = Math.min(rect.height || 380, window.innerHeight - topbar - 24);
@@ -252,9 +287,9 @@ export function createInspectorPreview(ctx, unit, anchor, onClose) {
 
 function renderInspector(ctx, unit, {
   docked = true, anchor = null, readOnly = false, graph = null, mobileSheet = false,
-  preview = false, onClose = null,
+  preview = false, onClose = null, layer = null,
 } = {}) {
-  const root = docked && !mobileSheet ? dockRoot() : overlayRoot();
+  const root = layer || (docked && !mobileSheet ? dockRoot() : overlayRoot());
   if (!preview) {
     for (const item of drawerRoots()) item.querySelectorAll(".drawer, .drawer-backdrop, .modal-backdrop").forEach((el) => el.remove());
   }
@@ -665,8 +700,8 @@ function renderInspector(ctx, unit, {
   };
 
   const drawer = h("aside", {
-    class: `drawer ${docked ? "docked" : "floating"} ${mobileSheet ? "mobile-sheet" : ""} ${preview ? "unit-ref-preview" : ""}`.trim(),
-    role: "complementary", "aria-label": t("inspector.details"),
+    class: `drawer ${docked ? "docked" : "floating"} ${mobileSheet ? "mobile-sheet" : ""} ${preview ? "unit-ref-preview" : ""} ${layer ? "graph-popover" : ""}`.trim(),
+    role: layer ? "dialog" : "complementary", "aria-label": t("inspector.details"),
   });
   drawer.appendChild(inspectorResizer(ctx));
   if (!docked) {
@@ -732,7 +767,7 @@ function renderInspector(ctx, unit, {
       return;
     }
     graph?.setMode?.("edit");
-    renderInspector(ctx, unit, { docked, anchor, readOnly: false, graph, mobileSheet });
+    renderInspector(ctx, unit, { docked, anchor, readOnly: false, graph, mobileSheet, layer });
   };
   const enterRead = () => {
     if (typeof ctx.syncInspectorMode === "function") {
@@ -740,7 +775,7 @@ function renderInspector(ctx, unit, {
       return;
     }
     graph?.setMode?.("read");
-    renderInspector(ctx, unit, { docked, anchor, readOnly: true, graph, mobileSheet });
+    renderInspector(ctx, unit, { docked, anchor, readOnly: true, graph, mobileSheet, layer });
   };
   const modeButton = readOnly
     ? h("button", {
@@ -767,7 +802,7 @@ function renderInspector(ctx, unit, {
       title: t("editor.open_in_editor"), "aria-label": t("editor.open_in_editor"),
       onclick: () => ctx.openUnitInEditor(unit),
     }, icon("file", "sm")) : null,
-    pinBtn,
+    layer ? null : pinBtn,
     // On the Map the node is already in view; elsewhere this opens the Map
     // with the node selected and centred.
     ctx.S.tab === "map" ? null : h("button", {
@@ -927,7 +962,8 @@ function renderInspector(ctx, unit, {
   }
   root.append(drawer);
   if (!preview) liveInspector = { ctx, projectId: ctx.S.project?.id, unitId: unit.id, isDirty: () => dirty || saving || Boolean(saveTimer) };
-  if (!docked && !mobileSheet) placeFloating(drawer, anchor);
+  if (!docked && !mobileSheet) placeFloating(drawer, anchor, layer ? { topbar: 0 } : {});
+  if (layer) lockEscape(true);
   autoGrow();
   title.addEventListener("input", autoGrow);
   return drawer;

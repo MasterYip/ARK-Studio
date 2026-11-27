@@ -354,7 +354,7 @@ func DefaultPresets() ([]*pyjson.Object, error) {
 		{"codex", "Codex CLI", "Codex exec with its JSON event stream; each message continues the same thread.", "ARK_TASK_CODEX_COMMAND", `codex exec --json --skip-git-repo-check "{prompt}"`, "arg"},
 		{"opencode", "OpenCode", "OpenCode non-interactive run mode.", "ARK_TASK_OPENCODE_COMMAND", `opencode run "{prompt}"`, "arg"},
 		{"cursor", "Cursor Agent", "Cursor Agent CLI print mode.", "ARK_TASK_CURSOR_COMMAND", `cursor-agent -p "{prompt}"`, "arg"},
-		{"gemini", "Gemini CLI", "Gemini CLI non-interactive prompt mode.", "ARK_TASK_GEMINI_COMMAND", `gemini -p "{prompt}"`, "arg"},
+		{"gemini", "Gemini CLI", "Gemini CLI headless mode with its stream-json events; each message resumes the same conversation.", "ARK_TASK_GEMINI_COMMAND", `gemini -p "{prompt}"`, "arg"},
 	}
 	presets := []*pyjson.Object{pyjson.NewObject(
 		"id", "echo",

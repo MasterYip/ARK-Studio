@@ -63,7 +63,7 @@ var authDetail = map[string]string{
 	"dsh":      "Configure model credentials in DSH or Settings → Assistant.",
 	"opencode": "Run `opencode auth login` or export a provider API key.",
 	"cursor":   "ARK cannot inspect the Cursor keychain; sign in with the Cursor CLI.",
-	"gemini":   "Run `gemini` and sign in, or set GEMINI_API_KEY.",
+	"gemini":   "Run `gemini` and sign in with Google, or set GEMINI_API_KEY (Vertex AI: GOOGLE_GENAI_USE_VERTEXAI=true and GOOGLE_CLOUD_PROJECT).",
 }
 
 var (
@@ -83,7 +83,7 @@ var probeEnvKeys = set("PATH", "Path", "PATHEXT", "SYSTEMROOT", "SystemRoot", "C
 	"XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_CACHE_HOME")
 
 var listEnvKeys = func() map[string]bool {
-	m := set("CODEX_HOME", "OPENCODE_CONFIG", "USERNAME", "USER", "HOMEDRIVE", "HOMEPATH")
+	m := set("CODEX_HOME", "OPENCODE_CONFIG", "GEMINI_CLI_HOME", "USERNAME", "USER", "HOMEDRIVE", "HOMEPATH")
 	for k := range probeEnvKeys {
 		m[k] = true
 	}
@@ -449,7 +449,10 @@ func (c *Catalog) authFor(id string) *pyjson.Object {
 		if len(sources) > 0 {
 			return base("authenticated", true, "environment", sources, "Provider API key found in the environment.")
 		}
-		path := filepath.Join(home, ".gemini", "oauth_creds.json")
+		if ok, method, more, detail := geminiOtherAuth(home); ok {
+			return base("authenticated", true, method, appendSources(sources, more...), detail)
+		}
+		path := filepath.Join(geminiDir(home), "oauth_creds.json")
 		state, data := readJSONStructure(path)
 		if state != "missing" {
 			sources = appendSources(sources, fileLabel(path, home))
@@ -839,7 +842,7 @@ func opencodeConfigModels(home string) discovery {
 }
 
 func geminiConfigModels(home string) discovery {
-	path := filepath.Join(home, ".gemini", "settings.json")
+	path := filepath.Join(geminiDir(home), "settings.json")
 	method := "config:~/.gemini/settings.json"
 	state, raw := readJSONConfig(path)
 	if state == "missing" {
@@ -1300,6 +1303,16 @@ func (c *Catalog) discoverModels(preset *pyjson.Object, resolved string) *pyjson
 		results = append(results, remote)
 	case installed && id == "opencode":
 		results = append(results, opencodeCLIModels(resolved, c.Runner.List))
+	case installed && id == "gemini":
+		remote, ok := c.remote[id]
+		if c.explicit || !ok {
+			remote = geminiCLIModels(resolved, c.Runner.List)
+			c.remote[id] = remote
+		}
+		results = append(results, remote)
+		if len(remote.models) == 0 {
+			results = append(results, geminiAliases())
+		}
 	case installed && id == "dsh":
 		if c.explicit {
 			cfg, err := assistcfg.Load()

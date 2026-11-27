@@ -28,7 +28,7 @@ export const MAX_SCROLLS = 6;
 const ROUTE_RE = /^#\/[A-Za-z0-9._~%/!$&'()*+,;=:@-]{0,400}$/;
 // Hash routes never restored: one-off actions, not places.
 const ONE_OFF_ROUTE = /^#\/?(join|pair)\b|[#?&]pair=/;
-const LAYOUTS = new Set(["force", "tree", "mind", "node"]);
+const LAYOUTS = new Set(["force", "mind", "node", "timeline"]);
 
 const text = (value, max) => (typeof value === "string" ? value.slice(0, max) : "");
 const finite = (value, fallback = 0) => (Number.isFinite(Number(value)) ? Number(value) : fallback);

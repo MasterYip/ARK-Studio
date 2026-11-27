@@ -47,7 +47,7 @@ Detection is deliberately conservative:
 | DeepSeek Harness | `TENCENTHUB_API_KEY`, `DEEPSEEK_API_KEY`, `DSH_API_KEY`, ARK's private assistant key |
 | OpenCode | provider key variables, `~/.local/share/opencode/auth.json`, `~/.config/opencode/auth.json`, `%APPDATA%/opencode/auth.json` |
 | Cursor Agent | `CURSOR_API_KEY`; the keychain is not inspected, so the result is `unknown` |
-| Gemini CLI | `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `~/.gemini/oauth_creds.json` |
+| Gemini CLI | `GEMINI_API_KEY`, `GOOGLE_API_KEY`, Vertex AI (`GOOGLE_GENAI_USE_VERTEXAI=true` with `GOOGLE_CLOUD_PROJECT` or `GOOGLE_API_KEY`), a key in `~/.gemini/.env`, `security.auth.selectedType` in `~/.gemini/settings.json`, `~/.gemini/oauth_creds.json` (`$GEMINI_CLI_HOME/.gemini` when set) |
 
 The version probe runs only known CLIs with `--version`, a four-second timeout,
 `shell=False`, and captured output. Version text is stripped of ANSI/control
@@ -74,7 +74,7 @@ read-only and bounded, and none starts a model run or spends tokens.
 | Codex CLI | `~/.codex/config.toml` (`model`, `model_reasoning_effort`, `[profiles.*].model`); `codex debug models --bundled` on every probe; `codex debug models` (lets Codex refresh its own catalog cache) only on an explicit refresh. Per-model reasoning levels come from the catalog. |
 | OpenCode | `opencode models`; `~/.config/opencode/opencode.json[c]` (`model`, `small_model`, `provider.*.models`) |
 | Claude Code | `~/.claude/settings.json` (`model`, `effortLevel`, `env.ANTHROPIC_MODEL` and `ANTHROPIC_DEFAULT_*_MODEL`), then the builtin aliases `opus`/`sonnet`/`haiku`/`fable`. Claude Code has no list command. Effort levels are the ones `claude --help` documents. |
-| Gemini CLI | `~/.gemini/settings.json` `model`, then builtin. There is no list command. |
+| Gemini CLI | `~/.gemini/settings.json` `model`; `gemini --list-models --output-format json` once, then on an explicit refresh (without credentials in its environment Gemini lists its built-in catalog). Versions without the list get Gemini's aliases `auto`, `pro`, `flash`, `flash-lite`. Gemini has no reasoning-effort option. |
 | DeepSeek Harness | the ARK assistant model; on an explicit refresh, `GET {base_url}/models` on the assistant endpoint (Settings → Assistant) with its key. DSH has no list command. |
 | Cursor Agent | builtin only. There is no verified list command. |
 
@@ -96,7 +96,8 @@ Rules:
   labelled `builtin`, with the reason, so the picker is never empty.
 - Session launch validates `effort` against the selected model's levels.
   Codex receives `-m <model>` and `-c model_reasoning_effort=<effort>`.
-  Claude Code receives `--model` and `--effort`. Templates may also use
+  Claude Code receives `--model` and `--effort`, Gemini CLI `--model`.
+  Templates may also use
   `{model}` and `{effort}`.
 
 In **Execute → Runs**, the composer's "model · effort" chip opens a picker
@@ -192,6 +193,62 @@ command that already chooses a sandbox (`-s`, `--sandbox`, `--full-auto`,
 `--dangerously-bypass-approvals-and-sandbox`, `default_permissions` or
 `sandbox_mode`) is left as it is. Older Codex has no network switch for the
 read-only sandbox, so read-only sessions there cannot reach ARK; update Codex.
+
+## Gemini CLI sessions
+
+ARK runs Gemini CLI in headless mode, one process per message, with its
+`stream-json` output:
+
+```
+gemini --output-format stream-json [--model <m>] --approval-mode <mode>
+       [--include-directories <dir> ...] [--resume <id>] -p "<message>"
+```
+
+- **Transcript.** Assistant text, tool calls (`read_file`, `replace`,
+  `run_shell_command`, ...) with their results, warnings, errors and token
+  usage come from the events. The echo of the prompt is not shown; the
+  person's own message is.
+- **Conversation.** The `init` event's `session_id` is the session's provider
+  id. Every later message runs `gemini --resume <id>` in the same folder, so
+  Gemini keeps the whole conversation and ARK sends only the new message. The
+  session context shows `gemini --resume <id>` for a terminal. Gemini has no
+  fork option: **Fork** starts from a summary.
+- **Permission modes.** In headless mode Gemini refuses a tool that would ask
+  for approval, so ARK picks the approval mode:
+
+  | Mode | Gemini |
+  |---|---|
+  | `read_only` | `--approval-mode default`: read and search tools only, no shell |
+  | `plan` | `--approval-mode plan` |
+  | `full_access` | `--approval-mode yolo`: every tool runs without asking |
+
+  A read-only Gemini session cannot run shell commands, so it reads the ARK
+  context from `ark-context.json` and `ARK-TASK.md` instead of calling the API.
+  A command that sets `--approval-mode`, `--yolo` or `-y` itself keeps it.
+  Gemini's own sandbox (`--sandbox`, Docker or Podman) is not turned on; add it
+  to the command in **Settings → Agents** if you have it set up.
+- **Folders.** ARK chose the folder, so the run gets
+  `GEMINI_CLI_TRUST_WORKSPACE=true` (headless Gemini stops in a folder it does
+  not trust, and only trusted folders allow other approval modes). Trusted
+  folders load their `.gemini/` settings, MCP servers and hooks. When the
+  session works in a worktree, the session workspace and the task folder are
+  added with `--include-directories`.
+- **Images.** Pasted images are referenced as `@path` in the message, and
+  Gemini reads them as image input.
+- **Wake.** As with Claude Code and Codex, ARK continues an idle Gemini session
+  itself (`ARK_WAKE=ark`), so the agent starts no watcher.
+- **End of a turn.** The `result` event decides how a turn ended: success is
+  *finished*, an error is *error* with Gemini's message (API errors, quota,
+  blocked responses), and a turn the person stopped reports nothing. A start-up
+  failure without events (no sign-in) reports Gemini's error line.
+- **Windows.** `npm install -g @google/gemini-cli` installs a `gemini.cmd`
+  shim and no `gemini.exe`. ARK reads the script the shim calls and runs it
+  with Node directly (the shim's own `node.exe`, else `node` on PATH), so a
+  message with line breaks, quotes or `&` reaches Gemini unchanged.
+- **Environment.** Gemini passes the session environment to its shell
+  commands, so `$ARKT`, `ARK_SESSION_ID` and the other session variables work.
+  If `security.environmentVariableRedaction` is on in Gemini's settings, it
+  hides variables whose names contain `TOKEN`; use `$ARKT`, which it keeps.
 
 ## Limitations
 

@@ -538,7 +538,7 @@ export function toolPaths(item = {}) {
 
 export function toolKind(item = {}) {
   const name = String(item.name || "").toLowerCase();
-  if (/(apply_?patch|edit|write|patch|str_replace|create_file|multiedit|notebookedit|file_change)/.test(name)) return "edit";
+  if (/(apply_?patch|edit|write|patch|str_replace|^replace$|create_file|multiedit|notebookedit|file_change)/.test(name)) return "edit";
   if (/(grep|search|glob|find|ripgrep|^rg$|^ls$|list_dir|web_search|websearch)/.test(name)) return "search";
   if (/(read|view|^cat$|open_file|fetch|webfetch)/.test(name)) return "read";
   if (/(shell|bash|exec|command|^run|terminal|powershell|^sh$|local_shell)/.test(name) || toolCommand(item)) return "command";

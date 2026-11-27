@@ -1,10 +1,16 @@
 // Pure helpers for topic units (a node that holds a curated subgraph).
 // DOM-free (tests/js/topic_model.test.mjs).
-import { GraphFilterIndex } from "./graph-filter.js";
+import { GraphFilterIndex, nodeTimeSpan } from "./graph-filter.js";
 
-/** Filter a topic's members, preserving narrative order and the saved design. */
+/**
+ * Filter a topic's members, preserving narrative order and the saved design.
+ * Every topic (stored or a line's automatic one) is filtered and counted over
+ * its own members only.  Time on a topic page: a member's planned dates, or,
+ * without any, its created..updated span, in the Time filter, the slider's
+ * extent (`facets.time`) and the Timeline view alike (topicTimelineItems).
+ */
 export function filterTopic(data, query = {}, me = "") {
-  const index = new GraphFilterIndex({ nodes: data.members || [], edges: data.edges || [] });
+  const index = new GraphFilterIndex({ nodes: data.members || [], edges: data.edges || [] }, { activityTime: true });
   const result = index.filter(query, me, { all: true });
   const selected = new Map(result.nodes.map(node => [node.id, node]));
   const all = new Map((data.members || []).map(node => [node.id, node]));
@@ -22,6 +28,30 @@ export function filterTopic(data, query = {}, me = "") {
   // Each facet ignores its own filter, using only this topic's members.
   const facets = index.facets(query, me);
   return { ...data, members, edges: result.edges, facets, filtered: members.length < (data.members || []).length };
+}
+
+const localDay = (ms) => {
+  const d = new Date(ms);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+/**
+ * The topic Timeline's bars: members with planned dates as they are; a
+ * member without any spans the local days of its created_at..updated_at
+ * (`time_source: "activity"`), the same time the topic's Time filter uses.
+ */
+export function topicTimelineItems(members = []) {
+  const items = [];
+  for (const unit of members || []) {
+    const span = nodeTimeSpan(unit, { activity: true });
+    if (span.source === "planned") items.push(unit);
+    else if (span.source === "activity") {
+      const start = Number.isFinite(span.start) ? span.start : span.end;
+      const end = Number.isFinite(span.end) ? span.end : span.start;
+      items.push({ ...unit, start_at: localDay(start), end_at: localDay(end), time_source: "activity" });
+    }
+  }
+  return items;
 }
 
 /** Layout key GraphView uses for a node in the "node" layout. */

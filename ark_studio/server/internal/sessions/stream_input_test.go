@@ -27,6 +27,10 @@ func TestMain(m *testing.M) {
 		fakeClaude()
 		return
 	}
+	if os.Getenv("ARK_FAKE_GEMINI") == "1" { // a headless Gemini CLI (gemini_test.go)
+		fakeGemini()
+		return
+	}
 	if os.Getenv("ARK_FAKE_ECHO") == "1" { // a one-shot agent that reports its argv and stdin (longargs_test.go)
 		fakeEcho()
 		return

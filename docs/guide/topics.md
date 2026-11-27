@@ -26,8 +26,9 @@ Filtering does not change the saved membership, rule, outline or positions, and
 does not hide the topic tabs. Clearing the filters restores the complete topic.
 
 A topic's Graph opens in the Force layout. A layout picked in the graph
-toolbar (Node: the topic's saved positions, Tree, Mind) is remembered for that
-topic in this browser.
+toolbar (Node: the topic's saved positions, Mind, Timeline graph) is kept for
+every topic and research line of the project in this browser, so switching
+topics keeps it.
 Filter changes reuse the current graph and retain its layout, pan and zoom,
 including when all members are temporarily filtered out. Node transitions use
 the same animation setting as the Map, without a synchronous force warm-up.
@@ -72,7 +73,13 @@ choices are in the topic unit's `meta.subgraph`.
     another sits under it. **+** creates a topic. From any page a click
     opens the topic.
   - **Lines**: the lines of work (`branch:a/b/c` tags) as a tree with node
-    counts; a line opens as its topic. The gear opens the line settings.
+    counts. A line opens the line view: every node with its tag, the lines
+    below it included unless **只看本研究线** is on. A line can be
+    associated with a topic: a topic whose rule is the line's tag (made by
+    **固定为专题**), or a topic that carries the tag itself. The line row then
+    shows a **专题** chip that opens the topic, and the topic row shows a
+    **研究线** badge that opens the line. A topic always opens with its own
+    members. The gear opens the line settings.
   - **Outline**: the open topic's reading order and levels, under the topic
     itself (level 0); on other pages it is empty. A click selects
     the node in the graph (or the section in Document) and opens its details.
@@ -86,7 +93,7 @@ choices are in the topic unit's `meta.subgraph`.
   the end of the topic page's head.
 - Every topic has three views:
   - **Graph** (default): the topic's graph, Force layout until another one is
-    picked for the topic. The Node layout keeps the saved positions; **Auto
+    picked (one choice for all topics). The Node layout keeps the saved positions; **Auto
     layout** re-arranges them.
   - **Document**: the topic as one document. Level 0 is the topic itself, its
     title and whole body (**Edit** opens it in Node details). Each member is a

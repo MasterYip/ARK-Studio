@@ -129,7 +129,38 @@ export function commentsSection(unit, {
       // text typed above is the accept note, the send-back reason or the
       // comment (`review`: { accept(text, clear), sendBack(text, clear) }).
       h("div", { class: "comments-actions", dataset: review ? { reviewActions: unit.uid } : {} },
+        decideButton(unit, review, input, addBtn, changed),
         ...commentActionButtons(review, addBtn, () => input.value.trim(), () => { input.value = ""; }))));
+}
+
+/**
+ * An open decision gets "Mark decided" before Add comment: the text typed
+ * above (optional) is recorded as the decision and the node is closed.
+ */
+function decideButton(unit, review, input, addBtn, changed) {
+  if (review || unit.type !== "decision" || unit.status === "done") return null;
+  const button = h("button", { class: "btn sm primary", type: "button", dataset: { commentAction: "decide" } },
+    icon("check", "sm"), t("needs.decide"));
+  addBtn.classList.remove("primary");
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    try {
+      const text = input.value.trim();
+      let comments = unit.comments || [];
+      if (text) comments = (await api.addComment(unit.id, { body: text, kind: "decided" })).comments || comments;
+      await api.updateUnit(unit.id, { status: "done" });
+      unit.status = "done";
+      input.value = "";
+      button.remove();
+      addBtn.classList.add("primary");
+      changed(comments);
+      toast(t("needs.decided", { uid: unit.uid }), "ok");
+    } catch (err) {
+      toast(err.message, "err");
+      button.disabled = false;
+    }
+  });
+  return button;
 }
 
 /** The buttons of the comment row, in order (Accept, Send back, Add comment). */

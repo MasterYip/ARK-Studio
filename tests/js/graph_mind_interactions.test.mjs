@@ -34,6 +34,7 @@ async function fixture(layout = "mind") {
     "./locate-map-model.js": { locateCamera(node, zoom) { return { zoom, pan: { x: -node.x * zoom, y: -node.y * zoom } }; } },
     "./presence-ui.js": { attachPresenceOverlay: () => null, createPresenceChip: () => ({ el: null, destroy() {} }) },
     "./read-edit-mode.js": { rememberMode() {}, savedMode: () => "read" },
+    "./graph-viewport-model.js": { pointsOnScreen: () => 1, viewportAction: () => "keep", anchorShift: () => null },
     "./users.js": { currentUsername: () => "" },
     "./components.js": { toast() {} },
     "./graph3d-model.js": {
@@ -80,7 +81,7 @@ async function fixture(layout = "mind") {
     graph.byId = new Map(nodes.map((n) => [n.id, n]));
     graph.edges = edges.map(([source, target]) => ({ source, target, relation: "part_of" }));
   };
-  return { graph, load, calls, settings };
+  return { graph, load, calls, settings, ns: graphModule.namespace };
 }
 
 function key(graph, value) {
@@ -151,8 +152,8 @@ for (const layout of ["mind", "node"]) {
   });
 }
 
-test("force/tree: circle intersection excludes bounding-box corners; Shift needs the entire circle", async () => {
-  for (const layout of ["force", "tree"]) {
+test("force: circle intersection excludes bounding-box corners; Shift needs the entire circle", async () => {
+  for (const layout of ["force"]) {
     const { graph, load } = await fixture(layout);
     load([{ id: "n", x: 100, y: 100, radius: 10 }]);
     assert.deepEqual(box(graph, 89, 98, 91, 102), ["n"]);
@@ -431,18 +432,42 @@ test("a reflowed tree that would overlap another tree moves just clear of it", a
   assert.ok(a.y1 + 28 <= b.y0 + 1e-9 || b.y1 + 28 <= a.y0 + 1e-9, "trees A and B do not overlap");
 });
 
-test("the auto layout button is shown for Mind and the node graph only", async () => {
+test("the auto layout button is shown for Mind and the node graph only; 3D for Force only", async () => {
   const { graph } = await fixture("mind");
   const classes = new Set(["hidden"]);
   const attrs = {};
   const button = { classList: { toggle: (name, on) => (on ? classes.add(name) : classes.delete(name)) }, setAttribute: (k, v) => { attrs[k] = v; } };
   graph.tools = { querySelector: (selector) => (selector === ".graph-node-auto" ? button : null) };
-  for (const [layout, hidden, label] of [["mind", false, "graph.auto_layout_mind"], ["node", false, "graph.auto_layout_node"], ["force", true], ["tree", true]]) {
+  graph.view3dBtn = { hidden: false };
+  for (const [layout, hidden, label] of [["mind", false, "graph.auto_layout_mind"], ["node", false, "graph.auto_layout_node"], ["force", true], ["timeline", true]]) {
     graph.layout = layout;
     graph._syncNodeTools();
     assert.equal(classes.has("hidden"), hidden, layout);
     if (label) assert.equal(button.title, label);
+    assert.equal(graph.view3dBtn.hidden, layout !== "force", `3D button with ${layout}`);
   }
+});
+
+test("the tree layout is gone: stored names fall back, other layouts leave 3D", async () => {
+  const { graph, ns } = await fixture("force");
+  assert.equal(ns.GRAPH_LAYOUTS.join(","), "force,mind,node,timeline");
+  assert.equal(ns.graphLayoutOf("tree"), "force");
+  assert.equal(ns.graphLayoutOf("timeline"), "timeline");
+  assert.equal(ns.graphLayoutOf(undefined, "node"), "node");
+  const leaves = [];
+  graph.opts = { compact: true };
+  graph._view3d = {};
+  graph.set3D = (on, options) => { leaves.push([on, options]); graph._view3d = null; };
+  graph._closeEditor = () => {};
+  graph._loadPrimaryRelation = () => "part_of";
+  graph._initialRelations = () => new Set(["part_of"]);
+  graph.setLayout("tree");
+  assert.equal(graph.layout, "force", "an unknown layout is ignored");
+  graph.setLayout("timeline");
+  assert.equal(graph.layout, "timeline");
+  // Leaving 3D does not overwrite the saved 3D choice (Force brings it back).
+  assert.equal(JSON.stringify(leaves), JSON.stringify([[false, { persist: false }]]));
+  assert.equal(graph._isNode(), true, "the timeline graph draws node cards");
 });
 
 test("a data refresh keeps a dragged Mind card's position and flag", async () => {

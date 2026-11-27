@@ -10,6 +10,39 @@ function likePattern(query) {
     : c === "_" ? "[\\s\\S]" : c.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join(""), "u");
 }
 
+const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * A time value in epoch ms (NaN if absent or unreadable).  A date-only value
+ * is a calendar day in the viewer's timezone: its first ms, or its last with
+ * `endOfDay`.  Timestamps keep their own offset.
+ */
+export function timeMs(value, endOfDay = false) {
+  const text = String(value ?? "").trim();
+  if (!text) return NaN;
+  if (DATE_ONLY.test(text)) {
+    const [year, month, day] = text.split("-").map(Number);
+    return endOfDay ? new Date(year, month - 1, day, 23, 59, 59, 999).getTime()
+      : new Date(year, month - 1, day).getTime();
+  }
+  return Date.parse(text);
+}
+
+/**
+ * Where a node sits on the time axis: its planned dates (start_at / end_at)
+ * when it has either.  With `activity` (topic pages) a node without planned
+ * dates counts from created_at to updated_at instead.  `start` / `end` are
+ * ms (NaN when missing); `startAt` / `endAt` the values they came from.
+ */
+export function nodeTimeSpan(node, { activity = false } = {}) {
+  const planned = { startAt: node?.start_at || null, endAt: node?.end_at || null, source: "planned" };
+  const span = planned.startAt || planned.endAt || !activity ? planned
+    : { startAt: node?.created_at || null, endAt: node?.updated_at || node?.created_at || null, source: "activity" };
+  const start = timeMs(span.startAt), end = timeMs(span.endAt, true);
+  if (!Number.isFinite(start) && !Number.isFinite(end)) return { start, end, startAt: null, endAt: null, source: null };
+  return { ...span, start, end };
+}
+
 /** A Min. links value: a whole number >= 0 (0 = no filter). */
 export function minLinksOf(value) {
   const n = Math.floor(Number(value));
@@ -27,7 +60,9 @@ export function linkCounts(edges = []) {
 }
 
 export class GraphFilterIndex {
-  constructor(snapshot) {
+  /** `activityTime`: undated nodes count by created/updated time (see nodeTimeSpan). */
+  constructor(snapshot, { activityTime = false } = {}) {
+    this.activityTime = Boolean(activityTime);
     this.edges = snapshot.edges || [];
     this.rows = (snapshot.nodes || []).map((node) => ({
       node, tags: new Set(node.tags || []),
@@ -113,15 +148,33 @@ export class GraphFilterIndex {
       unset[ns] = tagged.filter((node) => !(node.tags || []).some((tag) => ns === "tag" ? !tag.includes(":") : tag.startsWith(ns + ":"))).length;
     }
     const assigned = candidates("assignee", "assignees");
-    const nodes = this.rows.map((row) => row.node);
-    const dates = nodes.flatMap((node) => [node.start_at, node.end_at]).filter(Boolean).sort();
+    const time = this.timeExtent();
     return { types: counts(candidates("types", "types_none", "origins"), "type"),
       statuses: counts(candidates("statuses"), "status"), importance: counts(candidates("importance"), "importance"),
       namespaces: { ...namespaces }, unset: { ...unset }, assignees: counts(assigned, "assignee_effective"),
       unassigned: assigned.filter((node) => !node.assignee_effective && !node.assignee).length,
       links_max: this.maxDegree(linkTypes),
-      time: { min: dates[0] || null, max: dates.at(-1) || null,
-        undated: nodes.filter((node) => !node.start_at && !node.end_at).length } };
+      time };
+  }
+
+  /**
+   * Earliest and latest time over every node of the index (whatever the
+   * filters show), compared as ms: {min, max} keep the original values so
+   * a date-only max still means the end of that day.  `undated`: nodes with
+   * no time at all.
+   */
+  timeExtent() {
+    let min = null, max = null, minMs = Infinity, maxMs = -Infinity, undated = 0;
+    for (const { node } of this.rows) {
+      const span = nodeTimeSpan(node, { activity: this.activityTime });
+      if (!span.source) { undated++; continue; }
+      for (const value of [span.startAt, span.endAt]) {
+        const first = timeMs(value), last = timeMs(value, true);
+        if (Number.isFinite(first) && first < minMs) { minMs = first; min = value; }
+        if (Number.isFinite(last) && last > maxMs) { maxMs = last; max = value; }
+      }
+    }
+    return { min, max, undated };
   }
 
   /** Add full bodies for text search ({bodies: [[id, body], ...]}). */
@@ -166,7 +219,10 @@ export class GraphFilterIndex {
     const namespaces = [...new Set([...groups.keys(), ...unset])];
     const pattern = query.q?.trim() ? likePattern(query.q.trim()) : null;
     const from = query.from, to = query.to, today = new Date().toISOString().slice(0, 10);
-    const inRange = (at) => at != null && (!from || at >= from) && (!to || at <= to);
+    // Bounds and node times compare as ms, so date-only values and timestamps mix.
+    const fromMs = from ? timeMs(from) : -Infinity, toMs = to ? timeMs(to, true) : Infinity;
+    const inRange = (ms) => Number.isFinite(ms) && ms >= fromMs && ms <= toMs;
+    const activity = this.activityTime;
     const assignees = values(query.assignee || query.assignees);
     const minLinks = minLinksOf(query.min_links ?? query.minLinks);
     const matches = ({ node: n, tags, namespaces: ownNamespaces, search }) => {
@@ -177,7 +233,10 @@ export class GraphFilterIndex {
       if (pattern && !search.some((text) => pattern.test(text))) return false;
       if (enabled(query.roots) && n.parents?.length) return false;
       if (!assigneeMatches(n, assignees, me)) return false;
-      if ((from || to) && !inRange(n.start_at) && !inRange(n.end_at)) return false;
+      if (from || to) {
+        const span = nodeTimeSpan(n, { activity });
+        if (!inRange(span.start) && !inRange(span.end)) return false;
+      }
       if (enabled(query.has_dates) && !n.start_at && !n.end_at) return false;
       if (query.created_since && n.created_at < query.created_since) return false;
       if (query.updated_since && n.updated_at < query.updated_since) return false;

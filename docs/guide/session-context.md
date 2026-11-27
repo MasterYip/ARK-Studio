@@ -6,8 +6,8 @@ again and continue the work later. Open **Execute › Runs** and scroll to the
 
 The panel lists two kinds of sessions for the open project:
 
-- **ARK** sessions were started from Runs (Claude Code, Codex, DSH and the
-  other presets). ARK records them automatically.
+- **ARK** sessions were started from Runs (Claude Code, Codex, Gemini CLI, DSH
+  and the other presets). ARK records them automatically.
 - **External** sessions ran outside ARK, for example in your own Claude Code
   or Codex window, and uploaded their transcript to ARK. This only happens if
   you allow it, as described below.
@@ -31,10 +31,11 @@ saves the stored transcript.
 
 Select **Continue**:
 
-- **ARK session with a provider session id** (Claude Code or Codex reported
-  one): ARK resumes the same provider conversation and sends only your new
-  message. The dialog also shows the command to resume it yourself in a
-  terminal, for example `claude --resume <id>`.
+- **ARK session with a provider session id** (Claude Code, Codex or Gemini
+  CLI reported one): ARK resumes the same provider conversation and sends only
+  your new message. The dialog also shows the command to resume it yourself in
+  a terminal, for example `claude --resume <id>` or `gemini --resume <id>` (run
+  it in the session's folder: Gemini keeps its conversations per folder).
 - **Other ARK sessions and all external sessions**: **Start new session**
   starts a new ARK session for the agent you choose. Its prompt is your
   message followed by a summary of the old session (original request, latest

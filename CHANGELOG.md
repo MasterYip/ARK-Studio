@@ -6,6 +6,61 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.9] - 2026-11-27
+
+### Added
+
+- Sessions: Gemini CLI as a session agent next to Claude Code and Codex.
+  ARK runs it headless with its stream-json events, so the chat shows its
+  messages, tool calls with their results, warnings, errors and token usage.
+  Every later message continues the same Gemini conversation (`--resume`);
+  the model list comes from `gemini --list-models`; read-only, plan and full
+  access map to Gemini's approval modes; pasted images reach Gemini as
+  `@path` references; a failed turn reports Gemini's own error. On Windows
+  ARK starts the npm-installed `gemini` with Node, so messages with line
+  breaks or quotes arrive unchanged.
+- Graphs: a Timeline graph layout (Map, topics). Node cards run left to
+  right in time order (start date, else created, else updated), one lane per
+  research line (`branch:` tags; sub-lines under their parent, untagged work
+  in its own lane). *depends on* and *derived from* links keep a node right
+  of its inputs, so the lane changes show where lines meet. Dates mark the
+  columns where the day changes. The layout is always automatic and leaves
+  the node graph's arrangement alone.
+- Agents and Hosts cards on Home and the Board: right-click a row for
+  "Message this agent" or "Message agents on this host" (turn on
+  Settings › Advanced › "Experimental: message agents").
+- Decision nodes: "Mark decided" next to Add comment records the text
+  above it as the decision and closes the node.
+- Graphs: a node's popover can open full screen.
+
+### Changed
+
+- Graphs: the 3D button shows only with the Force layout. Picking another
+  layout leaves 3D; Force brings it back when it was the last choice.
+- GPU tab: Refresh is faster. The two queries to a server run side by side,
+  overlapping refreshes share one run, and on Linux and macOS the SSH
+  connection is reused.
+- Research › Topics: a research line always opens its own view with every
+  node of the line, apart from topics; a topic linked to the line shows as a
+  chip that opens it. All topics and lines use one graph layout.
+- Mermaid diagrams load faster: the library is cached, loaded only when a
+  page has a diagram, and draws the visible diagrams first. Click a diagram
+  to zoom.
+- Filters: the selected tag chips sit at the bottom of the filter panel.
+
+### Removed
+
+- Graphs: the Tree layout. Pages and topics that remembered it open in Force.
+
+### Fixed
+
+- Graphs: changing a filter keeps the view on the nodes that remain
+  instead of leaving the screen empty.
+- A topic's Time filter spans the times of its own members, also those
+  without planned dates.
+- Review groups: a heading link in the group's note opens that heading in
+  the member it names.
+
 ## [2.1.8] - 2026-11-27
 
 ### Added

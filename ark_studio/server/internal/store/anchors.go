@@ -206,6 +206,13 @@ func anchorObject(a Anchor, ok bool, problem string) *pyjson.Object {
 // "#slug" has no unit).  It returns the anchors as objects and the warnings
 // for those that do not resolve.
 func resolveAnchors(ctx context.Context, q sqlitedb.Querier, note, selfUID, selfBody string) ([]any, []any, error) {
+	return resolveAnchorsIn(ctx, q, note, selfUID, selfBody, nil)
+}
+
+// resolveAnchorsIn is resolveAnchors for a note that may name several units
+// (a review group's note, members: the member uids and bodies in order).
+// There a bare "#slug" means a member's heading (groupHeadingUnit).
+func resolveAnchorsIn(ctx context.Context, q sqlitedb.Querier, note, selfUID, selfBody string, members []groupBody) ([]any, []any, error) {
 	anchors := ParseAnchors(note)
 	objects := []any{}
 	warnings := []any{}
@@ -214,6 +221,9 @@ func resolveAnchors(ctx context.Context, q sqlitedb.Querier, note, selfUID, self
 	if selfUID != "" {
 		bodies[selfUID], exists[selfUID] = selfBody, true
 	}
+	for _, m := range members {
+		bodies[m.uid], exists[m.uid] = m.body, true
+	}
 	for _, a := range anchors {
 		problem := ""
 		var approx *bodyAnchor
@@ -221,7 +231,14 @@ func resolveAnchors(ctx context.Context, q sqlitedb.Querier, note, selfUID, self
 		uid := a.Unit
 		if a.Kind == "heading" && uid == "" {
 			uid = selfUID
-			if uid == "" {
+			if uid == "" && len(members) > 0 {
+				if uid = groupHeadingUnit(note, a, members); uid != "" {
+					a.Unit = uid
+				} else {
+					problem = "no member of this review group has a heading or {#id} block \"" + a.Slug +
+						"\": write the unit before it, e.g. " + members[0].uid + "#" + a.Slug
+				}
+			} else if uid == "" {
 				problem = "a #slug anchor needs a unit here: write T-0042#slug"
 			}
 		}

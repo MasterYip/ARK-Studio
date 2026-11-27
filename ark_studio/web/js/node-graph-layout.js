@@ -1,5 +1,6 @@
 // Layered (Sugiyama-style) auto layout and smooth Bézier edge routing for
-// node-editor style graphs (GraphView layout "node", the Resources graph).
+// node-editor style graphs (GraphView layout "node", the Resources graph),
+// and the timeline graph layout (GraphView layout "timeline", see below).
 //
 // Pure functions without DOM access so they can run in tests, scripts and a
 // Web Worker.  Coordinates are world units; nodes are centred rectangles
@@ -431,6 +432,341 @@ function packBlocks(blocks, nodes, waypoints, aspect) {
     rowHeight = Math.max(rowHeight, block.height);
   }
   return positions;
+}
+
+// ------------------------------------------------------------ timeline
+
+// The timeline graph (GraphView layout "timeline"): node cards left to right
+// in time order, one horizontal lane per research line.
+//
+//   order    start_at, else created_at, else updated_at (ms).  Relations in
+//            TIMELINE_RELATIONS (shown direction: the target comes later)
+//            constrain it: a topological order that takes the earliest
+//            ready node first (Kahn with a heap), so derived work sits right
+//            of its sources even when dates disagree.  part_of is softer: it
+//            only orders nodes whose dates do not say otherwise.  Cycles
+//            release the earliest remaining node.
+//   columns  ranks, not time coordinates: each node takes the column of the
+//            node placed before it (any lane) or the next one.  Consecutive
+//            nodes of one lane from the same day (or within `closeMs`) stack
+//            in one column (up to `maxStack`); a node always sits right of
+//            its inputs.
+//   lanes    one per line tag (`<prefix>:<path>`); sub-lines follow their
+//            parent.  A node with several lines joins the biggest one.
+//            Untagged nodes take the line of their nearest part_of ancestor,
+//            else go to one lane of their own; when they are the majority,
+//            they are grouped by part_of root instead.
+//
+// O((n + e) log n); positions are centres in world units.
+
+export const TIMELINE_RELATIONS = new Set(["derived_from", "depends_on", "part_of"]);
+export const TIMELINE_COL_GAP = 64;
+export const TIMELINE_LANE_PAD = 34;
+export const TIMELINE_LANE_BOTTOM = 20;
+export const TIMELINE_CLOSE_MS = 2 * 3600 * 1000;
+export const TIMELINE_MAX_STACK = 4;
+
+const DAY_ONLY = /^\d{4}-\d{2}-\d{2}$/;
+
+/** Epoch ms of a date value (NaN when absent); a date-only value is local midnight (graph-filter.js timeMs). */
+export function timelineTimeMs(value) {
+  const text = String(value ?? "").trim();
+  if (!text) return NaN;
+  if (DAY_ONLY.test(text)) {
+    const [year, month, day] = text.split("-").map(Number);
+    return new Date(year, month - 1, day).getTime();
+  }
+  return Date.parse(text);
+}
+
+/** A node's place in time: start_at, else created_at, else updated_at. */
+export function timelineTime(node) {
+  for (const key of ["start_at", "created_at", "updated_at"]) {
+    const ms = timelineTimeMs(node?.[key]);
+    if (Number.isFinite(ms)) return ms;
+  }
+  return NaN;
+}
+
+/** The line paths a node is tagged with (`<prefix>:<path>`), once each. */
+export function nodeLines(node, prefix = "branch") {
+  const head = `${prefix}:`;
+  const out = [];
+  for (const tag of node?.tags || []) {
+    if (typeof tag !== "string" || !tag.startsWith(head) || tag.length === head.length) continue;
+    const name = tag.slice(head.length);
+    if (!out.includes(name)) out.push(name);
+  }
+  return out;
+}
+
+// A binary min-heap of [key, index] (ties: lower index first).
+function heapPush(heap, item) {
+  heap.push(item);
+  let i = heap.length - 1;
+  while (i > 0) {
+    const up = (i - 1) >> 1;
+    if (!heapLess(heap[i], heap[up])) break;
+    [heap[i], heap[up]] = [heap[up], heap[i]];
+    i = up;
+  }
+}
+
+function heapPop(heap) {
+  const top = heap[0];
+  const end = heap.pop();
+  if (heap.length) {
+    heap[0] = end;
+    let i = 0;
+    for (;;) {
+      const l = 2 * i + 1, r = l + 1;
+      let m = i;
+      if (l < heap.length && heapLess(heap[l], heap[m])) m = l;
+      if (r < heap.length && heapLess(heap[r], heap[m])) m = r;
+      if (m === i) break;
+      [heap[i], heap[m]] = [heap[m], heap[i]];
+      i = m;
+    }
+  }
+  return top;
+}
+
+const heapLess = (a, b) => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
+
+/**
+ * Lay out a timeline graph.
+ * @param {Array<{id, w?, h?, tags?, start_at?, created_at?, updated_at?}>} nodes
+ * @param {Array<{source, target, relation, shownReversed?}>} edges  in shown direction
+ * @returns {{ positions: Map<id, {x, y}>, lanes: Array<{ key, kind: "line"|"group"|"loose",
+ *   name, root, depth, y0, y1, count }>, columns: Array<{ x0, x1, time }>, laneOf: Map<id, key>, order: id[] }}
+ *   `lanes[].name`: the line path ("line"); `root`: the group's part_of root id ("group").
+ */
+export function timelineLayout(nodes, edges, options = {}) {
+  const prefix = options.linePrefix || "branch";
+  const relations = options.relations || TIMELINE_RELATIONS;
+  const colGap = options.colGap ?? TIMELINE_COL_GAP;
+  const rowGap = options.rowGap ?? ROW_GAP;
+  const lanePad = options.lanePad ?? TIMELINE_LANE_PAD;
+  const laneBottom = options.laneBottom ?? TIMELINE_LANE_BOTTOM;
+  const closeMs = options.closeMs ?? TIMELINE_CLOSE_MS;
+  const maxStack = Math.max(1, options.maxStack ?? TIMELINE_MAX_STACK);
+  const n = nodes.length;
+  const empty = { positions: new Map(), lanes: [], columns: [], laneOf: new Map(), order: [] };
+  if (!n) return empty;
+  const index = new Map(nodes.map((node, i) => [node.id, i]));
+  const time = nodes.map(timelineTime);
+  const dayOf = time.map((ms) => {
+    if (!Number.isFinite(ms)) return "";
+    const date = new Date(ms);
+    return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+  });
+  const succ = Array.from({ length: n }, () => []);
+  const pred = Array.from({ length: n }, () => []);
+  const parentOf = new Array(n).fill(-1);
+  const seen = new Set();
+  for (const edge of edges) {
+    const u = index.get(edge.source), v = index.get(edge.target);
+    if (u === undefined || v === undefined || u === v) continue;
+    if (edge.relation === "part_of") {
+      const child = edge.shownReversed ? v : u;
+      if (parentOf[child] < 0) parentOf[child] = edge.shownReversed ? u : v;
+    }
+    if (!relations.has(edge.relation)) continue;
+    // part_of never pulls a node before its own date.
+    if (edge.relation === "part_of" && time[v] < time[u]) continue;
+    const key = `${u}>${v}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    succ[u].push(v);
+    pred[v].push(u);
+  }
+
+  // ---- order: Kahn's algorithm, earliest ready node first.
+  const order = [];
+  const done = new Uint8Array(n);
+  const indeg = pred.map((list) => list.length);
+  const startKey = (i) => {
+    if (Number.isFinite(time[i])) return time[i];
+    // Undated: just before its earliest dated successor, else last.
+    let best = Infinity;
+    for (const v of succ[i]) if (Number.isFinite(time[v]) && time[v] < best) best = time[v];
+    return best;
+  };
+  const heap = [];
+  for (let i = 0; i < n; i++) if (!indeg[i]) heapPush(heap, [startKey(i), i]);
+  // Cycles: the earliest remaining node is released.
+  const fallback = [...Array(n).keys()].sort((a, b) => (startKey(a) - startKey(b)) || a - b);
+  let next = 0;
+  while (order.length < n) {
+    if (!heap.length) {
+      while (done[fallback[next]]) next += 1;
+      heapPush(heap, [startKey(fallback[next]), fallback[next]]);
+    }
+    const [key, i] = heapPop(heap);
+    if (done[i]) continue;
+    done[i] = 1;
+    order.push(i);
+    for (const v of succ[i]) {
+      indeg[v] -= 1;
+      // An undated node follows its last input.
+      if (indeg[v] === 0 && !done[v]) heapPush(heap, [Number.isFinite(time[v]) ? time[v] : key, v]);
+    }
+  }
+  const rank = new Array(n);
+  order.forEach((i, r) => { rank[i] = r; });
+
+  // ---- lanes
+  const own = nodes.map((node) => nodeLines(node, prefix));
+  const lineSize = new Map();
+  for (const lines of own) for (const name of lines) lineSize.set(name, (lineSize.get(name) || 0) + 1);
+  const line = new Array(n).fill(undefined);
+  for (let i = 0; i < n; i++) {
+    if (own[i].length) line[i] = own[i].reduce((best, name) => (lineSize.get(name) > lineSize.get(best) ? name : best));
+  }
+  // Untagged: the line of the nearest tagged part_of ancestor.
+  for (let i = 0; i < n; i++) {
+    if (line[i] !== undefined) continue;
+    const path = [];
+    let cur = i, found = null;
+    while (cur >= 0) {
+      if (line[cur] !== undefined) { found = line[cur]; break; }
+      line[cur] = null;
+      path.push(cur);
+      cur = parentOf[cur];
+    }
+    for (const j of path) line[j] = found;
+  }
+  const laneKey = new Array(n);
+  const loose = [];
+  for (let i = 0; i < n; i++) {
+    if (line[i]) laneKey[i] = `line:${line[i]}`;
+    else loose.push(i);
+  }
+  const groupRoot = new Map();
+  if (loose.length * 2 > n) {
+    // Mostly untagged: one lane per part_of tree (top ancestor).
+    const rootOf = new Array(n).fill(-2);
+    for (const i of loose) {
+      const path = [];
+      let cur = i;
+      while (rootOf[cur] === -2 && parentOf[cur] >= 0 && !path.includes(cur)) { path.push(cur); cur = parentOf[cur]; }
+      const root = rootOf[cur] >= 0 ? rootOf[cur] : cur;
+      rootOf[cur] = root;
+      for (const j of path) rootOf[j] = root;
+    }
+    const size = new Map();
+    for (const i of loose) size.set(rootOf[i], (size.get(rootOf[i]) || 0) + 1);
+    for (const i of loose) {
+      if (size.get(rootOf[i]) < 2) continue;
+      laneKey[i] = `group:${rootOf[i]}`;
+      groupRoot.set(laneKey[i], rootOf[i]);
+    }
+  }
+  for (const i of loose) laneKey[i] ||= "loose";
+
+  // ---- columns and rows
+  const col = new Array(n).fill(-1);
+  const row = new Array(n).fill(0);
+  const stack = new Map();
+  const lastIn = new Map();
+  let floor = 0;
+  for (const i of order) {
+    const lane = laneKey[i];
+    let inputs = -1;
+    for (const p of pred[i]) if (col[p] > inputs) inputs = col[p];
+    let c = Math.max(floor, inputs + 1);
+    const prev = lastIn.get(lane);
+    if (prev !== undefined) {
+      const at = `${lane}|${col[prev]}`;
+      const close = Number.isFinite(time[i]) && Number.isFinite(time[prev])
+        && (dayOf[i] === dayOf[prev] || Math.abs(time[i] - time[prev]) <= closeMs);
+      if (close && col[prev] >= c && (stack.get(at) || 0) < maxStack) c = col[prev];
+      else c = Math.max(c, col[prev] + 1);
+    }
+    const at = `${lane}|${c}`;
+    row[i] = stack.get(at) || 0;
+    stack.set(at, row[i] + 1);
+    col[i] = c;
+    floor = c;
+    lastIn.set(lane, i);
+  }
+
+  // ---- lane order: lines as a tree (each subtree by its first node), then
+  // part_of groups by their first node, then the untagged lane.
+  const first = new Map();
+  const count = new Map();
+  for (const i of order) {
+    if (!first.has(laneKey[i])) first.set(laneKey[i], rank[i]);
+    count.set(laneKey[i], (count.get(laneKey[i]) || 0) + 1);
+  }
+  const trie = { children: new Map(), first: Infinity };
+  for (const [key, at] of first) {
+    if (!key.startsWith("line:")) continue;
+    const name = key.slice(5);
+    let item = trie;
+    const parts = name.split("/");
+    parts.forEach((part, depth) => {
+      if (!item.children.has(part)) item.children.set(part, { children: new Map(), first: Infinity, path: parts.slice(0, depth + 1).join("/") });
+      item = item.children.get(part);
+      item.first = Math.min(item.first, at);
+    });
+    item.lane = key;
+  }
+  const laneOrder = [];
+  const walk = (item) => {
+    if (item.lane) laneOrder.push(item.lane);
+    for (const child of [...item.children.values()].sort((a, b) => a.first - b.first)) walk(child);
+  };
+  walk(trie);
+  laneOrder.push(...[...first.keys()].filter((key) => key.startsWith("group:")).sort((a, b) => first.get(a) - first.get(b)));
+  if (first.has("loose")) laneOrder.push("loose");
+
+  // ---- coordinates
+  const ncol = Math.max(...col) + 1;
+  const colW = new Array(ncol).fill(0);
+  const colTime = new Array(ncol).fill(NaN);
+  for (let i = 0; i < n; i++) {
+    colW[col[i]] = Math.max(colW[col[i]], nodes[i].w || NODE_W);
+    if (Number.isFinite(time[i]) && !(colTime[col[i]] <= time[i])) colTime[col[i]] = time[i];
+  }
+  const columns = [];
+  let x = 0;
+  for (let c = 0; c < ncol; c++) {
+    columns.push({ x0: x, x1: x + colW[c], time: colTime[c] });
+    x += colW[c] + colGap;
+  }
+  const laneRows = new Map(), laneRowH = new Map();
+  for (let i = 0; i < n; i++) {
+    const lane = laneKey[i];
+    laneRows.set(lane, Math.max(laneRows.get(lane) || 0, row[i] + 1));
+    laneRowH.set(lane, Math.max(laneRowH.get(lane) || 0, nodes[i].h || NODE_H));
+  }
+  const lanes = [];
+  const laneTop = new Map();
+  let y = 0;
+  for (const key of laneOrder) {
+    const rows = laneRows.get(key), rowH = laneRowH.get(key);
+    const height = lanePad + rows * rowH + (rows - 1) * rowGap + laneBottom;
+    laneTop.set(key, y);
+    const name = key.startsWith("line:") ? key.slice(5) : "";
+    lanes.push({
+      key, kind: key === "loose" ? "loose" : key.startsWith("line:") ? "line" : "group", name,
+      root: groupRoot.has(key) ? nodes[groupRoot.get(key)].id : null,
+      depth: name ? name.split("/").length - 1 : 0, y0: y, y1: y + height, count: count.get(key) || 0,
+    });
+    y += height;
+  }
+  const positions = new Map();
+  const laneOf = new Map();
+  for (let i = 0; i < n; i++) {
+    const lane = laneKey[i], rowH = laneRowH.get(lane);
+    positions.set(nodes[i].id, {
+      x: (columns[col[i]].x0 + columns[col[i]].x1) / 2,
+      y: laneTop.get(lane) + lanePad + row[i] * (rowH + rowGap) + rowH / 2,
+    });
+    laneOf.set(nodes[i].id, lane);
+  }
+  return { positions, lanes, columns, laneOf, order: order.map((i) => nodes[i].id) };
 }
 
 /**

@@ -5,7 +5,7 @@ import { confirmDialog } from "./components.js";
 import { mediaSource } from "./editor-media.js";
 import { saveMarkerChange } from "./marker-actions.js";
 
-const GRAPH_LAYOUTS = new Set(["force", "tree", "mind", "node"]);
+const GRAPH_LAYOUTS = new Set(["force", "mind", "node", "timeline"]);
 
 /** Optional deep link: `?graph=mind` opens a graph in the requested layout. */
 export function preferredGraphLayout(fallback = "force") {
@@ -238,6 +238,8 @@ export function mindGraphOptions(ctx) {
   return {
     // A graph of this project's units (multi-selection inspector, app.js).
     projectUnits: true,
+    // Research line tags (timeline graph lanes): the project's namespace.
+    linePrefix: () => ctx.S.project?.settings?.branches?.prefix || "branch",
     mode: ctx.S.graphMode || undefined,
     onModeChange: (mode, options) => ctx.syncInspectorMode?.(mode, options),
     getSelectedId: () => ctx.S.selectedId,

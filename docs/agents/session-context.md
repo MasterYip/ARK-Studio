@@ -44,7 +44,8 @@ appears inside the agent's own JSONL. The watcher uses that to find the file.
 
 ARK records `native_session_id` from the agent's stdout or stderr:
 `{"type":"system","session_id":…}` (Claude stream-json),
-`{"type":"thread.started","thread_id":…}` (Codex `--json`), or the
+`{"type":"thread.started","thread_id":…}` (Codex `--json`),
+`{"type":"init","session_id":…}` (Gemini CLI `stream-json`), or the
 `session id: …` header line that `codex exec` prints.
 
 ### External session

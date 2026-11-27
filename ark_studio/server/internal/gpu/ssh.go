@@ -11,6 +11,8 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"syscall"
@@ -168,14 +170,47 @@ func orEmpty(v any) any {
 
 func baseArgv(server *pyjson.Object, binary string, timeout int) []string {
 	port, target := sshTarget(server)
-	return []string{binary,
+	argv := []string{binary,
 		"-o", "BatchMode=yes",
 		"-o", "ConnectTimeout=" + strconv.Itoa(max(1, timeout)),
 		"-o", "StrictHostKeyChecking=accept-new",
 		"-o", "ServerAliveInterval=5",
-		"-o", "ServerAliveCountMax=2",
-		"-p", strconv.FormatInt(port, 10),
-		"--", target}
+		"-o", "ServerAliveCountMax=2"}
+	argv = append(argv, muxOptions()...)
+	return append(argv, "-p", strconv.FormatInt(port, 10), "--", target)
+}
+
+// muxDir holds the SSH control sockets (muxOptions); "" turns sharing off.
+var muxDir = sshMuxDir()
+
+// sshMuxDir is a private folder for the control sockets, or "" on Windows
+// (its OpenSSH has no ControlMaster) and when ARK_GPU_SSH_MUX=0.
+func sshMuxDir() string {
+	if runtime.GOOS == "windows" || os.Getenv("ARK_GPU_SSH_MUX") == "0" {
+		return ""
+	}
+	dir := filepath.Join(os.TempDir(), "ark-gpu-ssh-"+strconv.Itoa(os.Getuid()))
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return ""
+	}
+	if fi, err := os.Stat(dir); err != nil || !fi.IsDir() || fi.Mode().Perm()&0o077 != 0 {
+		return "" // not ours or shared with others: no sockets there
+	}
+	return dir
+}
+
+// muxOptions share one SSH connection per server between the probe, the
+// system query and the next refreshes (ControlMaster): a refresh then skips
+// the SSH handshake, which was most of its time.  The connection closes
+// after a minute without use.  %C is a hash of host, port and user, which
+// keeps the socket path short.
+func muxOptions() []string {
+	if muxDir == "" {
+		return nil
+	}
+	return []string{"-o", "ControlMaster=auto",
+		"-o", "ControlPath=" + filepath.Join(muxDir, "%C"),
+		"-o", "ControlPersist=60"}
 }
 
 // BuildSSHArgv is ssh.build_ssh_argv.
@@ -272,6 +307,15 @@ func run(server *pyjson.Object, argvOf func(binary string, limit int) []string, 
 			DurationMS: elapsed()}
 	}
 	code := 0
+	// A shared SSH connection (muxOptions) is a background ssh that may keep
+	// the output pipes open after this command finished: WaitDelay closed
+	// them, and the command's own exit status still holds.
+	if errors.Is(err, exec.ErrWaitDelay) && cmd.ProcessState != nil {
+		err = nil
+		if c := cmd.ProcessState.ExitCode(); c != 0 {
+			code = c
+		}
+	}
 	if err != nil {
 		var exitErr *exec.ExitError
 		if !errors.As(err, &exitErr) {
