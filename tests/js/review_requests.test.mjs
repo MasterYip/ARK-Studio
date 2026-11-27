@@ -4,7 +4,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  anchorLabel, changesText, clockLabel, diffBlocks, keyNumber, noteParts, parseAnchors, parseClock, reviewCardText,
+  anchorKey, anchorLabel, changesText, clockLabel, diffBlocks, keyNumber, noteParts, parseAnchors, parseClock,
+  resolveHeadingAnchor, reviewCardText,
 } from "../../ark_studio/web/js/review-model.js";
 import {
   bulkAcceptable, deliveryKey, groupExplain, groupNeeds, groupReason, shortTitle, unitItems,
@@ -218,4 +219,33 @@ test("server grouping: auto_group cards, filtered members, lone items", () => {
   // The server said "not grouped": the local rules do not regroup it.
   const lone = LIST.filter((i) => i.kind !== "review_group").map((i) => ({ ...i, auto_group: null }));
   assert.ok(groupNeeds(lone).every((c) => c.kind === "item"));
+});
+
+test("adaptive anchors: explicit id, slug, normalized, fuzzy, else none", () => {
+  const texts = ["Results", "res", "更新：Sharpa 手指改用 Dex-X 的增益（DEX-1c）", "Baseline (v2)", "Ablation of the contact reward"];
+  const ids = headingAnchors(texts.map((text, i) => ({ text, explicit: i === 0 ? "res" : "" })));
+  const headings = texts.map((text, i) => ({ id: ids[i], text, explicit: i === 0 ? "res" : "" }))
+    .concat([{ id: "outro", text: "", explicit: "outro" }]);
+  const r = (slug, label = "") => {
+    const hit = resolveHeadingAnchor(slug, label, headings);
+    return hit && `${hit.id}|${hit.how}`;
+  };
+  // An explicit {#id} wins over a heading whose slug is the same.
+  assert.equal(ids[1], "res");
+  assert.equal(r("res"), "res|explicit");
+  assert.equal(r("outro"), "outro|explicit");
+  assert.equal(r("baseline-v2"), "baseline-v2|slug");
+  // X-0069: the note was written before "（DEX-1c）" was added to the heading.
+  const x69 = "更新-sharpa-手指改用-dex-x-的增益-dex-1c";
+  assert.equal(anchorSlug(texts[2]), x69);
+  assert.equal(r("更新-sharpa-手指改用-dex-x-的增益", "更新：Sharpa 手指改用 Dex-X 的增益"), `${x69}|normalized`);
+  assert.equal(r("whatever", "更新：Sharpa 手指改用 Dex-X 的增益"), `${x69}|normalized`);
+  assert.equal(anchorKey("更新：Sharpa 手指改用 Dex-X 的增益（DEX-1c）"), "更新sharpa手指改用dexx的增益");
+  assert.equal(r("baseline"), "baseline-v2|normalized");
+  assert.equal(r("ＢＡＳＥＬＩＮＥ"), "baseline-v2|normalized");
+  assert.equal(r("ablation-of-contact-reward"), "ablation-of-the-contact-reward|fuzzy");
+  // Nothing plausible: stays broken.
+  for (const slug of ["missing", "x", "contact"]) assert.equal(r(slug), null, slug);
+  // Two equally good headings: ambiguous, no guess.
+  assert.equal(resolveHeadingAnchor("notes", "", [{ id: "notes-a", text: "Notes (a)" }, { id: "notes-b", text: "Notes (b)" }]), null);
 });

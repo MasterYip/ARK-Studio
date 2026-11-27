@@ -2,6 +2,7 @@
 // local ARK page's "Connect to a server…" and the status page open it).
 import { t, applyI18n } from "./i18n.js";
 import { unreachableMessage } from "./connect-model.js";
+import { bypassText, platformNote, proxyConfig, proxyPatch, restartNeeded } from "./proxy-model.js";
 
 const invoke = (cmd, args = {}) => window.__TAURI_INTERNALS__.invoke(cmd, args);
 const $ = (id) => document.getElementById(id);
@@ -230,6 +231,58 @@ async function installUpdate() {
   }
 }
 
+// Settings › Proxy: system / no proxy / custom. Rust requests follow a
+// change at once; the window (Windows) and the local server at the next start.
+function proxyMode() {
+  return document.querySelector('input[name="proxy-mode"]:checked')?.value || "system";
+}
+
+function renderProxyForm() {
+  $("proxy-custom").classList.toggle("hidden", proxyMode() !== "custom");
+}
+
+function renderProxyStatus(message = "", { error = false } = {}) {
+  const waiting = restartNeeded(state.settings.proxy, state.proxy?.applied);
+  const text = [message, waiting && !error ? t("proxy.restart_needed") : ""].filter(Boolean).join(" ");
+  const box = $("proxy-status");
+  box.classList.toggle("hidden", !text);
+  box.classList.toggle("is-error", error);
+  $("proxy-status-text").textContent = text;
+  $("proxy-restart").classList.toggle("hidden", !(waiting && !error));
+}
+
+function renderProxy() {
+  const cfg = proxyConfig(state.settings.proxy);
+  for (const input of document.querySelectorAll('input[name="proxy-mode"]')) input.checked = input.value === cfg.mode;
+  $("proxy-url").value = cfg.url;
+  $("proxy-bypass").value = bypassText(cfg.bypass);
+  const note = platformNote(state.platform);
+  $("proxy-platform").textContent = note ? t(note) : "";
+  $("proxy-platform").classList.toggle("hidden", !note);
+  renderProxyForm();
+  renderProxyStatus();
+}
+
+async function saveProxy(event) {
+  event?.preventDefault();
+  const res = proxyPatch({ mode: proxyMode(), url: $("proxy-url").value, bypass: $("proxy-bypass").value });
+  if (res.error) {
+    renderProxyStatus(t(res.error, { entry: res.entry || "", max: res.max || "" }), { error: true });
+    $(res.field === "bypass" ? "proxy-bypass" : "proxy-url").focus();
+    return;
+  }
+  $("proxy-save").disabled = true;
+  try {
+    state.settings = await invoke("save_settings", { patch: res.patch });
+    renderProxy();
+    renderProxyStatus(t("proxy.saved"));
+  } catch (err) {
+    renderProxyStatus(t("proxy.save_failed", { error: splitError(err).message }), { error: true });
+  } finally {
+    $("proxy-save").disabled = false;
+  }
+}
+
 async function init() {
   applyI18n();
   state = await invoke("get_state");
@@ -254,6 +307,7 @@ async function init() {
   renderLocalState();
   renderServers();
   renderRoots();
+  renderProxy();
 
   const params = new URLSearchParams(location.search);
   if (params.get("notice")) {
@@ -286,6 +340,18 @@ async function init() {
   $("install-update").addEventListener("click", installUpdate);
   $("download-update").addEventListener("click", () => invoke("open_releases", { version: state.update?.available || null }));
   $("open-releases").addEventListener("click", () => invoke("open_releases", { version: null }));
+  $("panel-proxy").addEventListener("submit", saveProxy);
+  for (const input of document.querySelectorAll('input[name="proxy-mode"]')) input.addEventListener("change", renderProxyForm);
+  $("proxy-restart").addEventListener("click", async () => {
+    $("proxy-restart").disabled = true;
+    renderProxyStatus(t("proxy.restarting"));
+    try {
+      await invoke("restart_app");
+    } catch (err) {
+      $("proxy-restart").disabled = false;
+      renderProxyStatus(splitError(err).message, { error: true });
+    }
+  });
   $("auto-check").addEventListener("change", async (e) => {
     state.settings = await invoke("save_settings", { patch: { autoUpdateCheck: e.target.checked } });
     state.update.autoCheck = !!state.settings.autoUpdateCheck;
@@ -304,6 +370,8 @@ async function init() {
     $("sec-window").scrollIntoView({ block: "start" });
   } else if (view === "data") {
     $("sec-data").scrollIntoView({ block: "start" });
+  } else if (view === "proxy") {
+    $("sec-proxy").scrollIntoView({ block: "start" });
   }
 }
 

@@ -60,29 +60,37 @@ choices are in the topic unit's `meta.subgraph`.
 
 ## Using topics
 
-- **Research → Topics** shows the open topic and, on the right, the
-  **Explorer** (like the Editor's): stacked sections that fold, resize and
-  maximize, with a filter box on top. `#/research/topic/<uid>` links to a
-  topic. Switching topics or views replaces only the topic area.
+- **Research → Topics** shows the open topic: its title line (with the
+  body under it when the body is short plain text that fits in two lines),
+  then the views. `#/research/topic/<uid>` links to a topic. Switching topics
+  or views replaces only the topic area.
+- The **Topics** view (activity bar, left sidebar by default; it can be moved
+  and hidden like any workbench view) has stacked sections like the Editor's
+  Explorer, which fold, resize and maximize, with a filter box on top. It
+  comes forward the first time Research → Topics opens in a session.
   - **Topics**: every topic, built-in ones first; a topic that is `part_of`
-    another sits under it. **+** creates a topic.
+    another sits under it. **+** creates a topic. From any page a click
+    opens the topic.
   - **Lines**: the lines of work (`branch:a/b/c` tags) as a tree with node
     counts; a line opens as its topic. The gear opens the line settings.
-  - **Outline**: the open topic's reading order and levels. A click selects
+  - **Outline**: the open topic's reading order and levels, under the topic
+    itself (level 0); on other pages it is empty. A click selects
     the node in the graph (or the section in Document) and opens its details.
     Drag an item onto the top or bottom edge of another to put it before or
     after it, or onto its middle to nest it. Tab / Shift+Tab change the level,
     Alt+↑/↓ move an item with its children, ← / → and Space fold. While the
     Graph or Timeline is shown, Ctrl+K Ctrl+0 / J / 1–7 / [ / ] / L and
     Ctrl+Shift+[ / ] fold the outline.
-  The toolbar button **Explorer** hides or shows the panel; drag its left edge
-  to resize (double-click resets). Its state is kept in this browser. On a
-  phone it opens as a drawer.
+  Its sections and folds are kept in this browser. Without the workbench
+  sidebars (narrow windows, phones) it opens as a drawer from the button at
+  the end of the topic page's head.
 - Every topic has three views:
   - **Graph** (default): the topic's graph, Force layout until another one is
     picked for the topic. The Node layout keeps the saved positions; **Auto
     layout** re-arranges them.
-  - **Document**: the topic as one document. Each member is a section with its
+  - **Document**: the topic as one document. Level 0 is the topic itself, its
+    title and whole body (**Edit** opens it in Node details). Each member is a
+    section with its
     body (Markdown and HTML embeds), attachments (images, video, audio, PDF,
     HTML) and children; a nested topic links to its own document. Folded
     sections show only the title. VS Code keys: Ctrl+K Ctrl+0 fold all,

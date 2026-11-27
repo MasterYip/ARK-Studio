@@ -33,6 +33,7 @@
     "allow-open-local-settings",
     "allow-tray-menu-ready",
     "allow-tray-menu-action",
-    "allow-show-download"
+    "allow-show-download",
+    "allow-restart-app"
   ]
 }

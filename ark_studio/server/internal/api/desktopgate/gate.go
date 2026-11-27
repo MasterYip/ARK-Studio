@@ -22,10 +22,12 @@
 package desktopgate
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/hex"
+	"net"
 	"net/http"
 	"os"
 	"strconv"
@@ -97,32 +99,115 @@ func SignClaim(secret string, at time.Time, nonce string) string {
 	return payload + "." + hex.EncodeToString(m.Sum(nil))
 }
 
+type ownerKey struct{}
+
+// Owner reports whether r carries this app's desktop cookie: the request
+// comes from the app's own window, wherever the connection seems to come
+// from (a local proxy the system routes 127.0.0.1 through still delivers
+// the window's cookie). The server treats it like a loopback request, so
+// the window never gets the phone pairing page.
+func Owner(r *http.Request) bool {
+	v, _ := r.Context().Value(ownerKey{}).(bool)
+	return v
+}
+
 func (g *Gate) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path == ClaimPath {
 		g.claim(w, r)
+		return
+	}
+	if g.owner(r) {
+		g.next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), ownerKey{}, true)))
 		return
 	}
 	if g.allowed(r) {
 		g.next.ServeHTTP(w, r)
 		return
 	}
+	g.deny(w, r, http.StatusUnauthorized)
+}
+
+// Reasons for a refusal (Reason).
+const (
+	// ReasonNotLocal: the request reached the server through a proxy or
+	// from another address; the app's window would carry its cookie.
+	ReasonNotLocal = "not_local"
+	// ReasonNotApp: a browser on this computer without the app's cookie.
+	ReasonNotApp = "not_app"
+)
+
+// proxyHeaders are added by HTTP proxies and CDNs on the way.
+var proxyHeaders = []string{"Via", "X-Forwarded-For", "Forwarded", "X-Real-Ip", "X-Forwarded-Host",
+	"Cf-Connecting-Ip", "Cf-Ray"}
+
+// Reason says why r would be refused: ReasonNotLocal when it came through a
+// proxy or not from this computer, else ReasonNotApp.
+func Reason(r *http.Request) string {
+	for _, h := range proxyHeaders {
+		if r.Header.Get(h) != "" {
+			return ReasonNotLocal
+		}
+	}
+	if !loopbackHost(remoteHost(r.RemoteAddr)) || !loopbackHost(hostName(r.Host)) {
+		return ReasonNotLocal
+	}
+	return ReasonNotApp
+}
+
+func remoteHost(addr string) string {
+	if h, _, err := net.SplitHostPort(addr); err == nil {
+		return h
+	}
+	return addr
+}
+
+func hostName(host string) string {
+	if h, _, err := net.SplitHostPort(host); err == nil {
+		return h
+	}
+	return strings.Trim(host, "[]")
+}
+
+func loopbackHost(h string) bool {
+	h = strings.ToLower(strings.Trim(strings.TrimSpace(h), "[]"))
+	if h == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(strings.Split(h, "%")[0])
+	return ip != nil && ip.IsLoopback()
+}
+
+func (g *Gate) deny(w http.ResponseWriter, r *http.Request, status int) {
+	reason := Reason(r)
 	w.Header().Set("Cache-Control", "no-store")
 	if strings.HasPrefix(r.URL.Path, "/api/") {
 		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusUnauthorized)
+		w.WriteHeader(status)
+		if reason == ReasonNotLocal {
+			w.Write([]byte(`{"ok": false, "error": {"status": 401, "message": "This address is outside the service range: this ARK server only accepts connections from this computer. If a proxy is on, let localhost and 127.0.0.1 bypass it.", "code": "DESKTOP_NOT_LOCAL"}}`))
+			return
+		}
 		w.Write([]byte(`{"ok": false, "error": {"status": 401, "message": "This ARK server belongs to the ARK Studio desktop app; open it from the app.", "code": "DESKTOP_ONLY"}}`))
 		return
 	}
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	w.WriteHeader(http.StatusUnauthorized)
-	w.Write([]byte(deniedPage))
+	w.WriteHeader(status)
+	w.Write([]byte(deniedPage(reason, prefersChinese(r.Header.Get("Accept-Language")))))
+}
+
+// prefersChinese: the first language of Accept-Language is Chinese.
+func prefersChinese(accept string) bool {
+	first := strings.ToLower(strings.TrimSpace(strings.Split(accept, ",")[0]))
+	return strings.HasPrefix(first, "zh")
+}
+
+func (g *Gate) owner(r *http.Request) bool {
+	c, err := r.Cookie(g.cookieName)
+	return err == nil && equal(c.Value, g.cookieVal)
 }
 
 func (g *Gate) allowed(r *http.Request) bool {
 	if r.URL.Path == "/api/health" && (r.Method == http.MethodGet || r.Method == http.MethodHead) {
-		return true
-	}
-	if c, err := r.Cookie(g.cookieName); err == nil && equal(c.Value, g.cookieVal) {
 		return true
 	}
 	if g.tokenOK == nil {
@@ -156,10 +241,7 @@ func (g *Gate) claim(w http.ResponseWriter, r *http.Request) {
 		ok = g.useNonce(parts[1])
 	}
 	if !ok {
-		w.Header().Set("Cache-Control", "no-store")
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.WriteHeader(http.StatusForbidden)
-		w.Write([]byte(deniedPage))
+		g.deny(w, r, http.StatusForbidden)
 		return
 	}
 	next := r.URL.Query().Get("next")
@@ -189,9 +271,35 @@ func (g *Gate) useNonce(nonce string) bool {
 	return true
 }
 
-const deniedPage = `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>ARK Studio</title>
+// deniedPage is the refusal page: it names the reason in plain words (the
+// address is outside the service range, or the server belongs to the app).
+func deniedPage(reason string, zh bool) string {
+	lang, title, body, hint := "en", "", "", ""
+	switch {
+	case reason == ReasonNotLocal && zh:
+		lang = "zh-CN"
+		title = "此地址不在服务范围内"
+		body = "这台 ARK 服务器只接受本机（或已配对设备）的连接。"
+		hint = "如果你开了代理，请让本机地址（localhost、127.0.0.1）不经过代理，然后重新打开 ARK Studio。"
+	case reason == ReasonNotLocal:
+		title = "This address is outside the service range"
+		body = "This ARK server only accepts connections from this computer (or from paired devices)."
+		hint = "If a proxy is on, let local addresses (localhost, 127.0.0.1) bypass it, then reopen ARK Studio."
+	case zh:
+		lang = "zh-CN"
+		title = "这台 ARK 服务器属于 ARK Studio 桌面端"
+		body = "它只接受桌面端自己的窗口。要在浏览器中使用，请在 ARK Studio 托盘菜单中选择<b>在浏览器中打开</b>。"
+		hint = "如果这就是 ARK Studio 的窗口，并且开着代理，请让本机地址（localhost、127.0.0.1）不经过代理。"
+	default:
+		title = "This ARK server belongs to the ARK Studio desktop app"
+		body = "It only accepts the app's own window. To use it in a web browser, choose <b>Open in browser</b> in the ARK Studio tray menu."
+		hint = "If this is the ARK Studio window and a proxy is on, let local addresses (localhost, 127.0.0.1) bypass it."
+	}
+	return `<!doctype html><html lang="` + lang + `"><head><meta charset="utf-8"><title>ARK Studio</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>body{font:15px/1.5 system-ui,sans-serif;margin:0;display:grid;place-items:center;min-height:100vh;background:#f6f6f4;color:#24262b}
-main{max-width:30rem;padding:2rem}h1{font-size:1.2rem}@media(prefers-color-scheme:dark){body{background:#0f141c;color:#e6e8ec}}</style></head>
-<body><main><h1>This ARK server belongs to the ARK Studio desktop app</h1>
-<p>It only accepts the app's own window. To use it in a web browser, choose <b>Open in browser</b> in the ARK Studio tray menu.</p></main></body></html>`
+main{max-width:30rem;padding:2rem}h1{font-size:1.2rem}.hint{font-size:.85rem;opacity:.75}
+@media(prefers-color-scheme:dark){body{background:#0f141c;color:#e6e8ec}}</style></head>
+<body><main data-reason="` + reason + `"><h1>` + title + `</h1>
+<p>` + body + `</p><p class="hint">` + hint + `</p></main></body></html>`
+}

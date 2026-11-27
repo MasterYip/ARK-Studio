@@ -5,8 +5,8 @@
     <string name="update_back">返回</string>
     <string name="update_version">版本 %1$s（%2$d）</string>
     <string name="update_built_from">基于 ARK %1$s 构建</string>
-    <string name="update_source_line">更新来自 %1$s；该服务器没有安装包时改用 GitHub 发布。</string>
     <string name="update_source_github_only">更新来自 GitHub 发布。</string>
+    <string name="update_website">官网：%1$s</string>
     <string name="update_auto">每天自动检查更新</string>
     <string name="update_auto_detail">每个新版本只通知一次。</string>
     <string name="update_check">检查更新</string>

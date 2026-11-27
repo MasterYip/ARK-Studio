@@ -2,7 +2,8 @@
 // tests/js/review_model.test.mjs): the anchors of a review note, the parts
 // of a note to render, headline numbers of a result, and the labels of the
 // "changes since the last review" toggle.  The server resolves anchors
-// (store/anchors.go); this module only splits and labels them.
+// (store/anchors.go); this module splits and labels them, and finds the
+// closest heading for a slug that no longer matches (resolveHeadingAnchor).
 
 // Anchor syntax (docs/agents/working-mode.md "Review anchors"):
 //   [label](#slug)            heading / {#id} block in the reviewed unit
@@ -112,6 +113,84 @@ export function anchorLabel(anchor = {}, selfUid = "") {
   const unit = anchor.unit && anchor.unit !== selfUid ? anchor.unit : "";
   if (anchor.kind === "heading") return unit ? `${unit} › ${anchor.slug}` : `§ ${anchor.slug}`;
   return unit || anchor.raw || "";
+}
+
+// -------------------------------------------------- adaptive anchors
+// A "#slug" comes from the heading text when the note was written; a later
+// edit of the heading changes its slug.  resolveHeadingAnchor finds the
+// heading the link still means (Go store/anchorresolve.go resolveHeading
+// mirrors it): an explicit {#id}, an automatic slug, a loose match
+// (trailing parentheticals like "（DEX-1c）", punctuation, case and width
+// ignored; slug or link label against the heading text), then the clearly
+// best fuzzy match.  `headings`: [{ id, text, explicit }] in body order
+// (text "" for a {#id} block).  Returns { id, text, how } or null.
+const FUZZY_MIN = 0.6;
+const FUZZY_MARGIN = 0.08;
+const TRAILING_PAREN_RE = /\s*[(\[【〔][^()[\]【】〔〕]*[)\]】〕]\s*$/u;
+
+function foldWidth(text) {
+  return String(text || "").replace(/[！-～]/g, (ch) => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/　/g, " ");
+}
+
+function lettersOnly(text) { return foldWidth(text).toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ""); }
+
+/** The text a loose anchor match compares (see resolveHeadingAnchor). */
+export function anchorKey(text) {
+  let s = foldWidth(text).toLowerCase();
+  for (;;) {
+    const next = s.replace(TRAILING_PAREN_RE, "");
+    if (next === s || !next.trim()) break;
+    s = next;
+  }
+  return lettersOnly(s);
+}
+
+/** Dice coefficient of the character bigrams of a and b (0..1). */
+export function textSimilarity(a, b) {
+  if (!a || !b) return 0;
+  if (a === b) return 1;
+  const grams = (s) => {
+    const chars = [...s];
+    const out = new Map();
+    if (chars.length === 1) { out.set(s, 1); return out; }
+    for (let i = 0; i + 1 < chars.length; i++) {
+      const g = chars[i] + chars[i + 1];
+      out.set(g, (out.get(g) || 0) + 1);
+    }
+    return out;
+  };
+  const ga = grams(a);
+  const gb = grams(b);
+  let na = 0, nb = 0, common = 0;
+  for (const [g, n] of ga) { na += n; common += Math.min(n, gb.get(g) || 0); }
+  for (const n of gb.values()) nb += n;
+  return (2 * common) / (na + nb);
+}
+
+export function resolveHeadingAnchor(slug, label = "", headings = []) {
+  const list = (headings || []).filter((x) => x && x.id);
+  const pick = (x, how) => ({ id: x.id, text: x.text || "", how });
+  const explicit = list.find((x) => x.explicit && x.explicit === slug);
+  if (explicit) return pick(explicit, "explicit");
+  const auto = list.find((x) => !x.explicit && x.id === slug);
+  if (auto) return pick(auto, "slug");
+  const slugKey = anchorKey(slug);
+  const labelKey = anchorKey(label);
+  const loose = list.filter((x) => {
+    const keys = [anchorKey(x.id)];
+    if (x.text) keys.push(anchorKey(x.text), lettersOnly(x.text));
+    return keys.some((k) => k && (k === slugKey || k === labelKey));
+  });
+  if (loose.length === 1) return pick(loose[0], "normalized");
+  if (loose.length > 1) return null;
+  let best = 0, second = 0, at = null;
+  for (const x of list) {
+    const key = anchorKey(x.text || x.id);
+    const score = Math.max(textSimilarity(slugKey, key), textSimilarity(labelKey, key));
+    if (score > best) { second = best; best = score; at = x; } else if (score > second) second = score;
+  }
+  return at && best >= FUZZY_MIN && best - second >= FUZZY_MARGIN ? pick(at, "fuzzy") : null;
 }
 
 /** The unit an anchor opens ("" for media). */

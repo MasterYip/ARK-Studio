@@ -5,8 +5,8 @@
     <string name="update_back">Back</string>
     <string name="update_version">Version %1$s (%2$d)</string>
     <string name="update_built_from">Built from ARK %1$s</string>
-    <string name="update_source_line">Updates come from %1$s, or from the GitHub release when that server has none.</string>
     <string name="update_source_github_only">Updates come from the GitHub release.</string>
+    <string name="update_website">Website: %1$s</string>
     <string name="update_auto">Check for updates every day</string>
     <string name="update_auto_detail">Shows a notification once per new version.</string>
     <string name="update_check">Check for updates</string>

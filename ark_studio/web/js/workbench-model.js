@@ -31,6 +31,8 @@ export const VIEW_DEFAULTS = [
   { id: "explorer", container: "left", icon: "folder", titleKey: "editor.explorer" },
   { id: "search", container: "left", icon: "search", titleKey: "workbench.view.search" },
   { id: "changes", container: "left", icon: "git", titleKey: "workbench.view.changes" },
+  // Topics, lines of work and the open topic's outline (topic-explorer.js).
+  { id: "topics", container: "left", icon: "layers", titleKey: "workbench.view.topics" },
   { id: "details", container: "right", icon: "info", titleKey: "inspector.details" },
   { id: "localgraph", container: "right", icon: "graph", titleKey: "workbench.view.localgraph" },
   // Agent sessions: a chat beside the work, the session list on Execute › Runs.
@@ -669,7 +671,7 @@ const BUILTIN_SPECS = {
   // in the left bar with the Local graph open, Details on the right, the
   // Terminal in a hidden bottom panel.
   default: {
-    left: { sections: [["filters", "explorer", "search", "changes", "assistant", "localgraph", "sessions"]], active: "localgraph", visible: true, size: 269 },
+    left: { sections: [["filters", "explorer", "search", "changes", "assistant", "localgraph", "sessions", "topics"]], active: "localgraph", visible: true, size: 269 },
     right: { sections: [["details", "sessionprops"]], active: "details", visible: true, size: 354 },
     bottom: { sections: [["terminal"]], active: "terminal", visible: false, size: 260 },
   },

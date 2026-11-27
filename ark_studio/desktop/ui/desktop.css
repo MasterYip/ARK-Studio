@@ -91,6 +91,8 @@ h2 { margin: 8px 0 0; font-size: 0.9375rem; font-weight: 650; }
 .link:hover { text-decoration: underline; }
 .check { display: flex; gap: 9px; align-items: center; color: var(--mute); font-size: 0.8125rem; cursor: pointer; }
 .check input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.choices { display: grid; gap: 10px; }
+.choices .check { color: var(--ink); }
 .recent { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
 .recent:empty { display: none; }
 .recent li { display: flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 5px; padding: 0 4px 0 10px; min-height: 36px; }

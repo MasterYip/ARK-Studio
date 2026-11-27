@@ -14,8 +14,9 @@ async function loadModel() {
 
 const mod = await loadModel();
 // The layout mechanics below use the built-in views without the session views
-// (Sessions, Session properties); session_sidebar.test.mjs tests those.
-const LEGACY = mod.VIEW_DEFAULTS.filter((view) => !["sessions", "sessionprops"].includes(view.id));
+// (Sessions, Session properties; session_sidebar.test.mjs tests those) and
+// the Topics view (tested at the end of this file).
+const LEGACY = mod.VIEW_DEFAULTS.filter((view) => !["sessions", "sessionprops", "topics"].includes(view.id));
 const m = {
   ...mod,
   VIEW_DEFAULTS: LEGACY,
@@ -540,4 +541,21 @@ test("layouts that still list the former Outline and Timeline views drop them qu
   assert.equal(layout.containers.left.sections.length, 1, "their empty sections are gone");
   assert.equal(layout.containers.left.active, "explorer");
   assert.deepEqual(layout.containers.right.views, ["details", "localgraph"]);
+});
+
+test("the Topics view: a left view, last in the default preset, placed for stored layouts without it", () => {
+  const topics = mod.VIEW_DEFAULTS.find((view) => view.id === "topics");
+  assert.deepEqual({ container: topics.container, icon: topics.icon, titleKey: topics.titleKey },
+    { container: "left", icon: "layers", titleKey: "workbench.view.topics" });
+  const def = mod.builtinPresetLayout("default");
+  assert.equal(def.containers.left.views.at(-1), "topics");
+  assert.equal(def.containers.left.active, "localgraph", "the default preset still opens the Local graph");
+  // A layout saved before the view existed gets it in the left sidebar.
+  const old = { v: 1, containers: { left: { views: ["filters", "explorer"], sections: [{ views: ["filters", "explorer"] }] } } };
+  const layout = mod.normalizeWorkbench(old);
+  assert.equal(mod.containerOf(layout, "topics"), "left");
+  // Movable like the other views.
+  const moved = mod.placeView(layout, "topics", "right");
+  assert.equal(mod.containerOf(moved, "topics"), "right");
+  assert.equal(mod.containerOf(mod.normalizeWorkbench(JSON.parse(mod.serializeWorkbench(moved))), "topics"), "right");
 });

@@ -1,11 +1,11 @@
-// Research › Topics explorer (right side of the topic page): stacked sections
-// for Topics, Lines and the open topic's Outline, like the Editor's Explorer.
+// The Topics view (a workbench view; a drawer on the topic page without the
+// shell): stacked sections for Topics, Lines and the open topic's Outline,
+// like the Editor's Explorer.
 // This module keeps the trees, the search filter, the fold commands and the
 // panel's stored state; pure and DOM-free (tests/js/topic_explorer_model.test.mjs).
 import { sectionsModel } from "./explorer-sections-model.js";
 
 export const EXPLORER_KEY = "ark.topic.explorer.v1";
-export const EXPLORER_WIDTH = { min: 200, max: 560, default: 280 };
 
 export const sections = sectionsModel({
   ids: ["topics", "lines", "outline"],
@@ -13,15 +13,12 @@ export const sections = sectionsModel({
   collapsed: { topics: false, lines: false, outline: false },
 });
 
-/** The panel's stored state: shown, width and the sections. */
+/** The view's stored state: the sections and the folded tree rows. */
 export function parseExplorer(text) {
   let raw = null;
   try { raw = JSON.parse(text || "null"); } catch { raw = null; }
   const src = raw && typeof raw === "object" ? raw : {};
-  const width = Number(src.width);
   return {
-    open: src.open !== false,
-    width: Number.isFinite(width) ? clampWidth(width) : EXPLORER_WIDTH.default,
     sections: sections.normalizeSections(src.sections),
     folded: {
       topics: stringList(src.folded?.topics),
@@ -32,11 +29,6 @@ export function parseExplorer(text) {
 
 function stringList(value) {
   return Array.isArray(value) ? value.filter((item) => typeof item === "string").slice(0, 500) : [];
-}
-
-export function clampWidth(value) {
-  const width = Math.round(Number(value) || EXPLORER_WIDTH.default);
-  return Math.max(EXPLORER_WIDTH.min, Math.min(EXPLORER_WIDTH.max, width));
 }
 
 // ------------------------------------------------------------------- trees

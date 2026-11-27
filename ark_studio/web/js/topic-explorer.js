@@ -1,22 +1,39 @@
-// Research › Topics: the explorer beside the topic (right side; a drawer on
-// phones).  Stacked sections like the Editor's Explorer: Topics (nested by
-// part_of), Lines (branch: tags as a tree) and the open topic's Outline.
-// State (shown, width, sections, folds) lives in topic-explorer-model.js.
+// The Topics view: a workbench view (left sidebar by default, movable like
+// the others) with stacked sections like the Editor's Explorer: Topics
+// (nested by part_of), Lines (branch: tags as a tree) and the open topic's
+// Outline.  Without the workbench shell (narrow windows, phones) the same
+// element is a drawer on the Research › Topics page.  One instance per app;
+// the topic page feeds it the open topic (views/topics.js).  Sections and
+// folds are kept in topic-explorer-model.js.
 import { h, clear, typeColor } from "./dom.js";
+import { api } from "./api.js";
 import { t, typeLabel, statusLabel } from "./i18n.js";
 import { icon } from "./icons.js";
 import { branchBadge } from "./needs-ui.js";
+import { branchTopicEntries } from "./needs-model.js";
 import { outlineMove, outlineDrop, dropPosition, foldChord } from "./topic-model.js";
+import { openNewTopic } from "./topic-actions.js";
+import { shellActive, isViewDisplayed } from "./workbench.js";
 import {
-  EXPLORER_KEY, EXPLORER_WIDTH, parseExplorer, clampWidth, sections as model,
+  EXPLORER_KEY, parseExplorer, sections as model,
   topicTree, lineTree, visibleRows, searchRows, ancestorKeys, outlineRows, foldCommand,
 } from "./topic-explorer-model.js";
 
-const PHONE_QUERY = "(max-width: 760px)";
 const OUTLINE_FOLD_KEY = "ark.topic.tree.fold.v1";
 const SECTION_TITLES = { topics: "topic.ex.topics", lines: "topic.ex.lines", outline: "topic.ex.outline" };
+export const TOPICS_VIEW = "topics";
 
-const isPhone = () => Boolean(globalThis.matchMedia?.(PHONE_QUERY)?.matches);
+// Without the shell the explorer is a drawer on the topic page.
+const isClassic = () => !shellActive();
+
+// Default topics keep their built-in English title; show it in the UI language.
+export const DEFAULT_TITLES = { story: "Story", related: "Related work", method: "Method", experiment: "Experiment" }; // i18n-ignore: stored titles of the built-in topics
+
+export function topicTitle(topic) {
+  const key = topic?.default || topic?.meta?.default;
+  if (key && DEFAULT_TITLES[key] && topic.title === DEFAULT_TITLES[key]) return t(`nav.${key}`);
+  return topic?.title || "";
+}
 
 function loadOutlineFold(uid) {
   try {
@@ -30,23 +47,33 @@ function saveOutlineFold(uid, folded) {
   try { localStorage.setItem(`${OUTLINE_FOLD_KEY}:${uid}`, JSON.stringify([...folded])); } catch { /* storage unavailable */ }
 }
 
+let instance = null;
+
 /**
- * `hooks`: titleOf(topic), openTopic(topic), openLine(row), newTopic(),
- * lineSettings(), drill(unit), onToggle(open).
- * Returns { el, toggleButton, setTopics(topics, lines), setActive(ref),
- * setOutline(outline | null), markSelected(uid), toggle(force) }.
+ * The app's Topics view (created once).  Returns { el, backdrop,
+ * drawerButton(), load(), sync(), setTopics(topics, lines), setActive(ref),
+ * setOutline(outline | null), markSelected(uid), toggleDrawer(force), shown() }.
  */
-export function topicExplorer(ctx, hooks) {
+export function topicsExplorer(ctx) {
+  instance ||= createExplorer(ctx);
+  return instance;
+}
+
+function createExplorer(ctx) {
+  const S = ctx.S;
   let state = (() => {
     try { return parseExplorer(localStorage.getItem(EXPLORER_KEY)); } catch { return parseExplorer(""); }
   })();
-  let phoneOpen = false;
+  let drawerOpen = false;
+  let loaded = "";         // project the lists belong to
+  let loading = null;
   let query = "";
   let topics = [];
   let lines = [];
   let activeRef = "";
   let outline = null;      // { topic, data, allMembers, design, locate(uid), reveal(uid) }
   let outlineFolded = new Set();
+  let rootFolded = false;  // the topic's own row (level 0)
   let outlineFocus = null; // unit id the per-row fold commands act on
   let selectedUid = "";
   let armed = null;
@@ -64,26 +91,32 @@ export function topicExplorer(ctx, hooks) {
     onkeydown: (event) => { if (event.key === "Escape" && search.value) { event.stopPropagation(); search.value = ""; query = ""; paintAll(); } },
   });
   const chordHint = h("span", { class: "topic-ex-chord muted hidden" }, t("topic.chord_waiting"));
+  // The drawer's own head; in the workbench the container header is the chrome.
   const closeBtn = h("button", {
     class: "icon-btn", type: "button", title: t("topic.ex.hide"), "aria-label": t("topic.ex.hide"),
-    dataset: { topicExClose: "1" }, onclick: () => toggle(false),
+    dataset: { topicExClose: "1" }, onclick: () => toggleDrawer(false),
   }, icon("x", "sm"));
   const wrap = h("div", { class: "ed-sections topic-ex-sections" });
   const bodies = {};
-  const el = h("aside", { class: "topic-explorer", "aria-label": t("topic.ex.title"), dataset: { topicExplorer: "1" } },
+  const el = h("div", { class: "topic-explorer", "aria-label": t("topic.ex.title"), dataset: { topicExplorer: "1" } },
     h("div", { class: "topic-ex-head" },
-      h("span", { class: "topic-ex-title" }, t("topic.ex.title")), chordHint, h("span", { class: "spacer" }), closeBtn),
-    h("div", { class: "topic-ex-filter" }, search),
+      h("span", { class: "topic-ex-title" }, t("topic.ex.title")), h("span", { class: "spacer" }), closeBtn),
+    h("div", { class: "topic-ex-filter" }, search, chordHint),
     wrap);
-  const backdrop = h("div", { class: "topic-ex-backdrop", "aria-hidden": "true", onclick: () => toggle(false) });
-  const sash = h("div", {
-    class: "topic-ex-sash", role: "separator", tabindex: 0, "aria-orientation": "vertical", title: t("topic.ex.resize"),
-    "aria-label": t("topic.ex.resize"), "aria-valuemin": String(EXPLORER_WIDTH.min), "aria-valuemax": String(EXPLORER_WIDTH.max),
-  });
-  const toggleButton = h("button", {
-    class: "ghost-btn topic-ex-toggle", type: "button", dataset: { topicExToggle: "1" },
-    title: t("topic.ex.toggle"), "aria-label": t("topic.ex.toggle"), onclick: () => toggle(),
-  }, icon("panelLeft", "sm"), h("span", { class: "label" }, t("topic.ex.title")));
+  const backdrop = h("div", { class: "topic-ex-backdrop", "aria-hidden": "true", onclick: () => toggleDrawer(false) });
+
+  // Navigation: on the topic page the page swaps the topic in place;
+  // elsewhere a click opens Research › Topics.
+  const page = () => (ctx.topicPage?.mounted?.() ? ctx.topicPage : null);
+  const afterPick = () => { if (isClassic()) toggleDrawer(false); };
+  const hooks = {
+    titleOf: topicTitle,
+    openTopic: (topic) => { if (page()?.openPicked) page().openPicked(topic); else ctx.openTopic(topic.uid); afterPick(); },
+    openLine: (row) => { if (page()?.openLine) page().openLine(row); else ctx.openTopic(row.ref); afterPick(); },
+    newTopic: () => openNewTopic(ctx),
+    lineSettings: () => ctx.openSettingsAt?.("lines"),
+    drill: (unit) => outline?.drill?.(unit),
+  };
 
   const sectionButton = (iconName, label, onClick, data = {}) => h("button", {
     class: "icon-btn", type: "button", title: t(label), "aria-label": t(label), dataset: data,
@@ -179,69 +212,36 @@ export function topicExplorer(ctx, hooks) {
     }
   }
 
-  // ------------------------------------------------- shown, width, drawer
-  function shown() { return isPhone() ? phoneOpen : state.open; }
+  // ------------------------------------------------------ shown, drawer
+  function shown() {
+    return isClassic() ? drawerOpen && el.isConnected : isViewDisplayed(TOPICS_VIEW);
+  }
 
+  let drawerButtonEl = null;
   function applyShown() {
-    const page = el.closest(".topic-page");
-    const open = shown();
-    page?.classList.toggle("topic-ex-closed", !state.open);
-    page?.classList.toggle("topic-ex-phone-open", phoneOpen);
-    page?.style.setProperty("--topic-ex-w", `${state.width}px`);
-    sash.setAttribute("aria-valuenow", String(state.width));
-    toggleButton.setAttribute("aria-pressed", open ? "true" : "false");
-    toggleButton.classList.toggle("on", open);
+    const host = el.closest(".topic-page");
+    host?.classList.toggle("topic-ex-drawer-open", drawerOpen);
+    el.classList.toggle("in-drawer", isClassic());
+    drawerButtonEl?.setAttribute("aria-pressed", drawerOpen ? "true" : "false");
+    drawerButtonEl?.classList.toggle("on", drawerOpen);
   }
 
-  function toggle(force) {
-    if (isPhone()) {
-      phoneOpen = typeof force === "boolean" ? force : !phoneOpen;
-      if (phoneOpen) requestAnimationFrame(() => revealActive());
-    } else {
-      state = { ...state, open: typeof force === "boolean" ? force : !state.open };
-      save();
-    }
+  function toggleDrawer(force) {
+    drawerOpen = typeof force === "boolean" ? force : !drawerOpen;
+    if (drawerOpen) requestAnimationFrame(() => revealActive());
     applyShown();
-    hooks.onToggle?.(shown());
   }
 
-  const setWidth = (value, persist = false) => {
-    state = { ...state, width: clampWidth(value) };
-    applyShown();
-    if (persist) save();
-  };
-  let drag = null;
-  sash.addEventListener("pointerdown", (event) => {
-    if (event.button !== 0) return;
-    event.preventDefault();
-    drag = { id: event.pointerId, x: event.clientX, width: state.width };
-    sash.setPointerCapture?.(event.pointerId);
-    sash.classList.add("active");
-  });
-  sash.addEventListener("pointermove", (event) => {
-    if (drag?.id !== event.pointerId) return;
-    setWidth(drag.width - (event.clientX - drag.x));
-  });
-  const endDrag = (event) => {
-    if (drag?.id !== event.pointerId) return;
-    drag = null;
-    sash.classList.remove("active");
-    setWidth(state.width, true);
-    hooks.onToggle?.(shown());
-  };
-  for (const name of ["pointerup", "pointercancel", "lostpointercapture"]) sash.addEventListener(name, endDrag);
-  sash.addEventListener("keydown", (event) => {
-    if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;
-    event.preventDefault();
-    const next = event.key === "Home" ? EXPLORER_WIDTH.max : event.key === "End" ? EXPLORER_WIDTH.min
-      : state.width + (event.key === "ArrowLeft" ? 16 : -16);
-    setWidth(next, true);
-  });
-  sash.addEventListener("dblclick", () => setWidth(EXPLORER_WIDTH.default, true));
+  /** The topic page's button for the drawer (classic layout only). */
+  function drawerButton() {
+    drawerButtonEl = h("button", {
+      class: "ghost-btn topic-ex-toggle", type: "button", dataset: { topicExToggle: "1" },
+      title: t("topic.ex.toggle"), "aria-label": t("topic.ex.toggle"), onclick: () => toggleDrawer(),
+    }, icon("list", "sm"), h("span", { class: "label" }, t("topic.ex.title")));
+    return drawerButtonEl;
+  }
 
   // --------------------------------------------------------------- rows
-  const textMatch = (text) => !query.trim() || String(text || "").toLowerCase().includes(query.trim().toLowerCase());
-
   function treeRow({ depth, hasChildren, open, on, onFold, onClick, iconEl, name, count, extra = [], data = {}, title }) {
     const chevron = hasChildren
       ? h("span", {
@@ -306,7 +306,7 @@ export function topicExplorer(ctx, hooks) {
       host.append(treeRow({
         depth: row.depth, hasChildren: row.children > 0, open, on: topic.uid === activeRef,
         onFold: () => toggleFold("topics", row.key),
-        onClick: () => { hooks.openTopic(topic); if (isPhone()) toggle(false); },
+        onClick: () => hooks.openTopic(topic),
         iconEl: h("i", { class: "topic-ex-glyph", style: { color: typeColor("topic") } }, icon("layers", "sm")),
         name: hooks.titleOf(topic),
         count: topic.member_count ?? topic.preview?.members?.length ?? null,
@@ -341,7 +341,7 @@ export function topicExplorer(ctx, hooks) {
       host.append(treeRow({
         depth: row.depth, hasChildren: row.children > 0, open, on: ref === activeRef,
         onFold: () => toggleFold("lines", row.key),
-        onClick: () => { hooks.openLine({ ...row, ref }); if (isPhone()) toggle(false); },
+        onClick: () => hooks.openLine({ ...row, ref }),
         iconEl: icon("git", "sm"),
         name: row.label,
         count: row.count,
@@ -377,15 +377,37 @@ export function topicExplorer(ctx, hooks) {
   function paintOutline() {
     const host = bodies.outline;
     clear(host);
-    if (!outline) { host.append(h("div", { class: "ed-tree-note" }, t("topic.loading"))); return; }
+    if (!outline || !page()) {
+      sectionCount("outline", 0);
+      host.append(h("div", { class: "ed-tree-note" }, t(page() ? "topic.loading" : "topic.ex.no_outline")));
+      return;
+    }
     const members = outline.data.members || [];
     sectionCount("outline", members.length);
+    // Level 0: the topic itself (its title and body, the first section of
+    // the document); the members sit below it.
+    const topic = outline.topic;
+    const searching = Boolean(query.trim());
+    host.append(treeRow({
+      depth: 0, hasChildren: members.length > 0, open: searching || !rootFolded, on: selectedUid === topic.uid,
+      onFold: () => { rootFolded = !rootFolded; paintOutline(); focusOutlineRow(topic.uid); },
+      onClick: () => {
+        select(topic.uid);
+        outline.locate?.(topic.uid);
+        afterPick();
+        if (!topic.virtual) ctx.openUnit(topic.uid);
+      },
+      iconEl: h("i", { class: "topic-ex-glyph", style: { color: typeColor("topic") } }, icon("layers", "sm")),
+      name: topicTitle(topic),
+      data: { key: "root", outlineRow: topic.uid, outlineRoot: "1", depth: "-1" },
+      title: `${topic.uid} · ${topicTitle(topic)}`,
+    }));
     if (!members.length) {
       host.append(h("div", { class: "ed-tree-note" }, t(outline.data.filtered ? "common.no_results" : "topic.no_members")));
       return;
     }
+    if (rootFolded && !searching) return;
     const all = outlineRows(members);
-    const searching = Boolean(query.trim());
     const rows = searching
       ? searchRows(all, query, (row) => `${row.unit.title} ${row.unit.uid}`)
       : visibleRows(all, outlineFolded);
@@ -409,13 +431,13 @@ export function topicExplorer(ctx, hooks) {
       const m = unit.member || {};
       const open = searching || !outlineFolded.has(row.key);
       const item = treeRow({
-        depth: row.depth, hasChildren: row.children > 0, open, on: unit.uid === selectedUid,
+        depth: row.depth + 1, hasChildren: row.children > 0, open, on: unit.uid === selectedUid,
         onFold: () => { outlineFocus = unit.id; runOutline({ cmd: "toggle" }); focusOutlineRow(unit.uid); },
         onClick: () => {
           outlineFocus = unit.id;
           select(unit.uid);
           outline.locate?.(unit.uid);
-          if (isPhone()) toggle(false);
+          afterPick();
           ctx.openUnit(unit.uid);
         },
         iconEl: h("span", { class: `topic-ex-step ${m.source === "rule" ? "rule" : ""}`.trim(),
@@ -494,11 +516,13 @@ export function topicExplorer(ctx, hooks) {
   /** A node selected elsewhere (graph, document): highlight its outline row, unfolding the way to it. */
   function markSelected(uid) {
     if (!outline || !uid) { select(""); return; }
+    if (uid === outline.topic.uid) { select(uid); return; }
     const rows = outlineAll();
     const unit = (outline.data.members || []).find((item) => item.uid === uid);
     if (!unit) { select(""); return; }
     const up = ancestorKeys(rows, unit.id);
-    if (up.some((key) => outlineFolded.has(key))) {
+    if (rootFolded || up.some((key) => outlineFolded.has(key))) {
+      rootFolded = false;
       for (const key of up) outlineFolded.delete(key);
       saveOutlineFold(outline.topic.uid, outlineFolded);
       selectedUid = uid;
@@ -513,8 +537,7 @@ export function topicExplorer(ctx, hooks) {
   // focused row.
   const typing = (target) => target?.closest?.("input, textarea, select, [contenteditable=''], [contenteditable='true'], .cm-editor");
   const onKey = (event) => {
-    if (!el.isConnected) { window.removeEventListener("keydown", onKey, true); return; }
-    if (!outline || outline.ownChords || !shown()) return;
+    if (!outline || !page() || outline.ownChords || !shown()) return;
     if (state.sections.collapsed.outline && state.sections.max !== "outline") return;
     if (state.sections.max && state.sections.max !== "outline") return;
     if (typing(event.target) || document.querySelector(".modal-backdrop, .palette-backdrop")) return;
@@ -568,29 +591,79 @@ export function topicExplorer(ctx, hooks) {
     el.querySelector(".topic-ex-row.on")?.scrollIntoView({ block: "nearest" });
   }
 
+  // The lists, when the topic page did not bring them (another page, a
+  // project switch).
+  async function load({ force = false } = {}) {
+    const project = S.project?.id || "";
+    if (!project || (!force && loaded === project)) return;
+    if (loading) return loading;
+    loading = (async () => {
+      try {
+        const [list, branches] = await Promise.all([api.topics(), api.branches().catch(() => ({ items: [] }))]);
+        if ((S.project?.id || "") !== project) return;
+        loaded = project;
+        setTopics(list.items || [], branchTopicEntries(branches.items || []));
+      } catch { /* the view keeps what it shows */ } finally { loading = null; }
+    })();
+    return loading;
+  }
+
+  // After every route: outside the topic page nothing is open, and the
+  // outline shows its empty state.
+  function sync() {
+    if (!page()) {
+      outline = null;
+      activeRef = "";
+      drawerOpen = false;
+      markActive();
+      paintOutline();
+    }
+    applyShown();
+    if (shown()) load();
+  }
+  window.addEventListener("ark:selection", sync);
+  window.addEventListener("popstate", () => requestAnimationFrame(sync));
+  window.addEventListener("ark:project-switched", () => {
+    loaded = "";
+    topics = [];
+    lines = [];
+    paintAll();
+    if (shown()) load();
+  });
+
+  function setTopics(nextTopics, nextLines) {
+    topics = nextTopics || [];
+    lines = nextLines || [];
+    if (S.project?.id) loaded = S.project.id;
+    paintTopics();
+    paintLines();
+    revealActive();
+  }
+
+  function markActive() {
+    for (const row of el.querySelectorAll("[data-topic-row], [data-line-row]")) {
+      const on = (row.dataset.topicRow || row.dataset.lineRef) === activeRef;
+      row.classList.toggle("on", on);
+      row.setAttribute("aria-selected", on ? "true" : "false");
+    }
+  }
+
   paintSections();
   paintAll();
-  queueMicrotask(applyShown);
 
   return {
-    el, sash, backdrop, toggleButton,
+    el, backdrop, drawerButton,
     shown,
-    toggle,
+    toggleDrawer,
     applyShown,
-    setTopics(nextTopics, nextLines) {
-      topics = nextTopics || [];
-      lines = nextLines || [];
-      paintTopics();
-      paintLines();
-      revealActive();
-    },
+    load,
+    sync,
+    // The workbench showed the view.
+    shownInView() { applyShown(); load(); },
+    setTopics,
     setActive(ref) {
       activeRef = ref || "";
-      for (const row of el.querySelectorAll("[data-topic-row], [data-line-row]")) {
-        const on = (row.dataset.topicRow || row.dataset.lineRef) === activeRef;
-        row.classList.toggle("on", on);
-        row.setAttribute("aria-selected", on ? "true" : "false");
-      }
+      markActive();
       revealActive();
     },
     setOutline(next) {
@@ -598,12 +671,12 @@ export function topicExplorer(ctx, hooks) {
       outline = next;
       if (changed) {
         outlineFolded = next ? loadOutlineFold(next.topic.uid) : new Set();
+        rootFolded = false;
         outlineFocus = null;
         selectedUid = "";
       }
       paintOutline();
     },
     markSelected,
-    textMatch,
   };
 }

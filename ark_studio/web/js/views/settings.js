@@ -2784,6 +2784,10 @@ export function renderSettings(host, ctx) {
     class: "ghost-btn", href: `https://github.com/MasterYip${path}`,
     target: "_blank", rel: "noopener noreferrer",
   }, icon(glyph, "sm"), label);
+  const WEBSITE = "https://masteryip.github.io/ark-studio-site/";
+  const websiteLink = (label) => h("a", {
+    class: "ghost-btn", href: WEBSITE, target: "_blank", rel: "noopener noreferrer", "data-about-website": "",
+  }, icon("globe", "sm"), label);
   const build = document.querySelector('meta[name="ark-build"]')?.content;
   const aboutBrand = ["light", "dark"].map(theme => h("img", {
     class: `ark-lockup ark-lockup-${theme}`, alt: "", width: 227.1584, height: 49,
@@ -2794,6 +2798,8 @@ export function renderSettings(host, ctx) {
       ...aboutBrand),
     h("p", { class: "settings-lead" }, t("about.description")),
     h("dl", { class: "settings-about-details" },
+      h("dt", null, t("about.website")),
+      h("dd", null, websiteLink("masteryip.github.io/ark-studio-site")),
       h("dt", null, t("about.author")),
       h("dd", null, aboutLink("MasterYip", "", "user")),
       h("dt", null, t("about.license")),

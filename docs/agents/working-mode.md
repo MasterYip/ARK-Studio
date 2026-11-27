@@ -847,6 +847,15 @@ changes, end the heading or paragraph with `{#id}` (the marker is not
 shown): `Contact rate rises to 0.67. {#contact-rate}`. Use ATX headings
 (`#`).
 
+When a heading changes after the note was written, a `#slug` that no longer
+matches opens the closest heading: one whose text equals the slug or the
+link text once trailing parentheticals such as `(v2)` or `（DEX-1c）`,
+punctuation, case and width are ignored, else the clearly most similar
+heading text. The anchor then has `approx` (`"normalized"` or `"fuzzy"`),
+`slug` is the heading it opens, `written_slug` the slug as written, and
+`review_warnings` suggests the current slug. An anchor with no plausible
+heading stays broken.
+
 ### Review groups
 
 When one delivery puts several units up for review (a set of evidence, the

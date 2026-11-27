@@ -174,45 +174,9 @@ func plainHeading(text string) string {
 // -1, -2 suffixes of repeated ones) and explicit {#id} markers, in order.
 func BodyAnchors(body string) []string {
 	var out []string
-	counts := map[string]int{}
-	fence := ""
-	for _, line := range strings.Split(strings.ReplaceAll(body, "\r\n", "\n"), "\n") {
-		if m := anchorFenceRe.FindStringSubmatch(line); m != nil {
-			marker := m[1][:3]
-			if fence == "" {
-				fence = marker
-			} else if marker == fence {
-				fence = ""
-			}
-			continue
-		}
-		if fence != "" {
-			continue
-		}
-		explicit := ""
-		if m := explicitIDRe.FindStringSubmatch(line); m != nil {
-			explicit = m[1]
-			line = line[:len(line)-len(m[0])]
-		}
-		if m := atxHeadingRe.FindStringSubmatch(line); m != nil {
-			if explicit != "" {
-				out = append(out, explicit)
-				continue
-			}
-			slug := AnchorSlug(plainHeading(m[2]))
-			if slug == "" {
-				continue
-			}
-			n := counts[slug]
-			counts[slug] = n + 1
-			if n > 0 {
-				slug += "-" + strconv.Itoa(n)
-			}
-			out = append(out, slug)
-			continue
-		}
-		if explicit != "" {
-			out = append(out, explicit)
+	for _, a := range scanBodyAnchors(bodyLines(body)) {
+		if a.id != "" {
+			out = append(out, a.id)
 		}
 	}
 	return out
@@ -252,6 +216,8 @@ func resolveAnchors(ctx context.Context, q sqlitedb.Querier, note, selfUID, self
 	}
 	for _, a := range anchors {
 		problem := ""
+		var approx *bodyAnchor
+		approxHow := ""
 		uid := a.Unit
 		if a.Kind == "heading" && uid == "" {
 			uid = selfUID
@@ -270,8 +236,17 @@ func resolveAnchors(ctx context.Context, q sqlitedb.Querier, note, selfUID, self
 			}
 			if !exists[uid] {
 				problem = "unit not found: " + uid
-			} else if a.Kind == "heading" && !containsString(BodyAnchors(bodies[uid]), a.Slug) {
-				problem = "no heading or {#id} block \"" + a.Slug + "\" in " + uid
+			} else if a.Kind == "heading" {
+				// Exact id, else the closest heading (anchorresolve.go).
+				found, how, ok := resolveHeading(a.Slug, a.Label, scanBodyAnchors(bodyLines(bodies[uid])))
+				switch {
+				case !ok:
+					problem = "no heading or {#id} block \"" + a.Slug + "\" in " + uid +
+						"; its anchors: " + anchorIDList(scanBodyAnchors(bodyLines(bodies[uid])))
+				case how == "normalized" || how == "fuzzy":
+					approx = &found
+					approxHow = how
+				}
 			}
 		}
 		var media *pyjson.Object
@@ -289,7 +264,17 @@ func resolveAnchors(ctx context.Context, q sqlitedb.Querier, note, selfUID, self
 					Set("unit", r.Get("uid"))
 			}
 		}
+		written := a.Slug
+		if approx != nil {
+			a.Slug = approx.id // the id to scroll to
+		}
 		obj := anchorObject(a, problem == "", problem)
+		if approx != nil {
+			obj.Set("approx", approxHow).Set("written_slug", written).Set("heading", approx.text)
+			warnings = append(warnings, pyjson.NewObject("anchor", a.Raw, "problem",
+				"no heading or {#id} block \""+written+"\"; it opens the closest heading #"+approx.id+
+					" (\""+approx.text+"\") instead: link to #"+approx.id, "approx", true))
+		}
 		if media != nil {
 			obj.Set("media_item", media)
 		}

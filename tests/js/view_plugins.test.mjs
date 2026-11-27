@@ -245,14 +245,14 @@ test("workbench layout keeps plugin slots while the plugin is not loaded", () =>
   layout = wm.placeView(layout, "u-node-word-count", "left", { anchor: "filters", side: "before" });
   // Without the plugin in the catalog (disabled, or not loaded yet) the slot stays.
   const reloaded = wm.parseWorkbench(wm.serializeWorkbench(layout));
-  assert.deepEqual(reloaded.containers.left.views, ["u-node-word-count", "filters", "explorer", "search", "changes", "sessions"]);
+  assert.deepEqual(reloaded.containers.left.views, ["u-node-word-count", "filters", "explorer", "search", "changes", "topics", "sessions"]);
   assert.deepEqual(wm.storableLayout(reloaded).containers.left.views, reloaded.containers.left.views);
   // Arbitrary unknown ids are still dropped.
   const junk = wm.normalizeWorkbench({ v: 1, containers: { left: { views: ["nope", "u-", "u-X"] } } });
-  assert.deepEqual(junk.containers.left.views, ["filters", "explorer", "search", "changes", "sessions"]);
+  assert.deepEqual(junk.containers.left.views, ["filters", "explorer", "search", "changes", "topics", "sessions"]);
   // A removed plugin forgets its place.
   const removed = wm.removeViewSlot(reloaded, "u-node-word-count");
-  assert.deepEqual(removed.containers.left.views, ["filters", "explorer", "search", "changes", "sessions"]);
+  assert.deepEqual(removed.containers.left.views, ["filters", "explorer", "search", "changes", "topics", "sessions"]);
   assert.equal(wm.removeViewSlot(removed, "u-node-word-count"), removed);
 });
 

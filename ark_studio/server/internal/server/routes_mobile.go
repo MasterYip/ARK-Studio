@@ -935,13 +935,37 @@ func (c *reqCtx) mobileGet(path string) (bool, error) {
 			return true, err
 		}
 		required := !c.trustedLocal() && session == nil
-		out, err := c.mobileStatus(c.mobileToken(), required)
+		token := c.mobileToken()
+		out, err := c.mobileStatus(token, required)
 		if err == nil {
+			// Refused for where it comes from, and not plausibly a phone:
+			// the page names that reason instead of asking for a code.
+			if required && token == "" && !c.phonePlausible() {
+				out.Set("reason", "not_local")
+			}
 			c.ok(out)
 		}
 		return true, err
 	}
 	return false, nil
+}
+
+// mobileUA matches phone and tablet browsers and the Android app.
+var mobileUA = regexp.MustCompile(`(?i)android|iphone|ipad|ipod|mobile|harmonyos|arkstudioandroid`)
+
+// phonePlausible reports whether a request that needs pairing may come
+// from a phone: through the Cloudflare Tunnel, or from a phone browser to a
+// server phones can reach (bound beyond loopback or with a public URL). A
+// desktop browser, or the desktop window through a proxy, is not.
+func (c *reqCtx) phonePlausible() bool {
+	if viaTunnel(c.r) || cloudflareForwarded(c.r) {
+		return true
+	}
+	bind := c.app.BindHost
+	if (bind == "" || mobile.IsLoopbackHost(bind)) && pytext.Strip(c.app.mobilePublicURL()) == "" {
+		return false
+	}
+	return mobileUA.MatchString(c.header("User-Agent"))
 }
 
 // mobileStatus is App.mobile_status.

@@ -31,6 +31,7 @@ import java.io.File;
  * Shared by both APKs, so it builds its views without the app's UI kit.
  */
 public final class UpdateActivity extends AppCompatActivity {
+    private static final String WEBSITE = "https://masteryip.github.io/ark-studio-site/";
     private TextView status;
     private ProgressBar progress;
     private Button install;
@@ -61,9 +62,14 @@ public final class UpdateActivity extends AppCompatActivity {
         if (!BuildConfig.ARK_RELEASE.isEmpty()) {
             page.addView(text(getString(R.string.update_built_from, BuildConfig.ARK_RELEASE), 14, false));
         }
-        String base = UpdateServer.base(this);
-        page.addView(text(base == null || base.isEmpty() ? getString(R.string.update_source_github_only)
-                : getString(R.string.update_source_line, base), 13, false));
+        // Releases come from GitHub; the paired server's address is not shown here.
+        page.addView(text(getString(R.string.update_source_github_only), 13, false));
+        TextView site = text(getString(R.string.update_website, WEBSITE), 13, false);
+        site.setOnClickListener(v -> {
+            try { startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(WEBSITE))); } catch (Exception ignored) { }
+        });
+        site.setTextColor(site.getLinkTextColors());
+        page.addView(site);
         page.addView(space(16));
 
         LinearLayout autoRow = new LinearLayout(this);

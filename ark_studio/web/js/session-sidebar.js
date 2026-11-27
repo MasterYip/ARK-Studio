@@ -9,6 +9,7 @@
 // while the view is visible; nothing outside this element is re-rendered.
 
 import { h, clear, relativeTime, unitReference, copyText } from "./dom.js";
+import { openImageLightbox } from "./image-viewer.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import { api } from "./api.js";
@@ -565,7 +566,10 @@ export function createSessionSidebar(ctx) {
     if (block.kind === "user") {
       return h("div", { class: "ssb-msg ssb-user", dataset: { itemId: item.id } },
         turnImages(item.images, (path) => api.sessionArtifactUrl(selectedId, path, true),
-          (src) => window.open(src, "_blank", "noopener")),
+          (src, path) => openImageLightbox({
+            src, alt: path.split("/").pop(), title: path.split("/").pop(), className: "sw-image-lightbox",
+            actions: [h("a", { class: "btn sm ghost", href: src, download: true }, icon("download", "sm"), t("action.download"))],
+          })),
         h("div", { class: "sw-bubble" }, ...linkedText(item.text)));
     }
     if (block.kind === "assistant") {

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   layoutFromMembers, layoutChanges, ruleFromFilters, ruleParts, moveInOrder, visibleEdges, previewPoints,
-  outlineMove, outlineDrop, dropPosition, foldable, foldLevel, subtreeIds, visibleOutline, foldChord, filterTopic,
+  outlineMove, outlineDrop, dropPosition, foldable, foldLevel, subtreeIds, visibleOutline, foldChord, filterTopic, plainShortBody,
 } from "../../ark_studio/web/js/topic-model.js";
 
 const members = [
@@ -185,4 +185,16 @@ test("topic min links use the topic's own links and report the slider end", () =
   assert.deepEqual(filtered.members.map((m) => m.id), [2]);
   assert.equal(filtered.facets.links_max, 2, "the end does not shrink with the filter");
   assert.deepEqual(filterTopic(topic, { min_links: 1 }).members.map((m) => m.id), [1, 2, 3]);
+});
+
+test("a topic's body shows in the head only when it is short plain text", () => {
+  assert.equal(plainShortBody("灵巧手 tracking 的数据、方法和实验。"), true);
+  assert.equal(plainShortBody("Why this topic exists: **the plan**, see [[S-0001]].\nSecond line."), true, "inline marks and refs are fine");
+  assert.equal(plainShortBody(""), false);
+  assert.equal(plainShortBody("字".repeat(201)), false, "too long");
+  assert.equal(plainShortBody("one\ntwo\nthree"), false, "more than two lines");
+  for (const rich of ["## Plan\n\ntext", "- one\n- two", "1. first", "> quote", "```\ncode\n```", "| a | b |",
+    "![img](media:1)", "Energy $E=mc^2$ here", "$$x$$", "<div>html</div>", "[only a link](https://x.example)", "https://example.com"]) {
+    assert.equal(plainShortBody(rich), false, rich);
+  }
 });

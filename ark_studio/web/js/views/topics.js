@@ -1,8 +1,8 @@
 // Research > Topics: nodes that hold a curated subgraph.  A topic shows the
 // members it lists or that match its rule, minus the ones it excludes, in a
 // narrative order on its own graph; it chooses which of their links to show.
-// The explorer on the right (topic-explorer.js) lists topics, lines and the
-// open topic's outline.
+// The Topics workbench view (topic-explorer.js) lists topics, lines and the
+// open topic's outline; without the workbench shell it is a drawer here.
 import {
   h, clear, emptyState, typeColor, typeBadge, statusPill, richText, fmtDate, typesetMath, typesetMermaid,
 } from "../dom.js";
@@ -17,11 +17,12 @@ import { mindGraphOptions } from "../mind.js";
 import { openModal, viewToggle, attachGraphHeight } from "../components.js";
 import { openNewTopic, openMemberPicker } from "../topic-actions.js";
 import {
-  layoutFromMembers, layoutChanges, visibleEdges, ruleParts, filterTopic,
+  layoutFromMembers, layoutChanges, visibleEdges, ruleParts, filterTopic, plainShortBody,
   foldable, foldChord,
 } from "../topic-model.js";
 import { branchTopicEntries, lineLabel } from "../needs-model.js";
-import { topicExplorer } from "../topic-explorer.js";
+import { topicsExplorer, topicTitle, DEFAULT_TITLES, TOPICS_VIEW } from "../topic-explorer.js";
+import { shellActive, revealView } from "../workbench.js";
 import { outlineRows, foldCommand, ancestorKeys } from "../topic-explorer-model.js";
 import { openLineRename } from "./settings-lines.js";
 
@@ -45,14 +46,10 @@ function rememberedTopic(ctx) {
   try { return localStorage.getItem(`${SELECTED_KEY}:${ctx.S.project?.path || ""}`) || ""; } catch { return ""; }
 }
 
-// Default topics keep their built-in English title; show it in the UI language.
-const DEFAULT_TITLES = { story: "Story", related: "Related work", method: "Method", experiment: "Experiment" }; // i18n-ignore: stored titles of the built-in topics
+export { topicTitle };
 
-export function topicTitle(topic) {
-  const key = topic?.default || topic?.meta?.default;
-  if (key && DEFAULT_TITLES[key] && topic.title === DEFAULT_TITLES[key]) return t(`nav.${key}`);
-  return topic?.title || "";
-}
+// The Topics view comes forward once per visit to the page in a session.
+let viewRevealed = false;
 
 export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   const S = ctx.S;
@@ -68,23 +65,10 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
     member_count: line.units, preview: { members: [], edges: [] }, line });
   const known = (ref) => topics.find((topic) => topic.uid === ref || String(topic.id) === String(ref))
     || lines.filter((line) => line.auto).map(lineTopic).find((topic) => topic.uid === ref);
-  const explorer = topicExplorer(ctx, {
-    titleOf: topicTitle,
-    openTopic: (topic) => { S.topicTrail = []; open(topic); },
-    // A line with a stored topic opens that topic; a path that is only the
-    // parent of other lines opens as an automatic line too.
-    openLine: (row) => {
-      S.topicTrail = [];
-      if (row.line && !row.line.auto) open(known(row.line.ref) || { uid: row.line.ref });
-      else if (row.line) open(lineTopic(row.line));
-      else open({ uid: row.ref, title: row.key, virtual: true });
-    },
-    newTopic: () => openNewTopic(ctx),
-    lineSettings: () => ctx.openSettingsAt?.("lines"),
-    drill: (unit) => drillInto(ctx, state.data?.topic, unit),
-    onToggle: () => { setTimeout(() => state.graph?.repairView?.(), 220); },
-  });
+  const explorer = topicsExplorer(ctx);
   state.explorer = explorer;
+  // Without the workbench shell the view is a drawer on this page.
+  const classic = !shellActive();
   const page = h("div", { class: "page topic-page" },
     h("div", { class: "topic-page-head" },
       h("h1", { class: "topic-page-title", title: t("plan.topic.subtitle") }, icon("layers", "sm"), t("plan.topic.title")),
@@ -92,11 +76,15 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
         search,
         h("button", { class: "ghost-btn", onclick: () => ctx.openAssistant() }, icon("check", "sm"), t("assistant.title")),
         h("button", { class: "primary-btn", "data-topic-new": "1", onclick: () => openNewTopic(ctx) }, icon("plus", "sm"), t("topic.new")),
-        explorer.toggleButton)),
-    h("div", { class: "topic-layout" }, mainHost, explorer.sash, explorer.el),
-    explorer.backdrop);
+        classic ? explorer.drawerButton() : null)),
+    h("div", { class: "topic-layout" }, mainHost),
+    ...(classic ? [explorer.el, explorer.backdrop] : []));
   host.appendChild(page);
-  explorer.applyShown();
+  if (classic) explorer.toggleDrawer(false);
+  else {
+    ctx.reattachTopicsView?.();
+    if (!viewRevealed) { viewRevealed = true; revealView(TOPICS_VIEW); }
+  }
 
   const loadLines = async () => {
     try {
@@ -120,6 +108,15 @@ export function renderTopics(host, ctx, { defaultKey = null } = {}) {
   };
   ctx.topicPage = {
     mounted: () => page.isConnected,
+    // From the Topics view: a topic, or a line (a stored topic when the line
+    // has one; a path that only holds other lines opens as a line too).
+    openPicked: (topic) => { S.topicTrail = []; open(topic); },
+    openLine: (row) => {
+      S.topicTrail = [];
+      if (row.line && !row.line.auto) open(known(row.line.ref) || { uid: row.line.ref });
+      else if (row.line) open(lineTopic(row.line));
+      else open({ uid: row.ref, title: row.key, virtual: true });
+    },
     applyFilters: (options) => {
       search.value = S.filters.q || "";
       return state.applyFilters?.(options);
@@ -228,10 +225,16 @@ function rememberTopicLayout(ctx, uid, layout) {
   try { localStorage.setItem(`${LAYOUT_KEY}:${ctx.S.project?.path || ""}:${uid}`, layout); } catch { /* storage unavailable */ }
 }
 
-// The document view: scroll to a member's section, unfolding the way to it.
+// The document view: scroll to a member's section, unfolding the way to it
+// (the topic's own uid: its level-0 section).
 function revealSection(article, uid) {
   const section = article.querySelector(`.topic-art-section[data-unit-ref="${CSS.escape(uid)}"]`);
   if (!section) return;
+  if (section.classList.contains("topic-art-root")) {
+    section.classList.remove("folded");
+    section.scrollIntoView({ block: "start", behavior: "smooth" });
+    return;
+  }
   section.dispatchEvent(new CustomEvent("topic-reveal", { bubbles: true }));
   section.querySelector(":scope > .topic-art-head")?.scrollIntoView({ block: "center", behavior: "smooth" });
 }
@@ -367,7 +370,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
           class: "btn sm ghost", type: "button", title: t("lines.rename_hint"),
           onclick: () => openLineRename(ctx, lineTag.slice(lineTag.indexOf(":") + 1), () => ctx.topicPage?.reload()),
         }, t("lines.rename")) : null),
-      topicBody(topic.body)),
+      headBody(topic)),
     toolbar, ...(linksMode ? [linkRow] : []),
     view === "graph" ? attachGraphHeight(h("div", { class: "topic-split solo" }, panel), ctx, ".topic-canvas")
       : view === "timeline" ? timeline : article,
@@ -513,6 +516,7 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
     if (linksMode) paintLinkFilter(ctx, linkRow, edges, next.subgraph, design);
     state.explorer?.setOutline({
       topic, data: next, allMembers: original.members, design,
+      drill: (unit) => drillInto(ctx, topic, unit),
       removeLabel: lineTag ? t("branch.remove_from") : t("topic.remove_from"),
       // The document view keeps its own Ctrl+K chords.
       ownChords: view === "document",
@@ -546,22 +550,62 @@ async function openTopicMain(ctx, host, ref, state, { reuse = false } = {}) {
   if (state.graph && !data.members.length) state.graph.emptyEl?.classList.remove("hidden");
 }
 
-// The introduction stays short above the canvas; long ones fold open.
-function topicBody(body) {
-  if (!String(body || "").trim()) return null;
-  const text = h("div", { class: "topic-body read-body" }, richText(body));
-  if (String(body).length < 220) return text;
-  text.classList.add("clamped");
-  const label = h("span", null, t("topic.more"));
-  const toggle = h("button", { type: "button", "aria-expanded": "false" }, label, icon("chevron", "sm"));
-  const wrap = h("div", { class: "topic-body-wrap" }, text, h("div", { class: "topic-body-expand" }, toggle));
-  toggle.addEventListener("click", () => {
-    const open = text.classList.toggle("clamped") === false;
-    wrap.classList.toggle("open", open);
-    toggle.setAttribute("aria-expanded", open ? "true" : "false");
-    label.textContent = t(open ? "topic.less" : "topic.more");
+// The head shows the topic's body only when it is short plain text that
+// fits in two lines at the current width (checked again on resize); the
+// whole body is always level 0 of Document.
+function headBody(topic) {
+  if (!plainShortBody(topic.body)) return null;
+  const el = h("div", { class: "topic-head-body read-body" }, richText(topic.body));
+  let width = -1;
+  const observer = new ResizeObserver(() => fit());
+  function fit() {
+    const box = el.parentElement;
+    if (!el.isConnected || !box) { observer.disconnect(); return; }
+    if (box.clientWidth === width) return;
+    width = box.clientWidth;
+    el.hidden = false;
+    const line = parseFloat(getComputedStyle(el).lineHeight) || 18;
+    el.hidden = el.scrollHeight > line * 2 + 2;
+  }
+  requestAnimationFrame(() => {
+    if (!el.parentElement) return;
+    observer.observe(el.parentElement);
+    fit();
   });
-  return wrap;
+  return el;
+}
+
+// Level 0 of the document: the topic's own title and body, above the
+// members' sections.  The body is edited in Node details (the title and
+// the Edit button open it); a click on the heading folds the body.
+function rootSection(ctx, topic) {
+  const body = String(topic.body || "").trim();
+  const content = h("div", { class: "topic-art-content topic-art-root-body" },
+    body ? h("div", { class: "read-body topic-art-body" }, richText(topic.body, { vizScope: `topic:${topic.uid}` }))
+      : topic.virtual ? null : h("div", { class: "muted" }, t("topic.no_intro")));
+  const section = h("section", { class: "topic-art-section topic-art-root", dataset: { unitRef: topic.uid, depth: "-1" } });
+  const head = h("div", {
+    class: "topic-art-head", tabindex: 0, role: "button", "aria-expanded": "true",
+    onclick: (event) => {
+      if (event.target.closest?.("a, button")) return;
+      const folded = section.classList.toggle("folded");
+      head.setAttribute("aria-expanded", folded ? "false" : "true");
+    },
+    onkeydown: (event) => {
+      if (event.target !== head || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.key === "Enter" && !topic.virtual) { event.preventDefault(); ctx.openUnit(topic.uid); }
+      else if (event.key === " ") { event.preventDefault(); head.click(); }
+    },
+  },
+    h("span", { class: "topic-art-chevron" }, icon("chevronRight", "sm")),
+    h("h1", { class: "topic-art-title" }, topicTitle(topic)),
+    topic.virtual ? null : h("button", {
+      class: "btn sm ghost topic-art-edit", type: "button", title: t("topic.title_hint"), dataset: { topicEditBody: "1" },
+      onclick: (event) => ctx.openUnit(topic.uid, { x: event.clientX, y: event.clientY }),
+    }, icon("edit", "sm"), t("action.edit")));
+  section.append(head, content);
+  try { typesetMath(content); typesetMermaid(content); } catch { /* optional renderers */ }
+  return section;
 }
 
 function memberMenu(ctx, state, nodes, node, design, baseExtras, lineTag = "") {
@@ -743,8 +787,10 @@ function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.membe
   clear(host);
   const members = data.members || [];
   const uid = data.topic.uid;
+  const root = rootSection(ctx, data.topic);
   if (!members.length) {
-    host.append(h("div", { class: "muted topic-outline-empty" }, t(data.filtered ? "common.no_results" : "topic.no_members")));
+    host.append(h("article", { class: "topic-article" }, root,
+      h("div", { class: "muted topic-outline-empty" }, t(data.filtered ? "common.no_results" : "topic.no_members"))));
     return;
   }
   let folded = loadFold(uid, allMembers);
@@ -760,7 +806,7 @@ function paintArticle(ctx, host, data, { full, loadFull, allMembers = data.membe
     for (const [other, item] of sections) item.head.classList.toggle("selected", other === id);
     if (notify) onSelect?.(sections.get(id)?.unit.uid || "");
   };
-  const doc = h("article", { class: "topic-article", "aria-label": topicTitle(data.topic) });
+  const doc = h("article", { class: "topic-article", "aria-label": topicTitle(data.topic) }, root);
   const stack = [{ depth: -1, el: doc }];
   for (const unit of members) {
     const depth = unit.member?.depth || 0;

@@ -1161,54 +1161,168 @@
 }
 
 
-/* Pairing gate fallback for wider screens / desktop browsers that reached a
-   tunnel without a token.  The phone-specific overrides live above. */
-.pair-gate-wrap {
-  min-height: 100dvh;
+/* Pairing gate on wider screens (desktop browsers, the desktop window).
+   The phone layout is in the max-width: 760px block above; this one must not
+   override it, and it styles every part of the card (brand, eyebrow, facts),
+   not only the form. */
+@media (min-width: 761px) {
+  .pair-gate-wrap {
+    min-height: 100vh;
+    min-height: 100dvh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px 16px;
+    background:
+      radial-gradient(1100px 520px at 10% -10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
+      var(--bg);
+  }
+
+  .pair-gate-card {
+    width: min(460px, 100%);
+    background: var(--lane);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 24px 24px 20px;
+    box-shadow: var(--shadow);
+  }
+
+  .pair-gate-brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 18px;
+    font-size: 1.125rem;
+  }
+
+  .pair-gate-brand b {
+    font-weight: 800;
+    letter-spacing: -.03em;
+  }
+
+  .pair-gate-brand span {
+    font-weight: 300;
+    letter-spacing: -.02em;
+    margin-left: 2px;
+  }
+
+  .pair-gate-eyebrow {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    color: var(--accent-2);
+    font-size: 0.6875rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    font-weight: 750;
+  }
+
+  .pair-gate-eyebrow .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  .pair-gate-card h1 {
+    margin: 6px 0 8px;
+    font-size: 1.375rem;
+    line-height: 1.25;
+    letter-spacing: -.03em;
+  }
+
+  .pair-gate-lead {
+    margin: 0 0 14px;
+    color: var(--sub);
+    font-size: 0.875rem;
+    line-height: 1.55;
+  }
+
+  .pair-gate-form {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .pair-gate-input {
+    min-height: 44px;
+    font-size: 1rem;
+    width: 100%;
+    font-family: var(--mono);
+  }
+
+  .pair-gate-submit {
+    min-height: 44px;
+    justify-content: center;
+  }
+
+  .pair-gate-status {
+    margin-top: 10px;
+    font-size: 0.8125rem;
+    line-height: 1.5;
+    color: var(--sub);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .pair-gate-status.err {
+    color: var(--red);
+  }
+
+  .pair-gate-hint {
+    margin: 14px 0 8px;
+    font-size: 0.8125rem;
+    line-height: 1.55;
+    color: var(--mute);
+  }
+
+  .pair-gate-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 10px 0;
+  }
+
+  .pair-gate-facts span {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.75rem;
+    color: var(--sub);
+    border: 1px solid var(--line);
+    border-radius: 99px;
+    padding: 3px 9px;
+    background: var(--bg2);
+  }
+
+  .pair-gate-facts .icon {
+    width: 12px;
+    height: 12px;
+  }
+
+  .pair-gate-foot {
+    margin: 12px 0 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--line-soft);
+    font-size: 0.75rem;
+    line-height: 1.55;
+    color: var(--mute);
+  }
+}
+
+/* The out-of-range card's buttons (every width). */
+.pair-gate-actions {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px 16px;
-  background:
-    radial-gradient(1100px 520px at 10% -10%, color-mix(in srgb, var(--accent) 20%, transparent), transparent 70%),
-    var(--bg);
-}
-
-.pair-gate-card {
-  width: min(430px, 100%);
-  background: var(--lane);
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  padding: 20px 18px;
-  box-shadow: var(--shadow);
-}
-
-.pair-gate-card h1 {
-  margin: 6px 0 8px;
-  font-size: 1.375rem;
-  line-height: 1.2;
-  letter-spacing: -.03em;
-}
-
-.pair-gate-form {
-  display: flex;
-  flex-direction: column;
+  flex-wrap: wrap;
   gap: 8px;
+  margin-top: 14px;
 }
 
-.pair-gate-input {
-  min-height: 44px;
-  font-size: 1rem;
-  width: 100%;
-  font-family: var(--mono);
+.pair-gate-actions .icon {
+  flex-shrink: 0;
 }
 
-.pair-gate-submit {
-  min-height: 44px;
-  justify-content: center;
-}
-
-.pairing-gate .mobile-tabbar {
+.pairing-gate .mobile-tabbar,
+.pairing-gate #topbar {
   display: none;
 }
 

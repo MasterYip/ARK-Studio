@@ -2,7 +2,8 @@
 //!
 //! The main window (WebView2, WKWebView, WebKitGTK) follows the current system
 //! proxy settings, which proxy tools such as Clash switch on and off while the
-//! app runs. So every check reads the settings afresh. When a proxy applies to
+//! app runs. So every check reads the settings afresh (or, with Settings ›
+//! Proxy on "direct" or "custom", follows that setting). When a proxy applies to
 //! the address, the server is tried through the proxy and directly at the same
 //! time; either answer counts. Any HTTP answer means "reachable" (401, 403, an
 //! HTML page from a reverse proxy); only connection, TLS and timeout failures
@@ -17,6 +18,8 @@ use std::time::Duration;
 
 use futures_util::future::{select, Either};
 use serde_json::{json, Value};
+
+use crate::proxy::{self, ProxyConfig, Route};
 
 /// Upper bound for one check (both routes run at the same time).
 pub const TIMEOUT: Duration = Duration::from_secs(15);
@@ -145,7 +148,7 @@ fn system_proxy(url: &reqwest::Url) -> Option<String> {
     })
 }
 
-fn client(user_agent: &str, direct: bool) -> Option<reqwest::Client> {
+fn client(user_agent: &str, direct: bool, cfg: &ProxyConfig) -> Option<reqwest::Client> {
     let mut b = reqwest::Client::builder()
         .user_agent(user_agent)
         .connect_timeout(CONNECT_TIMEOUT)
@@ -154,6 +157,8 @@ fn client(user_agent: &str, direct: bool) -> Option<reqwest::Client> {
         .redirect(reqwest::redirect::Policy::none());
     if direct {
         b = b.no_proxy();
+    } else {
+        b = proxy::client_builder(b, cfg);
     }
     b.build().ok()
 }
@@ -178,18 +183,22 @@ async fn attempt(client: Option<reqwest::Client>, url: reqwest::Url, via_proxy: 
     }
 }
 
-/// GET <base>/api/health, through the system proxy (if one applies) and
+/// GET <base>/api/health, through the proxy of `cfg` (if one applies) and
 /// directly; returns as soon as one route answers.
-pub async fn check(base: &reqwest::Url, user_agent: &str) -> Value {
+pub async fn check(base: &reqwest::Url, user_agent: &str, cfg: &ProxyConfig) -> Value {
     let Ok(health) = base.join("api/health") else {
         return verdict(base.as_str(), None, &[]);
     };
-    let proxy = system_proxy(&health);
-    let direct = attempt(client(user_agent, true), health.clone(), false);
+    let proxy = match cfg.route() {
+        Route::System => system_proxy(&health),
+        Route::Direct => None,
+        Route::Custom(_) => proxy::custom_proxy_for(cfg, health.as_str()),
+    };
+    let direct = attempt(client(user_agent, true, cfg), health.clone(), false);
     let Some(proxy) = proxy else {
         return verdict(base.as_str(), None, &[direct.await]);
     };
-    let proxied = attempt(client(user_agent, false), health, true);
+    let proxied = attempt(client(user_agent, false, cfg), health, true);
     // The first answer wins; after a failure, wait for the other route.
     let attempts = match select(Box::pin(proxied), Box::pin(direct)).await {
         Either::Left((Ok(status), _)) | Either::Right((Ok(status), _)) => vec![Ok(status)],

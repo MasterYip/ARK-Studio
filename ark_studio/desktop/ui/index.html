@@ -101,6 +101,39 @@
       </label>
     </section>
 
+    <section id="sec-proxy" class="card" aria-labelledby="proxy-title">
+      <div class="section-title"><h2 id="proxy-title" data-i18n="proxy.title">Proxy</h2></div>
+      <p class="lead" data-i18n="proxy.lead">How ARK Studio reaches ARK servers and update checks, and how the local ARK reaches the internet.</p>
+      <form id="panel-proxy" class="panel" autocomplete="off" novalidate>
+        <div class="choices" role="radiogroup" aria-labelledby="proxy-title">
+          <label class="check"><input type="radio" name="proxy-mode" value="system"><span data-i18n="proxy.system">Use the system proxy</span></label>
+          <label class="check"><input type="radio" name="proxy-mode" value="direct"><span data-i18n="proxy.direct">No proxy</span></label>
+          <label class="check"><input type="radio" name="proxy-mode" value="custom"><span data-i18n="proxy.custom">Custom proxy</span></label>
+        </div>
+        <div id="proxy-custom" class="panel hidden">
+          <label class="field">
+            <span data-i18n="proxy.url">Proxy address</span>
+            <input id="proxy-url" class="input" type="text" placeholder="http://127.0.0.1:7890" spellcheck="false" inputmode="url">
+            <small class="hint" data-i18n="proxy.url_hint">http://, https:// or socks5://, for example http://127.0.0.1:7890 or socks5://127.0.0.1:1080.</small>
+          </label>
+          <label class="field">
+            <span data-i18n="proxy.bypass">Connect directly to (optional)</span>
+            <input id="proxy-bypass" class="input" type="text" placeholder="192.168.0.0/16, .example.com" spellcheck="false">
+            <small class="hint" data-i18n="proxy.bypass_hint">Host names, IP addresses or ranges, separated by commas. A host name also covers its subdomains.</small>
+          </label>
+        </div>
+        <small class="hint" data-i18n="proxy.local_hint">localhost, 127.0.0.1 and ::1 always connect directly, in every mode.</small>
+        <p id="proxy-platform" class="hint hidden"></p>
+        <div class="row"><button type="submit" id="proxy-save" class="btn primary" data-i18n="proxy.save">Save</button></div>
+      </form>
+      <div id="proxy-status" class="status hidden" role="status">
+        <p id="proxy-status-text"></p>
+        <div class="row end">
+          <button type="button" id="proxy-restart" class="btn hidden" data-i18n="proxy.restart">Restart ARK Studio</button>
+        </div>
+      </div>
+    </section>
+
     <section id="sec-data" class="card" aria-labelledby="data-title">
       <div class="section-title"><h2 id="data-title" data-i18n="settings.data">Data</h2></div>
       <p class="lead"><span data-i18n="settings.data_hint">Local projects, private keys, logs and these settings are stored in</span> <code id="data-dir"></code></p>

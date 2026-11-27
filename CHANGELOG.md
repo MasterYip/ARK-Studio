@@ -6,6 +6,54 @@ Notable changes to ARK Studio are recorded here. The format follows
 
 ## [Unreleased]
 
+## [2.1.8] - 2026-11-27
+
+### Added
+
+- Desktop app: a Proxy setting in the app's settings window: follow the
+  system (the default), no proxy, or your own http, https or socks5 proxy
+  with a list of addresses to reach directly. It applies to the app window,
+  updates and the app's own connections; the app offers to restart when the
+  window needs it. Local addresses (localhost, 127.0.0.1, ::1) always
+  connect directly.
+- About in the web app, the desktop app and the Android app links to the
+  official website.
+
+### Changed
+
+- Research › Topics: the topic explorer (Topics, Lines, Outline) is a view of
+  its own in the left sidebar with a button in the activity bar; move or
+  hide it like the other views. The graph gets the full width.
+- Android app: the update page always says that updates come from the
+  GitHub release, and no longer shows the paired server's address. Phones
+  with 2.1.2 to 2.1.7 update in the app.
+
+### Fixed
+
+- Desktop app with a proxy on (seen on Linux): the window could open on the
+  phone pairing page or on "This ARK server belongs to the ARK Studio desktop
+  app", because the window's requests to its own local server went through
+  the proxy and looked non-local. The app now lets localhost, 127.0.0.1 and
+  ::1 bypass the proxy (added to `no_proxy`; remote servers still use the
+  proxy), and the local server treats any request carrying the window's
+  desktop cookie as the app itself. Until the new desktop build is
+  installed, add `localhost,127.0.0.1,::1` to `no_proxy` or to the proxy's
+  ignored hosts.
+- Requests refused for where they come from (through a proxy, or a desktop
+  browser on another computer) now see "This address is outside the service
+  range" with a hint about proxies, instead of the phone pairing page; the
+  pairing page is kept for phones (through the tunnel, or a phone browser on
+  a server phones can reach), and the "Open in browser" page for a browser on
+  the same computer without the app. `GET /api/mobile/session` reports
+  `reason: "not_local"` for these.
+- The pairing page in a wide window (desktop browser, desktop app) styles
+  the whole card: the logo, the eyebrow and the fact chips no longer stack
+  on lines of their own.
+- Review notes: a link to a heading still opens the right place after the
+  heading was renamed.
+- Sessions sidebar: clicking an image you sent opens the preview instead of
+  a new page.
+
 ## [2.1.7] - 2026-11-26
 
 ### Added
@@ -95,11 +143,14 @@ Notable changes to ARK Studio are recorded here. The format follows
 ### Changed
 
 - Research › Topics: the strip of topic cards is gone and the page head is
-  one slim row. An Explorer on the right (like the Editor's) holds Topics
-  (nested by part_of), Lines (branch: paths as a tree, with counts) and the
-  open topic's Outline (click selects the node in the graph, drag to
-  arrange, folding with the Ctrl+K chords); it folds, resizes, hides and
-  remembers its state, and is a drawer on phones. The Canvas view is gone:
+  one slim row. A Topics view in the workbench (left sidebar by default,
+  its own activity-bar button) holds Topics (nested by part_of), Lines
+  (branch: paths as a tree, with counts) and the open topic's Outline with
+  the topic as level 0 (click selects the node in the graph, drag to
+  arrange, folding with the Ctrl+K chords); without the workbench sidebars
+  it is a drawer on the topic page. The topic's head shows its body only
+  when it is short plain text that fits in two lines; the whole body is
+  level 0 of Document. The Canvas view is gone:
   a topic opens in the Graph, Force layout by default; a layout picked in
   the graph toolbar (Node keeps the saved positions) is remembered per
   topic. The former Outline view is now Document.

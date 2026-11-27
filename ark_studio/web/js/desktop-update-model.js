@@ -145,6 +145,14 @@ export function compareAppVersions(a, b) {
   return 0;
 }
 
+/** The first app version with Settings › Proxy in its settings window. */
+export const PROXY_SETTING_SINCE = "2.1.8";
+
+/** Whether the app (hub.update().current) has Settings › Proxy. */
+export function appHasProxySetting(version) {
+  return compareAppVersions(version, PROXY_SETTING_SINCE) >= 0;
+}
+
 /**
  * The notice on a server page for an app that is older than the server and
  * does not show update notices itself (2.1.1 and older: they look for updates

@@ -1,6 +1,6 @@
 [package]
 name = "ark-studio"
-version = "2.1.7"
+version = "2.1.8"
 description = "ARK Studio desktop shell: tray, settings, saved servers and the bundled ark-server sidecar"
 authors = ["Raymon Yip"]
 license = "AGPL-3.0-only"
@@ -32,8 +32,9 @@ hex = "0.4"
 getrandom = "0.2"
 url = "2"
 # Health checks of saved servers (and, with a desktop link, their project
-# lists); the same reqwest/rustls the updater already brings in.
-reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "system-proxy"] }
+# lists); the same reqwest/rustls the updater already brings in. "socks":
+# socks5:// proxies of Settings › Proxy (handled by hyper-util, no new crate).
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls-no-provider", "system-proxy", "socks"] }
 rustls = { version = "0.23", default-features = false, features = ["ring"] }
 # Connect check (probe.rs): the system proxy for an address (the matcher
 # reqwest uses), and racing the proxied and the direct route (both crates
@@ -50,6 +51,11 @@ windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Globali
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"
+
+# Settings › Proxy on Linux: the WebKitGTK network proxy settings (the
+# version wry already uses).
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = { version = "2.0", features = ["v2_32"] }
 
 [profile.release]
 codegen-units = 1

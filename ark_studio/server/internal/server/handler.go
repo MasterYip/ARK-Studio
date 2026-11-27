@@ -18,6 +18,7 @@ import (
 	"arkstudio/go/internal/mobile"
 	"arkstudio/go/internal/platform/clock"
 
+	"arkstudio/go/internal/api/desktopgate"
 	"arkstudio/go/internal/auth"
 	"arkstudio/go/internal/compat/pyjson"
 	"arkstudio/go/internal/compat/pytext"
@@ -304,6 +305,11 @@ func (c *reqCtx) trustedLocal() bool {
 	// Tunnel traffic reaches ARK from 127.0.0.1 but comes from the internet.
 	if viaTunnel(c.r) || cloudflareForwarded(c.r) {
 		return false
+	}
+	// The desktop app's own window (its gate cookie, desktopgate.Owner) is
+	// local even when the system routed 127.0.0.1 through a proxy.
+	if desktopgate.Owner(c.r) {
+		return true
 	}
 	remote := c.clientIP()
 	loop := false

@@ -318,3 +318,20 @@ export function dropPosition(ratio) {
   if (ratio > 0.72) return "after";
   return "inside";
 }
+
+/**
+ * Whether a topic's body may show under its title: plain text (bold, italic,
+ * inline code and [[refs]] are fine; no headings, lists, quotes, tables,
+ * code blocks, images, math, HTML or a link alone on a line), at most two
+ * lines and `max` characters.  Whether it really fits in two lines at the
+ * current width is measured by the page (views/topics.js).
+ */
+export function plainShortBody(body, max = 200) {
+  const text = String(body || "").trim();
+  if (!text || text.length > max) return false;
+  if (text.split("\n").filter((line) => line.trim()).length > 2) return false;
+  if (/^\s*(#{1,6}\s|[-*+]\s|\d+[.)]\s|>|```|~~~|\||\$\$|<[a-z!])/im.test(text)) return false;
+  if (/!\[|\$[^$\n]+\$|<\/?[a-z][^>]*>/i.test(text)) return false;
+  if (/^\s*(\[[^\]]*\]\([^)]*\)|<?https?:\/\/\S+>?)\s*$/im.test(text)) return false;
+  return true;
+}

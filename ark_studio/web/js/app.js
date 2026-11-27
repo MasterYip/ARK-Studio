@@ -32,7 +32,8 @@ import {
 import { openInspector, closeInspector, showInspectorPlaceholder } from "./inspector.js";
 import { openMultiInspector, multiInspectorWanted } from "./inspector-multi.js";
 import { renderOverview } from "./views/overview.js";
-import { saveFiltersAsTopic } from "./topic-actions.js";
+import { saveFiltersAsTopic, openNewTopic } from "./topic-actions.js";
+import { topicsExplorer } from "./topic-explorer.js";
 import { ruleFromFilters } from "./topic-model.js";
 // Research, Map and the Editor load on demand (first visit elsewhere does not
 // download them; idle prefetch fetches them after the first screen).
@@ -3254,6 +3255,28 @@ function setupWorkbench() {
     menu: () => [
       { label: t("editor.reveal"), icon: "target", onClick: () => revealActiveFile() },
       { label: t("editor.auto_reveal"), checked: editorAutoReveal(), onClick: () => setEditorAutoReveal(!editorAutoReveal()) },
+    ],
+  });
+  // Topics, lines and the open topic's outline; a drawer on the topic page
+  // without the shell, where the element moves (views/topics.js).
+  const topicsView = topicsExplorer(ctx);
+  let topicsHost = null;
+  ctx.reattachTopicsView = () => {
+    if (topicsHost && topicsView.el.parentElement !== topicsHost) topicsHost.appendChild(topicsView.el);
+    topicsView.applyShown();
+  };
+  registerBuiltinView("topics", {
+    mount: (container) => { topicsHost = container; ctx.reattachTopicsView(); },
+    update: (state) => {
+      if (state.reason !== "show") return;
+      ctx.reattachTopicsView();
+      topicsView.shownInView();
+    },
+  }, {
+    applies: (state) => state.tab !== "settings",
+    actions: () => [
+      { icon: "plus", title: t("topic.new"), onClick: () => openNewTopic(ctx) },
+      { icon: "refresh", title: t("action.refresh"), onClick: () => topicsView.load({ force: true }) },
     ],
   });
   registerBuiltinView("details", {}, { applies: (state) => Boolean(state.drawerOpen) || !["tasks", "editor"].includes(state.tab) });

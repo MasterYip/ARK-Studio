@@ -18,7 +18,7 @@ import {
 } from "./needs-model.js";
 import { FOLD_ACTIONS, getShortcut, matchChord, shortcutLabel } from "./shortcuts.js";
 import {
-  anchorLabel, anchorUnit, changeSummary, changesText, clockLabel, diffBlocks, keyNumber, noteParts, reviewCardText,
+  anchorLabel, anchorUnit, resolveHeadingAnchor, changeSummary, changesText, clockLabel, diffBlocks, keyNumber, noteParts, reviewCardText,
 } from "./review-model.js";
 import { authorName, threadComments } from "./comments-model.js";
 import { currentUsername, displayName } from "./users.js";
@@ -743,12 +743,16 @@ function noteBlock(ctx, note, selfUid, anchors = []) {
   });
 }
 
+// A heading anchor whose slug no longer matches but the server resolved to
+// the closest heading (`approx`) is a working link with a hint; only one
+// with no plausible heading is shown broken.
 export function anchorChip(ctx, anchor, selfUid = "") {
   const broken = anchor.ok === false;
   const label = anchorLabel(anchor, selfUid);
+  const nearest = !broken && anchor.approx ? t("review_req.anchor_nearest", { heading: anchor.heading || anchor.slug }) : "";
   return h("button", {
-    class: `review-anchor kind-${anchor.kind}${broken ? " broken" : ""}`, type: "button",
-    title: broken ? `${anchor.raw} · ${anchor.problem || t("review_req.anchor_missing")}` : anchor.raw,
+    class: `review-anchor kind-${anchor.kind}${broken ? " broken" : ""}${nearest ? " approx" : ""}`, type: "button",
+    title: broken ? `${anchor.raw} · ${anchor.problem || t("review_req.anchor_missing")}` : nearest ? `${anchor.raw} · ${nearest}` : anchor.raw,
     dataset: { anchor: anchor.raw },
     onclick: (event) => { event.stopPropagation(); revealAnchor(ctx, anchor, selfUid); },
   }, icon(anchor.kind === "media" ? (anchor.start != null ? "play" : "image") : "link", "sm"), label);
@@ -844,11 +848,21 @@ export async function revealAnchor(ctx, anchor, selfUid = "") {
   await ctx.openUnit(uid, null, { readOnly: true });
   if (anchor.kind !== "heading" || !anchor.slug) return;
   const deadline = Date.now() + 2500;
-  const find = () => [...document.querySelectorAll(".drawer [data-anchor]")].find((el) => el.dataset.anchor === anchor.slug);
+  const all = () => [...document.querySelectorAll(".drawer [data-anchor]")];
+  const find = () => all().find((el) => el.dataset.anchor === anchor.slug);
   let target = find();
   while (!target && Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 80));
     target = find();
+  }
+  if (!target) {
+    // The body changed since: the closest heading the link still means.
+    const els = all();
+    const hit = resolveHeadingAnchor(anchor.slug, anchor.label || "", els.map((el) => ({
+      id: el.dataset.anchor, text: /^H[1-6]$/.test(el.tagName) ? el.textContent.trim() : "",
+    })));
+    target = hit ? els.find((el) => el.dataset.anchor === hit.id) : null;
+    if (target) toast(t("review_req.anchor_nearest", { heading: hit.text || hit.id }));
   }
   if (!target) { toast(t("review_req.anchor_missing"), "err"); return; }
   for (let el = target.parentElement; el; el = el.parentElement) if (el.tagName === "DETAILS") el.open = true;
@@ -1214,7 +1228,7 @@ function editNoteDialog(ctx, unit, info) {
         onClick: async () => {
           try {
             const out = await api.updateUnit(unit.uid, { review_note: input.value.trim() });
-            const warnings = out?.review_warnings || [];
+            const warnings = (out?.review_warnings || []).filter((w) => !w.approx);
             if (warnings.length) toast(t("review_req.anchor_warnings", { n: warnings.length, first: warnings[0].anchor }), "err", { duration: 6000 });
             else toast(t("review_req.note_saved"), "ok");
           } catch (err) { toast(err.message, "err"); return false; }

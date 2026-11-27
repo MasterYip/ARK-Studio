@@ -37,7 +37,7 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     if let Some(w) = app.get_webview_window(LABEL) {
         return Ok(w);
     }
-    WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("tray.html".into()))
+    let builder = WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("tray.html".into()))
         .title("ARK Studio")
         .decorations(false)
         .transparent(true)
@@ -49,8 +49,14 @@ fn window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .always_on_top(true)
         .visible(false)
         .inner_size(280.0, 360.0)
-        .disable_drag_drop_handler()
-        .build()
+        .disable_drag_drop_handler();
+    // One WebView2 environment: the same browser arguments as the other windows.
+    #[cfg(windows)]
+    let builder = match crate::proxy::webview2_startup_args() {
+        Some(args) => builder.additional_browser_args(&args),
+        None => builder,
+    };
+    builder.build()
 }
 
 /// Right click on the tray icon. Runs off the main thread (`off_main`):

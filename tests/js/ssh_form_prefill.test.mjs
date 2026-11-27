@@ -69,9 +69,9 @@ test("unlinked devices: own record, server suggestion, picker", () => {
   assert.equal(p.machine, "gpu:gpu-lab");
   assert.equal(p.values.host, "198.51.100.23");
   // Unlinking the ARK server; the public name is offered as the host.
-  p = sshFormPrefill({ device: ark, data: { ...data, suggest: { ark: { host: "ark-direct.example.com" } } }, link: "" });
+  p = sshFormPrefill({ device: ark, data: { ...data, suggest: { ark: { host: "ark-main.example.com" } } }, link: "" });
   assert.equal(p.machine, "");
-  assert.equal(p.values.host, "ark-direct.example.com");
+  assert.equal(p.values.host, "ark-main.example.com");
   assert.equal(p.values.name, "deskhost7k2pq");
 });
 

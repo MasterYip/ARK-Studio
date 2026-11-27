@@ -181,6 +181,13 @@ with **Sync scroll** in the tab's right-click menu or the open-files list.
 Search results open the same way: a double-click (or Ctrl+Enter) opens a
 node or file as a pinned tab at the match.
 
+## Topics
+
+Every topic (nested by `part_of`), the lines of work (`branch:` paths as a
+tree, with node counts) and the outline of the topic open in Research →
+Topics, with a filter box over all three. A click on a topic or a line opens
+it from any page; see [topics.md](topics.md#using-topics).
+
 ## Local graph
 
 Shows the node open in Details (Map, Research, Topics) or the node tab open

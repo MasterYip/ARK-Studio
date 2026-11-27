@@ -51,6 +51,7 @@ fn main() {
             "choose_project_folder",
             "tray_menu_ready",
             "tray_menu_action",
+            "restart_app",
         ]),
     ))
     .expect("failed to run tauri-build");

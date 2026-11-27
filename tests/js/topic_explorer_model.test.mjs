@@ -2,26 +2,21 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import {
-  EXPLORER_WIDTH, parseExplorer, clampWidth, sections, topicTree, lineTree, visibleRows, searchRows,
+  parseExplorer, sections, topicTree, lineTree, visibleRows, searchRows,
   ancestorKeys, outlineRows, foldCommand,
 } from "../../ark_studio/web/js/topic-explorer-model.js";
 
 const keys = (rows) => rows.map((row) => row.key);
 
-test("stored panel state: defaults, clamps and bad input", () => {
+test("stored view state: defaults and bad input", () => {
   const empty = parseExplorer("");
-  assert.equal(empty.open, true);
-  assert.equal(empty.width, EXPLORER_WIDTH.default);
   assert.deepEqual(sections.sectionLayout(empty.sections).map((item) => item.open), [true, true, true]);
   assert.deepEqual(parseExplorer("{bad"), empty);
   const stored = parseExplorer(JSON.stringify({ open: false, width: 9999, sections: { collapsed: { lines: true }, max: "outline" },
     folded: { topics: ["TP-1", 3], lines: "x" } }));
-  assert.equal(stored.open, false);
-  assert.equal(stored.width, EXPLORER_WIDTH.max);
   assert.equal(stored.sections.collapsed.lines, true);
   assert.equal(stored.sections.max, "outline");
   assert.deepEqual(stored.folded, { topics: ["TP-1"], lines: [] });
-  assert.equal(clampWidth(10), EXPLORER_WIDTH.min);
   assert.deepEqual(sections.ids, ["topics", "lines", "outline"]);
 });
 

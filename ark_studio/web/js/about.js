@@ -8,7 +8,7 @@
 import { h, relativeTime } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
-import { aboutState, aboutStatus, hasUpdate, inDesktopApp, updatedNotice } from "./desktop-update-model.js";
+import { aboutState, aboutStatus, appHasProxySetting, hasUpdate, inDesktopApp, updatedNotice } from "./desktop-update-model.js";
 import { announceUpdate, appUpdateHub, latestUpdate, onUpdate, publishUpdate, refreshUpdate } from "./update-state.js";
 
 /** The release version the ARK server put in this page (empty for development builds). */
@@ -227,6 +227,9 @@ export function appSettingsPanel() {
         linkButton("local", "monitor", t("app.open_local"), open),
         linkButton("window", "layers", t("app.open_window"), open),
         linkButton("data", "folder", t("app.open_data"), open));
+      Promise.resolve(latestUpdate() || found.hub.update()).then((info) => {
+        if (appHasProxySetting(info?.current)) links.append(linkButton("proxy", "globe", t("app.open_proxy"), open));
+      }).catch(() => {});
     }
     if (found.role === "local" && typeof found.hub.servers === "function") {
       let list = [];

@@ -5,7 +5,7 @@ import { h, clear } from "./dom.js";
 import { t } from "./i18n.js";
 import { icon } from "./icons.js";
 import {
-  isEditableTarget, isStandalone, keyboardTracker, pwaState,
+  isEditableTarget, isStandalone, keyboardTracker, pwaState, pairGateKind, pairingReachable,
 } from "./mobile-core.js";
 
 let installEvent = null;
@@ -169,8 +169,12 @@ export function syncThemeColor(theme) {
   if (meta) meta.setAttribute("content", theme === "light" ? "#f5f6f8" : "#0f141c");
 }
 
-export function renderPairGate(host, { session, api, onConnected, error = "", busy = false } = {}) {
+export function renderPairGate(host, { session, api, onConnected, error = "", busy = false, askCode = false } = {}) {
   clear(host);
+  if (pairGateKind(session) === "not_local" && !askCode && !busy) {
+    renderOutOfRange(host, { session, api, onConnected, error });
+    return;
+  }
   const project = session?.project?.name || "ARK Studio";
   const reason = session?.reason || "";
   const message = reason === "invalid_or_expired"
@@ -232,6 +236,30 @@ export function renderPairGate(host, { session, api, onConnected, error = "", bu
       h("span", null, icon("link", "sm"), t("mobile.gate.fact_tunnel"))),
     h("p", { class: "pair-gate-foot" }, t("mobile.gate.foot")),
     status);
+  host.appendChild(h("div", { class: "pair-gate-wrap" }, card));
+}
+
+// Refused for where the request comes from (not a phone): name the reason
+// instead of asking for a pairing code.
+function renderOutOfRange(host, options) {
+  const { session, error } = options;
+  const actions = h("div", { class: "pair-gate-actions" },
+    h("button", { class: "primary-btn", type: "button", onclick: () => location.reload() },
+      icon("refresh", "sm"), t("mobile.gate.out_retry")),
+    pairingReachable(session)
+      ? h("button", { class: "ghost-btn", type: "button", onclick: () => renderPairGate(host, { ...options, askCode: true }) },
+        icon("link", "sm"), t("mobile.gate.out_pair"))
+      : null);
+  const card = h("section", { class: "pair-gate-card", "data-gate": "not_local" },
+    h("div", { class: "pair-gate-brand" },
+      h("img", { src: "./brand/ark-mark.svg", alt: "", width: 34, height: 34 }),
+      h("div", null, h("b", null, "ARK"), h("span", null, "Studio"))),
+    h("div", { class: "pair-gate-eyebrow" }, icon("shield", "sm"), t("mobile.gate.out_eyebrow")),
+    h("h1", null, t("mobile.gate.out_title")),
+    h("p", { class: "pair-gate-lead" }, t("mobile.gate.out_lead")),
+    error ? h("div", { class: "pair-gate-status err" }, error) : null,
+    h("p", { class: "pair-gate-hint" }, t("mobile.gate.out_hint")),
+    actions);
   host.appendChild(h("div", { class: "pair-gate-wrap" }, card));
 }
 

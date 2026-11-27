@@ -4,7 +4,7 @@ import "regexp"
 
 // release is the repository's VERSION file; scripts/release/version.mjs
 // --write keeps this copy in step.
-const release = "2.1.7"
+const release = "2.1.8"
 
 var semver = regexp.MustCompile(`^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$`)
 

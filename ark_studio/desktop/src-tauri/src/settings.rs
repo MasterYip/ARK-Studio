@@ -48,6 +48,8 @@ pub struct Settings {
     pub notified_update: String,
     /// The newer version the person chose "Later" for in the app window's notice.
     pub dismissed_update: String,
+    /// Settings › Proxy (proxy.rs): system (default), direct or custom.
+    pub proxy: crate::proxy::ProxyConfig,
     /// Not stored: there was no `desktop.json` (a fresh install).
     #[serde(skip)]
     pub fresh: bool,
@@ -80,6 +82,7 @@ impl Default for Settings {
             last_seen_version: String::new(),
             notified_update: String::new(),
             dismissed_update: String::new(),
+            proxy: crate::proxy::ProxyConfig::default(),
             fresh: false,
             mode: String::new(),
             remote_url: String::new(),
@@ -242,6 +245,17 @@ mod tests {
     }
 
     #[test]
+    fn proxy_setting_round_trips_and_defaults_to_system() {
+        assert_eq!(Settings::parse(br#"{"settingsVersion":2}"#).unwrap().proxy.mode, "system");
+        let s = Settings::parse(br#"{"settingsVersion":2,"proxy":{"mode":"custom","url":"socks5://127.0.0.1:1080","bypass":["10.0.0.0/8"]}}"#).unwrap();
+        assert_eq!(s.proxy.route(), crate::proxy::Route::Custom("socks5://127.0.0.1:1080".into()));
+        let out = serde_json::to_string(&s).unwrap();
+        assert!(out.contains(r#""proxy":{"mode":"custom","url":"socks5://127.0.0.1:1080","bypass":["10.0.0.0/8"]}"#), "{out}");
+        // an unknown mode does not make the whole file unreadable
+        assert_eq!(Settings::parse(br#"{"proxy":{"mode":"later"}}"#).unwrap().proxy.route(), crate::proxy::Route::System);
+    }
+
+    #[test]
     fn normalizes_remote_addresses() {
         assert_eq!(normalize_remote("ark.example.com").unwrap().as_str(), "https://ark.example.com/");
         assert_eq!(normalize_remote(" http://127.0.0.1:8890 ").unwrap().as_str(), "http://127.0.0.1:8890/");
@@ -288,7 +302,8 @@ mod tests {
         assert!(!s.auto_connect && s.mode.is_empty() && s.remote_url.is_empty());
         // the dropped chooser fields are not written back
         let out = serde_json::to_string(&s).unwrap();
-        assert!(!out.contains("autoConnect") && !out.contains("\"mode\"") && !out.contains("remoteUrl"));
+        let top: serde_json::Value = serde_json::from_str(&out).unwrap();
+        assert!(top.get("autoConnect").is_none() && top.get("mode").is_none() && top.get("remoteUrl").is_none());
         assert!(out.contains("\"settingsVersion\":2"));
     }
 

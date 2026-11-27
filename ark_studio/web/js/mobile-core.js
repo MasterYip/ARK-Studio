@@ -250,3 +250,19 @@ export function isEditableTarget(el) {
   const NON_TEXT = ["button", "checkbox", "radio", "range", "color", "file", "submit", "reset", "image", "hidden"];
   return !NON_TEXT.includes(type) && !el.readOnly && !el.disabled;
 }
+
+// Which gate the page shows for a /api/mobile/session reply: "pair" (a
+// phone that needs its one-time code), "not_local" (refused for where the
+// request comes from, e.g. the desktop window through a proxy: no code
+// helps there) or "" (no gate).
+export function pairGateKind(session) {
+  if (!session?.required || session.authenticated) return "";
+  return session.reason === "not_local" ? "not_local" : "pair";
+}
+
+// The out-of-range page offers a pairing code only when phones can reach
+// this server at all (it is not bound to this computer only).
+export function pairingReachable(session) {
+  const mode = session?.connection?.mode;
+  return Boolean(mode) && mode !== "loopback";
+}

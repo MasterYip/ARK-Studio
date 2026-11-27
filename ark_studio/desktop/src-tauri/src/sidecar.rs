@@ -154,8 +154,9 @@ pub fn health_ok(port: u16) -> bool {
 }
 
 /// Starts ark-server on `preferred`, else on `fallback` (see [`pick_port`]),
-/// else on a free port.
-pub fn start(root: &Path, preferred: u16, fallback: u16) -> Result<Sidecar, String> {
+/// else on a free port. `proxy_env`: the proxy variables to set (`Some`) or
+/// remove (`None`) for the server's outbound requests (proxy.rs).
+pub fn start(root: &Path, preferred: u16, fallback: u16, proxy_env: &[(&str, Option<String>)]) -> Result<Sidecar, String> {
     let exe = server_exe()?;
     std::fs::create_dir_all(root).map_err(|e| format!("Cannot create the project folder {}: {e}", root.display()))?;
     paths::ensure_private_dir(&paths::private_dir()).map_err(|e| e.to_string())?;
@@ -196,6 +197,12 @@ pub fn start(root: &Path, preferred: u16, fallback: u16) -> Result<Sidecar, Stri
             cmd.env("ARK_BLACKBOX_DIR", layout.data.join("blackbox"));
         }
         cmd.arg("--sessions-root").arg(layout.data.join("agent-sessions"));
+    }
+    for (key, value) in proxy_env {
+        match value {
+            Some(v) => cmd.env(key, v),
+            None => cmd.env_remove(key),
+        };
     }
     #[cfg(windows)]
     {

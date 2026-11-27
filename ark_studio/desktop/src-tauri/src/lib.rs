@@ -56,8 +56,10 @@ mod downloads;
 mod external;
 mod links;
 mod measure;
+mod noproxy;
 mod paths;
 mod probe;
+mod proxy;
 mod remote_open;
 mod servers;
 mod settings;
@@ -267,15 +269,15 @@ fn user_agent(app: &AppHandle) -> String {
     format!("ARK-Studio-Desktop/{}", app.package_info().version)
 }
 
-/// A client for one call to a server. Built per call so that it follows the
-/// current system proxy settings (proxy tools switch them while the app runs).
+/// A client for one call to a server. Built per call so that it follows
+/// Settings › Proxy and the current system proxy settings (proxy tools
+/// switch them while the app runs).
 fn http(app: &AppHandle) -> reqwest::Client {
-    reqwest::Client::builder()
+    let b = reqwest::Client::builder()
         .user_agent(user_agent(app))
         .connect_timeout(Duration::from_secs(12))
-        .timeout(Duration::from_secs(20))
-        .build()
-        .unwrap_or_default()
+        .timeout(Duration::from_secs(20));
+    proxy::client_builder(b, &settings_snapshot(app).proxy).build().unwrap_or_default()
 }
 
 /// Origin of the bundled pages (`app.windows[].useHttpsScheme` is false).
@@ -408,7 +410,18 @@ fn base_builder<'a>(app: &'a AppHandle, label: &'a str, url: WebviewUrl) -> Webv
         .hidden_title(true);
     #[cfg(not(target_os = "macos"))]
     let builder = builder.decorations(false);
+    // Settings › Proxy (WebView2: the arguments this run started with).
+    #[cfg(windows)]
+    let builder = match proxy::webview2_startup_args() {
+        Some(args) => builder.additional_browser_args(&args),
+        None => builder,
+    };
     builder
+}
+
+/// WebKitGTK: Settings › Proxy for the windows' shared network settings.
+fn apply_proxy(app: &AppHandle, w: &WebviewWindow) {
+    proxy::apply_webview(w, &settings_snapshot(app).proxy);
 }
 
 fn settings_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
@@ -427,7 +440,9 @@ fn settings_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let builder = builder.inner_size(640.0, 800.0).min_inner_size(520.0, 480.0).transparent(true).shadow(false);
     #[cfg(target_os = "macos")]
     let builder = builder.inner_size(600.0, 780.0).min_inner_size(480.0, 440.0);
-    builder.build()
+    let w = builder.build()?;
+    apply_proxy(app, &w);
+    Ok(w)
 }
 
 fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
@@ -467,6 +482,7 @@ fn main_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     #[cfg(windows)]
     let builder = builder.shadow(true);
     let w = builder.build()?;
+    apply_proxy(app, &w);
     #[cfg(windows)]
     hide_frame_border(&w);
     Ok(w)
@@ -604,6 +620,8 @@ async fn save_download(
         .read_timeout(Duration::from_secs(180));
     if loopback {
         client = client.no_proxy();
+    } else {
+        client = proxy::client_builder(client, &settings_snapshot(&app).proxy);
     }
     let client = client.build().map_err(|e| e.to_string())?;
     let mut request = client.get(target.clone());
@@ -724,7 +742,7 @@ fn show_settings(app: &AppHandle, notice: Option<&str>, view: Option<&str>) {
     if let Some(n) = notice {
         q.append_pair("notice", n);
     }
-    if let Some(v) = view.filter(|v| matches!(*v, "connect" | "local" | "servers" | "about" | "window" | "data")) {
+    if let Some(v) = view.filter(|v| matches!(*v, "connect" | "local" | "servers" | "about" | "window" | "data" | "proxy")) {
         q.append_pair("view", v);
     }
     let q = q.finish();
@@ -816,8 +834,11 @@ fn start_local(app: &AppHandle, root: PathBuf, port: u16) -> Result<Value, Strin
             if let Some(mut old) = guard.take() {
                 old.stop();
             }
-            let fallback = st.settings.lock().unwrap().fallback_port;
-            let mut fresh = sidecar::start(&root, port, fallback)?;
+            let (fallback, proxy_cfg) = {
+                let s = st.settings.lock().unwrap();
+                (s.fallback_port, s.proxy.clone())
+            };
+            let mut fresh = sidecar::start(&root, port, fallback, &proxy::sidecar_env(&proxy_cfg))?;
             fresh.wait_ready(READY_TIMEOUT)?;
             // Remember a fallback port for the next start (see sidecar::pick_port).
             if fresh.port != port && fresh.port != fallback {
@@ -880,7 +901,8 @@ async fn probe(app: &AppHandle, server: &str) -> Value {
     let Ok(base) = settings::normalize_remote(server) else {
         return json!({ "url": server, "reachable": false, "ark": false, "reason": "invalid", "error": "invalid address" });
     };
-    probe::check(&base, &user_agent(app)).await
+    let cfg = settings_snapshot(app).proxy;
+    probe::check(&base, &user_agent(app), &cfg).await
 }
 
 fn reachable(check: &Value) -> bool {
@@ -999,6 +1021,12 @@ fn get_state(app: AppHandle) -> Value {
         "serverFound": sidecar::server_exe().is_ok(),
         "local": local,
         "update": update_info(&app),
+        // Settings › Proxy: the setting this run started with (a different
+        // saved one takes full effect after a restart).
+        "proxy": {
+            "applied": proxy::startup(),
+            "webviewLive": proxy::webview_live(),
+        },
     })
 }
 
@@ -1114,8 +1142,37 @@ fn save_settings(app: AppHandle, patch: Value) -> Result<Value, String> {
     if let Some(v) = patch.get("autoUpdateCheck").and_then(Value::as_bool) {
         s.auto_update_check = v;
     }
+    let proxy_changed = match patch.get("proxy") {
+        Some(p) => {
+            let cfg = proxy::ProxyConfig::from_value(p)?;
+            let changed = cfg != s.proxy;
+            s.proxy = cfg;
+            changed
+        }
+        None => false,
+    };
     s.save()?;
-    Ok(serde_json::to_value(&*s).unwrap_or(Value::Null))
+    let out = serde_json::to_value(&*s).unwrap_or(Value::Null);
+    drop(s);
+    if proxy_changed {
+        // WebKitGTK follows at once; WebView2 and the local server at the next start.
+        for w in app.webview_windows().values() {
+            apply_proxy(&app, w);
+        }
+    }
+    Ok(out)
+}
+
+/// Settings › Proxy: "Restart ARK Studio" (the bundled Settings page only).
+#[tauri::command]
+async fn restart_app(app: AppHandle, webview: tauri::Webview) -> Result<(), String> {
+    if !matches!(caller(&app, &webview), Caller::Bundled) {
+        return Err("Only the ARK Studio settings window may restart the app.".into());
+    }
+    state(&app).quitting.store(true, Ordering::SeqCst);
+    let handle = app.clone();
+    let _ = tauri::async_runtime::spawn_blocking(move || stop_sidecar(&handle)).await;
+    app.restart();
 }
 
 #[tauri::command]
@@ -1166,7 +1223,18 @@ fn close_window(app: AppHandle, window: tauri::Window) {
 /// (About, the tray). A successful check counts as the day's check.
 async fn fetch_update(app: &AppHandle) -> Result<Option<tauri_plugin_updater::Update>, String> {
     use tauri_plugin_updater::UpdaterExt;
-    let update = app.updater().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
+    // Settings › Proxy for the release lookups and the download.
+    let mut builder = app.updater_builder();
+    match settings_snapshot(app).proxy.route() {
+        proxy::Route::System => {}
+        proxy::Route::Direct => builder = builder.no_proxy(),
+        proxy::Route::Custom(url) => {
+            if let Ok(url) = Url::parse(&url) {
+                builder = builder.proxy(url);
+            }
+        }
+    }
+    let update = builder.build().map_err(|e| e.to_string())?.check().await.map_err(|e| e.to_string())?;
     {
         let st = state(app);
         let mut s = st.settings.lock().unwrap();
@@ -2230,6 +2298,13 @@ pub fn stop_installed_sidecars() {
 }
 
 pub fn run() {
+    // The window's requests to its own 127.0.0.1 server must not go through
+    // a proxy (noproxy.rs); before any window, thread or the sidecar starts.
+    noproxy::apply();
+    // Settings › Proxy (proxy.rs): the environment of this process and the
+    // sidecar; read before any thread exists.
+    let settings = Settings::load();
+    proxy::apply_env(&settings.proxy);
     // HTTPS to remote servers (reqwest over rustls) needs a crypto provider.
     let _ = rustls::crypto::ring::default_provider().install_default();
     // First start: create the default project folder (next to the app for
@@ -2265,7 +2340,7 @@ pub fn run() {
     }
     let app = builder
         .manage(AppState {
-            settings: Mutex::new(Settings::load()),
+            settings: Mutex::new(settings),
             links: Mutex::new(Links::load()),
             ..Default::default()
         })
@@ -2317,6 +2392,7 @@ pub fn run() {
             choose_project_folder,
             tray_menu_ready,
             tray_menu_action,
+            restart_app,
         ])
         .setup(|app| {
             let handle = app.handle().clone();
